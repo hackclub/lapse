@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PermissionLevel {
+  USER
+  ADMIN
+  ROOT
+}
+
+enum TimelapsePrivacy {
+  UNLISTED
+  PUBLIC
+}
+
+model User {
+  id                String            @id @default(uuid())
+  createdAt         DateTime          @default(now())
+  permissionLevel   PermissionLevel   @default(USER)
+  handle            String            @unique
+  displayName       String
+  bio               String            @default("")
+  urls              String[]          @default([])
+}
+
+model Timelapse {
+  id                  String              @id @default(uuid())
+  hackatimeProject    String?
+  name                String
+  description         String              @default("")
+  privacy             TimelapsePrivacy    @default(UNLISTED)
+  isPublished         Boolean             @default(false)
+
+  snapshots           Snapshot[]
+}
+
+model Snapshot {
+  id              String      @id @default(uuid())
+  timelapseId     String
+  checksum        String?
+  url             String?
+
+  timelapse       Timelapse   @relation(fields: [timelapseId], references: [id])
+}
