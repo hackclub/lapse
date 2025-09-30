@@ -9,19 +9,36 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.899.0",
+    "@aws-sdk/s3-request-presigner": "^3.899.0",
+    "@hackclub/theme": "^0.3.3",
+    "@prisma/client": "^6.16.2",
+    "@tanstack/react-query": "^5.90.2",
+    "@traversable/zod": "^0.0.53",
+    "@trpc/client": "^11.6.0",
+    "@trpc/next": "^11.6.0",
+    "@trpc/react-query": "^11.6.0",
+    "@trpc/server": "^11.6.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "jsonwebtoken": "^9.0.2",
+    "next": "^15.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.5.3"
+    "theme-ui": "^0.17.2"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
+    "@typescript-eslint/eslint-plugin": "^8.44.1",
+    "@typescript-eslint/parser": "^8.44.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
-    "@eslint/eslintrc": "^3"
+    "prisma": "^6.16.2",
+    "tailwindcss": "^4",
+    "tsx": "^4.20.5",
+    "typescript": "^5"
   }
 }
