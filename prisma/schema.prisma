@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../app/generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -21,30 +21,42 @@ enum TimelapsePrivacy {
 
 model User {
   id                String            @id @default(uuid())
+  email             String
   createdAt         DateTime          @default(now())
   permissionLevel   PermissionLevel   @default(USER)
   handle            String            @unique
   displayName       String
   bio               String            @default("")
   urls              String[]          @default([])
+  hackatimeApiKey   String?
+  slackId           String?
+
+  timelapses        Timelapse[]
 }
 
 model Timelapse {
   id                  String              @id @default(uuid())
+  videoUrl            String              @unique
   hackatimeProject    String?
   name                String
   description         String              @default("")
   privacy             TimelapsePrivacy    @default(UNLISTED)
   isPublished         Boolean             @default(false)
+  lengthSeconds       Float
+  decryptedChecksum   String
+
+  ownerId             String
+  owner               User                @relation(fields: [ownerId], references: [id])
 
   snapshots           Snapshot[]
 }
 
+/// Represents a single frame in a `TimelapseSegment`.
 model Snapshot {
-  id              String      @id @default(uuid())
-  timelapseId     String
-  checksum        String?
-  url             String?
+  id              String              @id @default(uuid())
+  frame           Int
+  createdAt       DateTime
 
-  timelapse       Timelapse   @relation(fields: [timelapseId], references: [id])
+  timelapseId       String
+  timelapse         Timelapse    @relation(fields: [timelapseId], references: [id])
 }
