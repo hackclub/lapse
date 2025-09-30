@@ -48,8 +48,8 @@ export const TimelapsePrivacySchema = z.enum(["UNLISTED", "PUBLIC"]);
  */
 export type TimelapseMutable = z.infer<typeof TimelapseMutableSchema>;
 export const TimelapseMutableSchema = z.object({
-    name: z.string().min(2),
-    description: z.string().default(""),
+    name: z.string().min(2).max(60),
+    description: z.string().max(280).default(""),
     privacy: TimelapsePrivacySchema,
     decryptedChecksum: z.hex().length(32 / 4),
 });

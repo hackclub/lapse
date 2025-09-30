@@ -1,5 +1,6 @@
 import Head from "next/head";
 import localFont from "next/font/local";
+import { JetBrains_Mono } from "next/font/google";
 
 import { ReactNode } from "react";
 
@@ -24,6 +25,10 @@ const phantomSans = localFont({
   ]
 });
 
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono"
+});
+
 interface RootLayoutProps {
   children: ReactNode;
   title?: string;
@@ -44,18 +49,8 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className={`min-h-screen text-foreground bg-background ${phantomSans.className}`}>
-        <header className="shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <div className="flex items-center">
-                <h1 className="text-xl font-semibold">Lapse</h1>
-              </div>
-            </div>
-          </div>
-        </header>
-        
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={`min-h-screen w-full h-full text-text bg-white ${jetBrainsMono.variable} ${phantomSans.className}`}>        
+        <main className="w-full h-full">
           {children}
         </main>
       </div>

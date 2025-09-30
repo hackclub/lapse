@@ -835,6 +835,11 @@
     "@eslint/core" "^0.15.2"
     levn "^0.4.1"
 
+"@hackclub/icons@^0.0.15":
+  version "0.0.15"
+  resolved "https://registry.yarnpkg.com/@hackclub/icons/-/icons-0.0.15.tgz#612b9e107d9eabb44e0eeb1f8ebfcdc6b88c2e28"
+  integrity sha512-IKJ5JQhRhlkYINv9pxzT//fn3aYwsGBeyNNBcw7eU+J0lfs0wGrq9lh7CGcXUUGXaKFxDPRlWhTxaAVaRdZVRA==
+
 "@hackclub/theme@^0.3.3":
   version "0.3.3"
   resolved "https://registry.yarnpkg.com/@hackclub/theme/-/theme-0.3.3.tgz#af4249519489459c0e6f9f50a9caab419495b92e"
@@ -2559,6 +2564,11 @@ client-only@0.0.1:
   version "0.0.1"
   resolved "https://registry.yarnpkg.com/client-only/-/client-only-0.0.1.tgz#38bba5d403c41ab150bff64a95c85013cf73bca1"
   integrity sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==
+
+clsx@^2.1.1:
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/clsx/-/clsx-2.1.1.tgz#eed397c9fd8bd882bfb18deab7102049a2f32999"
+  integrity sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==
 
 color-convert@^2.0.1:
   version "2.0.1"
