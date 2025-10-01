@@ -1,7 +1,7 @@
-import "@/styles/globals.css";
+import "@/client/styles/globals.css";
 import type { AppType } from "next/app";
-import { trpc } from "../utils/trpc";
-import RootLayout from "../components/RootLayout";
+import { trpc } from "../client/trpc";
+import RootLayout from "../client/components/RootLayout";
 
 const App: AppType = ({ Component, pageProps }) => {
   return (

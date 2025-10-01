@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { NextApiRequest, NextApiResponse } from "next";
-import { getAuthenticatedUser } from "../lib/auth";
+import { getAuthenticatedUser } from "./lib/auth";
 import type { User } from "../generated/prisma";
 
 export interface Context {

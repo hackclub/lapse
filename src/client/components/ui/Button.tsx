@@ -1,9 +1,10 @@
 import clsx from "clsx";
 import { PropsWithChildren } from "react";
 
-export function Button({ children, kind, isSquare, onClick }: PropsWithChildren<{
+export function Button({ children, kind, isSquare, disabled, onClick }: PropsWithChildren<{
   kind?: "primary" | "secondary" | "dark",
   isSquare?: boolean,
+  disabled?: boolean,
   onClick: () => void
 }>) {
   kind ??= "primary";
@@ -16,6 +17,7 @@ export function Button({ children, kind, isSquare, onClick }: PropsWithChildren<
         (kind == "primary") && "bg-red text-white",
         (kind == "secondary") && "border-2 border-red text-red",
         (kind == "dark") && "bg-black text-white",
+        disabled && "bg-smoke text-black",
         isSquare && "aspect-square"
       )}
     >{children}</button>

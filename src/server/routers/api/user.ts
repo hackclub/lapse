@@ -2,7 +2,7 @@ import { z } from "zod";
 import { zx } from "@traversable/zod";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { apiResult, ok } from "@/utils/common";
+import { apiResult, ok } from "@/shared/common";
 import * as db from "@/generated/prisma";
 
 const database = new db.PrismaClient();

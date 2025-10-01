@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ok } from "@/utils/common";
+import { apiResult, ok } from "@/shared/common";
 import crypto from "crypto";
 
 import { PrismaClient } from "../../../generated/prisma";

@@ -51,3 +51,4 @@ else {
 - All code should be strongly typed.
 - Prefer using Prisma's UUID generation rather than APIs like `crypto.randomUUID`.
 - Avoid using server components without a clear client/server separation.
+- Do not run linters. You may verify the code style with ESLint, but do not run code formatters.

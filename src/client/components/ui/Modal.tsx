@@ -12,7 +12,7 @@ export function Modal({ children, title, description, icon, isOpen, setIsOpen }:
 }>) {
   return (
     <dialog className={clsx(
-      "flex absolute w-screen h-screen p-8 top-0 left-0 text-text bg-[#00000022] justify-center items-center shadow z-10",
+      "flex absolute w-screen h-screen p-8 top-0 left-0 text-text bg-[#00000088] duration-500 transition-colors justify-center items-center shadow z-10",
       !isOpen && "hidden"
     )}>
       <section className="flex flex-col bg-white w-1/2 min-w-[600px] max-h-full rounded-lg overflow-hidden">

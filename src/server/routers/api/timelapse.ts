@@ -7,7 +7,7 @@ import crypto from "crypto";
 import { PrismaClient } from "../../../generated/prisma";
 import type { Timelapse as DbTimelapse } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ok } from "@/utils/common";
+import { apiResult, ok } from "@/shared/common";
 
 const db = new PrismaClient();
 const s3 = new S3Client({
