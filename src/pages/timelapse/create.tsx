@@ -8,15 +8,10 @@ import { InputField } from "@/client/components/ui/InputField";
 import { Modal } from "@/client/components/ui/Modal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
-import {
-  timelapseStorage,
-  StoredTimelapse,
-  StoredSnapshot,
-  StoredChunk,
-} from "@/client/timelapseStorage";
-import { videoProcessor } from "@/client/videoProcessing";
-
-const FRAME_INTERVAL_MS = 1 * 1000; // 60 seconds
+import { timelapseStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/timelapseStorage";
+import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
+import { ascending, assert } from "@/shared/common";
+import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
 
 export default function Page() {
   const router = useRouter();
@@ -32,16 +27,13 @@ export default function Page() {
   const [changingSource, setChangingSource] = useState(false);
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
-  const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(
-    null
-  );
+  const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(null);
   const [frameCount, setFrameCount] = useState(0);
-  const [currentTimelapseId, setCurrentTimelapseId] = useState<number | null>(
-    null
-  );
+  const [currentTimelapseId, setCurrentTimelapseId] = useState<number | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
   const [needsVideoSource, setNeedsVideoSource] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState<string>("");
+  const [currentSession, setCurrentSession] = useState<number>(Date.now());
+  const [videoProcessor, setVideoProcessor] = useState<VideoProcessor | null>(null);
 
   const [isFrozen, setIsFrozen] = useState(false);
   const isFrozenRef = useRef(false);
@@ -49,10 +41,16 @@ export default function Page() {
   const setupPreviewRef = useRef<HTMLVideoElement>(null);
   const mainPreviewRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chunksRef = useRef<StoredChunk[]>([]);
+  const chunksRef = useRef<LocalChunk[]>([]);
 
   const currentStream = cameraStream || screenStream;
   const isRecording = !isFrozen && !setupModalOpen;
+
+  useEffect(() => {
+    (async () => {
+      setVideoProcessor(await createVideoProcessor());
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -60,44 +58,45 @@ export default function Page() {
 
       try {
         const activeTimelapse = await timelapseStorage.getActiveTimelapse();
-        if (activeTimelapse) {
-          const snapshots = await timelapseStorage.getSnapshotsForTimelapse(
-            activeTimelapse.id
-          );
-
-          let adjustedStartTime = new Date(activeTimelapse.startedAt);
-          if (snapshots.length > 0) {
-            const sortedSnapshots = snapshots.sort(
-              (a, b) => a.createdAt - b.createdAt
-            );
-            const firstSnapshot = sortedSnapshots[0];
-            const lastSnapshot = sortedSnapshots[sortedSnapshots.length - 1];
-
-            const timeElapsed =
-              lastSnapshot.createdAt - firstSnapshot.createdAt;
-
-            adjustedStartTime = new Date(Date.now() - timeElapsed);
-          }
-
-          setName(activeTimelapse.name);
-          setDescription(activeTimelapse.description);
-          setFrameCount(activeTimelapse.frameCount);
-          setCurrentTimelapseId(activeTimelapse.id);
-          setStartedAt(adjustedStartTime);
-          setIsCreated(true);
-
-          chunksRef.current = activeTimelapse.chunks;
-
-          // Generate new session ID for this recording session
-          setCurrentSessionId(`session_${Date.now()}`);
-
-          setNeedsVideoSource(true);
-          setSetupModalOpen(true);
-
-          console.log(`Existing timelapse ${activeTimelapse.name} loaded!`);
-          console.log("  data:", activeTimelapse);
-          console.log("  snapshots:", snapshots);
+        if (!activeTimelapse) {
+          console.log("No timelapse was started previously.");
+          setIsRecovering(false);
+          return;
         }
+
+        console.group("An incomplete timelapse has been detected!");
+        console.log("timelapse:", activeTimelapse);
+
+        const snapshots = await timelapseStorage.getSnapshotsForTimelapse(activeTimelapse.id);
+        console.log("snapshots:", snapshots);
+        console.groupEnd();
+
+        let adjustedStartTime = new Date(activeTimelapse.startedAt);
+        if (snapshots.length > 0) {
+          const sorted = snapshots.sort((a, b) => a.createdAt - b.createdAt);
+          const firstSnapshot = sorted[0];
+          const lastSnapshot = sorted[sorted.length - 1];
+
+          const timeElapsed = lastSnapshot.createdAt - firstSnapshot.createdAt;
+
+          adjustedStartTime = new Date(Date.now() - timeElapsed);
+
+          console.log("first snapshot:", firstSnapshot);
+          console.log("last snapshot:", lastSnapshot);
+          console.log("time between:", timeElapsed);
+        }
+
+        setName(activeTimelapse.name);
+        setDescription(activeTimelapse.description);
+        setFrameCount(snapshots.length);
+        setCurrentTimelapseId(activeTimelapse.id);
+        setStartedAt(adjustedStartTime);
+        setIsCreated(true);
+
+        chunksRef.current = activeTimelapse.chunks;
+
+        setNeedsVideoSource(true);
+        setSetupModalOpen(true);
       }
       catch (error) {
         console.error("Failed to recover timelapse:", error);
@@ -109,7 +108,8 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (!setupPreviewRef.current) return;
+    if (!setupPreviewRef.current)
+      return;
 
     setupPreviewRef.current.srcObject = currentStream;
   }, [currentStream]);
@@ -140,13 +140,13 @@ export default function Page() {
       if (currentTimelapseId) {
         timelapseStorage.updateFrameCount(currentTimelapseId, newFrameCount);
 
-        const snapshot: Omit<StoredSnapshot, "id"> = {
+        const snapshot: Omit<LocalSnapshot, "id"> = {
           frame: newFrameCount,
           createdAt: Date.now(),
           timelapseId: currentTimelapseId,
         };
 
-        timelapseStorage.saveSnapshot(snapshot as StoredSnapshot);
+        timelapseStorage.saveSnapshot(snapshot as LocalSnapshot);
       }
 
       return newFrameCount;
@@ -168,11 +168,7 @@ export default function Page() {
       setFrameCount(0);
       setIsCreated(true);
 
-      // Generate session ID for new timelapse
-      const sessionId = `session_${now.getTime()}`;
-      setCurrentSessionId(sessionId);
-
-      const timelapseData: Omit<StoredTimelapse, "id"> = {
+      const timelapseData: Omit<LocalTimelapse, "id"> = {
         name,
         description,
         startedAt: now.getTime(),
@@ -203,7 +199,7 @@ export default function Page() {
     // Only set up recording if not already active (for new timelapses or resumed ones)
     if (!recorder || recorder.state === "inactive") {
       const canvas = canvasRef.current!;
-      const stream = canvas.captureStream(24);
+      const stream = canvas.captureStream(1000 / TIMELAPSE_FRAME_LENGTH);
 
       const newRecorder = new MediaRecorder(stream);
 
@@ -215,10 +211,10 @@ export default function Page() {
       newRecorder.ondataavailable = async (ev) => {
         if (ev.data.size <= 0) return;
 
-        const storedChunk: StoredChunk = {
+        const storedChunk: LocalChunk = {
           data: ev.data,
           timestamp: Date.now(),
-          sessionId: currentSessionId,
+          session: currentSession
         };
 
         chunksRef.current.push(storedChunk);
@@ -227,22 +223,23 @@ export default function Page() {
           await timelapseStorage.appendChunk(
             activeTimelapseId,
             ev.data,
-            currentSessionId
+            currentSession
           );
         }
       };
 
       setRecorder(newRecorder);
-      newRecorder.start(FRAME_INTERVAL_MS);
+      newRecorder.start(TIMELAPSE_FRAME_LENGTH);
 
-      setFrameInterval(setInterval(captureFrame, FRAME_INTERVAL_MS));
+      setFrameInterval(setInterval(captureFrame, TIMELAPSE_FRAME_LENGTH));
     }
 
     console.log("Timelapse recording started!", recorder);
   }
 
   async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
-    if (ev.target.value == videoSourceKind) return; // no change
+    if (ev.target.value == videoSourceKind)
+      return; // no change
 
     if (changingSource) {
       console.warn(
@@ -350,116 +347,51 @@ export default function Page() {
       setFrameInterval(null);
     }
 
-    if (recorder) {
-      recorder.onstop = async () => {
-        let allChunks: StoredChunk[] = [];
-
-        if (currentTimelapseId) {
-          const timelapse = await timelapseStorage.getTimelapse(
-            currentTimelapseId
-          );
-
-          if (timelapse) {
-            allChunks = timelapse.chunks;
-          }
-        }
-
-        // Fallback to in-memory chunks if no stored chunks
-        if (allChunks.length === 0) {
-          allChunks = chunksRef.current;
-        }
-
-        if (allChunks.length === 0) return;
-
-        console.log("Processing video chunks with FFmpeg!", allChunks);
-
-        try {
-          // Try FFmpeg processing first
-          const blobs = allChunks.map((chunk) => chunk.data);
-          let finalBlob: Blob;
-
-          try {
-            // Initialize video processor
-            await videoProcessor.initialize();
-
-            // Extract blob data and timestamps from stored chunks
-            const timestamps = allChunks.map((chunk) => chunk.timestamp);
-
-            // Classify chunks into sessions and concatenate
-            const sessions = videoProcessor.classifyChunks(blobs, timestamps);
-            console.log(`Classified into ${sessions.length} video sessions`);
-
-            if (sessions.length > 1) {
-              // Multiple sessions - use FFmpeg for proper concatenation
-              finalBlob = await videoProcessor.concatenateVideoSessions(sessions);
-            }
-            else {
-              // Single session - direct concatenation is sufficient
-              finalBlob = await videoProcessor.concatenateChunksDirectly(blobs);
-            }
-            
-            console.log("Video processing completed with FFmpeg");
-          }
-          catch (ffmpegError) {
-            console.warn("FFmpeg processing failed, falling back to simple concatenation:", ffmpegError);
-            // Fallback to simple blob concatenation
-            finalBlob = new Blob(blobs, { type: "video/webm" });
-          }
-
-          const url = URL.createObjectURL(finalBlob);
-
-          // Create download link
-          const a = document.createElement("a");
-          a.style.display = "none";
-          a.href = url;
-          a.download = `timelapse-${new Date()
-            .toISOString()
-            .slice(0, 19)
-            .replace(/:/g, "-")}.webm`;
-
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-
-          // Clean up
-          URL.revokeObjectURL(url);
-
-          // Mark timelapse as complete and clean up from IndexedDB
-          if (currentTimelapseId) {
-            await timelapseStorage.markComplete(currentTimelapseId);
-            await timelapseStorage.deleteSnapshotsForTimelapse(
-              currentTimelapseId
-            );
-            await timelapseStorage.deleteTimelapse(currentTimelapseId);
-            setCurrentTimelapseId(null);
-          }
-        }
-        catch (error) {
-          console.error("Failed to process video with FFmpeg:", error);
-          // Fallback to simple blob concatenation
-          const blobs = allChunks.map((chunk) => chunk.data);
-          const blob = new Blob(blobs, { type: "video/webm" });
-          const url = URL.createObjectURL(blob);
-
-          const a = document.createElement("a");
-          a.style.display = "none";
-          a.href = url;
-          a.download = `timelapse-${new Date()
-            .toISOString()
-            .slice(0, 19)
-            .replace(/:/g, "-")}.webm`;
-
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-
-          URL.revokeObjectURL(url);
-        }
-      };
-
-      recorder.stop();
+    if (!recorder) {
+      console.warn("Attempted to stop the recording while recorder was null!");
+      return;
     }
 
+    recorder.onstop = async () => {
+      assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
+      assert(videoProcessor != null, "Attempted to stop the recording while videoProcessor is null");
+
+      const timelapse = await timelapseStorage.getTimelapse(currentTimelapseId);
+      if (!timelapse)
+        throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
+
+      console.log("Stopping recording! Final timelapse:", timelapse);
+
+      const merged = await mergeVideoSessions(videoProcessor, timelapse);
+
+      const url = URL.createObjectURL(merged);
+
+      // Create download link
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = `timelapse-${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/:/g, "-")}.webm`;
+
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Clean up
+      URL.revokeObjectURL(url);
+
+      // Mark timelapse as complete and clean up from IndexedDB
+      if (currentTimelapseId) {
+        await timelapseStorage.markComplete(currentTimelapseId);
+        await timelapseStorage.deleteSnapshotsForTimelapse(currentTimelapseId);
+        await timelapseStorage.deleteTimelapse(currentTimelapseId);
+        setCurrentTimelapseId(null);
+      }
+    };
+
+    recorder?.stop();
     setRecorder(null);
   }
 
@@ -538,9 +470,7 @@ export default function Page() {
               onChange={onVideoSourceChange}
               disabled={changingSource}
             >
-              <option disabled value="NONE">
-                (none)
-              </option>
+              <option disabled value="NONE">(none)</option>
               <option value="CAMERA">{cameraLabel}</option>
               <option value="SCREEN">{screenLabel}</option>
             </select>
@@ -570,9 +500,7 @@ export default function Page() {
           <div className="flex gap-2 font-bold font-mono">
             <div>
               <div
-                className={`rounded-full inline-block w-4 h-4 ${
-                  isRecording ? "bg-red" : "bg-muted"
-                }`}
+                className={`rounded-full inline-block w-4 h-4 ${isRecording ? "bg-red" : "bg-muted"}`}
               ></div>
             </div>
 

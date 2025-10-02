@@ -1,294 +1,150 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 
-// Helper functions to replace @ffmpeg/util functionality
+import { ascending, assert, range, typeName } from "@/shared/common";
+import { LocalTimelapse } from "./timelapseStorage";
+import { TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
 
-// Enhanced chunk interface to track MediaRecorder sessions
-export interface VideoChunk {
-    data: Blob;
-    sessionId: string;
-    timestamp: number;
-    sequenceNumber: number;
+async function toBlobURL(url: string, mimeType: string): Promise<string> {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return URL.createObjectURL(new Blob([blob], { type: mimeType }));
 }
 
-// Group chunks by session and sort by sequence
-export interface VideoSession {
-    sessionId: string;
-    chunks: VideoChunk[];
-    startTime: number;
-    endTime: number;
+export async function createVideoProcessor() {
+    const processor = new VideoProcessor();
+    await processor.initialize();
+    return processor;
 }
 
 export class VideoProcessor {
     private ffmpeg: FFmpeg | null = null;
     private initialized = false;
 
-    // Helper method to replace @ffmpeg/util toBlobURL
-    private async toBlobURL(url: string, mimeType: string): Promise<string> {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        return URL.createObjectURL(new Blob([blob], { type: mimeType }));
-    }
-
-    // Helper method to replace @ffmpeg/util fetchFile
-    private async fetchFile(data: Blob): Promise<Uint8Array> {
-        const arrayBuffer = await data.arrayBuffer();
-        return new Uint8Array(arrayBuffer);
-    }
-
     async initialize(): Promise<void> {
-        if (this.initialized) return;
+        if (this.initialized)
+            return;
 
         this.ffmpeg = new FFmpeg();
-        
-        try {
-            // Use jsdelivr CDN which has better CORS support and correct file paths
-            let loaded = false;
-            
-            // Try different CDNs and paths
-            const cdnAttempts = [
-                {
-                    name: "jsdelivr",
-                    coreURL: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
-                    wasmURL: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
-                },
-                {
-                    name: "unpkg-umd", 
-                    coreURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
-                    wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
-                },
-                {
-                    name: "skypack",
-                    coreURL: "https://cdn.skypack.dev/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
-                    wasmURL: "https://cdn.skypack.dev/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
-                },
-            ];
 
-            for (const attempt of cdnAttempts) {
-                try {
-                    console.log(`Trying FFmpeg initialization with ${attempt.name}...`);
-                    
-                    await this.ffmpeg.load({
-                        coreURL: await this.toBlobURL(attempt.coreURL, "text/javascript"),
-                        wasmURL: await this.toBlobURL(attempt.wasmURL, "application/wasm"),
-                    });
-                    
-                    loaded = true;
-                    console.log(`FFmpeg initialized successfully with ${attempt.name}`);
-                    break;
-                }
-                catch (attemptError) {
-                    console.warn(`${attempt.name} failed:`, attemptError);
-                    // Continue to next attempt
-                }
-            }
+        this.ffmpeg.on("log", ({ message }) => {
+            console.log(`(ffmpeg) ${message}`);
+        });
 
-            if (!loaded) {
-                throw new Error("All CDN attempts failed");
-            }
+        const knownCdns = [
+            {
+                name: "jsdelivr",
+                coreURL: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+                wasmURL: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
+            },
+            {
+                name: "unpkg-umd",
+                coreURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+                wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
+            },
+            {
+                name: "skypack",
+                coreURL: "https://cdn.skypack.dev/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+                wasmURL: "https://cdn.skypack.dev/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm",
+            },
+        ];
 
-            this.initialized = true;
-            console.log("FFmpeg initialization completed successfully");
-        }
-        catch (error) {
-            console.error("Failed to initialize FFmpeg:", error);
-            throw new Error(`FFmpeg initialization failed: ${error}`);
-        }
-    }
-
-    /**
-     * Classify chunks by MediaRecorder session based on timestamp gaps
-     */
-    classifyChunks(chunks: Blob[], timestamps: number[]): VideoSession[] {
-        const sessions: VideoSession[] = [];
-        let currentSessionId = "session_0";
-        let currentSessionChunks: VideoChunk[] = [];
-        let sessionCount = 0;
-        
-        // Threshold for detecting new sessions (gaps larger than 5 seconds)
-        const SESSION_GAP_THRESHOLD = 5000;
-
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            const timestamp = timestamps[i] || Date.now();
-            
-            // Check if this chunk starts a new session
-            const isNewSession = i > 0 && 
-                (timestamp - timestamps[i - 1]) > SESSION_GAP_THRESHOLD;
-            
-            if (isNewSession && currentSessionChunks.length > 0) {
-                // Finalize current session
-                const startTime = currentSessionChunks[0].timestamp;
-                const endTime = currentSessionChunks[currentSessionChunks.length - 1].timestamp;
-                
-                sessions.push({
-                    sessionId: currentSessionId,
-                    chunks: currentSessionChunks,
-                    startTime,
-                    endTime
-                });
-                
-                // Start new session
-                sessionCount++;
-                currentSessionId = `session_${sessionCount}`;
-                currentSessionChunks = [];
-            }
-            
-            currentSessionChunks.push({
-                data: chunk,
-                sessionId: currentSessionId,
-                timestamp,
-                sequenceNumber: currentSessionChunks.length
-            });
-        }
-        
-        // Add final session
-        if (currentSessionChunks.length > 0) {
-            const startTime = currentSessionChunks[0].timestamp;
-            const endTime = currentSessionChunks[currentSessionChunks.length - 1].timestamp;
-            
-            sessions.push({
-                sessionId: currentSessionId,
-                chunks: currentSessionChunks,
-                startTime,
-                endTime
-            });
-        }
-        
-        console.log(`Classified ${chunks.length} chunks into ${sessions.length} sessions`);
-        return sessions;
-    }
-
-    /**
-     * Concatenate video sessions using FFmpeg without re-encoding
-     */
-    async concatenateVideoSessions(sessions: VideoSession[], outputFilename = "concatenated_timelapse.webm"): Promise<Blob> {
-        if (!this.initialized || !this.ffmpeg) {
-            await this.initialize();
-        }
-
-        if (sessions.length === 0) {
-            throw new Error("No video sessions to concatenate");
-        }
-
-        if (sessions.length === 1) {
-            // Single session - just concatenate chunks
-            const chunks = sessions[0].chunks.map(chunk => chunk.data);
-            return new Blob(chunks, { type: "video/webm" });
-        }
-
-        console.log(`Concatenating ${sessions.length} video sessions`);
-
-        // Create individual video files for each session
-        const sessionFiles: string[] = [];
-        
-        for (let i = 0; i < sessions.length; i++) {
-            const session = sessions[i];
-            const sessionFilename = `session_${i}.webm`;
-            
-            // Concatenate chunks within this session
-            const sessionBlob = new Blob(
-                session.chunks.map(chunk => chunk.data), 
-                { type: "video/webm" }
-            );
-            
-            // Write session video to FFmpeg filesystem
-            await this.ffmpeg!.writeFile(sessionFilename, await this.fetchFile(sessionBlob));
-            sessionFiles.push(sessionFilename);
-        }
-
-        // Create concat demuxer input file
-        const concatFileContent = sessionFiles
-            .map(filename => `file '${filename}'`)
-            .join('\n');
-        
-        await this.ffmpeg!.writeFile("concat_list.txt", concatFileContent);
-
-        // Run FFmpeg concatenation (copy streams without re-encoding)
-        await this.ffmpeg!.exec([
-            "-f", "concat",
-            "-safe", "0", 
-            "-i", "concat_list.txt",
-            "-c", "copy",  // Copy streams without re-encoding
-            outputFilename
-        ]);
-
-        // Read the output file
-        const outputData = await this.ffmpeg!.readFile(outputFilename);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const outputBlob = new Blob([outputData as any], { type: "video/webm" });
-
-        // Clean up temporary files
-        await this.cleanupFiles([...sessionFiles, "concat_list.txt", outputFilename]);
-
-        console.log(`Video concatenation complete. Output size: ${outputBlob.size} bytes`);
-        return outputBlob;
-    }
-
-    /**
-     * Alternative method: concatenate all chunks directly if they're from compatible streams
-     */
-    async concatenateChunksDirectly(chunks: Blob[], outputFilename = "direct_concat.webm"): Promise<Blob> {
-        if (!this.initialized || !this.ffmpeg) {
-            await this.initialize();
-        }
-
-        if (chunks.length === 0) {
-            throw new Error("No chunks to concatenate");
-        }
-
-        if (chunks.length === 1) {
-            return chunks[0];
-        }
-
-        console.log(`Direct concatenation of ${chunks.length} chunks`);
-
-        // Write all chunks as separate files
-        const chunkFiles: string[] = [];
-        
-        for (let i = 0; i < chunks.length; i++) {
-            const chunkFilename = `chunk_${i}.webm`;
-            await this.ffmpeg!.writeFile(chunkFilename, await this.fetchFile(chunks[i]));
-            chunkFiles.push(chunkFilename);
-        }
-
-        // Create concat demuxer input file
-        const concatFileContent = chunkFiles
-            .map(filename => `file '${filename}'`)
-            .join('\n');
-        
-        await this.ffmpeg!.writeFile("concat_list.txt", concatFileContent);
-
-        // Run FFmpeg concatenation
-        await this.ffmpeg!.exec([
-            "-f", "concat",
-            "-safe", "0",
-            "-i", "concat_list.txt", 
-            "-c", "copy",  // Copy streams without re-encoding
-            outputFilename
-        ]);
-
-        // Read the output file
-        const outputData = await this.ffmpeg!.readFile(outputFilename);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const outputBlob = new Blob([outputData as any], { type: "video/webm" });
-
-        // Clean up temporary files
-        await this.cleanupFiles([...chunkFiles, "concat_list.txt", outputFilename]);
-
-        console.log(`Direct concatenation complete. Output size: ${outputBlob.size} bytes`);
-        return outputBlob;
-    }
-
-    private async cleanupFiles(filenames: string[]): Promise<void> {
-        for (const filename of filenames) {
+        for (const cdn of knownCdns) {
             try {
-                await this.ffmpeg!.deleteFile(filename);
+                console.log(`(ffmpeg) loading from CDN:`, cdn);
+
+                await this.ffmpeg.load({
+                    coreURL: await toBlobURL(cdn.coreURL, "text/javascript"),
+                    wasmURL: await toBlobURL(cdn.wasmURL, "application/wasm"),
+                });
+
+                this.initialized = true;
+                console.log(`(ffmpeg) loaded successfully from ${cdn.name}!`);
+                break;
             }
-            catch (error) {
-                console.warn(`Failed to delete temporary file ${filename}:`, error);
+            catch (attemptError) {
+                console.warn(`(ffmpeg) could not load from CDN ${cdn.name}`, attemptError);
             }
         }
+
+        if (!this.initialized) {
+            throw new Error("Could not load FFMpeg from any CDN");
+        }
+    }
+
+    /**
+     * Concatenates multiple separately recorded streams of video together.
+     */
+    async concat(streams: Uint8Array<ArrayBufferLike>[]) {
+        assert(this.ffmpeg != null, "attempted to call concat() when this.ffmpeg is null");
+
+        for (let i = 0; i < streams.length; i++) {
+            console.log(`(ffmpeg) copying segment ${i} to fs`);
+            await this.ffmpeg.writeFile(`segment${i}.webm`, streams[i]);
+        }
+
+        await this.ffmpeg.writeFile(
+            "inputs.txt",
+            range(streams.length)
+                .map(i => `file 'segment${i}.webm'`)
+                .join("\n")
+        );
+
+        console.log("(ffmpeg) concatenating!");
+        await this.ffmpeg.exec([
+            "-f", "concat",
+            "-itsscale", ((1000 / TIMELAPSE_FRAME_LENGTH) / TIMELAPSE_FPS).toString(),
+            "-i", "inputs.txt",
+            "-c", "copy",
+            "output.webm"
+        ]);
+
+        console.log("(ffmpeg) concat ended! reading file...");
+        const data = await this.ffmpeg.readFile("output.webm");
+
+        assert(data instanceof Uint8Array, `readFile for output.webm returned a ${typeName(data)}`);
+
+        console.log("(ffmpeg) successfully concatenated!", data);
+        return data;
     }
 }
 
-export const videoProcessor = new VideoProcessor();
+/**
+ * Merges all of the potentially segmented chunks of a local timelapse to a single continous
+ * video stream.
+ */
+export async function mergeVideoSessions(processor: VideoProcessor, timelapse: LocalTimelapse) {
+    if (timelapse.chunks.length === 0)
+        throw new Error("No chunks were found when stopping the recording. Have we forgotten to capture any?!");
+
+    // Chunks that come from different sessions have to be processed with FFMpeg. If we have
+    // only one session (i.e. the user begun and ended the recording without refreshing/closing
+    // the tab), then we can skip the FFMpeg step and simply serve the first (and only) segment.
+
+    const segmented = Object.entries(Object.groupBy(timelapse.chunks, x => x.session))
+        .filter(x => x[1])
+        .map(x => ({
+            session: x[0],
+            chunks: x[1]!.toSorted(ascending(x => x.timestamp))
+        }));
+
+    console.log("mergeVideoSessions():", segmented);
+
+    if (segmented.length == 0)
+        throw new Error("Timelapse chunk segmentation resulted in an empty array");
+
+    const streams = segmented.map(x => new Blob(x.chunks.map(x => x.data), { type: "video/webm" }));
+
+    console.log("mergeVideoSessions(): blobified streams:", streams);
+
+    const streamBytes = await Promise.all(streams.map(x => new Response(x).bytes()));
+    
+    console.log(`mergeVideoSessions(): bytes retrieved from ${streamBytes.length} streams:`, streamBytes);
+    
+    const concatenated = await processor.concat(streamBytes);
+    if (concatenated.buffer instanceof SharedArrayBuffer) {
+        console.warn("mergeVideoSessions(): got a SharedArrayBuffer from .concat!", concatenated);
+        throw new Error("VideoProcessor.concat returned a SharedArrayBuffer");
+    }
+
+    return new Blob([concatenated.buffer]);
+}

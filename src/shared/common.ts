@@ -18,3 +18,21 @@ export function ok<T>(data: T) {
 export function err(message: string) {
     return { ok: false as const, error: message };
 }
+
+export function assert(condition: boolean, message: string): asserts condition {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+
+export function range(length: number) {
+    return [...Array(length).keys()];
+}
+
+export function ascending<T>(picker: (x: T) => number) {
+    return (a: T, b: T) => picker(a) - picker(b); 
+}
+
+export function typeName<T>(obj: T) {
+    return Object.prototype.toString.call(obj);
+}

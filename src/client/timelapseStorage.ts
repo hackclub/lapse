@@ -1,22 +1,32 @@
-export interface StoredSnapshot {
+/**
+ * Represents a locally stored snapshot. This will represent the structure on the server-side database.
+ */
+export interface LocalSnapshot {
   id: number;
   frame: number;
   createdAt: number;
   timelapseId: number;
 }
 
-export interface StoredChunk {
+/**
+ * Represents a video chunk. Serves to guard against interruptions between recordings.
+ * Chunks are merged together into one video stream before being uploaded to the server.
+ */
+export interface LocalChunk {
   data: Blob;
   timestamp: number;
-  sessionId?: string;
+  session: number;
 }
 
-export interface StoredTimelapse {
+/**
+ * An in-progress timelapse, stored locally.
+ */
+export interface LocalTimelapse {
   id: number;
   name: string;
   description: string;
   startedAt: number;
-  chunks: StoredChunk[];
+  chunks: LocalChunk[];
   frameCount: number;
   isActive: boolean;
 }
@@ -44,22 +54,27 @@ class TimelapseStorage {
         if (!db.objectStoreNames.contains(DB_STORE_NAME)) {
           db.createObjectStore(DB_STORE_NAME, { keyPath: "id", autoIncrement: true });
         }
+
         if (!db.objectStoreNames.contains(DB_SNAPSHOTS_STORE_NAME)) {
           const snapshotStore = db.createObjectStore(DB_SNAPSHOTS_STORE_NAME, {
             keyPath: "id",
             autoIncrement: true,
           });
+
           snapshotStore.createIndex("timelapseId", "timelapseId", {
             unique: false,
           });
+
           snapshotStore.createIndex("frame", "frame", { unique: false });
         }
       };
     });
   }
 
-  async saveTimelapse(timelapse: StoredTimelapse | Omit<StoredTimelapse, "id">): Promise<number> {
-    if (!this.db) await this.init();
+  async saveTimelapse(timelapse: LocalTimelapse | Omit<LocalTimelapse, "id">): Promise<number> {
+    if (!this.db) {
+      await this.init();
+    }
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([DB_STORE_NAME], "readwrite");
@@ -73,8 +88,10 @@ class TimelapseStorage {
     });
   }
 
-  async getTimelapse(id: number): Promise<StoredTimelapse | null> {
-    if (!this.db) await this.init();
+  async getTimelapse(id: number): Promise<LocalTimelapse | null> {
+    if (!this.db) {
+      await this.init();
+    }
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([DB_STORE_NAME], "readonly");
@@ -86,8 +103,10 @@ class TimelapseStorage {
     });
   }
 
-  async getActiveTimelapse(): Promise<StoredTimelapse | null> {
-    if (!this.db) await this.init();
+  async getActiveTimelapse(): Promise<LocalTimelapse | null> {
+    if (!this.db) {
+      await this.init();
+    }
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([DB_STORE_NAME], "readonly");
@@ -96,21 +115,22 @@ class TimelapseStorage {
 
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
-        const timelapses = request.result as StoredTimelapse[];
+        const timelapses = request.result as LocalTimelapse[];
         const activeTimelapse = timelapses.find((t) => t.isActive);
         resolve(activeTimelapse || null);
       };
     });
   }
 
-  async appendChunk(timelapseId: number, chunk: Blob, sessionId?: string): Promise<void> {
+  async appendChunk(timelapseId: number, chunk: Blob, session: number): Promise<void> {
     const timelapse = await this.getTimelapse(timelapseId);
-    if (!timelapse) return;
+    if (!timelapse)
+      return;
 
-    const storedChunk: StoredChunk = {
+    const storedChunk: LocalChunk = {
       data: chunk,
       timestamp: Date.now(),
-      sessionId
+      session
     };
 
     timelapse.chunks.push(storedChunk);
@@ -119,12 +139,10 @@ class TimelapseStorage {
     console.log(`(db) appendChunk(${timelapseId}) ->`, storedChunk);
   }
 
-  async updateFrameCount(
-    timelapseId: number,
-    frameCount: number
-  ): Promise<void> {
+  async updateFrameCount(timelapseId: number, frameCount: number): Promise<void> {
     const timelapse = await this.getTimelapse(timelapseId);
-    if (!timelapse) return;
+    if (!timelapse)
+      return;
 
     timelapse.frameCount = frameCount;
     await this.saveTimelapse(timelapse);
@@ -134,7 +152,8 @@ class TimelapseStorage {
 
   async markComplete(timelapseId: number): Promise<void> {
     const timelapse = await this.getTimelapse(timelapseId);
-    if (!timelapse) return;
+    if (!timelapse)
+      return;
 
     timelapse.isActive = false;
     await this.saveTimelapse(timelapse);
@@ -159,7 +178,7 @@ class TimelapseStorage {
     });
   }
 
-  async saveSnapshot(snapshot: StoredSnapshot | Omit<StoredSnapshot, "id">): Promise<number> {
+  async saveSnapshot(snapshot: LocalSnapshot | Omit<LocalSnapshot, "id">): Promise<number> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -180,7 +199,7 @@ class TimelapseStorage {
 
   async getSnapshotsForTimelapse(
     timelapseId: number
-  ): Promise<StoredSnapshot[]> {
+  ): Promise<LocalSnapshot[]> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -203,10 +222,7 @@ class TimelapseStorage {
     const snapshots = await this.getSnapshotsForTimelapse(timelapseId);
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(
-        [DB_SNAPSHOTS_STORE_NAME],
-        "readwrite"
-      );
+      const transaction = this.db!.transaction([DB_SNAPSHOTS_STORE_NAME], "readwrite");
       const store = transaction.objectStore(DB_SNAPSHOTS_STORE_NAME);
 
       let completed = 0;
