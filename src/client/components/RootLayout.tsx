@@ -26,7 +26,8 @@ const phantomSans = localFont({
 });
 
 const jetBrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono"
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"]
 });
 
 interface RootLayoutProps {
