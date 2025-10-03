@@ -6,6 +6,7 @@ export interface LocalSnapshot {
   frame: number;
   createdAt: number;
   timelapseId: number;
+  session: number;
 }
 
 /**
@@ -27,7 +28,6 @@ export interface LocalTimelapse {
   description: string;
   startedAt: number;
   chunks: LocalChunk[];
-  frameCount: number;
   isActive: boolean;
 }
 
@@ -137,17 +137,6 @@ class TimelapseStorage {
     await this.saveTimelapse(timelapse);
 
     console.log(`(db) appendChunk(${timelapseId}) ->`, storedChunk);
-  }
-
-  async updateFrameCount(timelapseId: number, frameCount: number): Promise<void> {
-    const timelapse = await this.getTimelapse(timelapseId);
-    if (!timelapse)
-      return;
-
-    timelapse.frameCount = frameCount;
-    await this.saveTimelapse(timelapse);
-
-    console.log(`(db) updateFrameCount(${timelapseId}) -> ${frameCount}`);
   }
 
   async markComplete(timelapseId: number): Promise<void> {

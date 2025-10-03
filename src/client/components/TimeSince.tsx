@@ -3,26 +3,28 @@ import { useEffect, useState, useRef } from "react";
 export function TimeSince({
   active,
   startTime,
+  initialElapsedSeconds = 0,
 }: {
   active: boolean;
   startTime?: Date;
+  initialElapsedSeconds?: number;
 }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(() => {
     if (startTime) {
       return Math.floor((Date.now() - startTime.getTime()) / 1000);
     }
-    return 0;
+    return initialElapsedSeconds;
   });
 
-  // Recalculate elapsed seconds when startTime changes
+  // Recalculate elapsed seconds when startTime or initialElapsedSeconds changes
   useEffect(() => {
     if (startTime) {
       setElapsedSeconds(Math.floor((Date.now() - startTime.getTime()) / 1000));
     }
     else {
-      setElapsedSeconds(0);
+      setElapsedSeconds(initialElapsedSeconds);
     }
-  }, [startTime]);
+  }, [startTime, initialElapsedSeconds]);
   const [formattedTime, setFormattedTime] = useState("00:00");
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
