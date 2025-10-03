@@ -33,6 +33,10 @@ export function ascending<T>(picker: (x: T) => number) {
     return (a: T, b: T) => picker(a) - picker(b); 
 }
 
+export function descending<T>(picker: (x: T) => number) {
+    return (a: T, b: T) => picker(b) - picker(a);
+}
+
 export function typeName<T>(obj: T) {
     return Object.prototype.toString.call(obj);
 }
