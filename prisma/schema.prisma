@@ -19,6 +19,11 @@ enum TimelapsePrivacy {
   PUBLIC
 }
 
+enum VideoContainerKind {
+  WEBM
+  MP4
+}
+
 model User {
   id                String            @id @default(uuid())
   email             String
@@ -35,20 +40,36 @@ model User {
 }
 
 model Timelapse {
-  id                  String              @id @default(uuid())
-  videoUrl            String              @unique
-  hackatimeProject    String?
-  name                String
-  description         String              @default("")
-  privacy             TimelapsePrivacy    @default(UNLISTED)
-  isPublished         Boolean             @default(false)
-  lengthSeconds       Float
-  decryptedChecksum   String
+  /// The unique ID of the timelapse.
+  id                    String              @id @default(uuid())
 
-  ownerId             String
-  owner               User                @relation(fields: [ownerId], references: [id])
+  /// The S3 key that points to the object. If `isPublished` is `false`, this refers to the
+  /// encrypted bucket - otherwise, the public bucket.
+  s3Key                 String
 
-  snapshots           Snapshot[]
+  /// The Hackatime project key associated with the timelapse. If `null`, the timelapse has not
+  /// yet been synchronized with Hackatime.
+  hackatimeProject      String?
+
+  /// The name (title) of the timelapse.
+  name                  String
+
+  /// The description of the timelapse.
+  description           String              @default("")
+
+  /// If `isPublished` is `true`, specifies whether the timelapse can only be accessed via its URL.
+  privacy               TimelapsePrivacy    @default(UNLISTED)
+
+  /// Determines whether the timelapse is decrypted and can be accessed by users other than the owner.
+  isPublished           Boolean             @default(false)
+
+  /// The container type used to store the video.
+  containerKind         VideoContainerKind
+
+  ownerId               String
+  owner                 User                @relation(fields: [ownerId], references: [id])
+
+  snapshots             Snapshot[]
 }
 
 /// Represents a single frame in a `TimelapseSegment`.

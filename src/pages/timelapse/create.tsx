@@ -10,7 +10,7 @@ import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { timelapseStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/timelapseStorage";
 import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
-import { ascending, assert, descending } from "@/shared/common";
+import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
 
 export default function Page() {
@@ -30,9 +30,8 @@ export default function Page() {
   const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(null);
   const [frameCount, setFrameCount] = useState(0);
   const [currentTimelapseId, setCurrentTimelapseId] = useState<number | null>(null);
-  const [isRecovering, setIsRecovering] = useState(false);
   const [needsVideoSource, setNeedsVideoSource] = useState(false);
-  const [currentSession, setCurrentSession] = useState<number>(Date.now());
+  const [currentSession] = useState<number>(Date.now());
   const [videoProcessor, setVideoProcessor] = useState<VideoProcessor | null>(null);
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
 
@@ -56,77 +55,66 @@ export default function Page() {
 
   useEffect(() => {
     (async () => {
-      setIsRecovering(true);
+      const activeTimelapse = await timelapseStorage.getActiveTimelapse();
+      if (!activeTimelapse) {
+        console.log("No timelapse was started previously.");
+        return;
+      }
 
-      try {
-        const activeTimelapse = await timelapseStorage.getActiveTimelapse();
-        if (!activeTimelapse) {
-          console.log("No timelapse was started previously.");
-          setIsRecovering(false);
-          return;
+      console.group("An incomplete timelapse has been detected!");
+      console.log("timelapse:", activeTimelapse);
+
+      const snapshots = await timelapseStorage.getAllSnapshots();
+      console.log("snapshots:", snapshots);
+      console.groupEnd();
+
+      let adjustedStartTime = new Date(activeTimelapse.startedAt);
+      if (snapshots.length > 0) {
+        // Group snapshots by session
+        const sessionGroups = new Map<number, LocalSnapshot[]>();
+        for (const snapshot of snapshots) {
+          if (!sessionGroups.has(snapshot.session)) {
+            sessionGroups.set(snapshot.session, []);
+          }
+          sessionGroups.get(snapshot.session)!.push(snapshot);
         }
 
-        console.group("An incomplete timelapse has been detected!");
-        console.log("timelapse:", activeTimelapse);
-
-        const snapshots = await timelapseStorage.getSnapshotsForTimelapse(activeTimelapse.id);
-        console.log("snapshots:", snapshots);
+        // Calculate total elapsed time by summing session durations
+        console.group("Sessions:");
+        let totalElapsedTime = 0;
+        for (const [session, sessionSnapshots] of sessionGroups) {
+          if (sessionSnapshots.length > 1) {
+            const sorted = sessionSnapshots.sort((a, b) => a.createdAt - b.createdAt);
+            const sessionStart = sorted[0].createdAt;
+            const sessionEnd = sorted[sorted.length - 1].createdAt;
+            const sessionDuration = sessionEnd - sessionStart;
+            totalElapsedTime += sessionDuration;
+            
+            console.log(`Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
+          }
+        }
         console.groupEnd();
 
-        let adjustedStartTime = new Date(activeTimelapse.startedAt);
-        if (snapshots.length > 0) {
-          // Group snapshots by session
-          const sessionGroups = new Map<number, LocalSnapshot[]>();
-          for (const snapshot of snapshots) {
-            if (!sessionGroups.has(snapshot.session)) {
-              sessionGroups.set(snapshot.session, []);
-            }
-            sessionGroups.get(snapshot.session)!.push(snapshot);
-          }
+        adjustedStartTime = new Date(Date.now() - totalElapsedTime);
+        setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
 
-          // Calculate total elapsed time by summing session durations
-          console.group("Sessions:");
-          let totalElapsedTime = 0;
-          for (const [session, sessionSnapshots] of sessionGroups) {
-            if (sessionSnapshots.length > 1) {
-              const sorted = sessionSnapshots.sort((a, b) => a.createdAt - b.createdAt);
-              const sessionStart = sorted[0].createdAt;
-              const sessionEnd = sorted[sorted.length - 1].createdAt;
-              const sessionDuration = sessionEnd - sessionStart;
-              totalElapsedTime += sessionDuration;
-              
-              console.log(`Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
-            }
-          }
-          console.groupEnd();
-
-          adjustedStartTime = new Date(Date.now() - totalElapsedTime);
-          setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
-
-          console.log("session groups:", sessionGroups);
-          console.log("total elapsed time:", totalElapsedTime);
-        }
-
-        setName(activeTimelapse.name);
-        setDescription(activeTimelapse.description);
-        const lastFrameCount = snapshots.toSorted(descending(x => x.frame))[0].frame;
-        setFrameCount(lastFrameCount);
-        frameCountRef.current = lastFrameCount;
-        setCurrentTimelapseId(activeTimelapse.id);
-        setStartedAt(adjustedStartTime);
-        setIsCreated(true);
-
-        chunksRef.current = activeTimelapse.chunks;
-
-        setNeedsVideoSource(true);
-        setSetupModalOpen(true);
+        console.log("session groups:", sessionGroups);
+        console.log("total elapsed time:", totalElapsedTime);
       }
-      catch (error) {
-        console.error("Failed to recover timelapse:", error);
-      }
-      finally {
-        setIsRecovering(false);
-      }
+
+      setName(activeTimelapse.name);
+      setDescription(activeTimelapse.description);
+      const lastFrameCount = snapshots.length;
+      setFrameCount(lastFrameCount);
+      frameCountRef.current = lastFrameCount;
+      setCurrentTimelapseId(activeTimelapse.id);
+      setStartedAt(adjustedStartTime);
+      setIsCreated(true);
+
+      chunksRef.current = activeTimelapse.chunks;
+
+      setNeedsVideoSource(true);
+      setSetupModalOpen(true);
     })();
   }, []);
 
@@ -138,7 +126,6 @@ export default function Page() {
   }, [currentStream]);
 
   const captureFrame = useCallback(async (timelapseId?: number) => {
-    console.log("captureFrame()");
     if (isFrozenRef.current)
       return;
 
@@ -168,14 +155,12 @@ export default function Page() {
     const newFrameCount = frameCountRef.current;
     frameCountRef.current += 1;
     
-    const snapshot: Omit<LocalSnapshot, "id"> = {
-      frame: newFrameCount,
+    const snapshot: LocalSnapshot = {
       createdAt: Date.now(),
-      timelapseId: activeTimelapseId,
       session: currentSession
     };
 
-    timelapseStorage.saveSnapshot(snapshot as LocalSnapshot);
+    timelapseStorage.saveSnapshot(snapshot);
     setFrameCount(newFrameCount);
   }, [recorder, currentTimelapseId, currentSession]);
 
@@ -237,7 +222,8 @@ export default function Page() {
       }
 
       newRecorder.ondataavailable = async (ev) => {
-        if (ev.data.size <= 0) return;
+        if (ev.data.size <= 0)
+          return;
 
         const storedChunk: LocalChunk = {
           data: ev.data,
@@ -419,7 +405,7 @@ export default function Page() {
       // Mark timelapse as complete and clean up from IndexedDB
       if (currentTimelapseId) {
         await timelapseStorage.markComplete(currentTimelapseId);
-        await timelapseStorage.deleteSnapshotsForTimelapse(currentTimelapseId);
+        await timelapseStorage.deleteAllSnapshots();
         await timelapseStorage.deleteTimelapse(currentTimelapseId);
         setCurrentTimelapseId(null);
       }
@@ -539,7 +525,7 @@ export default function Page() {
             </div>
 
             <div className="translate-y-[-2px]">
-              {isRecovering ? "RECOVERING" : isRecording ? "REC" : "PAUSE"}{" "}
+              {isRecording ? "REC" : "PAUSE"}{" "}
               <br></br>
               <TimeSince active={isRecording} startTime={startedAt} initialElapsedSeconds={initialElapsedSeconds} /> <br></br>
               <span className="opacity-70">

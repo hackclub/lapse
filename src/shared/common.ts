@@ -29,14 +29,58 @@ export function range(length: number) {
     return [...Array(length).keys()];
 }
 
-export function ascending<T>(picker: (x: T) => number) {
+/**
+ * Creates a function which can be used with `.toSorted` and `.sort` that sorts a collection
+ * in ascending order according to a numeric key.
+ */
+export function ascending<T>(picker: (x: T) => number): (a: T, b: T) => number;
+
+/**
+ * Creates a function which can be used with `.toSorted` and `sort` that sorts a numeric collection
+ * in ascending order.
+ */
+export function ascending(): (a: number, b: number) => number;
+
+export function ascending<T>(picker?: (x: T) => number) {
+    if (!picker)
+        return (a: number, b: number) => a - b;
+
     return (a: T, b: T) => picker(a) - picker(b); 
 }
 
-export function descending<T>(picker: (x: T) => number) {
+export function descending<T>(picker: (x: T) => number): (a: T, b: T) => number;
+export function descending(): (a: number, b: number) => number;
+
+export function descending<T>(picker?: (x: T) => number) {
+    if (!picker)
+        return (a: number, b: number) => b - a;
+
     return (a: T, b: T) => picker(b) - picker(a);
 }
 
 export function typeName<T>(obj: T) {
     return Object.prototype.toString.call(obj);
+}
+
+export function unwrap<T>(obj: T | undefined, err?: string): T {
+    if (obj)
+        return obj;
+
+    throw new Error(err ?? "Object was undefined.");
+}
+
+/**
+ * Emulates a `switch` expression present in languages like C#.
+ */
+export function match<K extends string, T>(selector: K, cases: Record<K, T>) {
+    if (!(selector in cases)) {
+        console.error("Could not find", selector, "from cases", cases);
+        throw new Error(`Could not match value ${selector} in "match" block`);
+    }
+
+    return cases[selector];
+}
+
+export function oneOf<T extends PropertyKey>(...values: T[]): Record<T, true> {
+    return Object.fromEntries(values.map(x => [x, true])) as Record<T, true>;
 }

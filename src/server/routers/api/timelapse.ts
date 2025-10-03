@@ -7,15 +7,18 @@ import crypto from "crypto";
 import { PrismaClient } from "../../../generated/prisma";
 import type { Timelapse as DbTimelapse } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ok } from "@/shared/common";
+import { apiResult, ascending, err, match, ok, oneOf } from "@/shared/common";
+import { decryptString, encryptString } from "@/server/encryption";
+import * as env from "@/server/env";
+import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE } from "@/shared/constants";
 
 const db = new PrismaClient();
 const s3 = new S3Client({
     region: "auto",
-    endpoint: process.env.R2_ENDPOINT,
+    endpoint: `https://${env.S3_ENDPOINT}`,
     credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        accessKeyId: env.S3_ACCESS_KEY_ID,
+        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
     },
 });
 
@@ -23,16 +26,19 @@ const s3 = new S3Client({
  * Converts a database representation of a timelapse to a runtime (API) one.
  */
 export function dtoTimelapse(entity: DbTimelapse): Timelapse {
+    const s3Bucket = entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED;
+
     return {
         id: entity.id,
         owner: entity.ownerId,
         isPublished: entity.isPublished,
         hackatimeProject: entity.hackatimeProject ?? undefined,
+        playbackUrl: `${s3Bucket}/${entity.s3Key}`,
+        videoContainerKind: entity.containerKind,
         mutable: {
             name: entity.name,
             description: entity.description,
-            privacy: entity.privacy as TimelapsePrivacy,
-            decryptedChecksum: entity.decryptedChecksum,
+            privacy: entity.privacy as TimelapsePrivacy
         },
     };
 }
@@ -44,14 +50,33 @@ export type TimelapsePrivacy = z.infer<typeof TimelapsePrivacySchema>;
 export const TimelapsePrivacySchema = z.enum(["UNLISTED", "PUBLIC"]);
 
 /**
+ * Represents supported container formats for timelapse video streams.
+ */
+export type TimelapseVideoContainer = z.infer<typeof TimelapseVideoContainerSchema>;
+export const TimelapseVideoContainerSchema = z.enum(["WEBM", "MP4"]);
+
+function containerTypeToMimeType(container: TimelapseVideoContainer) {
+    return match(container, {
+        "MP4": "video/mp4" as const,
+        "WEBM": "video/webm" as const
+    });
+}
+
+function containerTypeToExtension(container: TimelapseVideoContainer) {
+    return match(container, {
+        "MP4": "mp4" as const,
+        "WEBM": "webm" as const
+    });
+}
+
+/**
  * Represents the fields of a timelapse that can be mutated by the user.
  */
 export type TimelapseMutable = z.infer<typeof TimelapseMutableSchema>;
 export const TimelapseMutableSchema = z.object({
     name: z.string().min(2).max(60),
     description: z.string().max(280).default(""),
-    privacy: TimelapsePrivacySchema,
-    decryptedChecksum: z.hex().length(32 / 4),
+    privacy: TimelapsePrivacySchema
 });
 
 /**
@@ -62,8 +87,10 @@ export const TimelapseSchema = z.object({
     id: z.uuid(),
     owner: z.uuid(),
     isPublished: z.boolean(),
+    playbackUrl: z.url(),
     hackatimeProject: z.string().optional(),
-    mutable: TimelapseMutableSchema,
+    videoContainerKind: TimelapseVideoContainerSchema,
+    mutable: TimelapseMutableSchema
 });
 
 export default router({
@@ -85,9 +112,9 @@ export default router({
                 timelapse: TimelapseSchema,
             })
         )
-        .query(async ({ ctx, input }) => {
+        .query(async (req) => {
             const timelapse = await db.timelapse.findFirst({
-                where: { id: input.id },
+                where: { id: req.input.id },
             });
 
             if (!timelapse) {
@@ -97,8 +124,8 @@ export default router({
             // Check if user can access this timelapse
             const canAccess =
                 timelapse.isPublished ||
-                (ctx.user && ctx.user.id === timelapse.ownerId) ||
-                (ctx.user && (ctx.user.permissionLevel === "ADMIN" || ctx.user.permissionLevel === "ROOT"));
+                (req.ctx.user && req.ctx.user.id === timelapse.ownerId) ||
+                (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
             if (!canAccess) {
                 return { ok: false, error: "Timelapse not found" };
@@ -108,36 +135,38 @@ export default router({
         }),
 
     /**
-     * Creates a pre-signed URL for uploading a timelapse video file to R2.
+     * Creates a pre-signed URL for uploading a timelapse video stream. After an upload to the pre-signed
+     * URL is complete, `create` may be called with the `key`. The uploaded content has to be encrypted
+     * using AES-256-CBC using an arbitrary key that should be provided to `publish`.
      */
-    create: protectedProcedure
-        .input(TimelapseMutableSchema)
+    beginUpload: protectedProcedure
+        .input(z.object({
+            /**
+             * The container format of the video stream. This will be used to derive the MIME type
+             * of the video.
+             */
+            containerType: TimelapseVideoContainerSchema
+        }))
         .output(
             apiResult({
                 /**
-                 * Pre-signed URL for uploading the video file
+                 * The pre-signed URL that the client should upload the timelapse video stream to.
                  */
-                uploadUrl: z.url(),
+                url: z.url(),
 
                 /**
-                 * The timelapse ID that will be used when confirming the upload
+                 * An opaque key that refers to the upload after uploading.
                  */
-                timelapseId: z.uuid(),
-
-                /**
-                 * The key/path where the file will be stored in R2
-                 */
-                key: z.string(),
+                key: z.string()
             })
         )
-        .mutation(async ({ ctx }) => {
-            const timelapseId = crypto.randomUUID();
-            const key = `timelapses/${ctx.user.id}/${timelapseId}.mp4`;
+        .query(async (req) => {
+            const key = `timelapses/${req.ctx.user.id}/${crypto.randomUUID()}.${containerTypeToExtension(req.input.containerType)}`;
 
             const command = new PutObjectCommand({
-                Bucket: "lapse-encrypted",
+                Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                 Key: key,
-                ContentType: "video/mp4",
+                ContentType: containerTypeToMimeType(req.input.containerType)
             });
 
             const uploadUrl = await getSignedUrl(s3, command, {
@@ -145,21 +174,36 @@ export default router({
             });
 
             return ok({
-                uploadUrl,
-                timelapseId,
-                key,
+                url: uploadUrl,
+
+                // The key is opaque, but it doesn't really _have_ to be. If the client for some
+                // godforsaken reason NEEDS to know the actual bucket key, then we COULD make this
+                // a transparent field by just... not encrypting it.
+                key: encryptString(key, env.PRIVATE_KEY_UPLOAD_KEY)
             });
         }),
 
     /**
-     * Confirms the upload and creates the timelapse database entry.
+     * Creates a pre-signed URL for uploading a timelapse video file to R2.
      */
-    confirmUpload: protectedProcedure
+    create: protectedProcedure
         .input(
             z.object({
-                timelapseId: z.uuid(),
-                key: z.string(),
-                metadata: TimelapseMutableSchema,
+                /**
+                 * Mutable timelapse metadata.
+                 */
+                mutable: TimelapseMutableSchema,
+
+                /**
+                 * An array of Unix timestamps. The frame count is inferred by sorting the array,
+                 * and always begins at 0.
+                 */
+                snapshots: z.array(z.int().min(0)).max(MAX_VIDEO_FRAME_COUNT),
+
+                /**
+                 * The key provided by the `beginUpload` API endpoint.
+                 */
+                uploadKey: z.hex()
             })
         )
         .output(
@@ -167,24 +211,61 @@ export default router({
                 timelapse: TimelapseSchema,
             })
         )
-        .mutation(async ({ ctx, input }) => {
-            const videoUrl = `https://lapse-encrypted.${process.env.R2_ENDPOINT?.replace(
-                "https://",
-                ""
-            )}/timelapses/${ctx.user.id}/${input.timelapseId}.mp4`;
+        .mutation(async (req) => {
+            const s3Key = decryptString(req.input.uploadKey, env.PRIVATE_KEY_UPLOAD_KEY);
+            if (!s3Key)
+                return err("Invalid upload key.");
+
+            let containerKind: TimelapseVideoContainer | null = null;
+
+            try {
+                const getCommand = new GetObjectCommand({
+                    Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                    Key: s3Key,
+                });
+
+                const object = await s3.send(getCommand);
+                const fileSizeBytes = object.ContentLength ?? 0;
+
+                containerKind = !object.ContentType ? null
+                    : object.ContentType.includes("video/webm") ? "WEBM"
+                    : object.ContentType.includes("video/mp4") ? "MP4"
+                    : null; // unrecognized?!
+
+                if (fileSizeBytes > MAX_VIDEO_STREAM_SIZE || !containerKind) {
+                    const deleteCommand = new DeleteObjectCommand({
+                        Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                        Key: s3Key,
+                    });
+
+                    await s3.send(deleteCommand);
+                    
+                    return err("Video stream exceeds size limit or has an invalid content type");
+                }
+            }
+            catch {
+                return err("Uploaded file not found.");
+            }
 
             const timelapse = await db.timelapse.create({
                 data: {
-                    id: input.timelapseId,
-                    ownerId: ctx.user.id,
-                    name: input.metadata.name,
-                    description: input.metadata.description,
-                    privacy: input.metadata.privacy,
+                    ownerId: req.ctx.user.id,
+                    name: req.input.mutable.name,
+                    description: req.input.mutable.description,
+                    privacy: req.input.mutable.privacy,
+                    containerKind: containerKind,
                     isPublished: false,
-                    lengthSeconds: 0,
-                    decryptedChecksum: input.metadata.decryptedChecksum,
-                    videoUrl: videoUrl,
+                    s3Key: s3Key
                 },
+            });
+
+            const sortedSnapshots = req.input.snapshots.sort(ascending());
+            await db.snapshot.createMany({
+                data: sortedSnapshots.map((x, i) => ({
+                    timelapseId: timelapse.id,
+                    frame: i,
+                    createdAt: new Date(x * 1000)
+                }))
             });
 
             return ok({ timelapse: dtoTimelapse(timelapse) });
@@ -196,7 +277,14 @@ export default router({
     update: protectedProcedure
         .input(
             z.object({
+                /**
+                 * The ID of the timelapse to update.
+                 */
                 id: z.uuid(),
+
+                /**
+                 * The changes to apply to the timelapse.
+                 */
                 changes: TimelapseMutableSchema.partial(),
             })
         )
@@ -208,20 +296,18 @@ export default router({
                 timelapse: TimelapseSchema,
             })
         )
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async (req) => {
             const timelapse = await db.timelapse.findFirst({
-                where: { id: input.id },
+                where: { id: req.input.id },
             });
 
             if (!timelapse) {
                 return { ok: false, error: "Timelapse not found" };
             }
 
-            // Check permissions
             const canEdit =
-                ctx.user.id === timelapse.ownerId ||
-                ctx.user.permissionLevel === "ADMIN" ||
-                ctx.user.permissionLevel === "ROOT";
+                req.ctx.user.id === timelapse.ownerId ||
+                req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canEdit) {
                 return {
@@ -235,13 +321,20 @@ export default router({
             }
 
             const updateData: Partial<DbTimelapse> = {};
-            if (input.changes.name) updateData.name = input.changes.name;
-            if (input.changes.description !== undefined)
-                updateData.description = input.changes.description;
-            if (input.changes.privacy) updateData.privacy = input.changes.privacy;
+            if (req.input.changes.name) {
+                updateData.name = req.input.changes.name;
+            }
+
+            if (req.input.changes.description !== undefined) {
+                updateData.description = req.input.changes.description;
+            }
+
+            if (req.input.changes.privacy) {
+                updateData.privacy = req.input.changes.privacy;
+            }
 
             const updatedTimelapse = await db.timelapse.update({
-                where: { id: input.id },
+                where: { id: req.input.id },
                 data: updateData,
             });
 
@@ -258,9 +351,9 @@ export default router({
             })
         )
         .output(apiResult({}))
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async (req) => {
             const timelapse = await db.timelapse.findFirst({
-                where: { id: input.id },
+                where: { id: req.input.id },
             });
 
             if (!timelapse) {
@@ -268,9 +361,8 @@ export default router({
             }
 
             const canDelete =
-                ctx.user.id === timelapse.ownerId ||
-                ctx.user.permissionLevel === "ADMIN" ||
-                ctx.user.permissionLevel === "ROOT";
+                req.ctx.user.id === timelapse.ownerId ||
+                req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canDelete) {
                 return {
@@ -280,7 +372,7 @@ export default router({
             }
 
             await db.timelapse.delete({
-                where: { id: input.id },
+                where: { id: req.input.id },
             });
 
             return ok({});
@@ -306,7 +398,7 @@ export default router({
                 /**
                  * The 128-bit initialization vector (IV) used to encrypt the snapshot, serialized as a hex string.
                  */
-                iv: z.hex().length(128 / 4),
+                iv: z.hex().length(128 / 4)
             })
         )
         .output(
@@ -317,19 +409,17 @@ export default router({
                 timelapse: TimelapseSchema,
             })
         )
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async (req) => {
             const timelapse = await db.timelapse.findFirst({
-                where: { id: input.id },
+                where: { id: req.input.id },
             });
 
-            if (!timelapse) {
+            if (!timelapse)
                 return { ok: false, error: "Timelapse not found" };
-            }
 
             const canPublish =
-                ctx.user.id === timelapse.ownerId ||
-                ctx.user.permissionLevel === "ADMIN" ||
-                ctx.user.permissionLevel === "ROOT";
+                req.ctx.user.id === timelapse.ownerId ||
+                req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canPublish) {
                 return {
@@ -342,70 +432,49 @@ export default router({
                 return { ok: false, error: "Timelapse already published" };
             }
 
-            // Extract encrypted file key from current video URL
-            const encryptedKey = `timelapses/${ctx.user.id}/${input.id}.mp4`;
-            const publicKey = `timelapses/${input.id}.mp4`;
-
             try {
-                // Get encrypted video from lapse-encrypted bucket
                 const getCommand = new GetObjectCommand({
-                    Bucket: "lapse-encrypted",
-                    Key: encryptedKey,
+                    Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                    Key: timelapse.s3Key
                 });
 
                 const encryptedObject = await s3.send(getCommand);
-                const encryptedBuffer =
-                    await encryptedObject.Body?.transformToByteArray();
+                const encryptedBuffer = await encryptedObject.Body?.transformToByteArray();
 
                 if (!encryptedBuffer) {
                     return { ok: false, error: "Failed to retrieve encrypted video" };
                 }
 
-                // Decrypt the video using AES-256-CBC
-                const keyBuffer = Buffer.from(input.key, "hex");
-                const ivBuffer = Buffer.from(input.iv, "hex");
-
                 const decipher = crypto.createDecipheriv(
                     "aes-256-cbc",
-                    keyBuffer,
-                    ivBuffer
+                    Buffer.from(req.input.key, "hex"),
+                    Buffer.from(req.input.iv, "hex")
                 );
+                
                 const decryptedBuffer = Buffer.concat([
                     decipher.update(Buffer.from(encryptedBuffer)),
                     decipher.final(),
                 ]);
 
-                // Upload decrypted video to lapse-public bucket
                 const putCommand = new PutObjectCommand({
-                    Bucket: "lapse-public",
-                    Key: publicKey,
+                    Bucket: env.S3_PUBLIC_BUCKET_NAME,
+                    Key: timelapse.s3Key,
                     Body: decryptedBuffer,
-                    ContentType: "video/mp4",
+                    ContentType: containerTypeToMimeType(timelapse.containerKind)
                 });
 
                 await s3.send(putCommand);
 
-                // Delete from encrypted bucket
                 const deleteCommand = new DeleteObjectCommand({
-                    Bucket: "lapse-encrypted",
-                    Key: encryptedKey,
+                    Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                    Key: timelapse.s3Key,
                 });
 
                 await s3.send(deleteCommand);
 
-                // Update database with new public URL
-                const publicVideoUrl = `https://lapse-public.${process.env.R2_ENDPOINT?.replace(
-                    "https://",
-                    ""
-                )}/timelapses/${input.id}.mp4`;
-
                 const publishedTimelapse = await db.timelapse.update({
-                    where: { id: input.id },
-                    data: {
-                        isPublished: true,
-                        videoUrl: publicVideoUrl,
-                        decryptedChecksum: `${input.key}:${input.iv}`,
-                    },
+                    where: { id: req.input.id },
+                    data: { isPublished: true },
                 });
 
                 return ok({ timelapse: dtoTimelapse(publishedTimelapse) });
@@ -436,18 +505,15 @@ export default router({
                 timelapses: z.array(TimelapseSchema),
             })
         )
-        .query(async ({ ctx, input }) => {
-            const isViewingSelf = ctx.user && ctx.user.id === input.user;
-            const isAdmin =
-                ctx.user &&
-                (ctx.user.permissionLevel === "ADMIN" ||
-                    ctx.user.permissionLevel === "ROOT");
+        .query(async (req) => {
+            const isViewingSelf = req.ctx.user && req.ctx.user.id === req.input.user;
+            const isAdmin = req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT"));
 
             const whereClause: {
                 ownerId: string;
                 isPublished?: boolean;
                 privacy?: "PUBLIC" | "UNLISTED";
-            } = { ownerId: input.user };
+            } = { ownerId: req.input.user };
 
             // If not viewing self and not admin, only show published public timelapses
             if (!isViewingSelf && !isAdmin) {

@@ -2,10 +2,7 @@
  * Represents a locally stored snapshot. This will represent the structure on the server-side database.
  */
 export interface LocalSnapshot {
-  id: number;
-  frame: number;
   createdAt: number;
-  timelapseId: number;
   session: number;
 }
 
@@ -32,7 +29,7 @@ export interface LocalTimelapse {
 }
 
 const DB_NAME = "LapseStorage";
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 const DB_STORE_NAME = "timelapses";
 const DB_SNAPSHOTS_STORE_NAME = "snapshots";
 
@@ -51,21 +48,38 @@ class TimelapseStorage {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
+        const transaction = (event.target as IDBOpenDBRequest).transaction;
+        const oldVersion = event.oldVersion;
+        
         if (!db.objectStoreNames.contains(DB_STORE_NAME)) {
           db.createObjectStore(DB_STORE_NAME, { keyPath: "id", autoIncrement: true });
         }
 
         if (!db.objectStoreNames.contains(DB_SNAPSHOTS_STORE_NAME)) {
-          const snapshotStore = db.createObjectStore(DB_SNAPSHOTS_STORE_NAME, {
-            keyPath: "id",
-            autoIncrement: true,
+          db.createObjectStore(DB_SNAPSHOTS_STORE_NAME, {
+            keyPath: "createdAt",
           });
-
-          snapshotStore.createIndex("timelapseId", "timelapseId", {
-            unique: false,
+        }
+        
+        // Migration for version 5: Remove frame index if it exists
+        if (oldVersion < 5 && db.objectStoreNames.contains(DB_SNAPSHOTS_STORE_NAME)) {
+          const snapshotStore = transaction!.objectStore(DB_SNAPSHOTS_STORE_NAME);
+          if (snapshotStore.indexNames.contains("frame")) {
+            snapshotStore.deleteIndex("frame");
+          }
+        }
+        
+        // Migration for version 6: Recreate snapshots store with createdAt key and remove timelapseId index
+        if (oldVersion < 6 && db.objectStoreNames.contains(DB_SNAPSHOTS_STORE_NAME)) {
+          const snapshotStore = transaction!.objectStore(DB_SNAPSHOTS_STORE_NAME);
+          if (snapshotStore.indexNames.contains("timelapseId")) {
+            snapshotStore.deleteIndex("timelapseId");
+          }
+          // Note: We can't change the keyPath of an existing store, so we'll delete and recreate
+          db.deleteObjectStore(DB_SNAPSHOTS_STORE_NAME);
+          db.createObjectStore(DB_SNAPSHOTS_STORE_NAME, {
+            keyPath: "createdAt",
           });
-
-          snapshotStore.createIndex("frame", "frame", { unique: false });
         }
       };
     });
@@ -167,7 +181,7 @@ class TimelapseStorage {
     });
   }
 
-  async saveSnapshot(snapshot: LocalSnapshot | Omit<LocalSnapshot, "id">): Promise<number> {
+  async saveSnapshot(snapshot: LocalSnapshot): Promise<number> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -180,15 +194,13 @@ class TimelapseStorage {
       const request = store.put(snapshot);
 
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result as number);
+      request.onsuccess = () => resolve(snapshot.createdAt);
 
       console.log("(db) saveSnapshot ->", snapshot);
     });
   }
 
-  async getSnapshotsForTimelapse(
-    timelapseId: number
-  ): Promise<LocalSnapshot[]> {
+  async getAllSnapshots(): Promise<LocalSnapshot[]> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
@@ -197,46 +209,39 @@ class TimelapseStorage {
         "readonly"
       );
       const store = transaction.objectStore(DB_SNAPSHOTS_STORE_NAME);
-      const index = store.index("timelapseId");
-      const request = index.getAll(timelapseId);
+      const request = store.getAll();
 
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result || []);
     });
   }
 
-  async deleteSnapshotsForTimelapse(timelapseId: number): Promise<void> {
+  async deleteAllSnapshots(): Promise<void> {
     if (!this.db) await this.init();
-
-    const snapshots = await this.getSnapshotsForTimelapse(timelapseId);
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([DB_SNAPSHOTS_STORE_NAME], "readwrite");
       const store = transaction.objectStore(DB_SNAPSHOTS_STORE_NAME);
+      const request = store.clear();
 
-      let completed = 0;
-      const total = snapshots.length;
-
-      if (total === 0) {
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        console.log("(db) deleteAllSnapshots -> all snapshots deleted");
         resolve();
-        return;
-      }
-
-      snapshots.forEach((snapshot) => {
-        const request = store.delete(snapshot.id);
-        request.onsuccess = () => {
-          completed++;
-          if (completed === total) {
-            console.log(
-              `(db) deleteSnapshotsForTimelapse(${timelapseId}) -> ${total} snapshots deleted`
-            );
-            resolve();
-          }
-        };
-        request.onerror = () => reject(request.error);
-      });
+      };
     });
   }
+}
+
+/**
+ * Utility to get snapshots with computed frame numbers based on creation timestamp order
+ */
+export function getSnapshotsWithFrameNumbers(snapshots: LocalSnapshot[]): (LocalSnapshot & { frame: number })[] {
+    const sorted = snapshots.toSorted((a, b) => a.createdAt - b.createdAt);
+    return sorted.map((snapshot, index) => ({
+        ...snapshot,
+        frame: index
+    }));
 }
 
 export const timelapseStorage = new TimelapseStorage();

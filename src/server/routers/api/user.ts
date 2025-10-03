@@ -178,10 +178,21 @@ export default router({
             
             if (input.changes.profile) {
                 const { profile } = input.changes;
-                if (profile.displayName) updateData.displayName = profile.displayName;
-                if (profile.bio !== undefined) updateData.bio = profile.bio;
-                if (profile.handle) updateData.handle = profile.handle;
-                if (profile.urls) updateData.urls = profile.urls;
+                if (profile.displayName) {
+                    updateData.displayName = profile.displayName;
+                }
+
+                if (profile.bio !== undefined) {
+                    updateData.bio = profile.bio;
+                }
+
+                if (profile.handle) {
+                    updateData.handle = profile.handle;
+                }
+
+                if (profile.urls) {
+                    updateData.urls = profile.urls;
+                }
             }
             
             if (input.changes.hackatimeApiKey !== undefined) {
