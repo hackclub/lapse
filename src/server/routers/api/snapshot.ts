@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ok, oneOf } from "@/shared/common";
+import { apiResult, err, ok, oneOf } from "@/shared/common";
 
 import { PrismaClient } from "../../../generated/prisma";
 import type { Snapshot as DbSnapshot } from "../../../generated/prisma";
@@ -65,27 +65,18 @@ export default router({
                 include: { timelapse: true },
             });
 
-            if (!snapshot) {
-                return { ok: false, error: "Snapshot not found" };
-            }
+            if (!snapshot)
+                return err("Snapshot not found");
 
             const canDelete =
                 req.ctx.user.id === snapshot.timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
-            if (!canDelete) {
-                return {
-                    ok: false,
-                    error: "You don't have permission to delete this snapshot",
-                };
-            }
+            if (!canDelete)
+                return err("You don't have permission to delete this snapshot");
 
-            if (snapshot.timelapse.isPublished) {
-                return {
-                    ok: false,
-                    error: "Cannot delete snapshots from published timelapse",
-                };
-            }
+            if (snapshot.timelapse.isPublished)
+                return err("Cannot delete snapshots from published timelapse");
 
             await db.snapshot.delete({
                 where: { id: req.input.id },
@@ -119,9 +110,8 @@ export default router({
                 where: { id: req.input.timelapseId },
             });
 
-            if (!timelapse) {
-                return { ok: false, error: "Timelapse not found" };
-            }
+            if (!timelapse)
+                return err("Timelapse not found");
 
             // Check if user can access this timelapse
             const canAccess =
@@ -129,9 +119,8 @@ export default router({
                 (req.ctx.user && req.ctx.user.id === timelapse.ownerId) ||
                 (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
-            if (!canAccess) {
-                return { ok: false, error: "Timelapse not found" };
-            }
+            if (!canAccess)
+                return err("Timelapse not found");
 
             const snapshots = await db.snapshot.findMany({
                 where: { timelapseId: req.input.timelapseId },

@@ -19,7 +19,8 @@ export interface LocalChunk {
 /**
  * An in-progress timelapse, stored locally.
  */
-export interface LocalTimelapseMutable {
+export interface LocalTimelapse {
+    id: number;
     name: string;
     description: string;
     startedAt: number;
@@ -27,15 +28,26 @@ export interface LocalTimelapseMutable {
     isActive: boolean;
 }
 
-export type LocalTimelapse = LocalTimelapseMutable & {
-    id: number;
+/**
+ * A device with an associated passkey.
+ */
+export interface LocalDevice {
+    id: string;
+    name: string;
     passkey: string;
+    thisDevice: boolean;
 }
 
+/**
+ * Collection of locally stored devices.
+ */
+export type LocalDevices = LocalDevice[];
+
 const DB_NAME = "lapse";
-const DB_VERSION = 0;
-const DB_STORE_NAME = "timelapses";
+const DB_VERSION = 1;
+const DB_TIMELAPSES_STORE_NAME = "timelapses";
 const DB_SNAPSHOTS_STORE_NAME = "snapshots";
+const DB_DEVICES_STORE_NAME = "devices";
 
 /**
  * Securely stores data on the client device. 
@@ -60,7 +72,21 @@ export class DeviceStorage {
             };
 
             request.onupgradeneeded = (event) => {
-                console.error("(db) upgrade needed!", event);
+                const db = (event.target as IDBOpenDBRequest).result;
+                
+                if (!db.objectStoreNames.contains(DB_TIMELAPSES_STORE_NAME)) {
+                    db.createObjectStore(DB_TIMELAPSES_STORE_NAME, { keyPath: "id", autoIncrement: true });
+                }
+                
+                if (!db.objectStoreNames.contains(DB_SNAPSHOTS_STORE_NAME)) {
+                    db.createObjectStore(DB_SNAPSHOTS_STORE_NAME, { keyPath: "createdAt" });
+                }
+                
+                if (!db.objectStoreNames.contains(DB_DEVICES_STORE_NAME)) {
+                    db.createObjectStore(DB_DEVICES_STORE_NAME, { keyPath: "id" });
+                }
+                
+                console.log("(db) upgrade completed");
             };
         });
     }
@@ -82,9 +108,9 @@ export class DeviceStorage {
         });
     }
 
-    async saveTimelapse(timelapse: LocalTimelapse | LocalTimelapseMutable): Promise<number> {
+    async saveTimelapse(timelapse: LocalTimelapse | Omit<LocalTimelapse, "id">): Promise<number> {
         const result = await this.transact<number>(
-            [DB_STORE_NAME],
+            [DB_TIMELAPSES_STORE_NAME],
             "readwrite",
             (store) => store.put(timelapse)
         );
@@ -95,7 +121,7 @@ export class DeviceStorage {
 
     async getTimelapse(id: number): Promise<LocalTimelapse | null> {
         const result = await this.transact<LocalTimelapse>(
-            [DB_STORE_NAME],
+            [DB_TIMELAPSES_STORE_NAME],
             "readonly",
             (store) => store.get(id)
         );
@@ -105,7 +131,7 @@ export class DeviceStorage {
 
     async getActiveTimelapse(): Promise<LocalTimelapse | null> {
         const timelapses = await this.transact<LocalTimelapse[]>(
-            [DB_STORE_NAME],
+            [DB_TIMELAPSES_STORE_NAME],
             "readonly",
             (store) => store.getAll()
         );
@@ -143,7 +169,7 @@ export class DeviceStorage {
 
     async deleteTimelapse(id: number): Promise<void> {
         await this.transact<void>(
-            [DB_STORE_NAME],
+            [DB_TIMELAPSES_STORE_NAME],
             "readwrite",
             (store) => store.delete(id)
         );
@@ -180,6 +206,47 @@ export class DeviceStorage {
         );
 
         console.log("(db) deleteAllSnapshots -> all snapshots deleted");
+    }
+
+    async saveDevice(device: LocalDevice): Promise<string> {
+        await this.transact<string>(
+            [DB_DEVICES_STORE_NAME],
+            "readwrite",
+            (store) => store.put(device)
+        );
+
+        console.log("(db) saveDevice ->", device);
+        return device.id;
+    }
+
+    async getDevice(id: string): Promise<LocalDevice | null> {
+        const result = await this.transact<LocalDevice>(
+            [DB_DEVICES_STORE_NAME],
+            "readonly",
+            (store) => store.get(id)
+        );
+
+        return result || null;
+    }
+
+    async getAllDevices(): Promise<LocalDevices> {
+        const result = await this.transact<LocalDevices>(
+            [DB_DEVICES_STORE_NAME],
+            "readonly",
+            (store) => store.getAll()
+        );
+
+        return result || [];
+    }
+
+    async deleteDevice(id: string): Promise<void> {
+        await this.transact<void>(
+            [DB_DEVICES_STORE_NAME],
+            "readwrite",
+            (store) => store.delete(id)
+        );
+
+        console.log(`(db) deleteDevice(${id})`);
     }
 }
 

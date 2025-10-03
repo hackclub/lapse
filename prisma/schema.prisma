@@ -24,6 +24,19 @@ enum VideoContainerKind {
   MP4
 }
 
+/// Represents a device with an encryption passkey that is unknown to the server.
+model KnownDevice {
+  id      String        @id @default(uuid())
+  name    String
+
+  ownerId   String
+  owner     User        @relation(fields: [ownerId], references: [id])
+
+  /// The timelapses created on this device.
+  timelapses    Timelapse[]
+}
+
+/// Represents a single user of Lapse.
 model User {
   id                String            @id @default(uuid())
   email             String
@@ -37,6 +50,7 @@ model User {
   slackId           String?
 
   timelapses        Timelapse[]
+  devices           KnownDevice[]
 }
 
 model Timelapse {
@@ -68,6 +82,9 @@ model Timelapse {
 
   ownerId               String
   owner                 User                @relation(fields: [ownerId], references: [id])
+
+  deviceId              String
+  device                KnownDevice         @relation(fields: [deviceId], references: [id])
 
   snapshots             Snapshot[]
 }

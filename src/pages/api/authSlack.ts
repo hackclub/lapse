@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { PrismaClient } from "../../generated/prisma";
 import { generateJWT } from "../../server/lib/auth";
+import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET } from "../../server/env";
 
 const database = new PrismaClient();
 
@@ -16,13 +17,18 @@ const SlackUserIdentitySchema = z.object({
 
 const SlackAuthResponseSchema = z.object({
     ok: z.boolean(),
-    access_token: z.string(),
-    scope: z.string(),
-    user: SlackUserIdentitySchema,
+    app_id: z.string(),
+    authed_user: z.object({
+        id: z.string(),
+        scope: z.string(),
+        access_token: z.string(),
+        token_type: z.string(),
+    }),
     team: z.object({
         id: z.string(),
-        name: z.string(),
     }),
+    enterprise: z.any().nullable(),
+    is_enterprise_install: z.boolean(),
 });
 
 const SlackUserResponseSchema = z.object({
@@ -45,8 +51,8 @@ export default async function handler(
     if (!code || typeof code !== "string")
         return res.redirect("/?error=missing-code");
 
-    const clientId = process.env.SLACK_CLIENT_ID;
-    const clientSecret = process.env.SLACK_CLIENT_SECRET;
+    const clientId = SLACK_CLIENT_ID;
+    const clientSecret = SLACK_CLIENT_SECRET;
 
     if (!clientId || !clientSecret)
         return res.redirect("/?error=config-error");
@@ -68,7 +74,8 @@ export default async function handler(
         const tokenDataResult = SlackAuthResponseSchema.safeParse(tokenDataRaw);
 
         if (!tokenDataResult.success) {
-            console.error("Invalid token response format:", tokenDataResult.error);
+            console.error("Invalid token response format.", tokenDataResult.error);
+            console.error("Raw data:", tokenDataRaw);
             return res.redirect("/?error=invalid-token-response");
         }
 
@@ -82,7 +89,7 @@ export default async function handler(
         const userResponse = await fetch("https://slack.com/api/users.identity", {
             method: "GET",
             headers: {
-                Authorization: `Bearer ${tokenData.access_token}`,
+                Authorization: `Bearer ${tokenData.authed_user.access_token}`,
             },
         });
 

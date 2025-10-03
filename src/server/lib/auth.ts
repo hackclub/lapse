@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { NextApiRequest } from "next";
 
 import { PrismaClient } from "../../generated/prisma";
+import { JWT_SECRET } from "../env";
 
 const database = new PrismaClient();
 
@@ -12,26 +13,22 @@ export interface JWTPayload {
   exp: number
 }
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET)
-  throw new Error("JWT_SECRET environment variable is required");
-
 export function generateJWT(userId: string, email: string): string {
-  return jwt.sign(
-    { userId, email },
-    JWT_SECRET!,
-    { expiresIn: "30d" }
-  );
+    return jwt.sign(
+        { userId, email },
+        JWT_SECRET,
+        { expiresIn: "30d" }
+    );
 }
 
 export function verifyJWT(token: string): JWTPayload | null {
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET!) as jwt.JwtPayload;
-    return decoded as JWTPayload;
-  }
-  catch {
-    return null;
-  }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
+        return decoded as JWTPayload;
+    }
+    catch {
+        return null;
+    }
 }
 
 export function extractJWTFromRequest(req: NextApiRequest): string | null {

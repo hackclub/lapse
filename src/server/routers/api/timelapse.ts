@@ -26,15 +26,16 @@ const s3 = new S3Client({
  * Converts a database representation of a timelapse to a runtime (API) one.
  */
 export function dtoTimelapse(entity: DbTimelapse): Timelapse {
-    const s3Bucket = entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED;
+    const s3Url = entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED;
 
     return {
         id: entity.id,
         owner: entity.ownerId,
         isPublished: entity.isPublished,
         hackatimeProject: entity.hackatimeProject ?? undefined,
-        playbackUrl: `${s3Bucket}/${entity.s3Key}`,
+        playbackUrl: `${s3Url}/${entity.s3Key}`,
         videoContainerKind: entity.containerKind,
+        deviceId: entity.deviceId,
         mutable: {
             name: entity.name,
             description: entity.description,
@@ -84,10 +85,36 @@ export const TimelapseMutableSchema = z.object({
  */
 export type Timelapse = z.infer<typeof TimelapseSchema>;
 export const TimelapseSchema = z.object({
+    /**
+     * The ID of timelapse.
+     */
     id: z.uuid(),
+
+    /**
+     * The ID of the creator of the timelapse.
+     */
     owner: z.uuid(),
+
+    /**
+     * The device the timelapse has been created on. This determines which passkey it has been
+     * encrypted with.
+     */
+    deviceId: z.uuid(),
+
+    /**
+     * If `true`, the timelapse has been published and is _not_ encrypted.
+     */
     isPublished: z.boolean(),
+
+    /**
+     * The public URL that can be used to stream video data. If `isPublished` is `false`, the
+     * video data will be encrypted with a device's passkey.
+     */
     playbackUrl: z.url(),
+
+    /**
+     * The Hackatime project that has been associated with the timelapse. If `null`, no 
+     */
     hackatimeProject: z.string().optional(),
     videoContainerKind: TimelapseVideoContainerSchema,
     mutable: TimelapseMutableSchema
@@ -117,9 +144,8 @@ export default router({
                 where: { id: req.input.id },
             });
 
-            if (!timelapse) {
-                return { ok: false, error: "Timelapse not found" };
-            }
+            if (!timelapse)
+                return err("Timelapse not found");
 
             // Check if user can access this timelapse
             const canAccess =
@@ -127,9 +153,8 @@ export default router({
                 (req.ctx.user && req.ctx.user.id === timelapse.ownerId) ||
                 (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
-            if (!canAccess) {
-                return { ok: false, error: "Timelapse not found" };
-            }
+            if (!canAccess)
+                return err("Timelapse not found");
 
             return ok({ timelapse: dtoTimelapse(timelapse) });
         }),
@@ -203,7 +228,13 @@ export default router({
                 /**
                  * The key provided by the `beginUpload` API endpoint.
                  */
-                uploadKey: z.hex()
+                uploadKey: z.hex(),
+
+                /**
+                 * The device that the timelapse has been created on. This generally is used to
+                 * let other devices know what key to use to decrypt this timelapse.
+                 */
+                deviceId: z.uuid()
             })
         )
         .output(
@@ -255,8 +286,9 @@ export default router({
                     privacy: req.input.mutable.privacy,
                     containerKind: containerKind,
                     isPublished: false,
-                    s3Key: s3Key
-                },
+                    s3Key: s3Key,
+                    deviceId: req.input.deviceId
+                }
             });
 
             const sortedSnapshots = req.input.snapshots.sort(ascending());
@@ -301,24 +333,18 @@ export default router({
                 where: { id: req.input.id },
             });
 
-            if (!timelapse) {
-                return { ok: false, error: "Timelapse not found" };
-            }
+            if (!timelapse)
+                return err("Timelapse not found");
 
             const canEdit =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
-            if (!canEdit) {
-                return {
-                    ok: false,
-                    error: "You don't have permission to edit this timelapse",
-                };
-            }
+            if (!canEdit)
+                return err("You don't have permission to edit this timelapse");
 
-            if (timelapse.isPublished) {
-                return { ok: false, error: "Cannot edit published timelapse" };
-            }
+            if (timelapse.isPublished)
+                return err("Cannot edit published timelapse");
 
             const updateData: Partial<DbTimelapse> = {};
             if (req.input.changes.name) {
@@ -356,20 +382,15 @@ export default router({
                 where: { id: req.input.id },
             });
 
-            if (!timelapse) {
-                return { ok: false, error: "Timelapse not found" };
-            }
+            if (!timelapse)
+                return err("Timelapse not found");
 
             const canDelete =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
-            if (!canDelete) {
-                return {
-                    ok: false,
-                    error: "You don't have permission to delete this timelapse",
-                };
-            }
+            if (!canDelete)
+                return err("You don't have permission to delete this timelapse");
 
             await db.timelapse.delete({
                 where: { id: req.input.id },
@@ -415,22 +436,17 @@ export default router({
             });
 
             if (!timelapse)
-                return { ok: false, error: "Timelapse not found" };
+                return err("Timelapse not found");
 
             const canPublish =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
-            if (!canPublish) {
-                return {
-                    ok: false,
-                    error: "You don't have permission to publish this timelapse",
-                };
-            }
+            if (!canPublish)
+                return err("You don't have permission to publish this timelapse");
 
-            if (timelapse.isPublished) {
-                return { ok: false, error: "Timelapse already published" };
-            }
+            if (timelapse.isPublished)
+                return err("Timelapse already published");
 
             try {
                 const getCommand = new GetObjectCommand({
@@ -441,9 +457,8 @@ export default router({
                 const encryptedObject = await s3.send(getCommand);
                 const encryptedBuffer = await encryptedObject.Body?.transformToByteArray();
 
-                if (!encryptedBuffer) {
-                    return { ok: false, error: "Failed to retrieve encrypted video" };
-                }
+                if (!encryptedBuffer)
+                    return err("Failed to retrieve encrypted video");
 
                 const decipher = crypto.createDecipheriv(
                     "aes-256-cbc",
@@ -481,10 +496,7 @@ export default router({
             }
             catch (error) {
                 console.error("Failed to decrypt and publish timelapse:", error);
-                return {
-                    ok: false,
-                    error: "Failed to process timelapse for publishing",
-                };
+                return err("Failed to process timelapse for publishing");
             }
         }),
 
@@ -529,4 +541,39 @@ export default router({
                 timelapses: timelapses.map(dtoTimelapse),
             });
         }),
+
+    /**
+     * Synchronizes a timelapse with a Hackatime project, converting all snapshots into heartbeats.
+     * This procedure can only be called **once** for a timelapse.
+     */
+    syncWithHackatime: procedure
+        .input(
+            z.object({
+                id: z.uuid(),
+                hackatimeProject: z.string()
+            })
+        )
+        .output(
+            apiResult({
+                timelapse: TimelapseSchema
+            })
+        )
+        .mutation(async (req) => {
+            const timelapse = await db.timelapse.findFirst({
+                where: { id: req.input.id }
+            });
+
+            if (!timelapse)
+                return err("Timelapse not found");
+
+            if (timelapse.hackatimeProject)
+                return err("Timelapse already has an associated Hackatime project");
+
+            const updatedTimelapse = await db.timelapse.update({
+                where: { id: req.input.id },
+                data: { hackatimeProject: req.input.hackatimeProject }
+            });
+
+            return ok({ timelapse: dtoTimelapse(updatedTimelapse) });
+        })
 });

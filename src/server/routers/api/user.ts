@@ -2,7 +2,7 @@ import { z } from "zod";
 import { zx } from "@traversable/zod";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { apiResult, ok } from "@/shared/common";
+import { apiResult, err, ok } from "@/shared/common";
 import * as db from "@/generated/prisma";
 
 const database = new db.PrismaClient();
@@ -53,6 +53,22 @@ export const UserMutableSchema = z.object({
 });
 
 /**
+ * Represents a device that belongs to a user, which contains a private passkey. Passkeys are not
+ */
+export type KnownDevice = z.infer<typeof KnownDeviceSchema>;
+export const KnownDeviceSchema = z.object({
+    /**
+     * The ID of the device.
+     */
+    id: z.string(),
+
+    /**
+     * A user-defined name for the device.
+     */
+    name: z.string()
+});
+
+/**
  * Represents a full user, *including* private fields.
  */
 export type User = z.infer<typeof UserSchema>;
@@ -60,17 +76,34 @@ export const UserSchema = z.object({
     id: z.uuid(),
     createdAt: z.number().nonnegative(),
     permissionLevel: PermissionLevelSchema,
-    mutable: UserMutableSchema
+    mutable: UserMutableSchema,
+    devices: z.array(KnownDeviceSchema)
 });
+
+/**
+ * Represents a `db.User` with related tables included.
+ */
+export type DbCompositeUser = db.User & { devices: db.KnownDevice[] };
+
+/**
+ * Converts a database representation of a known device to a runtime (API) one.
+ */
+export function dtoKnownDevice(entity: db.KnownDevice): KnownDevice {
+    return {
+        id: entity.id,
+        name: entity.name
+    };
+}
 
 /**
  * Converts a database representation of a user to a runtime (API) one.
  */
-export function dtoUser(entity: db.User): User {
+export function dtoUser(entity: DbCompositeUser): User {
     return {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
         permissionLevel: entity.permissionLevel,
+        devices: entity.devices.map(dtoKnownDevice),
         mutable: {
             hackatimeApiKey: entity.hackatimeApiKey ?? undefined,
             profile: {
@@ -92,8 +125,16 @@ export default router({
         .output(apiResult({
             user: UserSchema
         }))
-        .query(async ({ ctx }) => {
-            return ok({ user: dtoUser(ctx.user) });
+        .query(async (req) => {
+            const user = await database.user.findFirst({
+                include: { devices: true },
+                where: { id: req.ctx.user.id }
+            });
+
+            if (!user)
+                return err("Could not find your user account.");
+
+            return ok({ user: dtoUser(user) });
         }),
 
     /**
@@ -120,18 +161,20 @@ export default router({
         )
         .query(async (req) => {
             if (!req.input.handle && !req.input.id)
-                return { ok: false, error: "No handle or user ID specified" }; 
+                return err("No handle or user ID specified"); 
 
-            let dbUser: db.User | null;
+            let dbUser: DbCompositeUser | null;
 
             if (req.input.handle) {
                 dbUser = await database.user.findFirst({
-                    where: { handle: req.input.handle }
+                    where: { handle: req.input.handle },
+                    include: { devices: true }
                 });
             }
             else {
                 dbUser = await database.user.findFirst({
-                    where: { id: req.input.id }
+                    where: { id: req.input.id },
+                    include: { devices: true }
                 });
             }
 
@@ -167,17 +210,16 @@ export default router({
                 user: UserSchema
             })
         )
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async (req) => {
             // Check if user can edit this profile
-            if (ctx.user.permissionLevel === "USER" && ctx.user.id !== input.id) {
-                return { ok: false, error: "You can only edit your own profile" };
-            }
+            if (req.ctx.user.permissionLevel === "USER" && req.ctx.user.id !== req.input.id)
+                return err("You can only edit your own profile");
 
             // Prepare update data
             const updateData: Partial<db.User> = {};
             
-            if (input.changes.profile) {
-                const { profile } = input.changes;
+            if (req.input.changes.profile) {
+                const { profile } = req.input.changes;
                 if (profile.displayName) {
                     updateData.displayName = profile.displayName;
                 }
@@ -195,15 +237,44 @@ export default router({
                 }
             }
             
-            if (input.changes.hackatimeApiKey !== undefined) {
-                updateData.hackatimeApiKey = input.changes.hackatimeApiKey;
+            if (req.input.changes.hackatimeApiKey !== undefined) {
+                updateData.hackatimeApiKey = req.input.changes.hackatimeApiKey;
             }
 
             const updatedUser = await database.user.update({
-                where: { id: input.id },
-                data: updateData
+                where: { id: req.input.id },
+                data: updateData,
+                include: { devices: true }
             });
 
             return ok({ user: dtoUser(updatedUser) });
+        }),
+
+    /**
+     * Creates a new device owned by their user, allocating a new, unique ID.
+     */
+    registerDevice: protectedProcedure
+        .input(
+            z.object({
+                /**
+                 * The initial string to use as the user-friendly device display name.
+                 */
+                name: z.string() 
+            })
+        )
+        .output(
+            apiResult({
+                device: KnownDeviceSchema
+            })
+        )
+        .mutation(async (req) => {
+            const device = await database.knownDevice.create({
+                data: {
+                    name: req.input.name,
+                    ownerId: req.ctx.user.id
+                }
+            });
+
+            return ok({ device: dtoKnownDevice(device) });
         })
 });

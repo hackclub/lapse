@@ -8,7 +8,7 @@ import { InputField } from "@/client/components/ui/InputField";
 import { Modal } from "@/client/components/ui/Modal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
-import { deviceStorage, LocalTimelapse, LocalSnapshot, LocalChunk, LocalTimelapseMutable } from "@/client/deviceStorage";
+import { deviceStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/deviceStorage";
 import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
 import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
@@ -182,7 +182,7 @@ export default function Page() {
       frameCountRef.current = 0;
       setIsCreated(true);
 
-      const timelapseData: LocalTimelapseMutable = {
+      const timelapseData: Omit<LocalTimelapse, "id"> = {
         name,
         description,
         startedAt: now.getTime(),

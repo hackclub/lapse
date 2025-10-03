@@ -49,3 +49,18 @@ export const S3_PUBLIC_URL_ENCRYPTED = requiredEnv("S3_PUBLIC_URL_ENCRYPTED");
  * The public URL for the `S3_PUBLIC_BUCKET_NAME` bucket. Will be suffixed with object names.
  */
 export const S3_PUBLIC_URL_PUBLIC = requiredEnv("S3_PUBLIC_URL_PUBLIC");
+
+/**
+ * The Slack OAuth client ID for authentication.
+ */
+export const SLACK_CLIENT_ID = requiredEnv("NEXT_PUBLIC_SLACK_CLIENT_ID");
+
+/**
+ * The Slack OAuth client secret for authentication.
+ */
+export const SLACK_CLIENT_SECRET = requiredEnv("SLACK_CLIENT_SECRET");
+
+/**
+ * The secret key used for JWT token generation and verification.
+ */
+export const JWT_SECRET = requiredEnv("JWT_SECRET");
