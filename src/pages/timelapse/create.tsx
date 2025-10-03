@@ -8,7 +8,7 @@ import { InputField } from "@/client/components/ui/InputField";
 import { Modal } from "@/client/components/ui/Modal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
-import { timelapseStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/timelapseStorage";
+import { deviceStorage, LocalTimelapse, LocalSnapshot, LocalChunk, LocalTimelapseMutable } from "@/client/deviceStorage";
 import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
 import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
@@ -55,7 +55,7 @@ export default function Page() {
 
   useEffect(() => {
     (async () => {
-      const activeTimelapse = await timelapseStorage.getActiveTimelapse();
+      const activeTimelapse = await deviceStorage.getActiveTimelapse();
       if (!activeTimelapse) {
         console.log("No timelapse was started previously.");
         return;
@@ -64,7 +64,7 @@ export default function Page() {
       console.group("An incomplete timelapse has been detected!");
       console.log("timelapse:", activeTimelapse);
 
-      const snapshots = await timelapseStorage.getAllSnapshots();
+      const snapshots = await deviceStorage.getAllSnapshots();
       console.log("snapshots:", snapshots);
       console.groupEnd();
 
@@ -160,7 +160,7 @@ export default function Page() {
       session: currentSession
     };
 
-    timelapseStorage.saveSnapshot(snapshot);
+    deviceStorage.saveSnapshot(snapshot);
     setFrameCount(newFrameCount);
   }, [recorder, currentTimelapseId, currentSession]);
 
@@ -182,7 +182,7 @@ export default function Page() {
       frameCountRef.current = 0;
       setIsCreated(true);
 
-      const timelapseData: Omit<LocalTimelapse, "id"> = {
+      const timelapseData: LocalTimelapseMutable = {
         name,
         description,
         startedAt: now.getTime(),
@@ -190,7 +190,7 @@ export default function Page() {
         isActive: true,
       };
 
-      const timelapseId = await timelapseStorage.saveTimelapse(timelapseData);
+      const timelapseId = await deviceStorage.saveTimelapse(timelapseData);
       setCurrentTimelapseId(timelapseId);
       activeTimelapseId = timelapseId;
 
@@ -199,12 +199,12 @@ export default function Page() {
     else {
       // Updating existing timelapse
       if (currentTimelapseId) {
-        const existingTimelapse = await timelapseStorage.getTimelapse(currentTimelapseId);
+        const existingTimelapse = await deviceStorage.getTimelapse(currentTimelapseId);
 
         if (existingTimelapse) {
           existingTimelapse.name = name;
           existingTimelapse.description = description;
-          await timelapseStorage.saveTimelapse(existingTimelapse);
+          await deviceStorage.saveTimelapse(existingTimelapse);
         }
       }
     }
@@ -234,7 +234,7 @@ export default function Page() {
         chunksRef.current.push(storedChunk);
 
         if (activeTimelapseId) {
-          await timelapseStorage.appendChunk(
+          await deviceStorage.appendChunk(
             activeTimelapseId,
             ev.data,
             currentSession
@@ -376,7 +376,7 @@ export default function Page() {
       assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
       assert(videoProcessor != null, "Attempted to stop the recording while videoProcessor is null");
 
-      const timelapse = await timelapseStorage.getTimelapse(currentTimelapseId);
+      const timelapse = await deviceStorage.getTimelapse(currentTimelapseId);
       if (!timelapse)
         throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
 
@@ -404,9 +404,9 @@ export default function Page() {
 
       // Mark timelapse as complete and clean up from IndexedDB
       if (currentTimelapseId) {
-        await timelapseStorage.markComplete(currentTimelapseId);
-        await timelapseStorage.deleteAllSnapshots();
-        await timelapseStorage.deleteTimelapse(currentTimelapseId);
+        await deviceStorage.markComplete(currentTimelapseId);
+        await deviceStorage.deleteAllSnapshots();
+        await deviceStorage.deleteTimelapse(currentTimelapseId);
         setCurrentTimelapseId(null);
       }
     };
