@@ -7,8 +7,10 @@ import type { Timelapse } from "@/server/routers/api/timelapse";
 import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
 import { assert } from "@/shared/common";
 import { deviceStorage } from "@/client/deviceStorage";
-import { decryptVideoWithTimelapseId } from "@/client/encryption";
+import { decryptVideo } from "@/client/encryption";
 import { useAuth } from "@/client/hooks/useAuth";
+import { ErrorModal } from "@/client/components/ui/ErrorModal";
+import { LoadingModal } from "@/client/components/ui/LoadingModal";
 
 export default function Page() {
   const router = useRouter();
@@ -19,6 +21,7 @@ export default function Page() {
   const [timelapse, setTimelapse] = useState<Timelapse | null>(null);
   const [videoObjUrl, setVideoObjUrl] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -26,64 +29,70 @@ export default function Page() {
     if (!router.isReady || fetchStarted)
       return;
 
-    const { id } = router.query;
+    try {
+      const { id } = router.query;
 
-    if (typeof id !== "string") {
-      // TODO: display error here!
-      console.error("Invalid 'id' parameter:", id);
-      throw new Error("'id' should be a string.");
-    }
-
-    setFetchStarted(true);
-
-    console.log("Querying timelapse...");
-    const res = await trpc.timelapse.query.query({ id });
-    if (!res.ok) {
-      console.error("Couldn't fetch that timelapse!", res);
-
-      // TODO: error modal
-      setIsLoading(false);
-      throw new Error(res.error);
-    }
-
-    const timelapse = res.data.timelapse;
-
-    console.log("Timelapse fetched!", timelapse);
-    setTimelapse(timelapse);
-    setIsLoading(false);
-
-    const video = videoRef.current;
-    assert(video != null, "<video> element ref should've been loaded by now");
-
-    if (timelapse.isPublished) {
-      // Video is decrypted - we don't have to decrypt it client-side!
-      video.src = timelapse.playbackUrl;
-    }
-    else {
-      // This case is trickier - we have to decrypt the video client-side with the device passkey.
-      const devices = await deviceStorage.getAllDevices();
-      const originDevice = devices.find(x => x.id == timelapse.deviceId);
-
-      if (!originDevice) {
-        // TODO: Show a modal to input the passkey for that device
-        throw new Error(`Missing passkey for device ${timelapse.deviceId}`);
+      if (typeof id !== "string") {
+        setError("Invalid timelapse ID provided");
+        setIsLoading(false);
+        return;
       }
 
-      const vidRes = await fetch(timelapse.playbackUrl, { method: "GET" });
-      const vidData = await vidRes.arrayBuffer();
-      
-      // Decrypt the video data using the device passkey and timelapse ID
-      const decryptedData = await decryptVideoWithTimelapseId(
-        vidData,
-        timelapse.id,
-        originDevice.passkey
-      );
-      
-      // Create a blob from the decrypted data and assign it to the video element
-      const videoBlob = new Blob([decryptedData], { type: "video/mp4" });
-      const url = URL.createObjectURL(videoBlob);
-      setVideoObjUrl(url);
-      video.src = url;
+      setFetchStarted(true);
+
+      console.log("Querying timelapse...");
+      const res = await trpc.timelapse.query.query({ id });
+      if (!res.ok) {
+        console.error("Couldn't fetch that timelapse!", res);
+        setError(res.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const timelapse = res.data.timelapse;
+
+      console.log("Timelapse fetched!", timelapse);
+      setTimelapse(timelapse);
+      setIsLoading(false);
+
+      const video = videoRef.current;
+      assert(video != null, "<video> element ref should've been loaded by now");
+
+      if (timelapse.isPublished) {
+        // Video is decrypted - we don't have to decrypt it client-side!
+        video.src = timelapse.playbackUrl;
+      }
+      else {
+        // This case is trickier - we have to decrypt the video client-side with the device passkey.
+        const devices = await deviceStorage.getAllDevices();
+        const originDevice = devices.find(x => x.id == timelapse.deviceId);
+
+        if (!originDevice) {
+          setError(`This timelapse was created on a different device. Device passkey for device ${timelapse.deviceId} is required to decrypt and view this video.`);
+          return;
+        }
+
+        const vidRes = await fetch(timelapse.playbackUrl, { method: "GET" });
+        const vidData = await vidRes.arrayBuffer();
+        
+        // Decrypt the video data using the device passkey and timelapse ID
+        const decryptedData = await decryptVideo(
+          vidData,
+          timelapse.id,
+          originDevice.passkey
+        );
+        
+        // Create a blob from the decrypted data and assign it to the video element
+        const videoBlob = new Blob([decryptedData], { type: "video/mp4" });
+        const url = URL.createObjectURL(videoBlob);
+        setVideoObjUrl(url);
+        video.src = url;
+      }
+    }
+    catch (err) {
+      console.error("Error loading timelapse:", err);
+      setError(err instanceof Error ? err.message : "An unknown error occurred while loading the timelapse");
+      setIsLoading(false);
     }
   }, [router, router.isReady]);
 
@@ -106,7 +115,7 @@ export default function Page() {
       const originDevice = devices.find(x => x.id === timelapse.deviceId);
 
       if (!originDevice) {
-        alert("Device passkey not found. Cannot publish this timelapse.");
+        setError("Device passkey not found. Cannot publish this timelapse.");
         return;
       }
 
@@ -117,15 +126,14 @@ export default function Page() {
 
       if (result.ok) {
         setTimelapse(result.data.timelapse);
-        alert("Timelapse published successfully!");
       } 
       else {
-        alert(`Failed to publish: ${result.error}`);
+        setError(`Failed to publish: ${result.error}`);
       }
     } 
     catch (error) {
       console.error("Error publishing timelapse:", error);
-      alert("An error occurred while publishing the timelapse.");
+      setError(error instanceof Error ? error.message : "An error occurred while publishing the timelapse.");
     } 
     finally {
       setIsPublishing(false);
@@ -152,6 +160,23 @@ export default function Page() {
       )}
 
       <video ref={videoRef} controls />
+
+      <ErrorModal
+        isOpen={!!error}
+        setIsOpen={(open) => !open && setError(null)}
+        message={error || ""}
+        onRetry={error?.includes("Failed to load") ? () => {
+          setError(null);
+          setFetchStarted(false);
+          setIsLoading(true);
+        } : undefined}
+      />
+
+      <LoadingModal
+        isOpen={isPublishing}
+        title="Publishing Timelapse"
+        message="Please wait while your timelapse is being published..."
+      />
     </div>
   );
 }

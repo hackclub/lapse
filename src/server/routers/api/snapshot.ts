@@ -111,7 +111,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             // Check if user can access this timelapse
             const canAccess =
@@ -120,7 +120,7 @@ export default router({
                 (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
             if (!canAccess)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             const snapshots = await db.snapshot.findMany({
                 where: { timelapseId: req.input.timelapseId },

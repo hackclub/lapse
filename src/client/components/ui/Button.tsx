@@ -3,11 +3,12 @@ import { PropsWithChildren } from "react";
 
 const noop = () => {};
 
-export function Button({ children, kind, isSquare, disabled, onClick }: PropsWithChildren<{
+export function Button({ children, kind, isSquare, disabled, onClick, className }: PropsWithChildren<{
   kind?: "primary" | "secondary" | "dark",
   isSquare?: boolean,
   disabled?: boolean,
-  onClick: () => void
+  onClick: () => void,
+  className?: string
 }>) {
   kind ??= "primary";
 
@@ -21,7 +22,8 @@ export function Button({ children, kind, isSquare, disabled, onClick }: PropsWit
         (kind == "dark") && "bg-black text-white",
         disabled && "bg-smoke text-black",
         !disabled && "hover:scale-[102%] active:scale-[98%]",
-        isSquare && "aspect-square"
+        isSquare && "aspect-square",
+        className
       )}
     >{children}</button>
   );

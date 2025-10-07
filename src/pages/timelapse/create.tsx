@@ -7,16 +7,18 @@ import Icon from "@hackclub/icons";
 import { TimeSince } from "@/client/components/TimeSince";
 import { Button } from "@/client/components/ui/Button";
 import { InputField } from "@/client/components/ui/InputField";
-import { Modal } from "@/client/components/ui/Modal";
+import { WindowedModal } from "@/client/components/ui/WindowedModal";
+import { LoadingModal } from "@/client/components/ui/LoadingModal";
+import { ErrorModal } from "@/client/components/ui/ErrorModal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { deviceStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/deviceStorage";
 import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
-import { encryptVideoWithTimelapseId, getCurrentDevice } from "@/client/encryption";
+import { encryptVideo, getCurrentDevice } from "@/client/encryption";
 import { trpc } from "@/client/trpc";
 import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
-import { containerTypeToMimeType } from "@/server/routers/api/timelapse";
+
 import { useOnce } from "@/client/hooks/useOnce";
 
 export default function Page() {
@@ -40,6 +42,11 @@ export default function Page() {
   const [currentSession] = useState<number>(Date.now());
   const [videoProcessor, setVideoProcessor] = useState<VideoProcessor | null>(null);
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
+  
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<string>("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [isFrozen, setIsFrozen] = useState(false);
   const isFrozenRef = useRef(false);
@@ -348,6 +355,12 @@ export default function Page() {
     setChangingSource(false);
   }
 
+  function setFreeze(shouldBeFrozen: boolean) {
+    if ( (shouldBeFrozen && !isFrozen) || (!shouldBeFrozen && isFrozen) ) {
+      toggleFreeze();
+    }
+  }
+
   function toggleFreeze() {
     if (isFrozen) {
       setIsFrozen(false);
@@ -373,78 +386,141 @@ export default function Page() {
     }
 
     recorder.onstop = async () => {
-      assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
-      assert(videoProcessor != null, "Attempted to stop the recording while videoProcessor is null");
+      try {
+        setIsUploading(true);
+        setUploadProgress(0);
+        setUploadStage("Preparing upload...");
+        
+        assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
+        assert(videoProcessor != null, "Attempted to stop the recording while videoProcessor is null");
 
-      const timelapse = await deviceStorage.getTimelapse(currentTimelapseId);
-      if (!timelapse)
-        throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
+        const timelapse = await deviceStorage.getTimelapse(currentTimelapseId);
+        if (!timelapse)
+          throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
 
-      console.log("(upload) recording stopped!", timelapse);
+        console.log("(upload) recording stopped!", timelapse);
+        
+        setUploadStage("Processing video...");
+        setUploadProgress(5);
+        const device = await getCurrentDevice();
 
-      const device = await getCurrentDevice();
+        const merged = await mergeVideoSessions(videoProcessor, timelapse, (stage, progress) => {
+          setUploadStage(stage);
+          setUploadProgress(5 + Math.floor(progress * 0.2));
+        });
+        
+        console.log("(upload) - merged session data:", merged);
 
-      const merged = await mergeVideoSessions(videoProcessor, timelapse);
-      console.log("(upload) - merged session data:", merged);
+        setUploadStage("Requesting upload URL...");
+        setUploadProgress(25);
+        const uploadRes = await trpc.timelapse.beginUpload.query({ containerType: "WEBM" });
+        console.log("(upload) timelapse.beginUpload response:", uploadRes);
 
-      const uploadRes = await trpc.timelapse.beginUpload.query({ containerType: "WEBM" });
-      console.log("(upload) timelapse.beginUpload response:", uploadRes);
+        if (!uploadRes.ok)
+          throw new Error(uploadRes.error);
 
-      if (!uploadRes.ok)
-        throw new Error(uploadRes.error);
+        setUploadStage("Encrypting video...");
+        setUploadProgress(30);
+        const encrypted = await encryptVideo(merged, uploadRes.data.timelapseId, (stage, progress) => {
+          setUploadStage(stage);
+          // Encryption takes 30-60% of total progress
+          setUploadProgress(30 + Math.floor(progress * 0.3));
+        });
+        console.log("(upload) - encrypted data:", encrypted);
 
-      const encrypted = await encryptVideoWithTimelapseId(merged, uploadRes.data.timelapseId);
-      console.log("(upload) - encrypted data:", encrypted);
+        setUploadStage("Uploading to server...");
+        setUploadProgress(60);
+        console.log(`(upload) uploading now to ${uploadRes.data.url}`);
 
-      console.log(`(upload) uploading now to ${uploadRes.data.url}`);
+        // Use XMLHttpRequest for upload progress tracking
+        const uploadPromise = new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          
+          xhr.upload.addEventListener("progress", (event) => {
+            if (event.lengthComputable) {
+              const uploadPercent = Math.floor((event.loaded / event.total) * 100);
+              const totalProgress = 60 + Math.floor(uploadPercent * 0.25); // Upload takes 60-85% of total
+              setUploadStage(`Uploading... ${uploadPercent}% (${Math.floor(event.loaded / 1024 / 1024)}MB / ${Math.floor(event.total / 1024 / 1024)}MB)`);
+              setUploadProgress(totalProgress);
+            }
+          });
 
-      const s3Res = await fetch(uploadRes.data.url, {
-        method: "PUT",
-        body: encrypted.data,
-        headers: {
-          "Content-Type": "video/webm",
+          xhr.addEventListener("load", () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            }
+            else {
+              reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}`));
+            }
+          });
+
+          xhr.addEventListener("error", () => {
+            reject(new Error("Network error during upload"));
+          });
+
+          xhr.addEventListener("abort", () => {
+            reject(new Error("Upload was aborted"));
+          });
+
+          xhr.open("PUT", uploadRes.data.url);
+          xhr.setRequestHeader("Content-Type", "video/webm");
+          xhr.send(encrypted.data);
+        });
+
+        await uploadPromise;
+        console.log("(upload) S3 upload completed successfully");
+
+        setUploadStage("Finalizing timelapse...");
+        setUploadProgress(85);
+        const snapshots = await deviceStorage.getAllSnapshots();
+        const snapshotTimestamps = snapshots.map(s => s.createdAt);
+
+        console.log("(upload) finalizing upload now!");
+        console.log("(upload) - name:", name);
+        console.log("(upload) - description:", description);
+        console.log("(upload) - snapshots:", snapshotTimestamps);
+
+        const createRes = await trpc.timelapse.create.mutate({
+          id: uploadRes.data.timelapseId,
+          deviceId: device.id,
+          snapshots: snapshotTimestamps,
+          mutable: {
+            name,
+            description,
+            privacy: "UNLISTED"
+          }
+        });
+
+        console.log("(upload) timelapse.create response:", createRes);
+
+        if (!createRes.ok)
+          throw new Error(createRes.error);
+
+        setUploadStage("Cleaning up local data...");
+        setUploadProgress(95);
+        console.log("(upload) timelapse created successfully! yay!");
+
+        if (currentTimelapseId) {
+          await deviceStorage.markComplete(currentTimelapseId);
+          await deviceStorage.deleteAllSnapshots();
+          await deviceStorage.deleteTimelapse(currentTimelapseId);
+          setCurrentTimelapseId(null);
         }
-      });
 
-      console.log("(upload) S3 response:", s3Res);
-
-      if (!s3Res.ok)
-        throw new Error(`S3 upload failed: ${s3Res.status} ${s3Res.statusText}`);
-
-      const snapshots = await deviceStorage.getAllSnapshots();
-      const snapshotTimestamps = snapshots.map(s => s.createdAt);
-
-      console.log("(upload) finalizing upload now!");
-      console.log("(upload) - name:", name);
-      console.log("(upload) - description:", description);
-      console.log("(upload) - snapshots:", snapshotTimestamps);
-
-      const createRes = await trpc.timelapse.create.mutate({
-        id: uploadRes.data.timelapseId,
-        deviceId: device.id,
-        snapshots: snapshotTimestamps,
-        mutable: {
-          name,
-          description,
-          privacy: "UNLISTED"
-        }
-      });
-
-      console.log("(upload) timelapse.create response:", createRes);
-
-      if (!createRes.ok)
-        throw new Error(createRes.error);
-
-      console.log("(upload) timelapse created successfully! yay!");
-
-      if (currentTimelapseId) {
-        await deviceStorage.markComplete(currentTimelapseId);
-        await deviceStorage.deleteAllSnapshots();
-        await deviceStorage.deleteTimelapse(currentTimelapseId);
-        setCurrentTimelapseId(null);
+        setUploadStage("Upload complete!");
+        setUploadProgress(100);
+        
+        // Brief delay to show completion before redirecting
+        setTimeout(() => {
+          setIsUploading(false);
+          router.push(`/timelapse/${createRes.data.timelapse.id}`);
+        }, 1000);
       }
-
-      router.push(`/timelapse/${createRes.data.timelapse.id}`);
+      catch (err) {
+        console.error("Upload failed:", err);
+        setIsUploading(false);
+        setError(err instanceof Error ? err.message : "An unknown error occurred during upload");
+      }
     };
 
     recorder?.stop();
@@ -461,6 +537,7 @@ export default function Page() {
 
   function openSetupModal() {
     setSetupModalOpen(true);
+    setFreeze(true);
   }
 
   function onModalClose() {
@@ -469,6 +546,7 @@ export default function Page() {
     }
     else {
       setSetupModalOpen(false);
+      setFreeze(false);
     }
   }
 
@@ -476,7 +554,7 @@ export default function Page() {
 
   return (
     <>
-      <Modal
+      <WindowedModal
         icon="clock-fill"
         title={
           needsVideoSource ? "Resume timelapse"
@@ -547,7 +625,7 @@ export default function Page() {
             }
           </Button>
         </div>
-      </Modal>
+      </WindowedModal>
 
       <div className="flex w-full h-screen bg-dark">
         <div
@@ -611,6 +689,23 @@ export default function Page() {
           </div>
         </div>
       </div>
+
+      <LoadingModal
+        isOpen={isUploading}
+        title="Uploading Timelapse"
+        message={uploadStage}
+        progress={uploadProgress}
+      />
+
+      <ErrorModal
+        isOpen={!!error}
+        setIsOpen={(open) => !open && setError(null)}
+        message={error || ""}
+        onRetry={() => {
+          setError(null);
+          stopRecording();
+        }}
+      />
     </>
   );
 }

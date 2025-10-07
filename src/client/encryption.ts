@@ -5,12 +5,11 @@ import { trpc } from "./trpc";
 
 /**
  * Derives deterministic key and IV salts from a timelapse ID.
- * This allows users to decrypt timelapses on any device using just the passkey and timelapse ID.
  */
-async function deriveSaltsFromTimelapseId(timelapseId: string): Promise<{ keySalt: ArrayBuffer; ivSalt: ArrayBuffer }> {
+// TODO: We should also probably generate the salt based on the provided passkey
+async function deriveSalts(timelapseId: string): Promise<{ keySalt: ArrayBuffer; ivSalt: ArrayBuffer }> {
     const encoder = new TextEncoder();
     
-    // Use HMAC to derive deterministic salts from the timelapse ID
     const keySaltKey = await crypto.subtle.importKey(
         "raw",
         encoder.encode("timelapse-key-salt"),
@@ -18,6 +17,7 @@ async function deriveSaltsFromTimelapseId(timelapseId: string): Promise<{ keySal
         false,
         ["sign"]
     );
+
     const keySalt = await crypto.subtle.sign("HMAC", keySaltKey, encoder.encode(timelapseId));
     
     const ivSaltKey = await crypto.subtle.importKey(
@@ -27,6 +27,7 @@ async function deriveSaltsFromTimelapseId(timelapseId: string): Promise<{ keySal
         false,
         ["sign"]
     );
+
     const ivSalt = await crypto.subtle.sign("HMAC", ivSaltKey, encoder.encode(timelapseId));
     
     return { keySalt, ivSalt };
@@ -92,9 +93,9 @@ export interface EncryptedVideoStream {
     ivSalt: string;
 }
 
-export async function deriveKeyAndIvWithTimelapseId(timelapseId: string, passkey?: string): Promise<KeyIvPair> {
+async function deriveKeyIvPair(timelapseId: string, passkey?: string): Promise<KeyIvPair> {
     const actualPasskey = passkey || (await getCurrentDevice()).passkey;
-    const { keySalt, ivSalt } = await deriveSaltsFromTimelapseId(timelapseId);
+    const { keySalt, ivSalt } = await deriveSalts(timelapseId);
 
     const encoder = new TextEncoder();
     const passkeyBuffer = encoder.encode(actualPasskey);
@@ -142,12 +143,18 @@ export async function deriveKeyAndIvWithTimelapseId(timelapseId: string, passkey
     };
 }
 
-
-
-export async function encryptVideo(videoBlob: Blob, timelapseId: string): Promise<EncryptedVideoStream> {
-    const { key, iv, keySalt, ivSalt } = await deriveKeyAndIvWithTimelapseId(timelapseId);
+export async function encryptVideo(
+    videoBlob: Blob, 
+    timelapseId: string,
+    onProgress?: (stage: string, progress: number) => void
+): Promise<EncryptedVideoStream> {
+    onProgress?.("Deriving encryption keys...", 5);
+    const { key, iv, keySalt, ivSalt } = await deriveKeyIvPair(timelapseId);
+    
+    onProgress?.("Reading video data...", 15);
     const videoBuffer = await videoBlob.arrayBuffer();
 
+    onProgress?.("Preparing encryption...", 25);
     const cryptoKey = await crypto.subtle.importKey(
         "raw",
         key,
@@ -156,175 +163,83 @@ export async function encryptVideo(videoBlob: Blob, timelapseId: string): Promis
         ["encrypt"]
     );
 
-    // Encrypt the video data
-    const encryptedBuffer = await crypto.subtle.encrypt(
-        { name: "AES-CBC", iv: iv },
-        cryptoKey,
-        videoBuffer
-    );
+    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+    const totalSize = videoBuffer.byteLength;
+    
+    onProgress?.("Encrypting video data...", 30);
+    
+    if (totalSize <= CHUNK_SIZE) {
+        // Small video - encrypt all at once
+        const encryptedBuffer = await crypto.subtle.encrypt(
+            { name: "AES-CBC", iv: iv },
+            cryptoKey,
+            videoBuffer
+        );
+        
+        onProgress?.("Encryption complete", 100);
+        
+        return {
+            data: encryptedBuffer,
+            key: Array.from(new Uint8Array(key)).map(b => b.toString(16).padStart(2, "0")).join(""),
+            iv: Array.from(new Uint8Array(iv)).map(b => b.toString(16).padStart(2, "0")).join(""),
+            keySalt: Array.from(new Uint8Array(keySalt)).map(b => b.toString(16).padStart(2, "0")).join(""),
+            ivSalt: Array.from(new Uint8Array(ivSalt)).map(b => b.toString(16).padStart(2, "0")).join("")
+        };
+    }
+    
+    const chunks: ArrayBuffer[] = [];
+    const numChunks = Math.ceil(totalSize / CHUNK_SIZE);
+    
+    for (let i = 0; i < numChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, totalSize);
+        const chunk = videoBuffer.slice(start, end);
+        
+        const encryptedChunk = await crypto.subtle.encrypt(
+            { name: "AES-CBC", iv: iv },
+            cryptoKey,
+            chunk
+        );
+        
+        chunks.push(encryptedChunk);
+        
+        const progress = 30 + Math.floor(((i + 1) / numChunks) * 65);
+        onProgress?.(`Encrypting chunk ${i + 1}/${numChunks}...`, progress);
+    }
+    
+    onProgress?.("Combining encrypted chunks...", 95);
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+    const combined = new ArrayBuffer(totalLength);
+    const combinedView = new Uint8Array(combined);
+    
+    let offset = 0;
+    for (const chunk of chunks) {
+        combinedView.set(new Uint8Array(chunk), offset);
+        offset += chunk.byteLength;
+    }
+
+    onProgress?.("Encryption complete", 100);
 
     return {
-        data: encryptedBuffer,
+        data: combined,
         key: Array.from(new Uint8Array(key)).map(b => b.toString(16).padStart(2, "0")).join(""),
         iv: Array.from(new Uint8Array(iv)).map(b => b.toString(16).padStart(2, "0")).join(""),
         keySalt: Array.from(new Uint8Array(keySalt)).map(b => b.toString(16).padStart(2, "0")).join(""),
         ivSalt: Array.from(new Uint8Array(ivSalt)).map(b => b.toString(16).padStart(2, "0")).join("")
-    };
-}
-
-export async function encryptVideoWithTimelapseId(videoBlob: Blob, timelapseId: string): Promise<EncryptedVideoStream> {
-    const { key, iv, keySalt, ivSalt } = await deriveKeyAndIvWithTimelapseId(timelapseId);
-    const videoBuffer = await videoBlob.arrayBuffer();
-
-    const cryptoKey = await crypto.subtle.importKey(
-        "raw",
-        key,
-        { name: "AES-CBC" },
-        false,
-        ["encrypt"]
-    );
-
-    // Encrypt the video data
-    const encryptedBuffer = await crypto.subtle.encrypt(
-        { name: "AES-CBC", iv: iv },
-        cryptoKey,
-        videoBuffer
-    );
-
-    return {
-        data: encryptedBuffer,
-        key: Array.from(new Uint8Array(key)).map(b => b.toString(16).padStart(2, "0")).join(""),
-        iv: Array.from(new Uint8Array(iv)).map(b => b.toString(16).padStart(2, "0")).join(""),
-        keySalt: Array.from(new Uint8Array(keySalt)).map(b => b.toString(16).padStart(2, "0")).join(""),
-        ivSalt: Array.from(new Uint8Array(ivSalt)).map(b => b.toString(16).padStart(2, "0")).join("")
-    };
-}
-
-export async function deriveKeyAndIvFromSalts(keySalt: ArrayBuffer, ivSalt: ArrayBuffer): Promise<KeyIvPair> {
-    const currentDevice = await getCurrentDevice();
-
-    const encoder = new TextEncoder();
-    const passkeyBuffer = encoder.encode(currentDevice.passkey);
-    
-    const keyMaterial = await crypto.subtle.importKey(
-        "raw",
-        passkeyBuffer,
-        { name: "PBKDF2" },
-        false,
-        ["deriveKey", "deriveBits"]
-    );
-
-    const key = await crypto.subtle.deriveKey(
-        {
-            name: "PBKDF2",
-            salt: keySalt,
-            iterations: 100000,
-            hash: "SHA-256"
-        },
-        keyMaterial,
-        { name: "AES-CBC", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-    );
-
-    // Derive IV (128 bits for AES-CBC)
-    const ivBuffer = await crypto.subtle.deriveBits(
-        {
-            name: "PBKDF2",
-            salt: ivSalt,
-            iterations: 100000,
-            hash: "SHA-256"
-        },
-        keyMaterial,
-        128
-    );
-
-    const keyBuffer = await crypto.subtle.exportKey("raw", key);
-    
-    return {
-        key: keyBuffer,
-        iv: ivBuffer,
-        keySalt,
-        ivSalt
     };
 }
 
 export async function decryptVideo(
     encryptedData: ArrayBuffer | Uint8Array,
-    keySalt: string,
-    ivSalt: string,
-    passkey: string
-): Promise<ArrayBuffer> {
-    const encoder = new TextEncoder();
-    const passkeyBuffer = encoder.encode(passkey);
-    
-    // Convert hex strings back to Uint8Arrays
-    const keySaltBuffer = new Uint8Array(keySalt.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
-    const ivSaltBuffer = new Uint8Array(ivSalt.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
-    
-    // Convert input data to ArrayBuffer
-    const inputBuffer = encryptedData instanceof Uint8Array 
-        ? encryptedData.slice().buffer
-        : encryptedData;
-    
-    // Import the passkey as key material
-    const keyMaterial = await crypto.subtle.importKey(
-        "raw",
-        passkeyBuffer,
-        { name: "PBKDF2" },
-        false,
-        ["deriveKey", "deriveBits"]
-    );
-
-    // Derive the encryption key
-    const derivedKey = await crypto.subtle.deriveKey(
-        {
-            name: "PBKDF2",
-            salt: keySaltBuffer,
-            iterations: 100000,
-            hash: "SHA-256"
-        },
-        keyMaterial,
-        { name: "AES-CBC", length: 256 },
-        false,
-        ["decrypt"]
-    );
-
-    // Derive the IV
-    const derivedIv = await crypto.subtle.deriveBits(
-        {
-            name: "PBKDF2",
-            salt: ivSaltBuffer,
-            iterations: 100000,
-            hash: "SHA-256"
-        },
-        keyMaterial,
-        128
-    );
-
-    // Decrypt the video data
-    const decryptedBuffer = await crypto.subtle.decrypt(
-        { name: "AES-CBC", iv: derivedIv },
-        derivedKey,
-        inputBuffer
-    );
-
-    return decryptedBuffer;
-}
-
-export async function decryptVideoWithTimelapseId(
-    encryptedData: ArrayBuffer | Uint8Array,
     timelapseId: string,
     passkey: string
 ): Promise<ArrayBuffer> {
-    const { key, iv } = await deriveKeyAndIvWithTimelapseId(timelapseId, passkey);
+    const { key, iv } = await deriveKeyIvPair(timelapseId, passkey);
     
-    // Convert input data to ArrayBuffer
     const inputBuffer = encryptedData instanceof Uint8Array 
         ? encryptedData.slice().buffer
         : encryptedData;
     
-    // Import the derived key
     const cryptoKey = await crypto.subtle.importKey(
         "raw",
         key,
@@ -333,7 +248,6 @@ export async function decryptVideoWithTimelapseId(
         ["decrypt"]
     );
 
-    // Decrypt the video data
     const decryptedBuffer = await crypto.subtle.decrypt(
         { name: "AES-CBC", iv: iv },
         cryptoKey,

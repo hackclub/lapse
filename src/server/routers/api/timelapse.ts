@@ -7,7 +7,7 @@ import { PrismaClient } from "../../../generated/prisma";
 import type { Timelapse as DbTimelapse } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
 import { apiResult, ascending, err, match, when, ok, oneOf } from "@/shared/common";
-import { encryptString, decryptVideoWithTimelapseId } from "@/server/encryption";
+import { decryptVideo } from "@/server/encryption";
 import * as env from "@/server/env";
 import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE } from "@/shared/constants";
 
@@ -152,7 +152,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             // Check if user can access this timelapse
             const canAccess =
@@ -161,7 +161,7 @@ export default router({
                 (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
             if (!canAccess)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             return ok({ timelapse: dtoTimelapse(timelapse) });
         }),
@@ -350,7 +350,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             const canEdit =
                 req.ctx.user.id === timelapse.ownerId ||
@@ -399,7 +399,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             const canDelete =
                 req.ctx.user.id === timelapse.ownerId ||
@@ -447,7 +447,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             const canPublish =
                 req.ctx.user.id === timelapse.ownerId ||
@@ -471,7 +471,7 @@ export default router({
                 if (!encryptedBuffer)
                     return err("NO_FILE", "Failed to retrieve encrypted video");
 
-                const decryptedBuffer = decryptVideoWithTimelapseId(
+                const decryptedBuffer = decryptVideo(
                     encryptedBuffer,
                     req.input.id,
                     req.input.passkey
@@ -564,7 +564,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Timelapse not found");
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             if (timelapse.hackatimeProject)
                 return err("HACKATIME_ALREADY_ASSIGNED", "Timelapse already has an associated Hackatime project");
