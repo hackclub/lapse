@@ -22,7 +22,7 @@ export default function Home() {
             {isLoggedIn ? (
               <>
                 <span className="text-gray-600">
-                  Welcome, {currentUser!.mutable.profile.displayName}
+                  Welcome, {currentUser!.displayName}
                 </span>
                 <button
                   onClick={signOut}

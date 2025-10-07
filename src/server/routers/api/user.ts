@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { zx } from "@traversable/zod";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { apiResult, err, ok } from "@/shared/common";
+import { apiResult, err, ok, when } from "@/shared/common";
 import * as db from "@/generated/prisma";
 
 const database = new db.PrismaClient();
@@ -12,25 +11,7 @@ const database = new db.PrismaClient();
  */
 export type UserProfile = z.infer<typeof UserProfileSchema>;
 export const UserProfileSchema = z.object({
-    /**
-     * The unique handle of the user.
-     */
-    handle: z.string().min(3).max(16),
 
-    /**
-     * The display name of the user. Cannot be blank.
-     */
-    displayName: z.string().min(1).max(24),
-
-    /**
-     * The bio of the user. Maximum of 160 characters.
-     */
-    bio: z.string().max(160).default(""),
-
-    /**
-     * Featured URLs that should be displayed on the user"s page. This array has a maximum of 4 members.
-     */
-    urls: z.array(z.url().max(64).min(1)).max(4)
 });
 
 /**
@@ -49,7 +30,6 @@ export const PermissionLevelSchema = z.enum([
 export type UserMutable = z.infer<typeof UserMutableSchema>;
 export const UserMutableSchema = z.object({
     profile: UserProfileSchema,
-    hackatimeApiKey: z.uuid().optional()
 });
 
 /**
@@ -68,16 +48,69 @@ export const KnownDeviceSchema = z.object({
     name: z.string()
 });
 
+export const UserHandle = z.string().min(3).max(16);
+export const UserDisplayName = z.string().min(1).max(24);
+export const UserBio = z.string().max(160).default("");
+export const UserUrlList = z.array(z.url().max(64).min(1)).max(4); 
+export const UserHackatimeApiKey = z.uuid().optional();
+
 /**
- * Represents a full user, *including* private fields.
+ * Data associated with a user model that should be exposed only to the represented user or
+ * administrators.
+ */
+export type PrivateUserData = z.infer<typeof PrivateUserDataSchema>;
+export const PrivateUserDataSchema = z.object({
+    permissionLevel: PermissionLevelSchema,
+    devices: z.array(KnownDeviceSchema),
+    hackatimeApiKey: UserHackatimeApiKey
+});
+
+/**
+ * Represents a public view of a user.
+ */
+export type PublicUser = z.infer<typeof PublicUserSchema>;
+export const PublicUserSchema = z.object({
+    /**
+     * The unique ID of the user.
+     */
+    id: z.uuid(),
+
+    /**
+     * The date when the user created their account.
+     */
+    createdAt: z.number().nonnegative(),
+
+    /**
+     * The unique handle of the user.
+     */
+    handle: UserHandle,
+
+    /**
+     * The display name of the user. Cannot be blank.
+     */
+    displayName: UserDisplayName,
+
+    /**
+     * The bio of the user. Maximum of 160 characters.
+     */
+    bio: UserBio,
+
+    /**
+     * Featured URLs that should be displayed on the user"s page. This array has a maximum of 4 members.
+     */
+    urls: UserUrlList
+});
+
+/**
+ * Represents a user, including all private fields.
  */
 export type User = z.infer<typeof UserSchema>;
-export const UserSchema = z.object({
-    id: z.uuid(),
-    createdAt: z.number().nonnegative(),
-    permissionLevel: PermissionLevelSchema,
-    mutable: UserMutableSchema,
-    devices: z.array(KnownDeviceSchema)
+export const UserSchema = PublicUserSchema.safeExtend({
+    /**
+     * Fields only accessible to the owning user or administrators. Not present for a public
+     * view of the user.
+     */
+    private: PrivateUserDataSchema
 });
 
 /**
@@ -98,20 +131,29 @@ export function dtoKnownDevice(entity: db.KnownDevice): KnownDevice {
 /**
  * Converts a database representation of a user to a runtime (API) one.
  */
-export function dtoUser(entity: DbCompositeUser): User {
+export function dtoPublicUser(entity: DbCompositeUser): PublicUser {
     return {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
-        permissionLevel: entity.permissionLevel,
-        devices: entity.devices.map(dtoKnownDevice),
-        mutable: {
+        displayName: entity.displayName,
+        bio: entity.bio,
+        handle: entity.handle,
+        urls: entity.urls
+    };
+}
+
+/**
+ * Converts a database representation of a user to a runtime (API) one, including all private fields.
+ * @param entity 
+ * @returns 
+ */
+export function dtoUser(entity: DbCompositeUser): User {
+    return {
+        ...dtoPublicUser(entity),
+        private: {
+            permissionLevel: entity.permissionLevel,
+            devices: entity.devices.map(dtoKnownDevice),
             hackatimeApiKey: entity.hackatimeApiKey ?? undefined,
-            profile: {
-                displayName: entity.displayName,
-                bio: entity.bio,
-                handle: entity.handle,
-                urls: entity.urls
-            }
         }
     };
 }
@@ -160,7 +202,7 @@ export default router({
         )
         .output(
             apiResult({
-                user: UserProfileSchema.optional()
+                user: z.union([PublicUserSchema, UserSchema]).nullable()
             })
         )
         .query(async (req) => {
@@ -183,9 +225,14 @@ export default router({
             }
 
             if (!dbUser)
-                return ok({ user: undefined });
+                return ok({ user: null });
             
-            return ok({ user: dtoUser(dbUser).mutable.profile });
+            // Watch out! Make sure we never return a `User` to an unauthorized user here.
+            const user: User | PublicUser = req.ctx.user?.id == dbUser.id
+                ? dtoUser(dbUser)
+                : dtoPublicUser(dbUser);
+            
+            return ok({ user });
         }),
 
     /**
@@ -203,7 +250,13 @@ export default router({
                 /**
                  * The changes to apply to the user profile.
                  */
-                changes: zx.deepPartial(UserMutableSchema)
+                changes: z.object({
+                    handle: UserHandle.optional(),
+                    displayName: UserDisplayName.optional(),
+                    bio: UserBio.optional(),
+                    urls: UserUrlList.optional(),
+                    hackatimeApiKey: UserHackatimeApiKey.optional()
+                })
             })
         )
         .output(
@@ -219,31 +272,14 @@ export default router({
             if (req.ctx.user.permissionLevel === "USER" && req.ctx.user.id !== req.input.id)
                 return err("NO_PERMISSION", "You can only edit your own profile");
 
-            // Prepare update data
-            const updateData: Partial<db.User> = {};
-            
-            if (req.input.changes.profile) {
-                const { profile } = req.input.changes;
-                if (profile.displayName) {
-                    updateData.displayName = profile.displayName;
-                }
-
-                if (profile.bio !== undefined) {
-                    updateData.bio = profile.bio;
-                }
-
-                if (profile.handle) {
-                    updateData.handle = profile.handle;
-                }
-
-                if (profile.urls) {
-                    updateData.urls = profile.urls;
-                }
-            }
-            
-            if (req.input.changes.hackatimeApiKey !== undefined) {
-                updateData.hackatimeApiKey = req.input.changes.hackatimeApiKey;
-            }
+            const changes = req.input.changes;
+            const updateData: Partial<db.User> = {
+                ...when(changes.displayName !== undefined, { displayName: changes.displayName }),
+                ...when(changes.bio !== undefined, { bio: changes.bio }),
+                ...when(changes.handle !== undefined, { handle: changes.handle }),
+                ...when(changes.urls !== undefined, { urls: changes.urls }),
+                ...when(changes.hackatimeApiKey !== undefined, { handle: changes.hackatimeApiKey })
+            };
 
             const updatedUser = await database.user.update({
                 where: { id: req.input.id },
