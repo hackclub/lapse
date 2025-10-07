@@ -141,10 +141,5 @@ export async function mergeVideoSessions(processor: VideoProcessor, timelapse: L
     console.log(`mergeVideoSessions(): bytes retrieved from ${streamBytes.length} streams:`, streamBytes);
     
     const concatenated = await processor.concat(streamBytes);
-    if (concatenated.buffer instanceof SharedArrayBuffer) {
-        console.warn("mergeVideoSessions(): got a SharedArrayBuffer from .concat!", concatenated);
-        throw new Error("VideoProcessor.concat returned a SharedArrayBuffer");
-    }
-
-    return new Blob([concatenated.buffer]);
+    return new Blob([concatenated.buffer as ArrayBuffer]);
 }
