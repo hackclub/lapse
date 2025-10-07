@@ -68,16 +68,29 @@ export default function RootLayout({
             </div>
             
             <div className="flex items-center gap-4">
-              <Link href="/timelapse/create">
-                <Button 
-                  kind="primary"
-                  onClick={() => {}}
-                  className="gap-2 px-8"
-                >
-                  <Icon glyph="plus-fill" size={20} />
-                  Create
-                </Button>
-              </Link>
+              {currentUser ? (
+                <Link href="/timelapse/create">
+                  <Button 
+                    kind="primary"
+                    onClick={() => {}}
+                    className="gap-2 px-8"
+                  >
+                    <Icon glyph="plus-fill" size={20} />
+                    Create
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/auth">
+                  <Button 
+                    kind="primary"
+                    onClick={() => {}}
+                    className="gap-2 px-8"
+                  >
+                    <Icon glyph="welcome" size={20} />
+                    Sign in
+                  </Button>
+                </Link>
+              )}
               {currentUser && (
                 <ProfilePicture 
                   profilePictureUrl={currentUser.profilePictureUrl}
