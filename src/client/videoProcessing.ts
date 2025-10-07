@@ -188,9 +188,7 @@ export async function mergeVideoSessions(
     
     onProgress?.("Processing with FFmpeg...", 30);
     const concatenated = await processor.concat(streamBytes, (stage, progress) => {
-        // Map FFmpeg progress (30-90% of total progress)
-        const mappedProgress = 30 + Math.floor(progress * 0.6);
-        onProgress?.(stage, mappedProgress);
+        onProgress?.(stage, (30 + Math.floor(progress * 0.6)) );
     });
     
     onProgress?.("Finalizing video...", 95);

@@ -132,6 +132,7 @@ export default async function handler(
                     slackId: slackUser.id,
                     handle: handle,
                     displayName: slackUser.name,
+                    profilePictureUrl: slackUser.image_original || slackUser.image_192 || "",
                     bio: "",
                     urls: [],
                     permissionLevel: "USER",
@@ -144,7 +145,19 @@ export default async function handler(
             // Update existing user with Slack ID if they signed up with a different method
             dbUser = await database.user.update({
                 where: { id: dbUser.id },
-                data: { slackId: slackUser.id },
+                data: { 
+                    slackId: slackUser.id,
+                    profilePictureUrl: slackUser.image_original || slackUser.image_192 || dbUser.profilePictureUrl,
+                },
+            });
+        }
+        else {
+            // Update profile picture for existing Slack users
+            dbUser = await database.user.update({
+                where: { id: dbUser.id },
+                data: { 
+                    profilePictureUrl: slackUser.image_original || slackUser.image_192 || dbUser.profilePictureUrl,
+                },
             });
         }
 

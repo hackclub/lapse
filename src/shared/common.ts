@@ -4,6 +4,7 @@ export type ApiError = z.infer<typeof ApiErrorSchema>;
 export const ApiErrorSchema = z.enum([
     "ERROR",
     "NOT_FOUND",
+    "DEVICE_NOT_FOUND",
     "NOT_MUTABLE",
     "MISSING_PARAMS",
     "SIZE_LIMIT",

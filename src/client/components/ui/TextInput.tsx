@@ -9,9 +9,8 @@ export function TextInput({ value, label, description, maxLength, onChange }: {
   maxLength?: number
 }) {
   function handleChange(ev: ChangeEvent<HTMLInputElement>) {
-    if (!ev.target.reportValidity()) {
+    if (!ev.target.reportValidity())
       return;
-    }
 
     onChange(ev.target.value);
   }
@@ -22,7 +21,7 @@ export function TextInput({ value, label, description, maxLength, onChange }: {
       description={description}
     >
       <input
-        className="border-1 border-sunken rounded-md p-2 px-4 w-full"
+        className="bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full"
         type="text"
         value={value}
         maxLength={maxLength}

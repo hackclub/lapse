@@ -1,3 +1,5 @@
+import "@/server/allow-only-server";
+
 import { z } from "zod";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
@@ -5,14 +7,6 @@ import { apiResult, err, ok, when } from "@/shared/common";
 import * as db from "@/generated/prisma";
 
 const database = new db.PrismaClient();
-
-/**
- * Public-facing user fields.
- */
-export type UserProfile = z.infer<typeof UserProfileSchema>;
-export const UserProfileSchema = z.object({
-
-});
 
 /**
  * Represents the permissions of a user.
@@ -23,14 +17,6 @@ export const PermissionLevelSchema = z.enum([
     "ADMIN", // same as "USER", but adds the ability to remove and review projects
     "ROOT", // same as "ADMIN", but adds the ability to change the permissions of non-owners, alongside full project editing permissions
 ]);
-
-/**
- * Represents fields of a user record that can be modified by said user.
- */
-export type UserMutable = z.infer<typeof UserMutableSchema>;
-export const UserMutableSchema = z.object({
-    profile: UserProfileSchema,
-});
 
 /**
  * Represents a device that belongs to a user, which contains a private passkey. Passkeys are not
@@ -91,6 +77,11 @@ export const PublicUserSchema = z.object({
     displayName: UserDisplayName,
 
     /**
+     * The profile picture URL of the user.
+     */
+    profilePictureUrl: z.url(),
+
+    /**
      * The bio of the user. Maximum of 160 characters.
      */
     bio: UserBio,
@@ -131,11 +122,12 @@ export function dtoKnownDevice(entity: db.KnownDevice): KnownDevice {
 /**
  * Converts a database representation of a user to a runtime (API) one.
  */
-export function dtoPublicUser(entity: DbCompositeUser): PublicUser {
+export function dtoPublicUser(entity: db.User): PublicUser {
     return {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
         displayName: entity.displayName,
+        profilePictureUrl: entity.profilePictureUrl,
         bio: entity.bio,
         handle: entity.handle,
         urls: entity.urls

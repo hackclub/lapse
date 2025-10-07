@@ -16,11 +16,11 @@ export function Button({ children, kind, isSquare, disabled, onClick, className 
     <button
       onClick={disabled ? noop : onClick}
       className={clsx(
-        "rounded-2xl px-4 py-3 cursor-pointer font-bold transition-transform",
+        "rounded-2xl px-4 py-3 cursor-pointer font-bold transition-all flex items-center justify-center",
         (kind == "primary") && "bg-red text-white",
         (kind == "secondary") && "border-2 border-red text-red",
         (kind == "dark") && "bg-black text-white",
-        disabled && "bg-smoke text-black",
+        disabled && "!bg-darkless !text-white",
         !disabled && "hover:scale-[102%] active:scale-[98%]",
         isSquare && "aspect-square",
         className

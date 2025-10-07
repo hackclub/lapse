@@ -1,5 +1,4 @@
 import { Html, Head, Main, NextScript } from "next/document";
-import localFont from "next/font/local";
 
 export default function Document() {
   return (

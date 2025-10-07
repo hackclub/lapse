@@ -1,3 +1,4 @@
+import "@/server/allow-only-server";
 import { router } from "../trpc";
 
 import timelapse from "./api/timelapse";

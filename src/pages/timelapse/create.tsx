@@ -67,15 +67,15 @@ export default function Page() {
   useOnce(async () => {
     const activeTimelapse = await deviceStorage.getActiveTimelapse();
     if (!activeTimelapse) {
-      console.log("No timelapse was started previously.");
+      console.log("(timelapse/create) no timelapse was started previously.");
       return;
     }
 
-    console.group("An incomplete timelapse has been detected!");
-    console.log("timelapse:", activeTimelapse);
+    console.group("(timelapse/create) An incomplete timelapse has been detected!");
+    console.log("(timelapse/create) - timelapse:", activeTimelapse);
 
     const snapshots = await deviceStorage.getAllSnapshots();
-    console.log("snapshots:", snapshots);
+    console.log("(timelapse/create) - snapshots:", snapshots);
     console.groupEnd();
 
     let adjustedStartTime = new Date(activeTimelapse.startedAt);
@@ -88,7 +88,7 @@ export default function Page() {
         sessionGroups.get(snapshot.session)!.push(snapshot);
       }
 
-      console.group("Sessions:");
+      console.group("(timelapse/create) Sessions:");
       let totalElapsedTime = 0;
       for (const [session, sessionSnapshots] of sessionGroups) {
         if (sessionSnapshots.length > 1) {
@@ -98,7 +98,7 @@ export default function Page() {
           const sessionDuration = sessionEnd - sessionStart;
           totalElapsedTime += sessionDuration;
           
-          console.log(`Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
+          console.log(`(timelapse/create) Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
         }
       }
       console.groupEnd();
@@ -106,8 +106,8 @@ export default function Page() {
       adjustedStartTime = new Date(Date.now() - totalElapsedTime);
       setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
 
-      console.log("session groups:", sessionGroups);
-      console.log("total elapsed time:", totalElapsedTime);
+      console.log("(timelapse/create) session groups:", sessionGroups);
+      console.log("(timelapse/create) total elapsed time:", totalElapsedTime);
     }
 
     setName(activeTimelapse.name);
@@ -172,7 +172,7 @@ export default function Page() {
   }, [recorder, currentTimelapseId, currentSession]);
 
   async function onCreate() {
-    console.log("Creating a new timelapse!");
+    console.log("(timelapse/create) creating a new timelapse!");
 
     mainPreviewRef.current!.srcObject = currentStream!;
     setSetupModalOpen(false);
@@ -201,7 +201,7 @@ export default function Page() {
       setCurrentTimelapseId(timelapseId);
       activeTimelapseId = timelapseId;
 
-      console.log(`New local timelapse created with ID ${timelapseId}`);
+      console.log(`(timelapse/create) new local timelapse created with ID ${timelapseId}`);
     }
     else {
       // Updating existing timelapse
@@ -253,7 +253,7 @@ export default function Page() {
       newRecorder.start(TIMELAPSE_FRAME_LENGTH);
 
       if (frameInterval) {
-        console.warn("Clearing previous frame capture interval.");
+        console.warn("(timelapse/create) clearing previous frame capture interval.");
         clearInterval(frameInterval);
       }
 
@@ -271,7 +271,7 @@ export default function Page() {
       return; // no change
 
     if (changingSource) {
-      console.warn("Attempted to change the video source while we're still processing a previous change. Ignoring.");
+      console.warn("(timelapse/create) attempted to change the video source while we're still processing a previous change. Ignoring.");
       return;
     }
 
@@ -292,7 +292,7 @@ export default function Page() {
       }
     }
 
-    console.log("Video source changed to", ev.target.value);
+    console.log("(timelapse/create) video source changed to", ev.target.value);
 
     if (ev.target.value == "CAMERA") {
       let stream: MediaStream;
@@ -304,12 +304,12 @@ export default function Page() {
         });
       }
       catch (err) {
-        console.error("Could not request permissions for camera stream.", err);
+        console.error("(timelapse/create) could not request permissions for camera stream.", err);
         setChangingSource(false);
         return;
       }
 
-      console.log("Stream retrieved!", stream);
+      console.log("(timelapse/create) stream retrieved!", stream);
 
       const cameraLabel = stream
         .getVideoTracks()[0]
@@ -331,12 +331,12 @@ export default function Page() {
         });
       }
       catch (err) {
-        console.error("Could not request permissions for screen capture.", err);
+        console.error("(timelapse/create) could not request permissions for screen capture.", err);
         setChangingSource(false);
         return;
       }
 
-      console.log("Screen stream retrieved!", stream);
+      console.log("(timelapse/create) screen stream retrieved!", stream);
 
       let screenLabel: string | null = stream.getVideoTracks()[0].label;
       if (screenLabel.includes("://") || screenLabel.includes("window:")) {
@@ -381,7 +381,7 @@ export default function Page() {
     }
 
     if (!recorder) {
-      console.warn("Attempted to stop the recording while recorder was null!");
+      console.warn("(timelapse/create) attempted to stop the recording while recorder was null!");
       return;
     }
 
@@ -421,25 +421,26 @@ export default function Page() {
 
         setUploadStage("Encrypting video...");
         setUploadProgress(30);
+
         const encrypted = await encryptVideo(merged, uploadRes.data.timelapseId, (stage, progress) => {
           setUploadStage(stage);
-          // Encryption takes 30-60% of total progress
           setUploadProgress(30 + Math.floor(progress * 0.3));
         });
+
         console.log("(upload) - encrypted data:", encrypted);
 
         setUploadStage("Uploading to server...");
         setUploadProgress(60);
         console.log(`(upload) uploading now to ${uploadRes.data.url}`);
 
-        // Use XMLHttpRequest for upload progress tracking
-        const uploadPromise = new Promise<void>((resolve, reject) => {
+        // We're using XHR here instead of fetch() because we want to track the progress.
+        await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           
           xhr.upload.addEventListener("progress", (event) => {
             if (event.lengthComputable) {
               const uploadPercent = Math.floor((event.loaded / event.total) * 100);
-              const totalProgress = 60 + Math.floor(uploadPercent * 0.25); // Upload takes 60-85% of total
+              const totalProgress = 60 + Math.floor(uploadPercent * 0.25); // upload takes 60-85% of total
               setUploadStage(`Uploading... ${uploadPercent}% (${Math.floor(event.loaded / 1024 / 1024)}MB / ${Math.floor(event.total / 1024 / 1024)}MB)`);
               setUploadProgress(totalProgress);
             }
@@ -467,7 +468,6 @@ export default function Page() {
           xhr.send(encrypted.data);
         });
 
-        await uploadPromise;
         console.log("(upload) S3 upload completed successfully");
 
         setUploadStage("Finalizing timelapse...");
@@ -510,14 +510,10 @@ export default function Page() {
         setUploadStage("Upload complete!");
         setUploadProgress(100);
         
-        // Brief delay to show completion before redirecting
-        setTimeout(() => {
-          setIsUploading(false);
-          router.push(`/timelapse/${createRes.data.timelapse.id}`);
-        }, 1000);
+        router.push(`/timelapse/${createRes.data.timelapse.id}`);
       }
       catch (err) {
-        console.error("Upload failed:", err);
+        console.error("(timelapse/create) upload failed:", err);
         setIsUploading(false);
         setError(err instanceof Error ? err.message : "An unknown error occurred during upload");
       }
@@ -595,7 +591,7 @@ export default function Page() {
             description="Record your screen, camera, or any other video source."
           >
             <select
-              className="border-1 border-sunken p-2 rounded-md disabled:bg-smoke transition-colors"
+              className="p-2 rounded-md disabled:bg-dark bg-darkless transition-colors"
               value={videoSourceKind}
               onChange={onVideoSourceChange}
               disabled={changingSource}
@@ -612,7 +608,7 @@ export default function Page() {
                 ref={setupPreviewRef}
                 autoPlay
                 muted
-                className="w-full h-auto border border-sunken rounded-md"
+                className="w-full h-auto rounded-md"
               />
             </div>
           )}

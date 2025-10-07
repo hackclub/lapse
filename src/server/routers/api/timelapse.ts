@@ -1,17 +1,20 @@
+import "@/server/allow-only-server";
+
 import { z } from "zod";
 import { S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import { PrismaClient } from "../../../generated/prisma";
-import type { Timelapse as DbTimelapse } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
 import { apiResult, ascending, err, match, when, ok, oneOf } from "@/shared/common";
 import { decryptVideo } from "@/server/encryption";
 import * as env from "@/server/env";
 import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE } from "@/shared/constants";
+import { dtoPublicUser, PublicUserSchema } from "./user";
+import * as db from "@/generated/prisma";
 
-const db = new PrismaClient();
+const database = new PrismaClient();
 const s3 = new S3Client({
     region: "auto",
     endpoint: `https://${env.S3_ENDPOINT}`,
@@ -22,14 +25,19 @@ const s3 = new S3Client({
 });
 
 /**
+ * Represents a `db.Timelapse` with related tables included.
+ */
+export type DbCompositeTimelapse = db.Timelapse & { owner: db.User };
+
+/**
  * Converts a database representation of a timelapse to a runtime (API) one.
  */
-export function dtoTimelapse(entity: DbTimelapse): Timelapse {
+export function dtoTimelapse(entity: DbCompositeTimelapse): Timelapse {
     const s3Url = entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED;
 
     return {
         id: entity.id,
-        owner: entity.ownerId,
+        owner: dtoPublicUser(entity.owner),
         isPublished: entity.isPublished,
         hackatimeProject: entity.hackatimeProject ?? undefined,
         playbackUrl: `${s3Url}/${entity.s3Key}`,
@@ -90,9 +98,9 @@ export const TimelapseSchema = z.object({
     id: z.uuid(),
 
     /**
-     * The ID of the creator of the timelapse.
+     * Information about the owner/author of the timelapse.
      */
-    owner: z.uuid(),
+    owner: PublicUserSchema,
 
     /**
      * The device the timelapse has been created on. This determines which passkey it has been
@@ -147,8 +155,9 @@ export default router({
             })
         )
         .query(async (req) => {
-            const timelapse = await db.timelapse.findFirst({
+            const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
+                include: { owner: true }
             });
 
             if (!timelapse)
@@ -207,7 +216,7 @@ export default router({
                 expiresIn: 15 * 60, // 15 minutes
             });
 
-            const draft = await db.draftTimelapse.create({
+            const draft = await database.draftTimelapse.create({
                 data: {
                     ownerId: req.ctx.user.id,
                     containerKind: req.input.containerType,
@@ -257,7 +266,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            const draft = await db.draftTimelapse.findFirst({
+            const draft = await database.draftTimelapse.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id }
             });
 
@@ -288,7 +297,18 @@ export default router({
                 return err("NOT_FOUND", "Uploaded file not found.");
             }
 
-            const timelapse = await db.timelapse.create({
+            const device = await database.knownDevice.findFirst({
+                where: { id: req.input.deviceId }
+            });
+
+            if (!device)
+                return err("DEVICE_NOT_FOUND", "The device creating this snapshot hasn't been registered with the server.");
+
+            if (device.ownerId != req.ctx.user.id)
+                return err("NO_PERMISSION", "The specified device doesn't belong to the logged in user.");
+
+            const timelapse = await database.timelapse.create({
+                include: { owner: true },
                 data: {
                     id: draft.id,
                     ownerId: req.ctx.user.id,
@@ -304,7 +324,7 @@ export default router({
 
             const sortedSnapshots = req.input.snapshots.sort(ascending());
             
-            await db.snapshot.createMany({
+            await database.snapshot.createMany({
                 data: sortedSnapshots.map((x, i) => ({
                     timelapseId: timelapse.id,
                     frame: i,
@@ -312,7 +332,7 @@ export default router({
                 }))
             });
 
-            await db.draftTimelapse.delete({
+            await database.draftTimelapse.delete({
                 where: { id: draft.id }
             });
 
@@ -345,7 +365,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            const timelapse = await db.timelapse.findFirst({
+            const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
             });
 
@@ -362,7 +382,7 @@ export default router({
             if (timelapse.isPublished)
                 return err("NOT_MUTABLE", "Cannot edit published timelapse");
 
-            const updateData: Partial<DbTimelapse> = {};
+            const updateData: Partial<db.Timelapse> = {};
             if (req.input.changes.name) {
                 updateData.name = req.input.changes.name;
             }
@@ -375,9 +395,10 @@ export default router({
                 updateData.privacy = req.input.changes.privacy;
             }
 
-            const updatedTimelapse = await db.timelapse.update({
+            const updatedTimelapse = await database.timelapse.update({
                 where: { id: req.input.id },
                 data: updateData,
+                include: { owner: true }
             });
 
             return ok({ timelapse: dtoTimelapse(updatedTimelapse) });
@@ -394,7 +415,7 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
-            const timelapse = await db.timelapse.findFirst({
+            const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
             });
 
@@ -408,7 +429,7 @@ export default router({
             if (!canDelete)
                 return err("NO_PERMISSION", "You don't have permission to delete this timelapse");
 
-            await db.timelapse.delete({
+            await database.timelapse.delete({
                 where: { id: req.input.id },
             });
 
@@ -442,7 +463,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            const timelapse = await db.timelapse.findFirst({
+            const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
             });
 
@@ -493,9 +514,10 @@ export default router({
 
                 await s3.send(deleteCommand);
 
-                const publishedTimelapse = await db.timelapse.update({
+                const publishedTimelapse = await database.timelapse.update({
                     where: { id: req.input.id },
                     data: { isPublished: true },
+                    include: { owner: true }
                 });
 
                 return ok({ timelapse: dtoTimelapse(publishedTimelapse) });
@@ -527,7 +549,8 @@ export default router({
             const isViewingSelf = req.ctx.user && req.ctx.user.id === req.input.user;
             const isAdmin = req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT"));
 
-            const timelapses = await db.timelapse.findMany({
+            const timelapses = await database.timelapse.findMany({
+                include: { owner: true },
                 where: {
                     ownerId: req.input.user,
                     ...when(!isViewingSelf && !isAdmin, {
@@ -559,7 +582,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            const timelapse = await db.timelapse.findFirst({
+            const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id }
             });
 
@@ -569,9 +592,10 @@ export default router({
             if (timelapse.hackatimeProject)
                 return err("HACKATIME_ALREADY_ASSIGNED", "Timelapse already has an associated Hackatime project");
 
-            const updatedTimelapse = await db.timelapse.update({
+            const updatedTimelapse = await database.timelapse.update({
                 where: { id: req.input.id },
-                data: { hackatimeProject: req.input.hackatimeProject }
+                data: { hackatimeProject: req.input.hackatimeProject },
+                include: { owner: true }
             });
 
             return ok({ timelapse: dtoTimelapse(updatedTimelapse) });

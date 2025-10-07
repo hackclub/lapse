@@ -11,18 +11,6 @@ export interface ErrorModalButton {
   kind?: "primary" | "secondary";
 }
 
-export interface ErrorModalProps {
-  isOpen: boolean;
-  setIsOpen: (x: boolean) => void;
-  title?: string;
-  message: string;
-  icon?: IconGlyph;
-  buttons?: ErrorModalButton[];
-  onRetry?: () => void;
-  retryLabel?: string;
-  className?: string;
-}
-
 export function ErrorModal({
   isOpen,
   setIsOpen,
@@ -33,15 +21,29 @@ export function ErrorModal({
   onRetry,
   retryLabel = "Try Again",
   className
-}: ErrorModalProps) {
+}: {
+  isOpen: boolean;
+  setIsOpen: (x: boolean) => void;
+  title?: string;
+  message: string;
+  icon?: IconGlyph;
+  buttons?: ErrorModalButton[];
+  onRetry?: () => void;
+  retryLabel?: string;
+  className?: string;
+}) {
   const router = useRouter();
 
   const defaultButtons: ErrorModalButton[] = [
-    ...(onRetry ? [{
-      label: retryLabel,
-      onClick: onRetry,
-      kind: "primary" as const
-    }] : []),
+    ...(
+      onRetry ? [
+        {
+          label: retryLabel,
+          onClick: onRetry,
+          kind: "primary" as const
+        }
+      ] : []
+    ),
     {
       label: "Close",
       onClick: () => {
@@ -62,21 +64,23 @@ export function ErrorModal({
         </div>
 
         <div className="flex flex-col">
-          <h1 className="font-bold text-2xl text-text">{title}</h1>
+          <h1 className="font-bold text-2xl">{title}</h1>
           <p className="max-w-md leading-relaxed">{message}</p>
         </div>
 
         <div className="flex flex-col gap-3 w-full">
-          {finalButtons.map((button, index) => (
-            <Button
-              key={index}
-              onClick={button.onClick}
-              kind={button.kind || "secondary"}
-              className="w-full"
-            >
-              {button.label}
-            </Button>
-          ))}
+          {
+            finalButtons.map((button, index) => (
+              <Button
+                key={index}
+                onClick={button.onClick}
+                kind={button.kind || "secondary"}
+                className="w-full"
+              >
+                {button.label}
+              </Button>
+            ))
+          }
         </div>
       </div>
     </Modal>

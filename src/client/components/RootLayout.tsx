@@ -1,8 +1,14 @@
 import Head from "next/head";
 import localFont from "next/font/local";
 import { JetBrains_Mono } from "next/font/google";
+import Link from "next/link";
+import Icon from "@hackclub/icons";
 
 import { ReactNode } from "react";
+import { Button } from "./ui/Button";
+import { ProfilePicture } from "./ui/ProfilePicture";
+import { useAuth } from "../hooks/useAuth";
+import LapseIcon from "../assets/icon.svg";
 
 const phantomSans = localFont({
   variable: "--font-phantom-sans",
@@ -34,13 +40,17 @@ interface RootLayoutProps {
   children: ReactNode;
   title?: string;
   description?: string;
+  showHeader?: boolean;
 }
 
 export default function RootLayout({
   children,
   title = "Lapse - Timelapse Recording",
-  description = "Create and share timelapses with Hack Club Lapse"
+  description = "Create and share timelapses with Hack Club Lapse",
+  showHeader = false
 }: RootLayoutProps) {
+  const { currentUser } = useAuth(false);
+
   return (
     <>
       <Head>
@@ -50,7 +60,35 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className={`min-h-screen w-full h-full text-text bg-white ${jetBrainsMono.variable} ${phantomSans.className}`}>        
+      <div className={`w-full h-full p-6 text-text bg-dark ${jetBrainsMono.variable} ${phantomSans.className}`}>
+        {showHeader && (
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <LapseIcon className="w-12 h-12" />
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <Link href="/timelapse/create">
+                <Button 
+                  kind="primary"
+                  onClick={() => {}}
+                  className="gap-2 px-8"
+                >
+                  <Icon glyph="plus-fill" size={20} />
+                  Create
+                </Button>
+              </Link>
+              {currentUser && (
+                <ProfilePicture 
+                  profilePictureUrl={currentUser.profilePictureUrl}
+                  displayName={currentUser.displayName}
+                  size="md"
+                />
+              )}
+            </div>
+          </div>
+        )}
+        
         <main className="w-full h-full">
           {children}
         </main>

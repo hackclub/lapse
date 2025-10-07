@@ -38,20 +38,21 @@ model KnownDevice {
 
 /// Represents a single user of Lapse.
 model User {
-  id                String            @id @default(uuid())
-  email             String
-  createdAt         DateTime          @default(now())
-  permissionLevel   PermissionLevel   @default(USER)
-  handle            String            @unique
-  displayName       String
-  bio               String            @default("")
-  urls              String[]          @default([])
-  hackatimeApiKey   String?
-  slackId           String?
+  id                    String            @id @default(uuid())
+  email                 String
+  createdAt             DateTime          @default(now())
+  permissionLevel       PermissionLevel   @default(USER)
+  handle                String            @unique
+  displayName           String
+  profilePictureUrl     String
+  bio                   String            @default("")
+  urls                  String[]          @default([])
+  hackatimeApiKey       String?
+  slackId               String?
 
-  timelapses        Timelapse[]
-  devices           KnownDevice[]
-  draftTimelapses   DraftTimelapse[]
+  timelapses            Timelapse[]
+  devices               KnownDevice[]
+  draftTimelapses       DraftTimelapse[]
 }
 
 model DraftTimelapse {

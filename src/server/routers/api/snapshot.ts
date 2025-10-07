@@ -1,3 +1,5 @@
+import "@/server/allow-only-server";
+
 import { z } from "zod";
 import { procedure, router, protectedProcedure } from "../../trpc";
 import { apiResult, err, ok, oneOf } from "@/shared/common";

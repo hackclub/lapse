@@ -113,11 +113,6 @@ export default function Auth() {
               )}
             </button>
           </div>
-          <div className="text-center">
-            <p className="text-xs text-gray-500">
-              By signing in, you agree to our terms of service and privacy policy.
-            </p>
-          </div>
         </div>
       </div>
     </div>

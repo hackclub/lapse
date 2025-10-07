@@ -1,3 +1,4 @@
+import "@/server/allow-only-server";
 import crypto from "crypto";
 
 function deriveSalts(timelapseId: string): { keySalt: Buffer; ivSalt: Buffer } {
