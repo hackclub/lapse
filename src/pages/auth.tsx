@@ -80,14 +80,18 @@ export default function Auth() {
   return (
     <RootLayout showHeader={true}>
       <div className="flex w-full h-full py-8 items-center justify-center">
-        <div className="max-w-md w-full px-6">
-          <div className="flex flex-col gap-8 text-center">
+        <div className="max-w-lg w-full bg-darkless p-16 rounded-lg">
+          <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-4">
-              <h1 className="text-3xl font-bold text-smoke leading-tight">
+              <h1 className="text-3xl flex gap-2 font-bold text-smoke leading-tight">
+                <Icon glyph="private" />
                 Pick a provider
               </h1>
               <p className="text-smoke">
-                If you have signed in before, you'll be logged in.
+                {`
+                  If you have signed in before, you'll be logged in. A new account will
+                  be created for each service.
+                `}
               </p>
             </div>
 
