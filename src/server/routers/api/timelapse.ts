@@ -2,13 +2,12 @@ import { z } from "zod";
 import { S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import crypto from "crypto";
 
 import { PrismaClient } from "../../../generated/prisma";
 import type { Timelapse as DbTimelapse } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ascending, err, match, ok, oneOf } from "@/shared/common";
-import { decryptString, encryptString } from "@/server/encryption";
+import { apiResult, ascending, err, match, when, ok, oneOf } from "@/shared/common";
+import { encryptString, decryptVideoWithTimelapseId } from "@/server/encryption";
 import * as env from "@/server/env";
 import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE } from "@/shared/constants";
 
@@ -56,14 +55,14 @@ export const TimelapsePrivacySchema = z.enum(["UNLISTED", "PUBLIC"]);
 export type TimelapseVideoContainer = z.infer<typeof TimelapseVideoContainerSchema>;
 export const TimelapseVideoContainerSchema = z.enum(["WEBM", "MP4"]);
 
-function containerTypeToMimeType(container: TimelapseVideoContainer) {
+export function containerTypeToMimeType(container: TimelapseVideoContainer) {
     return match(container, {
         "MP4": "video/mp4" as const,
         "WEBM": "video/webm" as const
     });
 }
 
-function containerTypeToExtension(container: TimelapseVideoContainer) {
+export function containerTypeToExtension(container: TimelapseVideoContainer) {
     return match(container, {
         "MP4": "mp4" as const,
         "WEBM": "webm" as const
@@ -116,7 +115,15 @@ export const TimelapseSchema = z.object({
      * The Hackatime project that has been associated with the timelapse. If `null`, no 
      */
     hackatimeProject: z.string().optional(),
+
+    /**
+     * The format of the video container.
+     */
     videoContainerKind: TimelapseVideoContainerSchema,
+
+    /**
+     * Fields editable by the user.
+     */
     mutable: TimelapseMutableSchema
 });
 
@@ -180,12 +187,14 @@ export default router({
                 url: z.url(),
 
                 /**
-                 * An opaque key that refers to the upload after uploading.
+                 * The UUID of the timelapse that will be created.
                  */
-                key: z.string()
+                timelapseId: z.uuid()
             })
         )
         .query(async (req) => {
+            // Generate the timelapse ID before upload so it can be used for encryption
+
             const key = `timelapses/${req.ctx.user.id}/${crypto.randomUUID()}.${containerTypeToExtension(req.input.containerType)}`;
 
             const command = new PutObjectCommand({
@@ -198,13 +207,17 @@ export default router({
                 expiresIn: 15 * 60, // 15 minutes
             });
 
+            const draft = await db.draftTimelapse.create({
+                data: {
+                    ownerId: req.ctx.user.id,
+                    containerKind: req.input.containerType,
+                    s3Key: key
+                }
+            });
+
             return ok({
                 url: uploadUrl,
-
-                // The key is opaque, but it doesn't really _have_ to be. If the client for some
-                // godforsaken reason NEEDS to know the actual bucket key, then we COULD make this
-                // a transparent field by just... not encrypting it.
-                key: encryptString(key, env.PRIVATE_KEY_UPLOAD_KEY)
+                timelapseId: draft.id
             });
         }),
 
@@ -215,20 +228,21 @@ export default router({
         .input(
             z.object({
                 /**
+                 * The UUID of the timelapse to be created. Must match the one returned by beginUpload.
+                 */
+                id: z.uuid(),
+
+                /**
                  * Mutable timelapse metadata.
                  */
                 mutable: TimelapseMutableSchema,
 
                 /**
-                 * An array of Unix timestamps. The frame count is inferred by sorting the array,
-                 * and always begins at 0.
+                 * An array of timestamps. Each timestamp counts the number of milliseconds since the
+                 * Unix epoch - equivalent to `Date.getTime()` in JavaScript. The frame count is
+                 * inferred by sorting the array, and always begins at 0.
                  */
                 snapshots: z.array(z.int().min(0)).max(MAX_VIDEO_FRAME_COUNT),
-
-                /**
-                 * The key provided by the `beginUpload` API endpoint.
-                 */
-                uploadKey: z.hex(),
 
                 /**
                  * The device that the timelapse has been created on. This generally is used to
@@ -243,35 +257,31 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            const s3Key = decryptString(req.input.uploadKey, env.PRIVATE_KEY_UPLOAD_KEY);
-            if (!s3Key)
-                return err("Invalid upload key.");
+            const draft = await db.draftTimelapse.findFirst({
+                where: { id: req.input.id, ownerId: req.ctx.user.id }
+            });
 
-            let containerKind: TimelapseVideoContainer | null = null;
+            if (!draft)
+                return err("Unknown timelapse ID.");
 
             try {
                 const getCommand = new GetObjectCommand({
                     Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    Key: s3Key,
+                    Key: draft.s3Key,
                 });
 
                 const object = await s3.send(getCommand);
                 const fileSizeBytes = object.ContentLength ?? 0;
 
-                containerKind = !object.ContentType ? null
-                    : object.ContentType.includes("video/webm") ? "WEBM"
-                    : object.ContentType.includes("video/mp4") ? "MP4"
-                    : null; // unrecognized?!
-
-                if (fileSizeBytes > MAX_VIDEO_STREAM_SIZE || !containerKind) {
+                if (fileSizeBytes > MAX_VIDEO_STREAM_SIZE) {
                     const deleteCommand = new DeleteObjectCommand({
                         Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                        Key: s3Key,
+                        Key: draft.s3Key,
                     });
 
                     await s3.send(deleteCommand);
                     
-                    return err("Video stream exceeds size limit or has an invalid content type");
+                    return err("Video stream exceeds size limit.");
                 }
             }
             catch {
@@ -280,24 +290,30 @@ export default router({
 
             const timelapse = await db.timelapse.create({
                 data: {
+                    id: draft.id,
                     ownerId: req.ctx.user.id,
                     name: req.input.mutable.name,
                     description: req.input.mutable.description,
                     privacy: req.input.mutable.privacy,
-                    containerKind: containerKind,
+                    containerKind: draft.containerKind,
                     isPublished: false,
-                    s3Key: s3Key,
+                    s3Key: draft.s3Key,
                     deviceId: req.input.deviceId
                 }
             });
 
             const sortedSnapshots = req.input.snapshots.sort(ascending());
+            
             await db.snapshot.createMany({
                 data: sortedSnapshots.map((x, i) => ({
                     timelapseId: timelapse.id,
                     frame: i,
-                    createdAt: new Date(x * 1000)
+                    createdAt: new Date(x)
                 }))
+            });
+
+            await db.draftTimelapse.delete({
+                where: { id: draft.id }
             });
 
             return ok({ timelapse: dtoTimelapse(timelapse) });
@@ -412,14 +428,9 @@ export default router({
                 id: z.uuid(),
 
                 /**
-                 * The 256-bit key used to encrypt the snapshots, serialized as a hex string.
+                 * The device passkey used to decrypt the timelapse.
                  */
-                key: z.hex().length(256 / 4),
-
-                /**
-                 * The 128-bit initialization vector (IV) used to encrypt the snapshot, serialized as a hex string.
-                 */
-                iv: z.hex().length(128 / 4)
+                passkey: z.string().length(6)
             })
         )
         .output(
@@ -460,16 +471,11 @@ export default router({
                 if (!encryptedBuffer)
                     return err("Failed to retrieve encrypted video");
 
-                const decipher = crypto.createDecipheriv(
-                    "aes-256-cbc",
-                    Buffer.from(req.input.key, "hex"),
-                    Buffer.from(req.input.iv, "hex")
+                const decryptedBuffer = decryptVideoWithTimelapseId(
+                    encryptedBuffer,
+                    req.input.id,
+                    req.input.passkey
                 );
-                
-                const decryptedBuffer = Buffer.concat([
-                    decipher.update(Buffer.from(encryptedBuffer)),
-                    decipher.final(),
-                ]);
 
                 const putCommand = new PutObjectCommand({
                     Bucket: env.S3_PUBLIC_BUCKET_NAME,
@@ -521,20 +527,14 @@ export default router({
             const isViewingSelf = req.ctx.user && req.ctx.user.id === req.input.user;
             const isAdmin = req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT"));
 
-            const whereClause: {
-                ownerId: string;
-                isPublished?: boolean;
-                privacy?: "PUBLIC" | "UNLISTED";
-            } = { ownerId: req.input.user };
-
-            // If not viewing self and not admin, only show published public timelapses
-            if (!isViewingSelf && !isAdmin) {
-                whereClause.isPublished = true;
-                whereClause.privacy = "PUBLIC";
-            }
-
             const timelapses = await db.timelapse.findMany({
-                where: whereClause,
+                where: {
+                    ownerId: req.input.user,
+                    ...when(!isViewingSelf && !isAdmin, {
+                        isPublished: true,
+                        privacy: "PUBLIC"
+                    })
+                }
             });
 
             return ok({

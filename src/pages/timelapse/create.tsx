@@ -1,3 +1,5 @@
+"use client";
+
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
@@ -10,8 +12,12 @@ import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { deviceStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/deviceStorage";
 import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
+import { encryptVideoWithTimelapseId, getCurrentDevice } from "@/client/encryption";
+import { trpc } from "@/client/trpc";
 import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
+import { containerTypeToMimeType } from "@/server/routers/api/timelapse";
+import { useOnce } from "@/client/hooks/useOnce";
 
 export default function Page() {
   const router = useRouter();
@@ -47,74 +53,74 @@ export default function Page() {
   const currentStream = cameraStream || screenStream;
   const isRecording = !isFrozen && !setupModalOpen;
 
-  useEffect(() => {
-    (async () => {
-      setVideoProcessor(await createVideoProcessor());
-    })();
-  }, []);
+  useOnce(async () => {
+    setVideoProcessor(await createVideoProcessor());
+  });
 
-  useEffect(() => {
-    (async () => {
-      const activeTimelapse = await deviceStorage.getActiveTimelapse();
-      if (!activeTimelapse) {
-        console.log("No timelapse was started previously.");
-        return;
+  useOnce(async () => {
+    const activeTimelapse = await deviceStorage.getActiveTimelapse();
+    if (!activeTimelapse) {
+      console.log("No timelapse was started previously.");
+      return;
+    }
+
+    console.group("An incomplete timelapse has been detected!");
+    console.log("timelapse:", activeTimelapse);
+
+    const snapshots = await deviceStorage.getAllSnapshots();
+    console.log("snapshots:", snapshots);
+    console.groupEnd();
+
+    let adjustedStartTime = new Date(activeTimelapse.startedAt);
+    if (snapshots.length > 0) {
+      const sessionGroups = new Map<number, LocalSnapshot[]>();
+      for (const snapshot of snapshots) {
+        if (!sessionGroups.has(snapshot.session)) {
+          sessionGroups.set(snapshot.session, []);
+        }
+        sessionGroups.get(snapshot.session)!.push(snapshot);
       }
 
-      console.group("An incomplete timelapse has been detected!");
-      console.log("timelapse:", activeTimelapse);
-
-      const snapshots = await deviceStorage.getAllSnapshots();
-      console.log("snapshots:", snapshots);
+      console.group("Sessions:");
+      let totalElapsedTime = 0;
+      for (const [session, sessionSnapshots] of sessionGroups) {
+        if (sessionSnapshots.length > 1) {
+          const sorted = sessionSnapshots.sort((a, b) => a.createdAt - b.createdAt);
+          const sessionStart = sorted[0].createdAt;
+          const sessionEnd = sorted[sorted.length - 1].createdAt;
+          const sessionDuration = sessionEnd - sessionStart;
+          totalElapsedTime += sessionDuration;
+          
+          console.log(`Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
+        }
+      }
       console.groupEnd();
 
-      let adjustedStartTime = new Date(activeTimelapse.startedAt);
-      if (snapshots.length > 0) {
-        // Group snapshots by session
-        const sessionGroups = new Map<number, LocalSnapshot[]>();
-        for (const snapshot of snapshots) {
-          if (!sessionGroups.has(snapshot.session)) {
-            sessionGroups.set(snapshot.session, []);
-          }
-          sessionGroups.get(snapshot.session)!.push(snapshot);
-        }
+      adjustedStartTime = new Date(Date.now() - totalElapsedTime);
+      setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
 
-        // Calculate total elapsed time by summing session durations
-        console.group("Sessions:");
-        let totalElapsedTime = 0;
-        for (const [session, sessionSnapshots] of sessionGroups) {
-          if (sessionSnapshots.length > 1) {
-            const sorted = sessionSnapshots.sort((a, b) => a.createdAt - b.createdAt);
-            const sessionStart = sorted[0].createdAt;
-            const sessionEnd = sorted[sorted.length - 1].createdAt;
-            const sessionDuration = sessionEnd - sessionStart;
-            totalElapsedTime += sessionDuration;
-            
-            console.log(`Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
-          }
-        }
-        console.groupEnd();
+      console.log("session groups:", sessionGroups);
+      console.log("total elapsed time:", totalElapsedTime);
+    }
 
-        adjustedStartTime = new Date(Date.now() - totalElapsedTime);
-        setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
+    setName(activeTimelapse.name);
+    setDescription(activeTimelapse.description);
+    const lastFrameCount = snapshots.length;
+    setFrameCount(lastFrameCount);
+    frameCountRef.current = lastFrameCount;
+    setCurrentTimelapseId(activeTimelapse.id);
+    setStartedAt(adjustedStartTime);
+    setIsCreated(true);
 
-        console.log("session groups:", sessionGroups);
-        console.log("total elapsed time:", totalElapsedTime);
-      }
+    chunksRef.current = activeTimelapse.chunks;
 
-      setName(activeTimelapse.name);
-      setDescription(activeTimelapse.description);
-      const lastFrameCount = snapshots.length;
-      setFrameCount(lastFrameCount);
-      frameCountRef.current = lastFrameCount;
-      setCurrentTimelapseId(activeTimelapse.id);
-      setStartedAt(adjustedStartTime);
-      setIsCreated(true);
+    setNeedsVideoSource(true);
+    setSetupModalOpen(true);
+  });
 
-      chunksRef.current = activeTimelapse.chunks;
-
-      setNeedsVideoSource(true);
-      setSetupModalOpen(true);
+  useEffect(() => {
+    (async () => {
+      
     })();
   }, []);
 
@@ -380,35 +386,71 @@ export default function Page() {
       if (!timelapse)
         throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
 
-      console.log("Stopping recording! Final timelapse:", timelapse);
+      console.log("(upload) recording stopped!", timelapse);
+
+      const device = await getCurrentDevice();
 
       const merged = await mergeVideoSessions(videoProcessor, timelapse);
+      console.log("(upload) - merged session data:", merged);
 
-      const url = URL.createObjectURL(merged);
+      const uploadRes = await trpc.timelapse.beginUpload.query({ containerType: "WEBM" });
+      console.log("(upload) timelapse.beginUpload response:", uploadRes);
 
-      // Create download link
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = url;
-      a.download = `timelapse-${new Date()
-        .toISOString()
-        .slice(0, 19)
-        .replace(/:/g, "-")}.webm`;
+      if (!uploadRes.ok)
+        throw new Error(uploadRes.error);
 
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const encrypted = await encryptVideoWithTimelapseId(merged, uploadRes.data.timelapseId);
+      console.log("(upload) - encrypted data:", encrypted);
 
-      // Clean up
-      URL.revokeObjectURL(url);
+      console.log(`(upload) uploading now to ${uploadRes.data.url}`);
 
-      // Mark timelapse as complete and clean up from IndexedDB
+      const s3Res = await fetch(uploadRes.data.url, {
+        method: "PUT",
+        body: encrypted.data,
+        headers: {
+          "Content-Type": "video/webm",
+        }
+      });
+
+      console.log("(upload) S3 response:", s3Res);
+
+      if (!s3Res.ok)
+        throw new Error(`S3 upload failed: ${s3Res.status} ${s3Res.statusText}`);
+
+      const snapshots = await deviceStorage.getAllSnapshots();
+      const snapshotTimestamps = snapshots.map(s => s.createdAt);
+
+      console.log("(upload) finalizing upload now!");
+      console.log("(upload) - name:", name);
+      console.log("(upload) - description:", description);
+      console.log("(upload) - snapshots:", snapshotTimestamps);
+
+      const createRes = await trpc.timelapse.create.mutate({
+        id: uploadRes.data.timelapseId,
+        deviceId: device.id,
+        snapshots: snapshotTimestamps,
+        mutable: {
+          name,
+          description,
+          privacy: "UNLISTED"
+        }
+      });
+
+      console.log("(upload) timelapse.create response:", createRes);
+
+      if (!createRes.ok)
+        throw new Error(createRes.error);
+
+      console.log("(upload) timelapse created successfully! yay!");
+
       if (currentTimelapseId) {
         await deviceStorage.markComplete(currentTimelapseId);
         await deviceStorage.deleteAllSnapshots();
         await deviceStorage.deleteTimelapse(currentTimelapseId);
         setCurrentTimelapseId(null);
       }
+
+      router.push(`/timelapse/${createRes.data.timelapse.id}`);
     };
 
     recorder?.stop();
@@ -443,18 +485,14 @@ export default function Page() {
       <Modal
         icon="clock-fill"
         title={
-          needsVideoSource
-            ? "Resume timelapse"
-            : isCreated
-            ? "Update timelapse"
-            : "Create timelapse"
+          needsVideoSource ? "Resume timelapse"
+          : isCreated ? "Update timelapse"
+          : "Create timelapse"
         }
         description={
-          needsVideoSource
-            ? "Select your video source to resume recording your timelapse."
-            : isCreated
-            ? "Update your timelapse settings."
-            : "After you click Create, your timelapse will start recording!"
+          needsVideoSource ? "Select your video source to resume recording your timelapse."
+          : isCreated ? "Update your timelapse settings."
+          : "After you click Create, your timelapse will start recording!"
         }
         isOpen={setupModalOpen}
         setIsOpen={onModalClose}
@@ -508,7 +546,11 @@ export default function Page() {
           )}
 
           <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary">
-            {needsVideoSource ? "Resume" : isCreated ? "Update" : "Create"}
+            {
+              needsVideoSource ? "Resume"
+              : isCreated ? "Update"
+              : "Create"
+            }
           </Button>
         </div>
       </Modal>

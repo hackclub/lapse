@@ -84,3 +84,10 @@ export function match<K extends string, T>(selector: K, cases: Record<K, T>) {
 export function oneOf<T extends PropertyKey>(...values: T[]): Record<T, true> {
     return Object.fromEntries(values.map(x => [x, true])) as Record<T, true>;
 }
+
+export function when<T>(condition: boolean, value: T) {
+    if (condition)
+        return value;
+
+    return {};
+}

@@ -8,7 +8,7 @@ function requiredEnv(key: string) {
     throw new Error(`The environment variable ${key} is missing.`);
 }
 
-// The following values need to defined as environment variables.
+// The following values need to be defined as environment variables.
 
 /**
  * The S3 name for the bucket that stores encrypted (private) user content.

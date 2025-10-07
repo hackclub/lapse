@@ -5,6 +5,18 @@ const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
 /**
+ * Derives deterministic key and IV salts from a timelapse ID.
+ * This allows users to decrypt timelapses on any device using just the passkey and timelapse ID.
+ */
+export function deriveSaltsFromTimelapseId(timelapseId: string): { keySalt: Buffer; ivSalt: Buffer } {
+    // Use HMAC to derive deterministic salts from the timelapse ID
+    const keySalt = crypto.createHmac('sha256', 'timelapse-key-salt').update(timelapseId).digest();
+    const ivSalt = crypto.createHmac('sha256', 'timelapse-iv-salt').update(timelapseId).digest();
+    
+    return { keySalt, ivSalt };
+}
+
+/**
  * Encrypts a plaintext string using AES-256-GCM encryption.
  * 
  * @param plaintext The string to encrypt
@@ -57,4 +69,124 @@ export function decryptString(encryptedHex: string, key: string): string | null 
     catch {
         return null;
     }
+}
+
+export interface KeyIvPair {
+    key: Buffer;
+    iv: Buffer;
+    keySalt: Buffer;
+    ivSalt: Buffer;
+}
+
+export interface EncryptedVideoStream {
+    data: Buffer;
+    key: string;
+    iv: string;
+    keySalt: string;
+    ivSalt: string;
+}
+
+export function deriveKeyAndIvFromTimelapseId(timelapseId: string, passkey: string): KeyIvPair {
+    const { keySalt, ivSalt } = deriveSaltsFromTimelapseId(timelapseId);
+    
+    const passkeyBuffer = Buffer.from(passkey, 'utf8');
+    
+    // Derive key (256 bits for AES-256-CBC)
+    const key = crypto.pbkdf2Sync(passkeyBuffer, keySalt, 100000, 32, 'sha256');
+    
+    // Derive IV (128 bits for AES-CBC)
+    const iv = crypto.pbkdf2Sync(passkeyBuffer, ivSalt, 100000, 16, 'sha256');
+    
+    return {
+        key,
+        iv,
+        keySalt,
+        ivSalt
+    };
+}
+
+export function deriveKeyAndIvFromSalts(keySalt: Buffer, ivSalt: Buffer, passkey: string): KeyIvPair {
+    const passkeyBuffer = Buffer.from(passkey, 'utf8');
+    
+    // Derive key (256 bits for AES-256-CBC)
+    const key = crypto.pbkdf2Sync(passkeyBuffer, keySalt, 100000, 32, 'sha256');
+    
+    // Derive IV (128 bits for AES-CBC)
+    const iv = crypto.pbkdf2Sync(passkeyBuffer, ivSalt, 100000, 16, 'sha256');
+    
+    return {
+        key,
+        iv,
+        keySalt,
+        ivSalt
+    };
+}
+
+export function encryptVideoWithTimelapseId(videoBuffer: Buffer, timelapseId: string, passkey: string): EncryptedVideoStream {
+    const { key, iv, keySalt, ivSalt } = deriveKeyAndIvFromTimelapseId(timelapseId, passkey);
+    
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const encryptedBuffer = Buffer.concat([
+        cipher.update(videoBuffer),
+        cipher.final()
+    ]);
+    
+    return {
+        data: encryptedBuffer,
+        key: key.toString('hex'),
+        iv: iv.toString('hex'),
+        keySalt: keySalt.toString('hex'),
+        ivSalt: ivSalt.toString('hex')
+    };
+}
+
+export function decryptVideo(
+    encryptedData: ArrayBuffer | Uint8Array,
+    keySalt: string,
+    ivSalt: string,
+    passkey: string
+): Buffer {
+    const keySaltBuffer = Buffer.from(keySalt, "hex");
+    const ivSaltBuffer = Buffer.from(ivSalt, "hex");
+    const passkeyBuffer = Buffer.from(passkey, "utf8");
+    
+    const derivedKey = crypto.pbkdf2Sync(passkeyBuffer, keySaltBuffer, 100000, 32, "sha256");
+    const derivedIv = crypto.pbkdf2Sync(passkeyBuffer, ivSaltBuffer, 100000, 16, "sha256");
+
+    const decipher = crypto.createDecipheriv("aes-256-cbc", derivedKey, derivedIv);
+    const inputBuffer = encryptedData instanceof Uint8Array 
+        ? Buffer.from(encryptedData)
+        : Buffer.from(new Uint8Array(encryptedData));
+        
+    const decryptedBuffer = Buffer.concat([
+        decipher.update(inputBuffer),
+        decipher.final()
+    ]);
+    
+    return decryptedBuffer;
+}
+
+export function decryptVideoWithTimelapseId(
+    encryptedData: ArrayBuffer | Uint8Array,
+    timelapseId: string,
+    passkey: string
+): Buffer {
+    const { keySalt, ivSalt } = deriveSaltsFromTimelapseId(timelapseId);
+    
+    const passkeyBuffer = Buffer.from(passkey, "utf8");
+    
+    const derivedKey = crypto.pbkdf2Sync(passkeyBuffer, keySalt, 100000, 32, "sha256");
+    const derivedIv = crypto.pbkdf2Sync(passkeyBuffer, ivSalt, 100000, 16, "sha256");
+
+    const decipher = crypto.createDecipheriv("aes-256-cbc", derivedKey, derivedIv);
+    const inputBuffer = encryptedData instanceof Uint8Array 
+        ? Buffer.from(encryptedData)
+        : Buffer.from(new Uint8Array(encryptedData));
+        
+    const decryptedBuffer = Buffer.concat([
+        decipher.update(inputBuffer),
+        decipher.final()
+    ]);
+    
+    return decryptedBuffer;
 }
