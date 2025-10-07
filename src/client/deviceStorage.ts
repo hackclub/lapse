@@ -153,7 +153,7 @@ export class DeviceStorage {
         timelapse.chunks.push(storedChunk);
         await this.saveTimelapse(timelapse);
 
-        console.log(`(db) appendChunk(${timelapseId}) ->`, storedChunk);
+        console.debug(`(db) appendChunk(${timelapseId}) ->`, storedChunk);
     }
 
     async markComplete(timelapseId: number): Promise<void> {
@@ -184,7 +184,7 @@ export class DeviceStorage {
             (store) => store.put(snapshot)
         );
 
-        console.log("(db) saveSnapshot ->", snapshot);
+        console.debug("(db) saveSnapshot ->", snapshot);
         return snapshot.createdAt;
     }
 
