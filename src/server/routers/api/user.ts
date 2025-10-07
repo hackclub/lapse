@@ -136,7 +136,7 @@ export default router({
             });
 
             if (!user)
-                return err("Could not find your user account.");
+                return err("NOT_FOUND", "Could not find your user account.");
 
             return ok({ user: dtoUser(user) });
         }),
@@ -165,7 +165,7 @@ export default router({
         )
         .query(async (req) => {
             if (!req.input.handle && !req.input.id)
-                return err("No handle or user ID specified"); 
+                return err("MISSING_PARAMS", "No handle or user ID specified"); 
 
             let dbUser: DbCompositeUser | null;
 
@@ -217,7 +217,7 @@ export default router({
         .mutation(async (req) => {
             // Check if user can edit this profile
             if (req.ctx.user.permissionLevel === "USER" && req.ctx.user.id !== req.input.id)
-                return err("You can only edit your own profile");
+                return err("NO_PERMISSION", "You can only edit your own profile");
 
             // Prepare update data
             const updateData: Partial<db.User> = {};

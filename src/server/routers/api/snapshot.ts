@@ -66,17 +66,17 @@ export default router({
             });
 
             if (!snapshot)
-                return err("Snapshot not found");
+                return err("NOT_FOUND", "Snapshot not found");
 
             const canDelete =
                 req.ctx.user.id === snapshot.timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canDelete)
-                return err("You don't have permission to delete this snapshot");
+                return err("NO_PERMISSION", "You don't have permission to delete this snapshot");
 
             if (snapshot.timelapse.isPublished)
-                return err("Cannot delete snapshots from published timelapse");
+                return err("NOT_MUTABLE", "Cannot delete snapshots from published timelapse");
 
             await db.snapshot.delete({
                 where: { id: req.input.id },
@@ -111,7 +111,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             // Check if user can access this timelapse
             const canAccess =
@@ -120,7 +120,7 @@ export default router({
                 (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
             if (!canAccess)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             const snapshots = await db.snapshot.findMany({
                 where: { timelapseId: req.input.timelapseId },

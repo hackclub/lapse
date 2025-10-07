@@ -1,9 +1,30 @@
 import { z } from "zod";
 
+export type ApiError = z.infer<typeof ApiErrorSchema>;
+export const ApiErrorSchema = z.enum([
+    "ERROR",
+    "NOT_FOUND",
+    "NOT_MUTABLE",
+    "MISSING_PARAMS",
+    "SIZE_LIMIT",
+    "NO_PERMISSION",
+    "HACKATIME_ALREADY_ASSIGNED",
+    "ALREADY_PUBLISHED",
+    "NO_FILE"
+]);
+
 export function createResultSchema<T extends z.ZodType>(dataSchema: T) {
     return z.discriminatedUnion("ok", [
-        z.object({ ok: z.literal(true), data: dataSchema }),
-        z.object({ ok: z.literal(false), error: z.string() })
+        z.object({
+            ok: z.literal(true),
+            data: dataSchema
+        }),
+
+        z.object({
+            ok: z.literal(false),
+            error: ApiErrorSchema,
+            message: z.string()
+        })
     ]);
 }
 
@@ -15,8 +36,8 @@ export function ok<T>(data: T) {
     return { ok: true as const, data };
 }
 
-export function err(message: string) {
-    return { ok: false as const, error: message };
+export function err(error: ApiError, message: string) {
+    return { ok: false as const, error, message };
 }
 
 export function assert(condition: boolean, message: string): asserts condition {

@@ -152,7 +152,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             // Check if user can access this timelapse
             const canAccess =
@@ -161,7 +161,7 @@ export default router({
                 (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
             if (!canAccess)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             return ok({ timelapse: dtoTimelapse(timelapse) });
         }),
@@ -262,7 +262,7 @@ export default router({
             });
 
             if (!draft)
-                return err("Unknown timelapse ID.");
+                return err("NOT_FOUND", "Unknown timelapse ID.");
 
             try {
                 const getCommand = new GetObjectCommand({
@@ -281,11 +281,11 @@ export default router({
 
                     await s3.send(deleteCommand);
                     
-                    return err("Video stream exceeds size limit.");
+                    return err("SIZE_LIMIT", "Video stream exceeds size limit.");
                 }
             }
             catch {
-                return err("Uploaded file not found.");
+                return err("NOT_FOUND", "Uploaded file not found.");
             }
 
             const timelapse = await db.timelapse.create({
@@ -350,17 +350,17 @@ export default router({
             });
 
             if (!timelapse)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             const canEdit =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canEdit)
-                return err("You don't have permission to edit this timelapse");
+                return err("NOT_FOUND", "You don't have permission to edit this timelapse");
 
             if (timelapse.isPublished)
-                return err("Cannot edit published timelapse");
+                return err("NOT_MUTABLE", "Cannot edit published timelapse");
 
             const updateData: Partial<DbTimelapse> = {};
             if (req.input.changes.name) {
@@ -399,14 +399,14 @@ export default router({
             });
 
             if (!timelapse)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             const canDelete =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canDelete)
-                return err("You don't have permission to delete this timelapse");
+                return err("NO_PERMISSION", "You don't have permission to delete this timelapse");
 
             await db.timelapse.delete({
                 where: { id: req.input.id },
@@ -447,17 +447,17 @@ export default router({
             });
 
             if (!timelapse)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             const canPublish =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canPublish)
-                return err("You don't have permission to publish this timelapse");
+                return err("NO_PERMISSION", "You don't have permission to publish this timelapse");
 
             if (timelapse.isPublished)
-                return err("Timelapse already published");
+                return err("ALREADY_PUBLISHED", "Timelapse already published");
 
             try {
                 const getCommand = new GetObjectCommand({
@@ -469,7 +469,7 @@ export default router({
                 const encryptedBuffer = await encryptedObject.Body?.transformToByteArray();
 
                 if (!encryptedBuffer)
-                    return err("Failed to retrieve encrypted video");
+                    return err("NO_FILE", "Failed to retrieve encrypted video");
 
                 const decryptedBuffer = decryptVideoWithTimelapseId(
                     encryptedBuffer,
@@ -502,7 +502,7 @@ export default router({
             }
             catch (error) {
                 console.error("Failed to decrypt and publish timelapse:", error);
-                return err("Failed to process timelapse for publishing");
+                return err("ERROR", "Failed to process timelapse for publishing");
             }
         }),
 
@@ -564,10 +564,10 @@ export default router({
             });
 
             if (!timelapse)
-                return err("Timelapse not found");
+                return err("NOT_FOUND", "Timelapse not found");
 
             if (timelapse.hackatimeProject)
-                return err("Timelapse already has an associated Hackatime project");
+                return err("HACKATIME_ALREADY_ASSIGNED", "Timelapse already has an associated Hackatime project");
 
             const updatedTimelapse = await db.timelapse.update({
                 where: { id: req.input.id },
