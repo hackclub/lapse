@@ -1,5 +1,4 @@
-import { createTRPCClient, createTRPCProxyClient, httpBatchLink } from "@trpc/client";
-import { createTRPCNext, withTRPC } from "@trpc/next";
+import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import { CreateReactUtils } from "@trpc/react-query/shared";
 import { NextPageContext } from "next";
 
