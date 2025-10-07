@@ -1,40 +1,47 @@
 import { useRouter } from "next/router";
 import { trpc } from "../trpc";
+import { useState } from "react";
 
-export function useAuth() {
+import { User } from "@/server/routers/api/user";
+import { useOnce } from "./useOnce";
+
+export function useAuth(required: boolean) {
     const router = useRouter();
-    const { data: myselfResult, isLoading, error, refetch } = trpc.user.myself.useQuery(
-        {},
-        {
-            retry: false,
-            refetchOnWindowFocus: false,
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useOnce(async () => {
+        console.log("(auth) authenticating...");
+        const req = await trpc.user.myself.query({});
+
+        console.log("(auth) response:", req);
+
+        if (!req.ok || req.data.user === null) {
+            console.log("(auth) user is not authenticated");
+
+            if (required) {
+                router.push("/auth");
+            }
+
+            setIsLoading(false);
+            return;
         }
-    );
 
-    const user = myselfResult?.ok ? myselfResult.data.user : null;
-    const isAuthenticated = !!user && !error;
+        console.log("(auth) user is authenticated");
 
-    const signOut = () => {
-        // Clear the auth cookie by setting it to expire in the past
+        setCurrentUser(req.data.user);
+        setIsLoading(false);
+    });
+
+    function signOut() {
+        console.log("(auth) signing out...");
         document.cookie = "lapse-auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax";
-        
-        // Redirect to auth page
         router.push("/auth");
     };
 
-    const requireAuth = () => {
-        if (!isLoading && !isAuthenticated) {
-            router.push("/auth");
-        }
-    };
-
     return {
-        user,
-        isAuthenticated,
+        currentUser,
         isLoading,
-        error,
-        signOut,
-        requireAuth,
-        refetch
+        signOut
     };
 }

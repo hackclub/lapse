@@ -118,14 +118,18 @@ export function dtoUser(entity: DbCompositeUser): User {
 
 export default router({
     /**
-     * Gets the information about the calling user.
+     * Gets the information about the calling user. If the caller is not authenticated,
+     * returns `null` as the `user`.
      */
-    myself: protectedProcedure
+    myself: procedure
         .input(z.object({}))
         .output(apiResult({
-            user: UserSchema
+            user: UserSchema.nullable()
         }))
         .query(async (req) => {
+            if (!req.ctx.user)
+                return ok({ user: null });
+
             const user = await database.user.findFirst({
                 include: { devices: true },
                 where: { id: req.ctx.user.id }
