@@ -1,5 +1,10 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import RootLayout from "@/client/components/RootLayout";
+import { Button } from "@/client/components/ui/Button";
+import { ErrorModal } from "@/client/components/ui/ErrorModal";
+import { LoadingModal } from "@/client/components/ui/LoadingModal";
+import Icon from "@hackclub/icons";
 
 export default function Auth() {
   const router = useRouter();
@@ -73,48 +78,43 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to Lapse
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Create and share timelapses
-          </p>
-        </div>
-        <div className="mt-8 space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
+    <RootLayout showHeader={true}>
+      <div className="flex w-full h-full py-8 items-center justify-center">
+        <div className="max-w-md w-full px-6">
+          <div className="flex flex-col gap-8 text-center">
+            <div className="flex flex-col gap-4">
+              <h1 className="text-3xl font-bold text-smoke leading-tight">
+                Pick a provider
+              </h1>
+              <p className="text-smoke">
+                If you have signed in before, you'll be logged in.
+              </p>
             </div>
-          )}
-          <div>
-            <button
-              onClick={handleSlackSignIn}
+
+            <Button 
+              className="gap-3 w-full" 
+              onClick={handleSlackSignIn} 
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              kind="primary"
             >
-              {isLoading ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Redirecting...
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52-2.523A2.528 2.528 0 0 1 5.042 10.12a2.528 2.528 0 0 1 2.523 2.522 2.528 2.528 0 0 1-2.523 2.523m0 .297c1.569 0 2.84-1.271 2.84-2.82s-1.271-2.82-2.84-2.82-2.82 1.271-2.82 2.82 1.251 2.82 2.82 2.82m2.626 7.882c0-.639-.516-1.154-1.154-1.154-.639 0-1.155.516-1.155 1.154 0 .639.516 1.155 1.155 1.155.638 0 1.154-.516 1.154-1.155m3.923-8.67c-.168-.168-.442-.168-.61 0l-.188.188a.431.431 0 0 0 0 .61l.188.188c.168.168.442.168.61 0l.188-.188a.431.431 0 0 0 0-.61l-.188-.188zm1.7-2.205c-.639 0-1.155.516-1.155 1.154 0 .639.516 1.155 1.155 1.155.638 0 1.154-.516 1.154-1.155 0-.638-.516-1.154-1.154-1.154m3.64 4.21a2.528 2.528 0 0 1-2.52 2.523 2.528 2.528 0 0 1-2.524-2.523A2.528 2.528 0 0 1 16.51 10.12a2.528 2.528 0 0 1 2.521 2.522" />
-                  </svg>
-                  Sign in with Slack
-                </span>
-              )}
-            </button>
+              <Icon glyph="slack-fill" />
+              {isLoading ? "Redirecting..." : "Sign in with Slack"}
+            </Button>
           </div>
         </div>
       </div>
-    </div>
+
+      <ErrorModal
+        isOpen={!!error}
+        setIsOpen={(open) => !open && setError(null)}
+        message={error || ""}
+      />
+
+      <LoadingModal
+        isOpen={isLoading}
+        title="Signing In"
+        message="Redirecting to Slack for authentication..."
+      />
+    </RootLayout>
   );
 }

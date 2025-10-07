@@ -308,5 +308,20 @@ export default router({
             });
 
             return ok({ device: dtoKnownDevice(device) });
+        }),
+
+    /**
+     * Signs out the current user by clearing the authentication cookie.
+     */
+    signOut: procedure
+        .input(z.object({}))
+        .output(apiResult({}))
+        .mutation(async (req) => {
+            if (req.ctx.res) {
+                req.ctx.res.setHeader("Set-Cookie", [
+                    "lapse-auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; HttpOnly; SameSite=Lax"
+                ]);
+            }
+            return ok({});
         })
 });

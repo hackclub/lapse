@@ -33,10 +33,11 @@ export function useAuth(required: boolean) {
         setIsLoading(false);
     });
 
-    function signOut() {
+    async function signOut() {
         console.log("(auth) signing out...");
-        document.cookie = "lapse-auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax";
-        router.push("/auth");
+        await trpc.user.signOut.mutate({});
+        setCurrentUser(null);
+        router.push("/");
     };
 
     return {
