@@ -119,12 +119,6 @@ export default function Page() {
   });
 
   useEffect(() => {
-    (async () => {
-      
-    })();
-  }, []);
-
-  useEffect(() => {
     if (!setupPreviewRef.current)
       return;
 
