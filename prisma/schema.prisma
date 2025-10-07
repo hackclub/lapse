@@ -51,6 +51,23 @@ model User {
 
   timelapses        Timelapse[]
   devices           KnownDevice[]
+  draftTimelapses   DraftTimelapse[]
+}
+
+model DraftTimelapse {
+  /// The unique ID of the timelapse. Will become the ID of a regular `Timelapse` when
+  /// the entity is realized.
+  id                String        @id @default(uuid())
+
+  /// The S3 key that points to the object. An object must be uploaded with this key before
+  /// the entity is realized.
+  s3Key             String
+
+  /// The format of the container that will be uploaded to the S3 key.
+  containerKind     VideoContainerKind
+
+  ownerId             String
+  owner               User        @relation(fields: [ownerId], references: [id])
 }
 
 model Timelapse {
