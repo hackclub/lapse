@@ -515,11 +515,18 @@ export default router({
                 if (!encryptedBuffer)
                     return err("NO_FILE", "Failed to retrieve encrypted video");
 
-                const decryptedBuffer = decryptVideo(
-                    encryptedBuffer,
-                    req.input.id,
-                    req.input.passkey
-                );
+                let decryptedBuffer: Buffer;
+
+                try {
+                    decryptedBuffer = decryptVideo(
+                        encryptedBuffer,
+                        req.input.id,
+                        req.input.passkey
+                    );
+                }
+                catch {
+                    return err("ERROR", "Invalid passkey provided. Please check your 6-digit PIN.");
+                }
 
                 const putCommand = new PutObjectCommand({
                     Bucket: env.S3_PUBLIC_BUCKET_NAME,
@@ -547,12 +554,6 @@ export default router({
             }
             catch (error) {
                 console.error("Failed to decrypt and publish timelapse:", error);
-                
-                // Check if this looks like a decryption error
-                if (error instanceof Error && error.message.includes("decrypt")) {
-                    return err("INVALID_PASSKEY", "Invalid passkey provided. Please check your 6-digit PIN.");
-                }
-                
                 return err("ERROR", "Failed to process timelapse for publishing");
             }
         }),
