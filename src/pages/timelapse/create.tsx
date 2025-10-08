@@ -60,6 +60,10 @@ export default function Page() {
   const currentStream = cameraStream || screenStream;
   const isRecording = !isFrozen && !setupModalOpen;
 
+  document.title = setupModalOpen ? "Lapse"
+    : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
+    : `🔴 REC: ${name} - Lapse`;
+
   useOnce(async () => {
     setVideoProcessor(await createVideoProcessor());
   });

@@ -245,7 +245,7 @@ export default function Page() {
   }
 
   return (
-    <RootLayout showHeader={true}>
+    <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
       <div className="flex w-full h-full py-8 gap-6">
         {/* Video Section */}
         <video 
