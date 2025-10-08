@@ -1,10 +1,9 @@
+import Icon from "@hackclub/icons";
+import clsx from "clsx";
+
 import { Modal } from "./Modal";
 import { Button } from "./Button";
-import Icon from "@hackclub/icons";
 import { IconGlyph } from "./util";
-import clsx from "clsx";
-import { useRouter } from "next/router";
-
 export interface ErrorModalButton {
   label: string;
   onClick: () => void;
@@ -19,6 +18,7 @@ export function ErrorModal({
   icon = "important",
   buttons,
   onRetry,
+  onClose,
   retryLabel = "Try Again",
   className
 }: {
@@ -29,10 +29,13 @@ export function ErrorModal({
   icon?: IconGlyph;
   buttons?: ErrorModalButton[];
   onRetry?: () => void;
+  onClose?: () => void;
   retryLabel?: string;
   className?: string;
 }) {
-  const router = useRouter();
+  onClose ??= () => {
+    setIsOpen(false);
+  };
 
   const defaultButtons: ErrorModalButton[] = [
     ...(
@@ -46,10 +49,7 @@ export function ErrorModal({
     ),
     {
       label: "Close",
-      onClick: () => {
-        setIsOpen(false);
-        router.back();
-      },
+      onClick: onClose,
       kind: "primary" as const
     }
   ];

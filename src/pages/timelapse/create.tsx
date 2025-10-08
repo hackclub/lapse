@@ -482,13 +482,11 @@ export default function Page() {
 
         const createRes = await trpc.timelapse.create.mutate({
           id: uploadRes.data.timelapseId,
+          name,
+          description,
+          privacy: "UNLISTED",
           deviceId: device.id,
           snapshots: snapshotTimestamps,
-          mutable: {
-            name,
-            description,
-            privacy: "UNLISTED"
-          }
         });
 
         console.log("(upload) timelapse.create response:", createRes);
@@ -697,6 +695,7 @@ export default function Page() {
         isOpen={!!error}
         setIsOpen={(open) => !open && setError(null)}
         message={error || ""}
+        onClose={() => router.back()}
         onRetry={() => {
           setError(null);
           stopRecording();

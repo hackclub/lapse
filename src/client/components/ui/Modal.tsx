@@ -23,7 +23,9 @@ export function Modal({
       className
     )}>
       <section className={clsx(
-        "flex flex-col bg-dark text-smoke max-h-full rounded-lg overflow-hidden",
+        "flex flex-col bg-dark text-smoke max-h-full rounded-lg overflow-hidden transition-transform",
+        isOpen && "scale-100",
+        !isOpen && "scale-0",
         size == "SMALL"   && "w-1/3 min-w-[100px]",
         size == "REGULAR" && "w-1/2 min-w-[600px]"
       )}>

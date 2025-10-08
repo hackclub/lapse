@@ -38,6 +38,7 @@ export function useAuth(required: boolean) {
         await trpc.user.signOut.mutate({});
         setCurrentUser(null);
         router.push("/");
+        router.reload();
     };
 
     return {

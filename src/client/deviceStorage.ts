@@ -33,7 +33,6 @@ export interface LocalTimelapse {
  */
 export interface LocalDevice {
     id: string;
-    name: string;
     passkey: string;
     thisDevice: boolean;
 }

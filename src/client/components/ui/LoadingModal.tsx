@@ -31,15 +31,15 @@ export function LoadingModal({
               <span className="text-xs text-muted">{Math.round(progress)}%</span>
             )}
 
-            <div className="w-full bg-smoke rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-darkless rounded-full h-2 overflow-hidden">
               {progress !== undefined ? (
                 <div
-                  className="bg-blue h-2 rounded-full transition-all duration-300"
+                  className="bg-red h-2 rounded-full transition-all duration-300"
                   style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
                 />
               ) : (
                 <div
-                  className="bg-blue h-2 rounded-full animate-pulse"
+                  className="bg-red h-2 rounded-full animate-pulse"
                   style={{
                     width: "30%",
                     animation: "indeterminate 2s ease-in-out infinite"

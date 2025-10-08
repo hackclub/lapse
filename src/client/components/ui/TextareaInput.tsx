@@ -13,7 +13,7 @@ export function TextareaInput({ value, label, description, maxLength, onChange }
       description={description}
     >
       <textarea
-        className="bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full"
+        className="bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full field-sizing-content"
         value={value}
         maxLength={maxLength}
         onChange={ev => onChange(ev.target.value)}

@@ -136,8 +136,6 @@ export function dtoPublicUser(entity: db.User): PublicUser {
 
 /**
  * Converts a database representation of a user to a runtime (API) one, including all private fields.
- * @param entity 
- * @returns 
  */
 export function dtoUser(entity: DbCompositeUser): User {
     return {
@@ -270,7 +268,7 @@ export default router({
                 ...when(changes.bio !== undefined, { bio: changes.bio }),
                 ...when(changes.handle !== undefined, { handle: changes.handle }),
                 ...when(changes.urls !== undefined, { urls: changes.urls }),
-                ...when(changes.hackatimeApiKey !== undefined, { handle: changes.hackatimeApiKey })
+                ...when(changes.hackatimeApiKey !== undefined, { hackatimeApiKey: changes.hackatimeApiKey })
             };
 
             const updatedUser = await database.user.update({
@@ -283,7 +281,25 @@ export default router({
         }),
 
     /**
-     * Creates a new device owned by their user, allocating a new, unique ID.
+     * Gets all devices registered by the currently authenticated user.
+     */
+    getDevices: protectedProcedure
+        .input(z.object({}))
+        .output(
+            apiResult({
+                devices: z.array(KnownDeviceSchema)
+            })
+        )
+        .query(async (req) => {
+            const devices = await database.knownDevice.findMany({
+                where: { ownerId: req.ctx.user.id }
+            });
+
+            return ok({ devices: devices.map(dtoKnownDevice) });
+        }),
+
+    /**
+     * Creates a new device owned by a user, allocating a new, unique ID.
      */
     registerDevice: protectedProcedure
         .input(
@@ -308,6 +324,27 @@ export default router({
             });
 
             return ok({ device: dtoKnownDevice(device) });
+        }),
+
+    /**
+     * Removes a device owned by a user.
+     */
+    removeDevice: protectedProcedure
+        .input(
+            z.object({
+                /**
+                 * The ID of the device to remove. The device must be owned by the calling user.
+                 */
+                id: z.uuid()
+            })
+        )
+        .output(apiResult({}))
+        .mutation(async (req) => {
+            await database.knownDevice.delete({
+                where: { id: req.input.id, ownerId: req.ctx.user.id }
+            });
+
+            return ok({});
         }),
 
     /**

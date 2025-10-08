@@ -17,8 +17,10 @@ import { Button } from "@/client/components/ui/Button";
 import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
+import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
 import Icon from "@hackclub/icons";
 import { Skeleton } from "@/client/components/ui/Skeleton";
+import { Badge } from "@/client/components/ui/Badge";
 import clsx from "clsx";
 
 export default function Page() {
@@ -35,6 +37,10 @@ export default function Page() {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
+  const [missingDeviceName, setMissingDeviceName] = useState<string>("");
+  const [invalidPasskeyAttempt, setInvalidPasskeyAttempt] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -75,28 +81,43 @@ export default function Page() {
       else {
         // This case is trickier - we have to decrypt the video client-side with the device passkey.
         const devices = await deviceStorage.getAllDevices();
-        const originDevice = devices.find(x => x.id == timelapse.deviceId);
+        assert(timelapse.private != undefined, "Non-published timelapse that we have access to should always have private fields");
+        assert(timelapse.private.device != null, "Non-published timelapse should always have a device");
+
+        // go home typescript, you're drunk... 
+        const originDevice = devices.find(x => x.id == timelapse.private!.device!.id);
 
         if (!originDevice) {
-          setError(`This timelapse was created on a different device. Device passkey for device ${timelapse.deviceId} is required to decrypt and view this video.`);
+          setMissingDeviceName(timelapse.private.device.name);
+          setInvalidPasskeyAttempt(false);
+          setPasskeyModalOpen(true);
           return;
         }
 
         const vidRes = await fetch(timelapse.playbackUrl, { method: "GET" });
         const vidData = await vidRes.arrayBuffer();
         
-        // Decrypt the video data using the device passkey and timelapse ID
-        const decryptedData = await decryptVideo(
-          vidData,
-          timelapse.id,
-          originDevice.passkey
-        );
-        
-        // Create a blob from the decrypted data and assign it to the video element
-        const videoBlob = new Blob([decryptedData], { type: "video/mp4" });
-        const url = URL.createObjectURL(videoBlob);
-        setVideoObjUrl(url);
-        video.src = url;
+        try {
+          // Decrypt the video data using the device passkey and timelapse ID
+          const decryptedData = await decryptVideo(
+            vidData,
+            timelapse.id,
+            originDevice.passkey
+          );
+          
+          // Create a blob from the decrypted data and assign it to the video element
+          const videoBlob = new Blob([decryptedData], { type: "video/mp4" });
+          const url = URL.createObjectURL(videoBlob);
+          setVideoObjUrl(url);
+          video.src = url;
+        }
+        catch (decryptionError) {
+          console.warn("(timelapse/[id]) decryption failed:", decryptionError);
+          setMissingDeviceName(timelapse.private.device.name);
+          setInvalidPasskeyAttempt(true);
+          setPasskeyModalOpen(true);
+          return;
+        }
       }
     }
     catch (err) {
@@ -120,8 +141,11 @@ export default function Page() {
     try {
       setIsPublishing(true);
 
+      assert(timelapse.private != undefined, "Non-published timelapse that we have access to should always have private fields");
+      assert(timelapse.private.device != null, "Non-published timelapse should always have a device");
+
       const devices = await deviceStorage.getAllDevices();
-      const originDevice = devices.find(x => x.id === timelapse.deviceId);
+      const originDevice = devices.find(x => x.id === timelapse.private!.device!.id);
 
       if (!originDevice) {
         setError("Device passkey not found. Cannot publish this timelapse.");
@@ -161,8 +185,8 @@ export default function Page() {
     if (!timelapse)
       return;
 
-    setEditName(timelapse.mutable.name);
-    setEditDescription(timelapse.mutable.description);
+    setEditName(timelapse.name);
+    setEditDescription(timelapse.description);
     setEditModalOpen(true);
   };
 
@@ -199,6 +223,27 @@ export default function Page() {
 
   const isUpdateDisabled = !editName.trim() || isUpdating;
 
+  async function handlePasskeySubmit(passkey: string) {
+    if (!timelapse?.private?.device) return;
+
+    try {
+      await deviceStorage.saveDevice({
+        id: timelapse.private.device.id,
+        passkey: passkey,
+        thisDevice: false
+      });
+
+      // Retry loading the timelapse with the new passkey
+      setFetchStarted(false);
+      setInvalidPasskeyAttempt(false);
+      setPasskeyModalOpen(false);
+    }
+    catch (error) {
+      console.error("Error saving device passkey:", error);
+      setError("Failed to save passkey. Please try again.");
+    }
+  }
+
   return (
     <RootLayout showHeader={true}>
       <div className="flex w-full h-full py-8 gap-6">
@@ -218,9 +263,15 @@ export default function Page() {
         <div className="p-6 w-full pl-3">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
-              <h1 className="text-4xl font-bold text-smoke leading-tight">
-                {timelapse?.mutable.name || <Skeleton className="w-full" />}
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-4xl font-bold text-smoke leading-tight">
+                  {timelapse?.name || <Skeleton className="w-full" />}
+                                  
+                  {timelapse && !timelapse.isPublished && (
+                    <Badge variant="warning" className="ml-4">UNPUBLISHED</Badge>
+                  )}
+                </h1>
+              </div>
               
               <div className="flex items-center gap-3 mb-4">
                 <ProfilePicture 
@@ -242,7 +293,7 @@ export default function Page() {
               <p className="text-smoke text-lg leading-relaxed">
                 {
                   timelapse != null
-                  ? timelapse?.mutable.description || "(no description)"
+                  ? timelapse?.description || "(no description)"
                   : <Skeleton className="w-full" lines={3} />
                 }
               </p>
@@ -301,10 +352,13 @@ export default function Page() {
         isOpen={!!error}
         setIsOpen={(open) => !open && setError(null)}
         message={error || ""}
-        onRetry={error?.includes("Failed to load") ? () => {
-          setError(null);
-          setFetchStarted(false);
-        } : undefined}
+        onClose={() => router.back()}
+        onRetry={
+          error?.includes("Failed to load") ? () => {
+            setError(null);
+            setFetchStarted(false);
+          } : undefined
+        }
       />
 
       <LoadingModal
@@ -312,6 +366,23 @@ export default function Page() {
         title="Publishing Timelapse"
         message="Please wait while your timelapse is being published..."
       />
+
+      <PasskeyModal
+        isOpen={passkeyModalOpen}
+        setIsOpen={setPasskeyModalOpen}
+        description={`Enter the 6-digit PIN for ${missingDeviceName} to decrypt the timelapse`}
+        onPasskeySubmit={handlePasskeySubmit}
+      >
+        {invalidPasskeyAttempt && (
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
+            <Icon glyph="important" size={24} className="text-yellow flex-shrink-0" />
+            <div>
+              <p className="font-bold text-yellow">Invalid passkey</p>
+              <p className="text-smoke">The passkey you entered could not decrypt this timelapse. Please try again.</p>
+            </div>
+          </div>
+        )}
+      </PasskeyModal>
     </RootLayout>
   );
 }

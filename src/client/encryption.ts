@@ -69,7 +69,6 @@ export async function getCurrentDevice(): Promise<LocalDevice> {
     const assignedDevice = req.data.device;
     const device: LocalDevice = {
         id: assignedDevice.id,
-        name: assignedDevice.name,
         passkey: generatePasskey(),
         thisDevice: true
     };

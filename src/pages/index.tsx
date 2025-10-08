@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { useRouter } from "next/router";
+import { useEffect } from "react";
 import { useAuth } from "../client/hooks/useAuth";
 import RootLayout from "@/client/components/RootLayout";
 import { Button } from "@/client/components/ui/Button";
@@ -6,8 +8,17 @@ import { LoadingModal } from "@/client/components/ui/LoadingModal";
 import Icon from "@hackclub/icons";
 
 export default function Home() {
+  const router = useRouter();
   const { currentUser, isLoading, signOut } = useAuth(false);
   const isLoggedIn = currentUser != null;
+
+  useEffect(() => {
+    const { error } = router.query;
+    
+    if (error) {
+      router.push(`/auth?error=${error}`);
+    }
+  }, [router.query, router]);
 
   return (
     <RootLayout showHeader={true}>
@@ -43,16 +54,16 @@ export default function Home() {
                           </Link>
                           
                           <Button className="gap-2" onClick={signOut} kind="secondary">
-                            <Icon glyph="view-close" size={24} />
+                            <Icon glyph="door-leave" size={24} />
                             Sign Out
                           </Button>
                         </>
                       )
                       : (
                         <Link href="/auth">
-                          <Button className="gap-2" kind="primary" onClick={() => {}}>
+                          <Button className="gap-2 px-16" kind="primary" onClick={() => {}}>
                             <Icon glyph="welcome" size={24} />
-                            Log In
+                            Sign in
                           </Button>
                         </Link>
                       )

@@ -101,8 +101,8 @@ model Timelapse {
   ownerId               String
   owner                 User                @relation(fields: [ownerId], references: [id])
 
-  deviceId              String
-  device                KnownDevice         @relation(fields: [deviceId], references: [id])
+  deviceId              String?
+  device                KnownDevice?        @relation(fields: [deviceId], references: [id])
 
   snapshots             Snapshot[]
 }
