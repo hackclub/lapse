@@ -55,18 +55,31 @@ function generatePasskey() {
 
 export async function getCurrentDevice(): Promise<LocalDevice> {
     const existing = (await deviceStorage.getAllDevices()).find(x => x.thisDevice);
-    if (existing)
-        return existing;
+    if (existing) {
+        const res = await trpc.user.getDevices.query({});
+
+        if (res.ok) {
+            if (res.data.devices.some(d => d.id === existing.id))
+                return existing;
+            
+            console.warn("(encryption) this device has been removed remotely. re-registering!");
+            await deviceStorage.deleteDevice(existing.id);
+        }
+        else {
+            console.error("(encryption) user.getDevices failed!", res);
+            console.error("(encryption) assuming this device exists on the server, but something went ary!");
+        }
+    }
 
     // We haven't registered this device with the server yet! Assign it an ID.
-    const req = await trpc.user.registerDevice.mutate({
+    const res = await trpc.user.registerDevice.mutate({
         name: platform.description ?? navigator.platform
     });
 
-    if (!req.ok)
-        throw new Error(req.error);
+    if (!res.ok)
+        throw new Error(res.error);
 
-    const assignedDevice = req.data.device;
+    const assignedDevice = res.data.device;
     const device: LocalDevice = {
         id: assignedDevice.id,
         passkey: generatePasskey(),
