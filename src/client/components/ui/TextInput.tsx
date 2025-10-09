@@ -3,21 +3,29 @@ import clsx from "clsx";
 
 import { InputField } from "./InputField";
 
-export function TextInput({ value, label, description, maxLength, onChange, isSecret }: {
+export function TextInput({ value, label, description, maxLength, onBlur, onChange, isSecret }: {
   label: string,
   description: string,
   value: string,
   onChange: (x: string) => void,
+  onBlur?: () => void,
   maxLength?: number,
   isSecret?: boolean
 }) {
   const [isFocused, setIsFocused] = useState(false);
+
+  const inputIsPassword = isSecret && !isFocused;
 
   function handleChange(ev: ChangeEvent<HTMLInputElement>) {
     if (!ev.target.reportValidity())
       return;
 
     onChange(ev.target.value);
+  }
+
+  function handleBlur() {
+    setIsFocused(false);
+    onBlur?.();
   }
 
   return (
@@ -27,16 +35,16 @@ export function TextInput({ value, label, description, maxLength, onChange, isSe
     >
       <input
         onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
+        onBlur={handleBlur}
         className={clsx(
           "bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full",
           isSecret && "font-mono"
         )}
-        type={isSecret ? (isFocused ? "text" : "password") : "text"}
+        type={inputIsPassword ? "password" : "text"}
         value={value}
         maxLength={maxLength}
         onChange={handleChange}
-        autoComplete="off"
+        autoComplete={inputIsPassword ? "new-password" : "off"}
       />
     </InputField>
   );
