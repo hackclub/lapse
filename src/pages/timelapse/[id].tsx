@@ -191,8 +191,7 @@ export default function Page() {
     !timelapse.isPublished;
 
   const canEdit = timelapse && currentUser && 
-    currentUser.id === timelapse.owner.id &&
-    !timelapse.isPublished;
+    currentUser.id === timelapse.owner.id;
 
   const canSyncWithHackatime = timelapse && currentUser &&
     currentUser.id === timelapse.owner.id &&
@@ -374,7 +373,7 @@ export default function Page() {
 
             <div className="flex gap-3 w-full">
               {canEdit && (
-                <Button className="gap-2 w-full" onClick={handleEdit} kind="secondary">
+                <Button className="gap-2 w-full" onClick={handleEdit} kind="primary">
                   <Icon glyph="edit" size={24} />
                   Edit
                 </Button>
@@ -388,7 +387,7 @@ export default function Page() {
               )}
               
               {canSyncWithHackatime && (
-                <Button className="gap-2 w-full" onClick={handleSyncWithHackatime} kind="secondary">
+                <Button className="gap-2 w-full" onClick={handleSyncWithHackatime} kind="primary">
                   <Icon glyph="history" size={24} />
                   Sync with Hackatime
                 </Button>

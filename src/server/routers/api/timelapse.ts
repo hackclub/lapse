@@ -387,7 +387,7 @@ export default router({
         }),
 
     /**
-     * Updates a timelapse.
+     * Updates the metadata of a timelapse.
      */
     update: protectedProcedure
         .input(
@@ -429,9 +429,6 @@ export default router({
 
             if (!canEdit)
                 return err("NOT_FOUND", "You don't have permission to edit this timelapse");
-
-            if (timelapse.isPublished)
-                return err("NOT_MUTABLE", "Cannot edit published timelapse");
 
             const updateData: Partial<db.Timelapse> = {};
             if (req.input.changes.name) {
