@@ -43,6 +43,7 @@ export function PasskeyModal({ isOpen, setIsOpen, description, onPasskeySubmit, 
             onChange={(e) => setPasskeyInput(e.target.value.replace(/\D/g, ""))}
             className="bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full font-mono text-center text-2xl tracking-widest"
             placeholder="000000"
+            autoComplete="one-time-code"
           />
         </div>
 
