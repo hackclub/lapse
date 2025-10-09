@@ -6,12 +6,12 @@ import Icon from "@hackclub/icons";
 
 import { TimeSince } from "@/client/components/TimeSince";
 import { Button } from "@/client/components/ui/Button";
-import { InputField } from "@/client/components/ui/InputField";
 import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { LoadingModal } from "@/client/components/ui/LoadingModal";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
+import { SelectInput } from "@/client/components/ui/SelectInput";
 import { deviceStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/deviceStorage";
 import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
 import { encryptVideo, getCurrentDevice } from "@/client/encryption";
@@ -592,21 +592,17 @@ export default function Page() {
             </>
           )}
 
-          <InputField
+          <SelectInput
             label="Video source"
             description="Record your screen, camera, or any other video source."
+            value={videoSourceKind}
+            onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
+            disabled={changingSource}
           >
-            <select
-              className="p-2 rounded-md disabled:bg-dark bg-darkless transition-colors"
-              value={videoSourceKind}
-              onChange={onVideoSourceChange}
-              disabled={changingSource}
-            >
-              <option disabled value="NONE">(none)</option>
-              <option value="CAMERA">{cameraLabel}</option>
-              <option value="SCREEN">{screenLabel}</option>
-            </select>
-          </InputField>
+            <option disabled value="NONE">(none)</option>
+            <option value="CAMERA">{cameraLabel}</option>
+            <option value="SCREEN">{screenLabel}</option>
+          </SelectInput>
 
           {(cameraStream || screenStream) && (
             <div className="flex flex-col gap-2">

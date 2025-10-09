@@ -3,7 +3,7 @@ import { trpc } from "@/client/trpc";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 
-import type { Timelapse } from "@/server/routers/api/timelapse";
+import type { Timelapse, TimelapseVisibility } from "@/server/routers/api/timelapse";
 import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
 import { assert } from "@/shared/common";
 import { deviceStorage } from "@/client/deviceStorage";
@@ -18,6 +18,7 @@ import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
+import { SelectInput } from "@/client/components/ui/SelectInput";
 import Icon from "@hackclub/icons";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
@@ -37,6 +38,7 @@ export default function Page() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editVisibility, setEditVisibility] = useState<TimelapseVisibility>("PUBLIC");
   const [isUpdating, setIsUpdating] = useState(false);
   
   const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
@@ -203,6 +205,7 @@ export default function Page() {
 
     setEditName(timelapse.name);
     setEditDescription(timelapse.description);
+    setEditVisibility(timelapse.visibility);
     setEditModalOpen(true);
   };
 
@@ -216,7 +219,8 @@ export default function Page() {
         id: timelapse.id,
         changes: {
           name: editName.trim(),
-          description: editDescription.trim()
+          description: editDescription.trim(),
+          visibility: editVisibility
         }
       });
 
@@ -336,6 +340,9 @@ export default function Page() {
                   {timelapse && !timelapse.isPublished && (
                     <Badge variant="warning" className="ml-4">UNPUBLISHED</Badge>
                   )}
+                  {timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
+                    <Badge variant="default" className="ml-4">UNLISTED</Badge>
+                  )}
                 </h1>
               </div>
               
@@ -414,6 +421,16 @@ export default function Page() {
             onChange={setEditDescription}
             maxLength={280}
           />
+
+          <SelectInput
+            label="Visibility"
+            description="Controls who can see your timelapse when published."
+            value={editVisibility}
+            onChange={(value) => setEditVisibility(value as TimelapseVisibility)}
+          >
+            <option value="PUBLIC">Public - visible to everyone</option>
+            <option value="UNLISTED">Unlisted - only visible with direct link</option>
+          </SelectInput>
 
           <Button onClick={handleUpdate} disabled={isUpdateDisabled} kind="primary">
             {isUpdating ? "Updating..." : "Update"}
