@@ -1,18 +1,20 @@
 import "@/server/allow-only-server";
 
-import { iso, z } from "zod";
+import { z } from "zod";
 import { S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import { PrismaClient } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ascending, err, match, when, ok, oneOf, assert } from "@/shared/common";
+import { apiResult, ascending, err, match, when, ok, oneOf, closest } from "@/shared/common";
 import { decryptVideo } from "@/server/encryption";
 import * as env from "@/server/env";
 import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE } from "@/shared/constants";
 import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "./user";
 import * as db from "@/generated/prisma";
+import { Hackatime, WakaTimeHeartbeat } from "@/server/hackatime";
+import { logError, logInfo } from "@/server/serverCommon";
 
 const database = new PrismaClient();
 const s3 = new S3Client({
@@ -81,6 +83,33 @@ export function containerTypeToExtension(container: TimelapseVideoContainer) {
         "MP4": "mp4" as const,
         "WEBM": "webm" as const
     });
+}
+
+/**
+ * Permanently deletes a timelapse, including all its snapshots and S3 files.
+ */
+export async function deleteTimelapse(timelapseId: string): Promise<void> {
+    const timelapse = await database.timelapse.findFirst({
+        where: { id: timelapseId }
+    });
+
+    if (!timelapse)
+        throw new Error(`Timelapse ${timelapseId} not found`);
+
+    await database.snapshot.deleteMany({
+        where: { timelapseId: timelapse.id }
+    });
+
+    await s3.send(new DeleteObjectCommand({
+        Bucket: timelapse.isPublished ? env.S3_PUBLIC_BUCKET_NAME : env.S3_ENCRYPTED_BUCKET_NAME,
+        Key: timelapse.s3Key
+    }));
+
+    await database.timelapse.delete({
+        where: { id: timelapse.id }
+    });
+
+    logInfo("timelapse", `Timelapse ${timelapseId} deleted.`);
 }
 
 export const TimelapseName = z.string().min(2).max(60);
@@ -226,15 +255,17 @@ export default router({
 
             const key = `timelapses/${req.ctx.user.id}/${crypto.randomUUID()}.${containerTypeToExtension(req.input.containerType)}`;
 
-            const command = new PutObjectCommand({
-                Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                Key: key,
-                ContentType: containerTypeToMimeType(req.input.containerType)
-            });
-
-            const uploadUrl = await getSignedUrl(s3, command, {
-                expiresIn: 15 * 60, // 15 minutes
-            });
+            const uploadUrl = await getSignedUrl(
+                s3,
+                new PutObjectCommand({
+                    Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                    Key: key,
+                    ContentType: containerTypeToMimeType(req.input.containerType)
+                }),
+                {
+                    expiresIn: 15 * 60, // 15 minutes
+                }
+            );
 
             const draft = await database.draftTimelapse.create({
                 data: {
@@ -293,21 +324,18 @@ export default router({
                 return err("NOT_FOUND", "Unknown timelapse ID.");
 
             try {
-                const getCommand = new GetObjectCommand({
+                const object = await s3.send(new GetObjectCommand({
                     Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                     Key: draft.s3Key,
-                });
+                }));
 
-                const object = await s3.send(getCommand);
                 const fileSizeBytes = object.ContentLength ?? 0;
 
                 if (fileSizeBytes > MAX_VIDEO_STREAM_SIZE) {
-                    const deleteCommand = new DeleteObjectCommand({
+                    await s3.send(new DeleteObjectCommand({
                         Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                         Key: draft.s3Key,
-                    });
-
-                    await s3.send(deleteCommand);
+                    }));
                     
                     return err("SIZE_LIMIT", "Video stream exceeds size limit.");
                 }
@@ -452,11 +480,14 @@ export default router({
             if (!canDelete)
                 return err("NO_PERMISSION", "You don't have permission to delete this timelapse");
 
-            await database.timelapse.delete({
-                where: { id: req.input.id },
-            });
-
-            return ok({});
+            try {
+                await deleteTimelapse(req.input.id);
+                return ok({});
+            }
+            catch (error) {
+                logError("timelapse.delete", "Failed to delete timelapse:", error);
+                return err("ERROR", "Failed to delete timelapse");
+            }
         }),
 
     /**
@@ -504,12 +535,11 @@ export default router({
                 return err("ALREADY_PUBLISHED", "Timelapse already published");
 
             try {
-                const getCommand = new GetObjectCommand({
+                const encryptedObject = await s3.send(new GetObjectCommand({
                     Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                     Key: timelapse.s3Key
-                });
+                }));
 
-                const encryptedObject = await s3.send(getCommand);
                 const encryptedBuffer = await encryptedObject.Body?.transformToByteArray();
 
                 if (!encryptedBuffer)
@@ -528,25 +558,21 @@ export default router({
                     return err("ERROR", "Invalid passkey provided. Please check your 6-digit PIN.");
                 }
 
-                const putCommand = new PutObjectCommand({
+                await s3.send(new PutObjectCommand({
                     Bucket: env.S3_PUBLIC_BUCKET_NAME,
                     Key: timelapse.s3Key,
                     Body: decryptedBuffer,
                     ContentType: containerTypeToMimeType(timelapse.containerKind)
-                });
+                }));
 
-                await s3.send(putCommand);
-
-                const deleteCommand = new DeleteObjectCommand({
+                await s3.send(new DeleteObjectCommand({
                     Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                     Key: timelapse.s3Key,
-                });
-
-                await s3.send(deleteCommand);
+                }));
 
                 const publishedTimelapse = await database.timelapse.update({
                     where: { id: req.input.id },
-                    data: { isPublished: true },
+                    data: { isPublished: true, deviceId: null },
                     include: { owner: true, device: true }
                 });
 
@@ -603,7 +629,7 @@ export default router({
         .input(
             z.object({
                 id: z.uuid(),
-                hackatimeProject: z.string()
+                hackatimeProject: z.string().min(1).max(128)
             })
         )
         .output(
@@ -613,14 +639,58 @@ export default router({
         )
         .mutation(async (req) => {
             const timelapse = await database.timelapse.findFirst({
-                where: { id: req.input.id, ownerId: req.ctx.user.id }
+                where: { id: req.input.id, ownerId: req.ctx.user.id },
+                include: { owner: true }
             });
 
             if (!timelapse)
                 return err("NOT_FOUND", "Couldn't find that timelapse!");
 
             if (timelapse.hackatimeProject)
-                return err("HACKATIME_ALREADY_ASSIGNED", "Timelapse already has an associated Hackatime project");
+                return err("HACKATIME_ERROR", "Timelapse already has an associated Hackatime project");
+
+            if (!timelapse.owner.hackatimeApiKey)
+                return err("ERROR", "You don't have a Hackatime API key assigned to your profile!");
+
+            const hackatime = new Hackatime(timelapse.owner.hackatimeApiKey);
+            
+            const snapshots = await database.snapshot.findMany({
+                where: { timelapseId: timelapse.id }
+            });
+
+            const heartbeats: WakaTimeHeartbeat[] = snapshots.map(x => ({
+                entity: `${timelapse.name} (${timelapse.id})`,
+                time: x.createdAt.getTime() / 1000,
+                category: "timelapsing",
+                type: "timelapse",
+                user_agent: "wakatime/lapse (lapse) lapse/0.1.0 lapse/0.1.0",
+                project: req.input.hackatimeProject
+            }));
+
+            const assignedHeartbeats = await hackatime.pushHeartbeats(heartbeats);
+            const failedHeartbeat = assignedHeartbeats.responses.find(x => x[1] < 200 || x[1] > 299);
+            if (failedHeartbeat) {
+                logError("timelapse.syncWithHackatime", "Couldn't sync heartbeat:", failedHeartbeat);
+                logError("timelapse.syncWithHackatime", "All snapshots:", snapshots);
+                logError("timelapse.syncWithHackatime", "All heartbeats:", heartbeats);
+                return err("HACKATIME_ERROR", `Hackatime returned HTTP ${failedHeartbeat[1]} for heartbeat at ${failedHeartbeat[0]?.time}! Report this at https://github.com/hackclub/lapse.`);
+            }
+
+            logInfo("timelapse.syncWithHackatime", `Synchronizing ${heartbeats.length} heartbeats with ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}`);
+            await Promise.all(
+                assignedHeartbeats.responses
+                    .map(x => x[0])
+                    .map(async (heartbeat) => {
+                        const snapshot = closest(heartbeat.time!, snapshots, x => x.createdAt.getTime() / 1000);
+                        
+                        await database.snapshot.update({
+                            where: { id: snapshot.id },
+                            data: { heartbeatId: heartbeat.id }
+                        });
+                    })
+            );
+
+            logInfo("timelapse.syncWithHackatime", `All heartbeats synchronized with snapshots for ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}!`);
 
             const updatedTimelapse = await database.timelapse.update({
                 where: { id: req.input.id, ownerId: req.ctx.user.id },

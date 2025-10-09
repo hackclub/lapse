@@ -5,6 +5,9 @@ import { z } from "zod";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, err, ok, when } from "@/shared/common";
 import * as db from "@/generated/prisma";
+import { Hackatime, WakaTimeUserStats } from "@/server/hackatime";
+import { logError, logWarning } from "@/server/serverCommon";
+import { deleteTimelapse } from "./timelapse";
 
 const database = new db.PrismaClient();
 
@@ -271,6 +274,18 @@ export default router({
                 ...when(changes.hackatimeApiKey !== undefined, { hackatimeApiKey: changes.hackatimeApiKey })
             };
 
+            if (changes.hackatimeApiKey) {
+                const hackatime = new Hackatime(changes.hackatimeApiKey);
+
+                try {
+                    await hackatime.currentUserStats();
+                }
+                catch (ex) {
+                    logWarning("user.update", "Error caught when verifying a Hackatime API key!", ex);
+                    return err("HACKATIME_ERROR", "You provided an invalid Hackatime API key!");
+                }
+            }
+
             const updatedUser = await database.user.update({
                 where: { id: req.input.id },
                 data: updateData,
@@ -340,6 +355,29 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
+            const device = await database.knownDevice.findFirst({
+                where: { id: req.input.id, ownerId: req.ctx.user.id }
+            });
+
+            if (!device)
+                return err("DEVICE_NOT_FOUND", "That device doesn't seem to exist!");
+
+            const timelapses = await database.timelapse.findMany({
+                where: { deviceId: device.id }
+            });
+
+            if (timelapses.some(x => x.ownerId != req.ctx.user.id)) {
+                logError("user.removeDevice", "A timelapse has a device that is not owned by the author!");
+                logError("user.removeDevice", `owner ID = ${req.ctx.user.id}, timelapses =`, timelapses);
+                return err("ERROR", "That device seems to be used by another user! Please report this to @ascpixi on Slack.");
+            }
+
+            await Promise.all(
+                timelapses.map(async (timelapse) => {
+                    await deleteTimelapse(timelapse.id);
+                })
+            );
+
             await database.knownDevice.delete({
                 where: { id: req.input.id, ownerId: req.ctx.user.id }
             });

@@ -9,7 +9,7 @@ export const ApiErrorSchema = z.enum([
     "MISSING_PARAMS",
     "SIZE_LIMIT",
     "NO_PERMISSION",
-    "HACKATIME_ALREADY_ASSIGNED",
+    "HACKATIME_ERROR",
     "ALREADY_PUBLISHED",
     "NO_FILE"
 ]);
@@ -41,25 +41,30 @@ export function err(error: ApiError, message: string) {
     return { ok: false as const, error, message };
 }
 
+/**
+ * Throws an error if `condition` is `false`.
+ */
 export function assert(condition: boolean, message: string): asserts condition {
     if (!condition) {
         throw new Error(message);
     }
 }
 
+/**
+ * Creates an array like `[0, ..., length - 1]`.
+ */
 export function range(length: number) {
     return [...Array(length).keys()];
 }
 
 /**
- * Creates a function which can be used with `.toSorted` and `.sort` that sorts a collection
- * in ascending order according to a numeric key.
+ * Used as an ascending numeric sort function for a `T[]` with a key selector.
+ * For example, `x.sort(descending(x => x.someNumber))`.
  */
 export function ascending<T>(picker: (x: T) => number): (a: T, b: T) => number;
 
 /**
- * Creates a function which can be used with `.toSorted` and `sort` that sorts a numeric collection
- * in ascending order.
+ * Used as an ascending numeric sort function for a `number[]`. For example, `x.sort(descending())`.
  */
 export function ascending(): (a: number, b: number) => number;
 
@@ -70,7 +75,15 @@ export function ascending<T>(picker?: (x: T) => number) {
     return (a: T, b: T) => picker(a) - picker(b); 
 }
 
+/**
+ * Used as a descending numeric sort function for a `T[]` with a key selector.
+ * For example, `x.sort(descending(x => x.someNumber))`.
+ */
 export function descending<T>(picker: (x: T) => number): (a: T, b: T) => number;
+
+/**
+ * Used as a descending numeric sort function for a `number[]`. For example, `x.sort(descending())`.
+ */
 export function descending(): (a: number, b: number) => number;
 
 export function descending<T>(picker?: (x: T) => number) {
@@ -80,10 +93,16 @@ export function descending<T>(picker?: (x: T) => number) {
     return (a: T, b: T) => picker(b) - picker(a);
 }
 
+/**
+ * Gets a string like `[object ArrayBuffer]` for the given object.
+ */
 export function typeName<T>(obj: T) {
     return Object.prototype.toString.call(obj);
 }
 
+/**
+ * Throws an error when `obj` is not truthy.
+ */
 export function unwrap<T>(obj: T | undefined, err?: string): T {
     if (obj)
         return obj;
@@ -92,7 +111,17 @@ export function unwrap<T>(obj: T | undefined, err?: string): T {
 }
 
 /**
- * Emulates a `switch` expression present in languages like C#.
+ * Emulates a `switch` expression present in languages like C#. For example:
+ * 
+ * ```
+ * // 'result' will be equal to 420.
+ * const result = match("c", {
+ *      "a": 727,
+ *      "b": 67,
+ *      "c": 420,
+ *      "d": 2137
+ * });
+ * ```
  */
 export function match<K extends string, T>(selector: K, cases: Record<K, T>) {
     if (!(selector in cases)) {
@@ -103,13 +132,49 @@ export function match<K extends string, T>(selector: K, cases: Record<K, T>) {
     return cases[selector];
 }
 
+/**
+ * Transforms an array like `["a", "b"]` to an object like `{ a: true, b: true }`.
+ * This function is usually used for expressions like `choice in oneOf("a", "b")`.
+ */
 export function oneOf<T extends PropertyKey>(...values: T[]): Record<T, true> {
     return Object.fromEntries(values.map(x => [x, true])) as Record<T, true>;
 }
 
+/**
+ * Returns `value` when `condition` is `true` - otherwise, returns an empty object (`{}`).
+ * This function is usually used for conditional object construction via the spread operator.
+ */
 export function when<T>(condition: boolean, value: T) {
     if (condition)
         return value;
 
     return {};
+}
+
+/**
+ * Finds the closest number to `x` in `array`.
+ */
+export function closest(x: number, array: number[]): number;
+
+/**
+ * Finds the closest item to `x` in `array` using a selector function.
+ */
+export function closest<T>(x: number, array: T[], selector: (item: T) => number): T;
+
+export function closest<T>(x: number, array: T[] | number[], selector?: (item: T) => number): T | number {
+    if (selector) {
+        const typedArray = array as T[];
+        const match = typedArray.find(item => selector(item) === x);
+        if (match) return match;
+
+        return typedArray.reduce((prev, curr) => 
+            Math.abs(selector(curr) - x) < Math.abs(selector(prev) - x) ? curr : prev
+        );
+    }
+    
+    const numberArray = array as number[];
+    if (numberArray.find(y => x === y))
+        return x;
+
+    return numberArray.reduce((prev, curr) => Math.abs(curr - x) < Math.abs(prev - x) ? curr : prev);
 }
