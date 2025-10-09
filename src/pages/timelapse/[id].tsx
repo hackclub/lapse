@@ -32,6 +32,7 @@ export default function Page() {
   const [videoObjUrl, setVideoObjUrl] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorIsCritical, setErrorIsCritical] = useState(false);
   
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
@@ -41,6 +42,10 @@ export default function Page() {
   const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
   const [missingDeviceName, setMissingDeviceName] = useState<string>("");
   const [invalidPasskeyAttempt, setInvalidPasskeyAttempt] = useState(false);
+  
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [hackatimeProject, setHackatimeProject] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -53,6 +58,7 @@ export default function Page() {
 
       if (typeof id !== "string") {
         setError("Invalid timelapse ID provided");
+        setErrorIsCritical(true);
         return;
       }
 
@@ -63,6 +69,7 @@ export default function Page() {
       if (!res.ok) {
         console.error("(timelapse/[id]) couldn't fetch that timelapse!", res);
         setError(res.message);
+        setErrorIsCritical(true);
         return;
       }
 
@@ -122,6 +129,7 @@ export default function Page() {
     }
     catch (err) {
       console.error("(timelapse/[id]) error loading timelapse:", err);
+      setErrorIsCritical(true);
       setError(err instanceof Error ? err.message : "An unknown error occurred while loading the timelapse");
     }
   }, [router, router.isReady]);
@@ -148,6 +156,7 @@ export default function Page() {
       const originDevice = devices.find(x => x.id === timelapse.private!.device!.id);
 
       if (!originDevice) {
+        setErrorIsCritical(false);
         setError("Device passkey not found. Cannot publish this timelapse.");
         return;
       }
@@ -161,11 +170,13 @@ export default function Page() {
         setTimelapse(result.data.timelapse);
       } 
       else {
+        setErrorIsCritical(false);
         setError(`Failed to publish: ${result.error}`);
       }
     } 
     catch (error) {
       console.error("(timelapse/[id]) error publishing timelapse:", error);
+      setErrorIsCritical(false);
       setError(error instanceof Error ? error.message : "An error occurred while publishing the timelapse.");
     } 
     finally {
@@ -180,6 +191,11 @@ export default function Page() {
   const canEdit = timelapse && currentUser && 
     currentUser.id === timelapse.owner.id &&
     !timelapse.isPublished;
+
+  const canSyncWithHackatime = timelapse && currentUser &&
+    currentUser.id === timelapse.owner.id &&
+    timelapse.isPublished &&
+    !timelapse.private?.hackatimeProject;
 
   const handleEdit = () => {
     if (!timelapse)
@@ -209,11 +225,13 @@ export default function Page() {
         setEditModalOpen(false);
       } 
       else {
+        setErrorIsCritical(false);
         setError(`Failed to update: ${result.error}`);
       }
     } 
     catch (error) {
       console.error("(timelapse/[id]) error updating timelapse:", error);
+      setErrorIsCritical(false);
       setError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
     } 
     finally {
@@ -222,6 +240,53 @@ export default function Page() {
   };
 
   const isUpdateDisabled = !editName.trim() || isUpdating;
+
+  const handleSyncWithHackatime = async () => {
+    if (!timelapse || !currentUser)
+      return;
+
+    if (!currentUser.private?.hackatimeApiKey) {
+      setErrorIsCritical(false);
+      setError("You need to set a Hackatime API key in Settings before syncing with Hackatime.");
+      return;
+    }
+
+    setHackatimeProject("");
+    setSyncModalOpen(true);
+  };
+
+  const handleConfirmSync = async () => {
+    if (!timelapse || !hackatimeProject.trim()) return;
+
+    try {
+      setIsSyncing(true);
+
+      const result = await trpc.timelapse.syncWithHackatime.mutate({
+        id: timelapse.id,
+        hackatimeProject: hackatimeProject.trim()
+      });
+
+      if (result.ok) {
+        setTimelapse(result.data.timelapse);
+        setSyncModalOpen(false);
+        setHackatimeProject("");
+      } 
+      else {
+        setErrorIsCritical(false);
+        setError(`Failed to sync with Hackatime: ${result.error}`);
+      }
+    } 
+    catch (error) {
+      console.error("(timelapse/[id]) error syncing with Hackatime:", error);
+      setErrorIsCritical(false);
+      setError(error instanceof Error ? error.message : "An error occurred while syncing with Hackatime.");
+    } 
+    finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const isSyncDisabled = !hackatimeProject.trim() || isSyncing;
 
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;
@@ -240,6 +305,7 @@ export default function Page() {
     }
     catch (error) {
       console.error("Error saving device passkey:", error);
+      setErrorIsCritical(false);
       setError("Failed to save passkey. Please try again.");
     }
   }
@@ -313,6 +379,13 @@ export default function Page() {
                   {isPublishing ? "Publishing..." : "Publish"}
                 </Button>
               )}
+              
+              {canSyncWithHackatime && (
+                <Button className="gap-2 w-full" onClick={handleSyncWithHackatime} kind="secondary">
+                  <Icon glyph="history" size={24} />
+                  Sync with Hackatime
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -348,11 +421,41 @@ export default function Page() {
         </div>
       </WindowedModal>
 
+      <WindowedModal
+        icon="history"
+        title="Sync with Hackatime"
+        description="Import your timelapse snapshots to Hackatime as heartbeats. This can only be done once per timelapse."
+        isOpen={syncModalOpen}
+        setIsOpen={setSyncModalOpen}
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
+            <Icon glyph="important" size={24} className="text-yellow flex-shrink-0" />
+            <div>
+              <p className="font-bold text-yellow">One-time sync</p>
+              <p className="text-smoke">You can only sync a timelapse with Hackatime once. Make sure you choose the correct project name.</p>
+            </div>
+          </div>
+
+          <TextInput
+            label="Project Name"
+            description="The name of the Hackatime project to sync with."
+            value={hackatimeProject}
+            onChange={setHackatimeProject}
+            maxLength={128}
+          />
+
+          <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
+            {isSyncing ? "Syncing..." : "Sync with Hackatime"}
+          </Button>
+        </div>
+      </WindowedModal>
+
       <ErrorModal
         isOpen={!!error}
         setIsOpen={(open) => !open && setError(null)}
         message={error || ""}
-        onClose={() => router.back()}
+        onClose={errorIsCritical ? () => router.back() : undefined}
         onRetry={
           error?.includes("Failed to load") ? () => {
             setError(null);
@@ -364,7 +467,7 @@ export default function Page() {
       <LoadingModal
         isOpen={isPublishing}
         title="Publishing Timelapse"
-        message="Please wait while your timelapse is being published..."
+        message="We're decrypting your timelapse - hold tight!"
       />
 
       <PasskeyModal
