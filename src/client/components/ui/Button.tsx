@@ -20,7 +20,7 @@ export function Button({ children, kind, isSquare, disabled, onClick, className 
         (kind == "primary") && "bg-red text-white",
         (kind == "secondary") && "border-2 border-red text-red",
         (kind == "dark") && "bg-black text-white",
-        disabled && "!bg-darkless !text-white",
+        disabled && "!bg-darkless !text-white !cursor-not-allowed",
         !disabled && "hover:scale-[102%] active:scale-[98%]",
         isSquare && "aspect-square",
         className
