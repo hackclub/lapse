@@ -20,9 +20,11 @@ import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
 
 import { useOnce } from "@/client/hooks/useOnce";
+import { useAuth } from "@/client/hooks/useAuth";
 
 export default function Page() {
   const router = useRouter();
+  useAuth(true);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [setupModalOpen, setSetupModalOpen] = useState(true);
@@ -60,9 +62,11 @@ export default function Page() {
   const currentStream = cameraStream || screenStream;
   const isRecording = !isFrozen && !setupModalOpen;
 
-  document.title = setupModalOpen ? "Lapse"
-    : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
-    : `🔴 REC: ${name} - Lapse`;
+  useEffect(() => {
+    document.title = setupModalOpen ? "Lapse"
+      : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
+      : `🔴 REC: ${name} - Lapse`;
+  }, [name, setupModalOpen, isFrozen]);
 
   useOnce(async () => {
     setVideoProcessor(await createVideoProcessor());
@@ -539,7 +543,7 @@ export default function Page() {
   }
 
   function onModalClose() {
-    if (!isCreated) {
+    if (!isCreated || !currentStream) {
       router.back();
     }
     else {
