@@ -4,7 +4,7 @@ import { JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
 import Icon from "@hackclub/icons";
 
-import { ReactNode, useState, useEffect, useCallback, useRef } from "react";
+import { ReactNode, useState, useEffect, useCallback } from "react";
 import { Button } from "./ui/Button";
 import { ProfilePicture } from "./ui/ProfilePicture";
 import { WindowedModal } from "./ui/WindowedModal";
@@ -15,6 +15,8 @@ import { deviceStorage, LocalDevice } from "../deviceStorage";
 import LapseIcon from "../assets/icon.svg";
 import { trpc } from "../trpc";
 import { KnownDevice } from "@/server/routers/api/user";
+import type { Timelapse } from "@/server/routers/api/timelapse";
+import { ErrorModal } from "./ui/ErrorModal";
 
 const phantomSans = localFont({
   variable: "--font-phantom-sans",
@@ -59,32 +61,41 @@ export default function RootLayout({
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [hackatimeApiKey, setHackatimeApiKey] = useState("");
-  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [originalHackatimeApiKey, setOriginalHackatimeApiKey] = useState("");
 
   const [devices, setDevices] = useState<KnownDevice[]>([]);
   const [localDevices, setLocalDevices] = useState<LocalDevice[]>([]);
   const [currentDeviceForPin, setCurrentDeviceForPin] = useState<string | null>(null);
   const [passkeyVisible, setPasskeyVisible] = useState(false);
+  const [deviceToRemove, setDeviceToRemove] = useState<string | null>(null);
+  const [removeDeviceModalOpen, setRemoveDeviceModalOpen] = useState(false);
+  const [timelapsesToRemove, setTimelapsesToRemove] = useState<Timelapse[]>([]);
+
+  const [error, setError] = useState<string | null>(null);
 
   // Initialize hackatimeApiKey from current user data
   useEffect(() => {
     if (currentUser?.private?.hackatimeApiKey) {
       setHackatimeApiKey(currentUser.private.hackatimeApiKey);
+      setOriginalHackatimeApiKey(currentUser.private.hackatimeApiKey);
     }
   }, [currentUser]);
 
   // Debounced save function to avoid server overload
   const saveApiKey = useCallback(async (apiKey: string) => {
     if (currentUser) {
-      try {
-        await trpc.user.update.mutate({
-          id: currentUser.id,
-          changes: { hackatimeApiKey: apiKey || undefined }
-        });
+      const res = await trpc.user.update.mutate({
+        id: currentUser.id,
+        changes: { hackatimeApiKey: apiKey || undefined }
+      });
+
+      if (!res.ok) {
+        console.error("(root) couldn't update Hackatime API key!", res);
+        setError(res.message);
+        return;
       }
-      catch (error) {
-        console.error("Failed to save Hackatime API key:", error);
-      }
+
+      console.log("(root) Hackatime API key updated!", res);
     }
   }, [currentUser]);
 
@@ -96,19 +107,23 @@ export default function RootLayout({
 
   const handleHackatimeApiKeyChange = useCallback((value: string) => {
     setHackatimeApiKey(value);
-    
-    // Clear existing timeout
-    if (debounceTimeout.current) {
-      clearTimeout(debounceTimeout.current);
+  }, []);
+
+  function handleSaveSettings() {
+    if (!isValidUUID(hackatimeApiKey)) {
+      setError("That isn't a valid Hackatime API key!");
+      return;
     }
-    
-    // Only save if the value is empty or a valid UUID
-    if (isValidUUID(value)) {
-      debounceTimeout.current = setTimeout(() => {
-        saveApiKey(value);
-      }, 500);
-    }
-  }, [saveApiKey]);
+
+    saveApiKey(hackatimeApiKey);
+    setOriginalHackatimeApiKey(hackatimeApiKey);
+    setSettingsModalOpen(false);
+  }
+
+  function handleCancelSettings() {
+    setHackatimeApiKey(originalHackatimeApiKey);
+    setSettingsModalOpen(false);
+  }
 
   useEffect(() => {
     if (!settingsModalOpen)
@@ -131,16 +146,53 @@ export default function RootLayout({
   }
 
   function handleSettingsClick() {
+    setOriginalHackatimeApiKey(hackatimeApiKey);
     setSettingsModalOpen(true);
   }
 
   async function handleRemoveDevice(deviceId: string) {
+    if (!currentUser)
+      return;
+
+    const res = await trpc.timelapse.findByUser.query({ user: currentUser.id });
+    if (!res.ok) {
+      console.error("(root) timelapse.findByUser failed when trying to remove a device!", res);
+      setError(res.message);
+      return;
+    }
+
+    const unpublishedTimelapses = res.data.timelapses.filter(
+      t => "private" in t && t.private && t.private.device?.id === deviceId && !t.isPublished
+    );
+
+    if (unpublishedTimelapses.length > 0) {
+      setDeviceToRemove(deviceId);
+      setTimelapsesToRemove(unpublishedTimelapses);
+      setRemoveDeviceModalOpen(true);
+    }
+    else {
+      await confirmRemoveDevice(deviceId);
+    }
+  }
+
+  async function confirmRemoveDevice(deviceId: string) {
     const req = await trpc.user.removeDevice.mutate({ id: deviceId });
     if (!req.ok) {
-      throw new Error(req.message);
+      setError(req.message);
+      return;
     }
 
     await deviceStorage.deleteDevice(deviceId);
+    setDevices(devices.filter(device => device.id !== deviceId));
+    setRemoveDeviceModalOpen(false);
+    setDeviceToRemove(null);
+    setTimelapsesToRemove([]);
+  }
+
+  function cancelRemoveDevice() {
+    setRemoveDeviceModalOpen(false);
+    setDeviceToRemove(null);
+    setTimelapsesToRemove([]);
   }
 
   function handleAddPasskey(deviceId: string) {
@@ -344,6 +396,23 @@ export default function RootLayout({
               </div>
             )}
           </div>
+
+          <div className="flex gap-4 pt-4">
+            <Button
+              kind="primary"
+              onClick={handleSaveSettings}
+              className="flex-1"
+            >
+              Save
+            </Button>
+            <Button
+              kind="secondary"
+              onClick={handleCancelSettings}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
       </WindowedModal>
 
@@ -353,6 +422,56 @@ export default function RootLayout({
         description={`Enter the 6-digit PIN for ${devices.find(d => d.id === currentDeviceForPin)?.name || "Unknown Device"}`}
         onPasskeySubmit={handlePinSubmit}
       />
+
+      <ErrorModal
+        isOpen={!!error} 
+        setIsOpen={(open) => !open && setError(null)}
+        message={error!}
+      />
+
+      <WindowedModal
+        icon="delete"
+        title="Remove Device"
+        description="This action cannot be undone"
+        isOpen={removeDeviceModalOpen}
+        setIsOpen={setRemoveDeviceModalOpen}
+      >
+        <div className="flex flex-col gap-4">
+          <p>
+            This device has {timelapsesToRemove.length} unpublished timelapse{timelapsesToRemove.length !== 1 ? "s" : ""} that will be permanently deleted:
+          </p>
+          
+          <div className="bg-darkless rounded-md p-3 px-4 max-h-32 overflow-y-auto">
+            {timelapsesToRemove.map(timelapse => (
+              <div key={timelapse.id} className="flex justify-between items-center py-1">
+                <div className="flex flex-col">
+                  <span className="font-bold truncate">{timelapse.name}</span>
+                  <span className="truncate text-muted">{timelapse.description}</span>
+                </div>
+
+                <span className="text-sm text-muted ml-2">{timelapse.id.slice(0, 8)}...</span>
+              </div>
+            ))}
+          </div>
+          
+          <div className="flex gap-4">
+            <Button
+              kind="primary"
+              onClick={() => deviceToRemove && confirmRemoveDevice(deviceToRemove)}
+              className="flex-1"
+            >
+              Remove Device
+            </Button>
+            <Button
+              kind="secondary"
+              onClick={cancelRemoveDevice}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </WindowedModal>
     </>
   );
 }
