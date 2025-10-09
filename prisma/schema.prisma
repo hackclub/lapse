@@ -14,7 +14,7 @@ enum PermissionLevel {
   ROOT
 }
 
-enum TimelapsePrivacy {
+enum TimelapseVisibility {
   UNLISTED
   PUBLIC
 }
@@ -91,7 +91,7 @@ model Timelapse {
   description           String              @default("")
 
   /// If `isPublished` is `true`, specifies whether the timelapse can only be accessed via its URL.
-  privacy               TimelapsePrivacy    @default(UNLISTED)
+  visibility            TimelapseVisibility    @default(UNLISTED)
 
   /// Determines whether the timelapse is decrypted and can be accessed by users other than the owner.
   isPublished           Boolean             @default(false)

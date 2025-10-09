@@ -39,7 +39,7 @@ export function dtoTimelapse(entity: DbCompositeTimelapse): Timelapse {
         owner: dtoPublicUser(entity.owner),
         name: entity.name,
         description: entity.description,
-        privacy: entity.privacy,
+        visibility: entity.visibility,
         playbackUrl: `${entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED}/${entity.s3Key}`,
         videoContainerKind: entity.containerKind,
         isPublished: entity.isPublished
@@ -60,10 +60,10 @@ export function dtoOwnedTimelapse(entity: DbCompositeTimelapse): OwnedTimelapse 
 }
 
 /**
- * Represents the possible privacy settings for a published timelapse.
+ * Represents the possible visibility settings for a published timelapse.
  */
-export type TimelapsePrivacy = z.infer<typeof TimelapsePrivacySchema>;
-export const TimelapsePrivacySchema = z.enum(["UNLISTED", "PUBLIC"]);
+export type TimelapseVisibility = z.infer<typeof TimelapseVisibilitySchema>;
+export const TimelapseVisibilitySchema = z.enum(["UNLISTED", "PUBLIC"]);
 
 /**
  * Represents supported container formats for timelapse video streams.
@@ -143,7 +143,7 @@ export const OwnedTimelapseSchema = z.object({
     /**
      * Determines the discoverability of the timelapse.
      */
-    privacy: TimelapsePrivacySchema,
+    visibility: TimelapseVisibilitySchema,
 
     /**
      * Must be `true` for public timelapses.
@@ -294,7 +294,7 @@ export default router({
 
                 name: TimelapseName,
                 description: TimelapseDescription,
-                privacy: TimelapsePrivacySchema,
+                visibility: TimelapseVisibilitySchema,
 
                 /**
                  * An array of timestamps. Each timestamp counts the number of milliseconds since the
@@ -361,7 +361,7 @@ export default router({
                     ownerId: req.ctx.user.id,
                     name: req.input.name,
                     description: req.input.description,
-                    privacy: req.input.privacy,
+                    visibility: req.input.visibility,
                     containerKind: draft.containerKind,
                     isPublished: false,
                     s3Key: draft.s3Key,
@@ -403,7 +403,7 @@ export default router({
                 changes: z.object({
                     name: TimelapseName.optional(),
                     description: TimelapseDescription.optional(),
-                    privacy: TimelapsePrivacySchema.optional()
+                    visibility: TimelapseVisibilitySchema.optional()
                 })
             })
         )
@@ -442,8 +442,8 @@ export default router({
                 updateData.description = req.input.changes.description;
             }
 
-            if (req.input.changes.privacy) {
-                updateData.privacy = req.input.changes.privacy;
+            if (req.input.changes.visibility) {
+                updateData.visibility = req.input.changes.visibility;
             }
 
             const updatedTimelapse = await database.timelapse.update({
@@ -611,7 +611,7 @@ export default router({
                     ownerId: req.input.user,
                     ...when(!isViewingSelf && !isAdmin, {
                         isPublished: true,
-                        privacy: "PUBLIC"
+                        visibility: "PUBLIC"
                     })
                 }
             });

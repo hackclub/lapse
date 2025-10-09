@@ -492,7 +492,7 @@ export default function Page() {
           id: uploadRes.data.timelapseId,
           name,
           description,
-          privacy: "UNLISTED",
+          visibility: "UNLISTED",
           deviceId: device.id,
           snapshots: snapshotTimestamps,
         });
