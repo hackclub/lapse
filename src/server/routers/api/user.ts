@@ -277,13 +277,18 @@ export default router({
             if (changes.hackatimeApiKey) {
                 const hackatime = new Hackatime(changes.hackatimeApiKey);
 
+                let stats: WakaTimeUserStats;
+
                 try {
-                    await hackatime.currentUserStats();
+                    stats = await hackatime.currentUserStats();
                 }
                 catch (ex) {
                     logWarning("user.update", "Error caught when verifying a Hackatime API key!", ex);
                     return err("HACKATIME_ERROR", "You provided an invalid Hackatime API key!");
                 }
+
+                // Hackatime has these as Slack IDs - not entirely sure why, but we'll go with this
+                updateData.knownSlackId = stats.data.user_id ?? stats.data.username;
             }
 
             const updatedUser = await database.user.update({

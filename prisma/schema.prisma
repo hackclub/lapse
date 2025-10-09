@@ -38,17 +38,18 @@ model KnownDevice {
 
 /// Represents a single user of Lapse.
 model User {
-  id                    String            @id @default(uuid())
-  email                 String
-  createdAt             DateTime          @default(now())
-  permissionLevel       PermissionLevel   @default(USER)
-  handle                String            @unique
-  displayName           String
-  profilePictureUrl     String
-  bio                   String            @default("")
-  urls                  String[]          @default([])
-  hackatimeApiKey       String?
-  slackId               String?
+  id                        String            @id @default(uuid())
+  email                     String
+  createdAt                 DateTime          @default(now())
+  permissionLevel           PermissionLevel   @default(USER)
+  handle                    String            @unique
+  displayName               String
+  profilePictureUrl         String
+  bio                       String            @default("")
+  urls                      String[]          @default([])
+  hackatimeApiKey           String?
+  knownSlackId              String?
+  slackId                   String?
 
   timelapses            Timelapse[]
   devices               KnownDevice[]
@@ -112,6 +113,7 @@ model Snapshot {
   id              String              @id @default(uuid())
   frame           Int
   createdAt       DateTime
+  heartbeatId     Int                 @default(0)
 
   timelapseId       String
   timelapse         Timelapse    @relation(fields: [timelapseId], references: [id])
