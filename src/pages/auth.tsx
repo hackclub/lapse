@@ -6,6 +6,7 @@ import RootLayout from "@/client/components/RootLayout";
 import { Button } from "@/client/components/ui/Button";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
 import { LoadingModal } from "@/client/components/ui/LoadingModal";
+import { assert, matchOrDefault } from "@/shared/common";
 
 export default function Auth() {
   const router = useRouter();
@@ -15,41 +16,23 @@ export default function Auth() {
   useEffect(() => {
     const { error: queryError, auth } = router.query;
 
+    assert(typeof queryError === "string", "queryError wasn't a strings");
+
     if (queryError) {
-      switch (queryError) {
-        case "invalid-method":
-          setError("Invalid request method");
-          break;
-        case "oauth-access_denied":
-          setError("Access denied by Slack");
-          break;
-        case "oauth-error":
-          setError("OAuth error occurred");
-          break;
-        case "missing-code":
-          setError("Missing authorization code");
-          break;
-        case "config-error":
-          setError("Server configuration error");
-          break;
-        case "invalid-token-response":
-          setError("Invalid response from Slack");
-          break;
-        case "token-exchange-failed":
-          setError("Failed to exchange code for token");
-          break;
-        case "invalid-user-response":
-          setError("Invalid user response from Slack");
-          break;
-        case "profile-fetch-failed":
-          setError("Failed to fetch user profile");
-          break;
-        case "server-error":
-          setError("Server error occurred");
-          break;
-        default:
-          setError("An unknown error occurred");
-      }
+      setError(
+        matchOrDefault(queryError, {
+          "invalid-method": "Invalid request method",
+          "oauth-access_denied": "Access denied by Slack",
+          "oauth-error": "OAuth error occurred",
+          "missing-code": "Missing authorization code",
+          "config-error": "Server configuration error",
+          "invalid-token-response": "Invalid response from Slack",
+          "token-exchange-failed": "Failed to exchange code for token",
+          "invalid-user-response": "Invalid user response from Slack",
+          "profile-fetch-failed": "Failed to fetch user profile",
+          "server-error": "Server error occurred"
+        }) ?? queryError
+      );
     }
 
     if (auth === "success") {

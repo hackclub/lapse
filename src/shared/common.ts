@@ -133,6 +133,27 @@ export function match<K extends string, T>(selector: K, cases: Record<K, T>) {
 }
 
 /**
+ * Emulates a `switch` expression present in languages like C#. Returns `null` if the selector
+ * is not present in `cases`. For example:
+ * 
+ * ```
+ * // 'result' will be equal to 12345678.
+ * const result = match("meow", {
+ *      "a": 727,
+ *      "b": 67,
+ *      "c": 420,
+ *      "d": 2137
+ * }) ?? 12345678;
+ * ```
+ */
+export function matchOrDefault<K extends string, T>(selector: K, cases: Record<K, T>) {
+    if (!(selector in cases))
+        return null;
+
+    return cases[selector];
+}
+
+/**
  * Transforms an array like `["a", "b"]` to an object like `{ a: true, b: true }`.
  * This function is usually used for expressions like `choice in oneOf("a", "b")`.
  */
