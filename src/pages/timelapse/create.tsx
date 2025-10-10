@@ -18,7 +18,6 @@ import { encryptVideo, getCurrentDevice } from "@/client/encryption";
 import { trpc } from "@/client/trpc";
 import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
-
 import { useOnce } from "@/client/hooks/useOnce";
 import { useAuth } from "@/client/hooks/useAuth";
 

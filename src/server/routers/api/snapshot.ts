@@ -1,18 +1,16 @@
 import "@/server/allow-only-server";
 
 import { z } from "zod";
-import { procedure, router, protectedProcedure } from "../../trpc";
+import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, err, ok, oneOf } from "@/shared/common";
+import * as db from "@/generated/prisma";
 
-import { PrismaClient } from "../../../generated/prisma";
-import type { Snapshot as DbSnapshot } from "../../../generated/prisma";
-
-const db = new PrismaClient();
+const database = new db.PrismaClient();
 
 /**
  * Converts a database representation of a snapshot to a runtime (API) one.
  */
-export function dtoSnapshot(entity: DbSnapshot): Snapshot {
+export function dtoSnapshot(entity: db.Snapshot): Snapshot {
     return {
         id: entity.id,
         timelapseId: entity.timelapseId,
@@ -62,7 +60,7 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
-            const snapshot = await db.snapshot.findFirst({
+            const snapshot = await database.snapshot.findFirst({
                 where: { id: req.input.id },
                 include: { timelapse: true },
             });
@@ -80,7 +78,7 @@ export default router({
             if (snapshot.timelapse.isPublished)
                 return err("NOT_MUTABLE", "Cannot delete snapshots from published timelapse");
 
-            await db.snapshot.delete({
+            await database.snapshot.delete({
                 where: { id: req.input.id },
             });
 
@@ -108,7 +106,7 @@ export default router({
             })
         )
         .query(async (req) => {
-            const timelapse = await db.timelapse.findFirst({
+            const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.timelapseId },
             });
 
@@ -124,7 +122,7 @@ export default router({
             if (!canAccess)
                 return err("NOT_FOUND", "Couldn't find that timelapse!");
 
-            const snapshots = await db.snapshot.findMany({
+            const snapshots = await database.snapshot.findMany({
                 where: { timelapseId: req.input.timelapseId },
                 orderBy: { frame: "asc" },
             });

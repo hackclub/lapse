@@ -1,5 +1,4 @@
 import { match } from "@/shared/common";
-import Image from "next/image";
 import { Skeleton } from "./Skeleton";
 
 export function ProfilePicture({

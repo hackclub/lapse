@@ -1,11 +1,15 @@
 
-import { trpc } from "@/client/trpc";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
+import Icon from "@hackclub/icons";
+import clsx from "clsx";
 
 import type { Timelapse, TimelapseVisibility } from "@/server/routers/api/timelapse";
-import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
+
 import { assert } from "@/shared/common";
+
+import { trpc } from "@/client/trpc";
+import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
 import { deviceStorage } from "@/client/deviceStorage";
 import { decryptVideo } from "@/client/encryption";
 import { useAuth } from "@/client/hooks/useAuth";
@@ -19,10 +23,8 @@ import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
 import { SelectInput } from "@/client/components/ui/SelectInput";
-import Icon from "@hackclub/icons";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
-import clsx from "clsx";
 
 export default function Page() {
   const router = useRouter();

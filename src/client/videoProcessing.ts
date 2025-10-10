@@ -1,7 +1,7 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 
-import { ascending, assert, range, typeName } from "@/shared/common";
 import { LocalTimelapse } from "./deviceStorage";
+import { ascending, assert, range, typeName } from "@/shared/common";
 import { TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
 
 async function toBlobURL(url: string, mimeType: string): Promise<string> {

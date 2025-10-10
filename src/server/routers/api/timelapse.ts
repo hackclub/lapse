@@ -5,13 +5,13 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
-import { PrismaClient } from "../../../generated/prisma";
-import { procedure, router, protectedProcedure } from "../../trpc";
+import { PrismaClient } from "@/generated/prisma";
+import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, ascending, err, match, when, ok, oneOf, closest } from "@/shared/common";
 import { decryptVideo } from "@/server/encryption";
 import * as env from "@/server/env";
 import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE } from "@/shared/constants";
-import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "./user";
+import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "@/server/routers/api/user";
 import * as db from "@/generated/prisma";
 import { Hackatime, WakaTimeHeartbeat } from "@/server/hackatime";
 import { logError, logInfo } from "@/server/serverCommon";

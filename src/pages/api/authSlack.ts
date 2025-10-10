@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
-import { PrismaClient } from "../../generated/prisma";
-import { generateJWT } from "../../server/lib/auth";
-import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET } from "../../server/env";
+import { PrismaClient } from "@/generated/prisma";
+import { generateJWT } from "@/server/lib/auth";
+import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET } from "@/server/env";
 
 const database = new PrismaClient();
 

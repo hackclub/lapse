@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
-import { useAuth } from "../client/hooks/useAuth";
+import Icon from "@hackclub/icons";
+
+import { useAuth } from "@/client/hooks/useAuth";
 import RootLayout from "@/client/components/RootLayout";
 import { Button } from "@/client/components/ui/Button";
-import LapseIcon from "../client/assets/icon.svg";
-import { LoadingModal } from "@/client/components/ui/LoadingModal";
-import Icon from "@hackclub/icons";
+
+import LapseIcon from "@/client/assets/icon.svg";
 
 export default function Home() {
   const router = useRouter();
-  const { currentUser, isLoading, signOut } = useAuth(false);
-  const isLoggedIn = currentUser != null;
+  const { currentUser, signOut } = useAuth(false);
 
   useEffect(() => {
     const { error } = router.query;

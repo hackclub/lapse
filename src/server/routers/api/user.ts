@@ -2,12 +2,12 @@ import "@/server/allow-only-server";
 
 import { z } from "zod";
 
+import * as db from "@/generated/prisma";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, err, ok, when } from "@/shared/common";
-import * as db from "@/generated/prisma";
 import { Hackatime, WakaTimeUserStats } from "@/server/hackatime";
 import { logError, logWarning } from "@/server/serverCommon";
-import { deleteTimelapse } from "./timelapse";
+import { deleteTimelapse } from "@/server/routers/api/timelapse";
 
 const database = new db.PrismaClient();
 

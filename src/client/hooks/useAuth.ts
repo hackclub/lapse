@@ -1,8 +1,9 @@
 import { useRouter } from "next/router";
-import { trpc } from "../trpc";
 import { useState } from "react";
 
-import { User } from "@/server/routers/api/user";
+import type { User } from "@/server/routers/api/user";
+
+import { trpc } from "../trpc";
 import { useOnce } from "./useOnce";
 
 export function useAuth(required: boolean) {

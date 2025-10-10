@@ -3,8 +3,11 @@ import localFont from "next/font/local";
 import { JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
 import Icon from "@hackclub/icons";
-
 import { ReactNode, useState, useEffect, useCallback } from "react";
+
+import type { KnownDevice } from "@/server/routers/api/user";
+import type { Timelapse } from "@/server/routers/api/timelapse";
+
 import { Button } from "./ui/Button";
 import { ProfilePicture } from "./ui/ProfilePicture";
 import { WindowedModal } from "./ui/WindowedModal";
@@ -14,8 +17,6 @@ import { useAuth } from "../hooks/useAuth";
 import { deviceStorage, LocalDevice } from "../deviceStorage";
 import LapseIcon from "../assets/icon.svg";
 import { trpc } from "../trpc";
-import { KnownDevice } from "@/server/routers/api/user";
-import type { Timelapse } from "@/server/routers/api/timelapse";
 import { ErrorModal } from "./ui/ErrorModal";
 
 const phantomSans = localFont({

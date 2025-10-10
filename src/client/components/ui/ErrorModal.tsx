@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
 import { IconGlyph } from "./util";
+
 export interface ErrorModalButton {
   label: string;
   onClick: () => void;

@@ -1,4 +1,3 @@
-
 export function Skeleton({ className, lines = 1 }: {
   className: string;
   lines?: number;
