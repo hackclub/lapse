@@ -28,3 +28,16 @@ Timelapses can be synchronized with Hackatime. This will create a WakaTime heart
 
 ## REST API endpoints
 Lapse uses tRPC with a REST interface being planned. This is currently not yet implemented.
+
+## Deployment
+Deploying Lapse is largely the same as deploying [any other Next.js web app](https://coolify.io/docs/applications/nextjs). You'll need to set a couple of environment variables, though - you'll find them in [`src/server/env.ts`](./src/server/env.ts).
+
+Lapse uses Prisma with the PostgreSQL adapter - this means you'll also need a PostgreSQL database. Set the `DATABASE_URL` environment variable to the connection string of your database.
+
+You'll need at least one root user in order to promote other users to admins. You can do this via the [`./prisma/promote.js`](./prisma/promote.js) script:
+
+```sh
+# You'd probably want to use your production database URL here.
+export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
+node ./prisma/promote.js --email ascpixi@hackclub.com
+```
