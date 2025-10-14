@@ -16,9 +16,9 @@ export default function Auth() {
   useEffect(() => {
     const { error: queryError, auth } = router.query;
 
-    assert(typeof queryError === "string", "queryError wasn't a strings");
-
     if (queryError) {
+      assert(typeof queryError === "string", "queryError wasn't a string");
+
       setError(
         matchOrDefault(queryError, {
           "invalid-method": "Invalid request method",
