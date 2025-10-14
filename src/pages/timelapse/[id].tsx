@@ -51,7 +51,21 @@ export default function Page() {
   const [hackatimeProject, setHackatimeProject] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [hackatimeApiKey, setHackatimeApiKey] = useState("");
+  const [isSettingApiKey, setIsSettingApiKey] = useState(false);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  function setCriticalError(message: string) {
+    setError(message);
+    setErrorIsCritical(true);
+  }
+
+  function setRegularError(message: string) {
+    setError(message);
+    setErrorIsCritical(false);
+  }
 
   useAsyncEffect(async () => {
     if (!router.isReady || fetchStarted)
@@ -61,8 +75,7 @@ export default function Page() {
       const { id } = router.query;
 
       if (typeof id !== "string") {
-        setError("Invalid timelapse ID provided");
-        setErrorIsCritical(true);
+        setCriticalError("Invalid timelapse ID provided");
         return;
       }
 
@@ -72,8 +85,7 @@ export default function Page() {
       const res = await trpc.timelapse.query.query({ id });
       if (!res.ok) {
         console.error("(timelapse/[id]) couldn't fetch that timelapse!", res);
-        setError(res.message);
-        setErrorIsCritical(true);
+        setCriticalError(res.message);
         return;
       }
 
@@ -133,8 +145,12 @@ export default function Page() {
     }
     catch (err) {
       console.error("(timelapse/[id]) error loading timelapse:", err);
-      setErrorIsCritical(true);
-      setError(err instanceof Error ? err.message : "An unknown error occurred while loading the timelapse");
+
+      setCriticalError(
+        err instanceof Error
+          ? err.message
+          : "An unknown error occurred while loading the timelapse"
+        );
     }
   }, [router, router.isReady]);
 
@@ -160,8 +176,7 @@ export default function Page() {
       const originDevice = devices.find(x => x.id === timelapse.private!.device!.id);
 
       if (!originDevice) {
-        setErrorIsCritical(false);
-        setError("Device passkey not found. Cannot publish this timelapse.");
+        setRegularError("Device passkey not found. Cannot publish this timelapse.");
         return;
       }
 
@@ -174,14 +189,16 @@ export default function Page() {
         setTimelapse(result.data.timelapse);
       } 
       else {
-        setErrorIsCritical(false);
-        setError(`Failed to publish: ${result.error}`);
+        setRegularError(`Failed to publish: ${result.error}`);
       }
     } 
     catch (error) {
       console.error("(timelapse/[id]) error publishing timelapse:", error);
-      setErrorIsCritical(false);
-      setError(error instanceof Error ? error.message : "An error occurred while publishing the timelapse.");
+      setCriticalError(
+        error instanceof Error
+          ? error.message
+          : "An error occurred while publishing the timelapse."
+      );
     } 
     finally {
       setIsPublishing(false);
@@ -230,14 +247,12 @@ export default function Page() {
         setEditModalOpen(false);
       } 
       else {
-        setErrorIsCritical(false);
-        setError(`Failed to update: ${result.error}`);
+        setRegularError(`Failed to update: ${result.error}`);
       }
     } 
     catch (error) {
       console.error("(timelapse/[id]) error updating timelapse:", error);
-      setErrorIsCritical(false);
-      setError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
+      setRegularError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
     } 
     finally {
       setIsUpdating(false);
@@ -251,8 +266,8 @@ export default function Page() {
       return;
 
     if (!currentUser.private?.hackatimeApiKey) {
-      setErrorIsCritical(false);
-      setError("You need to set a Hackatime API key in Settings before syncing with Hackatime.");
+      setHackatimeApiKey("");
+      setApiKeyModalOpen(true);
       return;
     }
 
@@ -277,14 +292,12 @@ export default function Page() {
         setHackatimeProject("");
       } 
       else {
-        setErrorIsCritical(false);
-        setError(`Failed to sync with Hackatime: ${result.error}`);
+        setRegularError(`Failed to sync with Hackatime: ${result.error}`);
       }
     } 
     catch (error) {
       console.error("(timelapse/[id]) error syncing with Hackatime:", error);
-      setErrorIsCritical(false);
-      setError(error instanceof Error ? error.message : "An error occurred while syncing with Hackatime.");
+      setRegularError(error instanceof Error ? error.message : "An error occurred while syncing with Hackatime.");
     } 
     finally {
       setIsSyncing(false);
@@ -292,6 +305,43 @@ export default function Page() {
   };
 
   const isSyncDisabled = !hackatimeProject.trim() || isSyncing;
+
+  async function handleSetApiKey() {
+    if (!hackatimeApiKey.trim() || !currentUser) 
+      return;
+
+    try {
+      setIsSettingApiKey(true);
+
+      const result = await trpc.user.update.mutate({
+        id: currentUser!.id,
+        changes: {
+          hackatimeApiKey: hackatimeApiKey.trim()
+        }
+      });
+
+      if (result.ok) {
+        setApiKeyModalOpen(false);
+        setHackatimeApiKey("");
+
+        // Now that API key is set, open sync modal
+        setHackatimeProject("");
+        setSyncModalOpen(true);
+      } 
+      else {
+        setRegularError(`Failed to set API key: ${result.error}`);
+      }
+    } 
+    catch (error) {
+      console.error("(timelapse/[id]) error setting Hackatime API key:", error);
+      setRegularError(error instanceof Error ? error.message : "An error occurred while setting the API key.");
+    } 
+    finally {
+      setIsSettingApiKey(false);
+    }
+  };
+
+  const isApiKeyDisabled = !hackatimeApiKey.trim() || isSettingApiKey;
 
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;
@@ -310,8 +360,7 @@ export default function Page() {
     }
     catch (error) {
       console.error("Error saving device passkey:", error);
-      setErrorIsCritical(false);
-      setError("Failed to save passkey. Please try again.");
+      setRegularError("Failed to save passkey. Please try again.");
     }
   }
 
@@ -465,6 +514,36 @@ export default function Page() {
 
           <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
             {isSyncing ? "Syncing..." : "Sync with Hackatime"}
+          </Button>
+        </div>
+      </WindowedModal>
+
+      <WindowedModal
+        icon="private"
+        title="Set Hackatime API Key"
+        description="Enter your Hackatime API key to sync timelapses with your Hackatime account."
+        isOpen={apiKeyModalOpen}
+        setIsOpen={setApiKeyModalOpen}
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-blue/10 border border-blue/20">
+            <Icon glyph="info" size={24} className="text-blue flex-shrink-0" />
+            <div>
+              <p className="font-bold text-blue">Hackatime API Key</p>
+              <p className="text-smoke">You can find your API key in your Hackatime account settings.</p>
+            </div>
+          </div>
+
+          <TextInput
+            label="API Key"
+            description="Your Hackatime API key for syncing timelapses."
+            value={hackatimeApiKey}
+            onChange={setHackatimeApiKey}
+            isSecret={true}
+          />
+
+          <Button onClick={handleSetApiKey} disabled={isApiKeyDisabled} kind="primary">
+            {isSettingApiKey ? "Setting..." : "Set API Key"}
           </Button>
         </div>
       </WindowedModal>
