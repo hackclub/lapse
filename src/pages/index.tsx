@@ -38,7 +38,7 @@ export default function Home() {
                 <p className="text-smoke text-xl leading-relaxed">
                   {
                     currentUser
-                      ? <>Thank you for participating in the alpha, <span className="text-cyan">{currentUser.displayName}</span>!</>
+                      ? <>Thank you for participating in the alpha, <span className="text-cyan font-bold">{currentUser.displayName}</span>!</>
                       : <>Lapse is a timelapse recording tool, currently in alpha.</>
                   }
                 </p>
