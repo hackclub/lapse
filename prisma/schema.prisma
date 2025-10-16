@@ -38,7 +38,7 @@ model KnownDevice {
 
 /// Represents a single user of Lapse.
 model User {
-  id                        String            @id @default(uuid())
+  id                        String            @id @default(nanoid(12))
   email                     String
   createdAt                 DateTime          @default(now())
   permissionLevel           PermissionLevel   @default(USER)
@@ -59,7 +59,7 @@ model User {
 model DraftTimelapse {
   /// The unique ID of the timelapse. Will become the ID of a regular `Timelapse` when
   /// the entity is realized.
-  id                String        @id @default(uuid())
+  id                String        @id @default(nanoid(12))
 
   /// The S3 key that points to the object. An object must be uploaded with this key before
   /// the entity is realized.
@@ -74,11 +74,15 @@ model DraftTimelapse {
 
 model Timelapse {
   /// The unique ID of the timelapse.
-  id                    String              @id @default(uuid())
+  id                    String                  @id @default(nanoid(12))
 
   /// The S3 key that points to the object. If `isPublished` is `false`, this refers to the
   /// encrypted bucket - otherwise, the public bucket.
   s3Key                 String
+
+  /// The S3 key that points to the thumbnail image. If `isPublished` is `false`, this refers to the
+  /// encrypted bucket - otherwise, the public bucket. If `null`, no thumbnail has been generated yet.
+  thumbnailS3Key        String?
 
   /// The Hackatime project key associated with the timelapse. If `null`, the timelapse has not
   /// yet been synchronized with Hackatime.
@@ -88,13 +92,13 @@ model Timelapse {
   name                  String
 
   /// The description of the timelapse.
-  description           String              @default("")
+  description           String                  @default("")
 
   /// If `isPublished` is `true`, specifies whether the timelapse can only be accessed via its URL.
-  visibility            TimelapseVisibility    @default(UNLISTED)
+  visibility            TimelapseVisibility     @default(UNLISTED)
 
   /// Determines whether the timelapse is decrypted and can be accessed by users other than the owner.
-  isPublished           Boolean             @default(false)
+  isPublished           Boolean                 @default(false)
 
   /// The container type used to store the video.
   containerKind         VideoContainerKind
