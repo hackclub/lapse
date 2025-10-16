@@ -175,65 +175,22 @@ export async function encryptVideo(
         ["encrypt"]
     );
 
-    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     const totalSize = videoBuffer.byteLength;
     
     onProgress?.("Encrypting video data...", 30);
     
-    if (totalSize <= CHUNK_SIZE) {
-        // Small video - encrypt all at once
-        const encryptedBuffer = await crypto.subtle.encrypt(
-            { name: "AES-CBC", iv: iv },
-            cryptoKey,
-            videoBuffer
-        );
-        
-        onProgress?.("Encryption complete", 100);
-        
-        return {
-            data: encryptedBuffer,
-            key: Array.from(new Uint8Array(key)).map(b => b.toString(16).padStart(2, "0")).join(""),
-            iv: Array.from(new Uint8Array(iv)).map(b => b.toString(16).padStart(2, "0")).join(""),
-            keySalt: Array.from(new Uint8Array(keySalt)).map(b => b.toString(16).padStart(2, "0")).join(""),
-            ivSalt: Array.from(new Uint8Array(ivSalt)).map(b => b.toString(16).padStart(2, "0")).join("")
-        };
-    }
+    // Encrypt the entire video as one continuous stream to avoid IV reuse
+    // AES-CBC requires unique IVs or proper chaining between blocks
+    const encryptedBuffer = await crypto.subtle.encrypt(
+        { name: "AES-CBC", iv: iv },
+        cryptoKey,
+        videoBuffer
+    );
     
-    const chunks: ArrayBuffer[] = [];
-    const numChunks = Math.ceil(totalSize / CHUNK_SIZE);
-    
-    for (let i = 0; i < numChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, totalSize);
-        const chunk = videoBuffer.slice(start, end);
-        
-        const encryptedChunk = await crypto.subtle.encrypt(
-            { name: "AES-CBC", iv: iv },
-            cryptoKey,
-            chunk
-        );
-        
-        chunks.push(encryptedChunk);
-        
-        const progress = 30 + Math.floor(((i + 1) / numChunks) * 65);
-        onProgress?.(`Encrypting chunk ${i + 1}/${numChunks}...`, progress);
-    }
-    
-    onProgress?.("Combining encrypted chunks...", 95);
-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-    const combined = new ArrayBuffer(totalLength);
-    const combinedView = new Uint8Array(combined);
-    
-    let offset = 0;
-    for (const chunk of chunks) {
-        combinedView.set(new Uint8Array(chunk), offset);
-        offset += chunk.byteLength;
-    }
-
     onProgress?.("Encryption complete", 100);
-
+    
     return {
-        data: combined,
+        data: encryptedBuffer,
         key: Array.from(new Uint8Array(key)).map(b => b.toString(16).padStart(2, "0")).join(""),
         iv: Array.from(new Uint8Array(iv)).map(b => b.toString(16).padStart(2, "0")).join(""),
         keySalt: Array.from(new Uint8Array(keySalt)).map(b => b.toString(16).padStart(2, "0")).join(""),

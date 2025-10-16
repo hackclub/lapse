@@ -146,6 +146,61 @@ export class VideoProcessor {
         console.log("(ffmpeg) successfully concatenated!", data);
         return data;
     }
+
+    /**
+     * Generates a thumbnail image from a video blob using FFmpeg.
+     */
+    async generateThumbnail(
+        videoBlob: Blob,
+        onProgress?: (stage: string, progress: number) => void
+    ): Promise<Blob> {
+        assert(this.ffmpeg != null, "attempted to call generateThumbnail() when this.ffmpeg is null");
+
+        onProgress?.("Preparing video for thumbnail...", 10);
+        
+        // Convert blob to Uint8Array
+        const videoBytes = new Uint8Array(await videoBlob.arrayBuffer());
+        
+        onProgress?.("Extracting thumbnail frame...", 30);
+        
+        // Write video to FFmpeg filesystem
+        await this.ffmpeg.writeFile("input.webm", videoBytes);
+        
+        onProgress?.("Processing thumbnail...", 50);
+        
+        // Extract frame at 1 second (or beginning if video is shorter)
+        // Generate a 480x360 JPEG thumbnail
+        await this.ffmpeg.exec([
+            "-i", "input.webm",
+            "-ss", "1",
+            "-vframes", "1",
+            "-vf", "scale=480:360:force_original_aspect_ratio=decrease,pad=480:360:(ow-iw)/2:(oh-ih)/2",
+            "-q:v", "3",
+            "thumbnail.jpg"
+        ]);
+        
+        onProgress?.("Reading thumbnail...", 80);
+        
+        // Read the generated thumbnail
+        const thumbnailBytes = await this.ffmpeg.readFile("thumbnail.jpg");
+        
+        assert(thumbnailBytes instanceof Uint8Array, `readFile for thumbnail.jpg returned a ${typeName(thumbnailBytes)}`);
+        
+        onProgress?.("Finalizing thumbnail...", 100);
+        
+        return new Blob([thumbnailBytes.buffer as ArrayBuffer], { type: "image/jpeg" });
+    }
+}
+
+/**
+ * Generates a thumbnail image from a video blob using FFmpeg.
+ */
+export async function generateThumbnail(
+    processor: VideoProcessor,
+    videoBlob: Blob,
+    onProgress?: (stage: string, progress: number) => void
+): Promise<Blob> {
+    return processor.generateThumbnail(videoBlob, onProgress);
 }
 
 /**

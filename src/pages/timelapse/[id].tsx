@@ -25,6 +25,7 @@ import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
 import { SelectInput } from "@/client/components/ui/SelectInput";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
+import { createVideoProcessor, generateThumbnail } from "@/client/videoProcessing";
 
 export default function Page() {
   const router = useRouter();
@@ -133,6 +134,9 @@ export default function Page() {
           const url = URL.createObjectURL(videoBlob);
           setVideoObjUrl(url);
           video.src = url;
+
+          // Generate thumbnail for encrypted video if it doesn't have one yet
+          generateThumbnailForEncryptedVideo(videoBlob, timelapse.id);
         }
         catch (decryptionError) {
           console.warn("(timelapse/[id]) decryption failed:", decryptionError);
@@ -343,6 +347,55 @@ export default function Page() {
 
   const isApiKeyDisabled = !hackatimeApiKey.trim() || isSettingApiKey;
 
+  // Generate thumbnail for encrypted videos
+  const generateThumbnailForEncryptedVideo = async (videoBlob: Blob, timelapseId: string) => {
+    if (!timelapse || timelapse.isPublished || timelapse.thumbnailUrl)
+      return;
+
+    try {
+      console.log("(timelapse/[id]) generating thumbnail for encrypted video...");
+      
+      const processor = await createVideoProcessor();
+      const thumbnailBlob = await generateThumbnail(processor, videoBlob);
+      
+      // Get upload URL from server
+      const uploadResult = await trpc.timelapse.uploadThumbnail.query({ id: timelapseId });
+      if (!uploadResult.ok) {
+        console.warn("Failed to get thumbnail upload URL:", uploadResult);
+        return;
+      }
+
+      // Upload thumbnail
+      const uploadResponse = await fetch(uploadResult.data.uploadUrl, {
+        method: "PUT",
+        body: thumbnailBlob,
+        headers: {
+          "Content-Type": "image/jpeg",
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        console.warn("Failed to upload thumbnail:", uploadResponse.status);
+        return;
+      }
+
+      // Confirm upload with server
+      const confirmResult = await trpc.timelapse.confirmThumbnailUpload.mutate({
+        id: timelapseId,
+        thumbnailKey: uploadResult.data.thumbnailKey
+      });
+
+      if (confirmResult.ok) {
+        setTimelapse(confirmResult.data.timelapse);
+        console.log("(timelapse/[id]) thumbnail generated and uploaded successfully!");
+      }
+    }
+    catch (error) {
+      console.warn("(timelapse/[id]) failed to generate thumbnail:", error);
+      // Don't show error to user - thumbnails are not critical
+    }
+  };
+
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;
 
@@ -373,6 +426,7 @@ export default function Page() {
           controls
           width={timelapse ? undefined : 850}
           height={timelapse ? undefined : 638}
+          poster={timelapse?.thumbnailUrl || undefined}
           className={clsx(
             "h-full object-contain rounded-2xl",
             !timelapse && "w-full"
@@ -385,7 +439,7 @@ export default function Page() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-3">
                 <h1 className="text-4xl font-bold text-smoke leading-tight">
-                  {timelapse?.name || <Skeleton className="w-full" />}
+                  {timelapse?.name || <Skeleton />}
                                   
                   {timelapse && !timelapse.isPublished && (
                     <Badge variant="warning" className="ml-4">UNPUBLISHED</Badge>
@@ -402,12 +456,13 @@ export default function Page() {
                   profilePictureUrl={timelapse?.owner.profilePictureUrl}
                   displayName={timelapse?.owner.displayName ?? "?"}
                   size="sm"
+                  handle={timelapse?.owner.handle}
                 />
 
                 <span className="text-smoke">
                   by {
                     timelapse == null
-                    ? <Skeleton className="w-full" />
+                    ? <Skeleton />
                     : <span className="text-cyan underline">{timelapse.owner.displayName}</span>
                   }
                 </span>
@@ -417,7 +472,7 @@ export default function Page() {
                 {
                   timelapse != null
                   ? timelapse?.description || "(no description)"
-                  : <Skeleton className="w-full" lines={3} />
+                  : <Skeleton lines={3} />
                 }
               </p>
             </div>

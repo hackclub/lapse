@@ -56,7 +56,6 @@ export default function Page() {
   const setupPreviewRef = useRef<HTMLVideoElement>(null);
   const mainPreviewRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chunksRef = useRef<LocalChunk[]>([]);
 
   const currentStream = cameraStream || screenStream;
   const isRecording = !isFrozen && !setupModalOpen;
@@ -125,9 +124,7 @@ export default function Page() {
     setCurrentTimelapseId(activeTimelapse.id);
     setStartedAt(adjustedStartTime);
     setIsCreated(true);
-
-    chunksRef.current = activeTimelapse.chunks;
-
+    
     setNeedsVideoSource(true);
     setSetupModalOpen(true);
   });
@@ -230,32 +227,19 @@ export default function Page() {
 
       const newRecorder = new MediaRecorder(stream);
 
-      // For new timelapses, reset chunks; for existing ones, keep them
-      if (!currentTimelapseId || !isCreated) {
-        chunksRef.current = [];
-      }
-
       newRecorder.ondataavailable = async (ev) => {
         if (ev.data.size <= 0)
           return;
 
-        const storedChunk: LocalChunk = {
-          data: ev.data,
-          timestamp: Date.now(),
-          session: currentSession
-        };
-
-        chunksRef.current.push(storedChunk);
-
-        if (activeTimelapseId) {
-          await deviceStorage.appendChunk(
-            activeTimelapseId,
-            ev.data,
-            currentSession
-          );
-        }
+        assert(activeTimelapseId != null, "activeTimelapseId was null when ondataavailable was called");
+        await deviceStorage.appendChunk(
+          activeTimelapseId,
+          ev.data,
+          currentSession
+        );
       };
 
+      console.log("(timelapse/create) creating new recorder!", newRecorder);
       setRecorder(newRecorder);
       newRecorder.start(TIMELAPSE_FRAME_LENGTH);
 
@@ -418,8 +402,32 @@ export default function Page() {
         
         console.log("(upload) - merged session data:", merged);
 
-        setUploadStage("Requesting upload URL...");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(merged);
+        a.download = "merged.webm";
+        a.click();
+        a.remove();
+
+        // Generate thumbnail from the merged video
+        setUploadStage("Generating thumbnail...");
         setUploadProgress(25);
+        let thumbnailBlob: Blob | null = null;
+        
+        try {
+          thumbnailBlob = await videoProcessor.generateThumbnail(merged, (stage, progress) => {
+            setUploadStage(stage);
+            setUploadProgress(25 + Math.floor(progress * 0.05)); // 25-30%
+          });
+
+          console.log("(upload) thumbnail generated:", thumbnailBlob);
+        }
+        catch (thumbnailError) {
+          console.warn("(upload) failed to generate thumbnail:", thumbnailError);
+          // Continue without thumbnail - it's not critical for the upload process
+        }
+
+        setUploadStage("Requesting upload URL...");
+        setUploadProgress(30);
         const uploadRes = await trpc.timelapse.beginUpload.query({ containerType: "WEBM" });
         console.log("(upload) timelapse.beginUpload response:", uploadRes);
 
@@ -427,16 +435,16 @@ export default function Page() {
           throw new Error(uploadRes.error);
 
         setUploadStage("Encrypting video...");
-        setUploadProgress(30);
+        setUploadProgress(35);
 
         const encrypted = await encryptVideo(merged, uploadRes.data.timelapseId, (stage, progress) => {
           setUploadStage(stage);
-          setUploadProgress(30 + Math.floor(progress * 0.3));
+          setUploadProgress(35 + Math.floor(progress * 0.25)); // 35-60%
         });
 
         console.log("(upload) - encrypted data:", encrypted);
 
-        setUploadStage("Uploading to server...");
+        setUploadStage("Uploading video to server...");
         setUploadProgress(60);
         console.log(`(upload) uploading now to ${uploadRes.data.url}`);
 
@@ -447,8 +455,8 @@ export default function Page() {
           xhr.upload.addEventListener("progress", (event) => {
             if (event.lengthComputable) {
               const uploadPercent = Math.floor((event.loaded / event.total) * 100);
-              const totalProgress = 60 + Math.floor(uploadPercent * 0.25); // upload takes 60-85% of total
-              setUploadStage(`Uploading... ${uploadPercent}% (${Math.floor(event.loaded / 1024 / 1024)}MB / ${Math.floor(event.total / 1024 / 1024)}MB)`);
+              const totalProgress = 60 + Math.floor(uploadPercent * 0.20); // upload takes 60-80% of total
+              setUploadStage(`Uploading video... ${uploadPercent}% (${Math.floor(event.loaded / 1024 / 1024)}MB / ${Math.floor(event.total / 1024 / 1024)}MB)`);
               setUploadProgress(totalProgress);
             }
           });
@@ -476,6 +484,39 @@ export default function Page() {
         });
 
         console.log("(upload) S3 upload completed successfully");
+
+        // Upload thumbnail if we generated one
+        if (thumbnailBlob) {
+          try {
+            setUploadStage("Uploading thumbnail...");
+            setUploadProgress(80);
+            
+            const thumbnailUploadRes = await trpc.timelapse.uploadThumbnail.query({ 
+              id: uploadRes.data.timelapseId 
+            });
+            
+            if (thumbnailUploadRes.ok) {
+              await fetch(thumbnailUploadRes.data.uploadUrl, {
+                method: "PUT",
+                body: thumbnailBlob,
+                headers: {
+                  "Content-Type": "image/jpeg",
+                },
+              });
+
+              await trpc.timelapse.confirmThumbnailUpload.mutate({
+                id: uploadRes.data.timelapseId,
+                thumbnailKey: thumbnailUploadRes.data.thumbnailKey
+              });
+              
+              console.log("(upload) - thumbnail uploaded successfully");
+            }
+          }
+          catch (thumbnailUploadError) {
+            console.warn("(upload) - failed to upload thumbnail:", thumbnailUploadError);
+            // Continue without thumbnail - it's not critical
+          }
+        }
 
         setUploadStage("Finalizing timelapse...");
         setUploadProgress(85);
