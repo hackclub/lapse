@@ -1,7 +1,9 @@
 export function Skeleton({ className, lines = 1 }: {
-  className: string;
+  className?: string;
   lines?: number;
 }) {
+  className ??= "w-full";
+
   if (lines === 1) {
     return (
       <span className={`inline-block h-4 bg-slate rounded-xl animate-pulse ${className}`} />

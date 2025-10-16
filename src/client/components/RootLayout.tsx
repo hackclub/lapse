@@ -293,6 +293,7 @@ export default function RootLayout({
                   profilePictureUrl={currentUser.profilePictureUrl}
                   displayName={currentUser.displayName}
                   size="md"
+                  handle={currentUser.handle}
                 />
               )}
             </div>
