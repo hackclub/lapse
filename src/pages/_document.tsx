@@ -4,11 +4,11 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        <link rel="icon" type="image/x-icon" href="/src/app/favicon.ico" />
-        <link rel="icon" type="image/svg+xml" href="/src/app/icon0.svg" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/src/app/icon1.png" />
-        <link rel="apple-touch-icon" href="/src/app/apple-icon.png" />
-        <link rel="manifest" href="/src/app/manifest.json" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/svg+xml" href="/icon0.svg" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icon1.png" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-title" content="Lapse" />
       </Head>
       <body className="antialiased">

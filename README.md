@@ -17,7 +17,7 @@ We currently only officially support Hackatime. Sorry!
 ## Nerdy Details
 Lapse captures timestamped snapshots of a video feed (e.g. a user's screen or camera). Snapshots are always synchronized with the server, _and_ encrypted client-side with a key derived from:
 - the user's password (which is not stored on the server),
-- the UUID of the timelapse.
+- the ID of the timelapse.
 - a salt stored in the server's .env
 
 Currently, the algorithm used to encrypt snapshots is the browser-provided implementation of AES-256. Users can censor and remove snapshots before publishing them (giving the server the key and IV).
