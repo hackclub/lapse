@@ -199,3 +199,22 @@ export function closest<T>(x: number, array: T[] | number[], selector?: (item: T
 
     return numberArray.reduce((prev, curr) => Math.abs(curr - x) < Math.abs(prev - x) ? curr : prev);
 }
+
+/**
+ * Equivalent to `array.slice`, but acts as a generator instead.
+ */
+export function* slicedView<T>(array: T[], start: number, end: number) {
+    for (let i = start; i < end; i++) {
+        yield array[i];
+    }
+}
+
+/**
+ * Creates an array of chunks of size `n` derived from `array`.
+ * For example, an input of `( [1, 2, 3, 4, 5], 2 )` yields `[1, 2], [3, 4], [5]`.
+ */
+export function* chunked<T>(array: T[], n: number) {
+    for (let i = 0; i < array.length; i += n) {
+        yield array.slice(i, i + n);
+    }
+}

@@ -7,7 +7,7 @@ import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sd
 
 import { PrismaClient } from "@/generated/prisma";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { apiResult, ascending, err, match, when, ok, oneOf, closest } from "@/shared/common";
+import { apiResult, ascending, err, match, when, ok, oneOf, closest, chunked } from "@/shared/common";
 import { decryptVideo } from "@/server/encryption";
 import * as env from "@/server/env";
 import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE } from "@/shared/constants";
@@ -15,6 +15,8 @@ import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } fr
 import * as db from "@/generated/prisma";
 import { Hackatime, WakaTimeHeartbeat } from "@/server/hackatime";
 import { logError, logInfo } from "@/server/serverCommon";
+import { generateServerThumbnail } from "@/server/videoProcessing";
+import { PublicId } from "../common";
 
 const database = new PrismaClient();
 const s3 = new S3Client({
@@ -41,6 +43,9 @@ export function dtoTimelapse(entity: DbCompositeTimelapse): Timelapse {
         description: entity.description,
         visibility: entity.visibility,
         playbackUrl: `${entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED}/${entity.s3Key}`,
+        thumbnailUrl: entity.thumbnailS3Key 
+            ? `${entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED}/${entity.thumbnailS3Key}`
+            : null,
         videoContainerKind: entity.containerKind,
         isPublished: entity.isPublished
     };
@@ -105,6 +110,14 @@ export async function deleteTimelapse(timelapseId: string): Promise<void> {
         Key: timelapse.s3Key
     }));
 
+    // Also delete thumbnail if it exists
+    if (timelapse.thumbnailS3Key) {
+        await s3.send(new DeleteObjectCommand({
+            Bucket: timelapse.isPublished ? env.S3_PUBLIC_BUCKET_NAME : env.S3_ENCRYPTED_BUCKET_NAME,
+            Key: timelapse.thumbnailS3Key
+        }));
+    }
+
     await database.timelapse.delete({
         where: { id: timelapse.id }
     });
@@ -123,7 +136,7 @@ export const OwnedTimelapseSchema = z.object({
     /**
      * The ID of timelapse.
      */
-    id: z.uuid(),
+    id: PublicId,
 
     /**
      * Information about the owner/author of the timelapse.
@@ -155,6 +168,11 @@ export const OwnedTimelapseSchema = z.object({
      * video data will be encrypted with a device's passkey.
      */
     playbackUrl: z.url(),
+
+    /**
+     * The URL of the thumbnail image for this timelapse. Will be null if no thumbnail has been generated yet.
+     */
+    thumbnailUrl: z.url().nullable(),
 
     /**
      * The format of the video container.
@@ -196,9 +214,9 @@ export default router({
         .input(
             z.object({
                 /**
-                 * The UUID of the timelapse to query information about.
+                 * The ID of the timelapse to query information about.
                  */
-                id: z.uuid(),
+                id: PublicId,
             })
         )
         .output(
@@ -207,6 +225,8 @@ export default router({
             })
         )
         .query(async (req) => {
+            logInfo("snapshot/query", req.input);
+            
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
                 include: { owner: true, device: true }
@@ -245,9 +265,9 @@ export default router({
                 url: z.url(),
 
                 /**
-                 * The UUID of the timelapse that will be created.
+                 * The ID of the timelapse that will be created.
                  */
-                timelapseId: z.uuid()
+                timelapseId: PublicId
             })
         )
         .query(async (req) => {
@@ -287,9 +307,9 @@ export default router({
         .input(
             z.object({
                 /**
-                 * The UUID of the timelapse to be created. Must match the one returned by beginUpload.
+                 * The ID of the timelapse to be created. Must match the one returned by beginUpload.
                  */
-                id: z.uuid(),
+                id: PublicId,
 
                 name: TimelapseName,
                 description: TimelapseDescription,
@@ -372,13 +392,16 @@ export default router({
 
             const sortedSnapshots = req.input.snapshots.sort(ascending());
             
-            await database.snapshot.createMany({
-                data: sortedSnapshots.map((x, i) => ({
-                    timelapseId: timelapse.id,
-                    frame: i,
-                    createdAt: new Date(x)
-                }))
-            });
+            for (const batch of chunked(sortedSnapshots, 100)) {
+                await database.snapshot.createMany({
+                    skipDuplicates: true,
+                    data: batch.map((x, i) => ({
+                        timelapseId: timelapse.id,
+                        frame: i,
+                        createdAt: new Date(x)
+                    }))
+                });
+            }
 
             await database.draftTimelapse.delete({
                 where: { id: draft.id }
@@ -396,7 +419,7 @@ export default router({
                 /**
                  * The ID of the timelapse to update.
                  */
-                id: z.uuid(),
+                id: PublicId,
 
                 /**
                  * The changes to apply to the timelapse.
@@ -461,7 +484,7 @@ export default router({
     delete: protectedProcedure
         .input(
             z.object({
-                id: z.uuid(),
+                id: PublicId,
             })
         )
         .output(apiResult({}))
@@ -500,9 +523,9 @@ export default router({
         .input(
             z.object({
                 /**
-                 * The UUID of the timelapse to published.
+                 * The ID of the timelapse to published.
                  */
-                id: z.uuid(),
+                id: PublicId,
 
                 /**
                  * The device passkey used to decrypt the timelapse.
@@ -569,6 +592,24 @@ export default router({
                     ContentType: containerTypeToMimeType(timelapse.containerKind)
                 }));
 
+                // Generate and upload thumbnail
+                let thumbnailS3Key: string | null = null;
+                try {
+                    const thumbnailBuffer = await generateServerThumbnail(decryptedBuffer);
+                    thumbnailS3Key = timelapse.s3Key.replace(/\.(webm|mp4)$/, "-thumbnail.jpg");
+                    
+                    await s3.send(new PutObjectCommand({
+                        Bucket: env.S3_PUBLIC_BUCKET_NAME,
+                        Key: thumbnailS3Key,
+                        Body: thumbnailBuffer,
+                        ContentType: "image/jpeg"
+                    }));
+                }
+                catch (thumbnailError) {
+                    console.warn("Failed to generate thumbnail for published timelapse:", thumbnailError);
+                    // Continue without thumbnail
+                }
+
                 await s3.send(new DeleteObjectCommand({
                     Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                     Key: timelapse.s3Key,
@@ -576,7 +617,11 @@ export default router({
 
                 const publishedTimelapse = await database.timelapse.update({
                     where: { id: req.input.id },
-                    data: { isPublished: true, deviceId: null },
+                    data: { 
+                        isPublished: true, 
+                        deviceId: null,
+                        thumbnailS3Key: thumbnailS3Key
+                    },
                     include: { owner: true, device: true }
                 });
 
@@ -594,7 +639,7 @@ export default router({
     findByUser: procedure
         .input(
             z.object({
-                user: z.uuid(),
+                user: PublicId,
             })
         )
         .output(
@@ -634,7 +679,7 @@ export default router({
     syncWithHackatime: protectedProcedure
         .input(
             z.object({
-                id: z.uuid(),
+                id: PublicId,
                 hackatimeProject: z.string().min(1).max(128)
             })
         )
@@ -707,5 +752,116 @@ export default router({
             });
 
             return ok({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
+        }),
+
+    /**
+     * Uploads a thumbnail for a timelapse. This is typically used for non-published timelapses
+     * where thumbnails are generated on the client-side.
+     */
+    uploadThumbnail: protectedProcedure
+        .input(
+            z.object({
+                /**
+                 * The ID of the timelapse to upload a thumbnail for.
+                 */
+                id: PublicId
+            })
+        )
+        .output(
+            apiResult({
+                /**
+                 * The pre-signed URL to upload the thumbnail image to.
+                 */
+                uploadUrl: z.url(),
+
+                /**
+                 * The S3 key that will be used for the thumbnail.
+                 */
+                thumbnailKey: z.string()
+            })
+        )
+        .query(async (req) => {
+            logInfo("timelapse/uploadThumbnail", req.input);
+            
+            const timelapse = await database.timelapse.findFirst({
+                where: { id: req.input.id, ownerId: req.ctx.user.id }
+            });
+
+            if (!timelapse)
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
+
+            const thumbnailKey = timelapse.s3Key.replace(/\.(webm|mp4)$/, "-thumbnail.jpg");
+
+            const uploadUrl = await getSignedUrl(
+                s3,
+                new PutObjectCommand({
+                    Bucket: timelapse.isPublished ? env.S3_PUBLIC_BUCKET_NAME : env.S3_ENCRYPTED_BUCKET_NAME,
+                    Key: thumbnailKey,
+                    ContentType: "image/jpeg"
+                }),
+                {
+                    expiresIn: 15 * 60, // 15 minutes
+                }
+            );
+
+            return ok({
+                uploadUrl,
+                thumbnailKey
+            });
+        }),
+
+    /**
+     * Confirms that a thumbnail has been uploaded and updates the timelapse record.
+     */
+    confirmThumbnailUpload: protectedProcedure
+        .input(
+            z.object({
+                /**
+                 * The ID of the timelapse.
+                 */
+                id: PublicId,
+
+                /**
+                 * The S3 key of the uploaded thumbnail.
+                 */
+                thumbnailKey: z.string()
+            })
+        )
+        .output(
+            apiResult({
+                /**
+                 * The updated timelapse with thumbnail information.
+                 */
+                timelapse: OwnedTimelapseSchema
+            })
+        )
+        .mutation(async (req) => {
+            logInfo("timelapse/confirmThumbnailUpload", req.input);
+            
+            const timelapse = await database.timelapse.findFirst({
+                where: { id: req.input.id, ownerId: req.ctx.user.id }
+            });
+
+            if (!timelapse)
+                return err("NOT_FOUND", "Couldn't find that timelapse!");
+
+            try {
+                // Verify the thumbnail exists
+                await s3.send(new GetObjectCommand({
+                    Bucket: timelapse.isPublished ? env.S3_PUBLIC_BUCKET_NAME : env.S3_ENCRYPTED_BUCKET_NAME,
+                    Key: req.input.thumbnailKey,
+                }));
+
+                const updatedTimelapse = await database.timelapse.update({
+                    where: { id: req.input.id },
+                    data: { thumbnailS3Key: req.input.thumbnailKey },
+                    include: { owner: true, device: true }
+                });
+
+                return ok({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
+            }
+            catch {
+                return err("NOT_FOUND", "Uploaded thumbnail not found.");
+            }
         })
 });

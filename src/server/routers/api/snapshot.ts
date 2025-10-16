@@ -4,6 +4,8 @@ import { z } from "zod";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, err, ok, oneOf } from "@/shared/common";
 import * as db from "@/generated/prisma";
+import { PublicId } from "../common";
+import { logInfo } from "@/server/serverCommon";
 
 const database = new db.PrismaClient();
 
@@ -32,7 +34,7 @@ export const SnapshotSchema = z.object({
     /**
      * The ID of the timelapse this snapshot belongs to.
      */
-    timelapseId: z.uuid(),
+    timelapseId: PublicId,
 
     /**
      * The frame number in the timelapse sequence.
@@ -94,9 +96,9 @@ export default router({
         .input(
             z.object({
                 /**
-                 * The UUID of the timelapse to find snapshots for.
+                 * The ID of the timelapse to find snapshots for.
                  */
-                timelapseId: z.uuid(),
+                timelapseId: PublicId,
             })
         )
         .output(

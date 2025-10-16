@@ -4,10 +4,11 @@ import { z } from "zod";
 
 import * as db from "@/generated/prisma";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { apiResult, err, ok, when } from "@/shared/common";
+import { apiResult, assert, err, ok, when } from "@/shared/common";
 import { Hackatime, WakaTimeUserStats } from "@/server/hackatime";
-import { logError, logWarning } from "@/server/serverCommon";
+import { logError, logWarning, logInfo } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
+import { PublicId } from "../common";
 
 const database = new db.PrismaClient();
 
@@ -29,7 +30,7 @@ export const KnownDeviceSchema = z.object({
     /**
      * The ID of the device.
      */
-    id: z.string(),
+    id: z.uuid(),
 
     /**
      * A user-defined name for the device.
@@ -62,7 +63,7 @@ export const PublicUserSchema = z.object({
     /**
      * The unique ID of the user.
      */
-    id: z.uuid(),
+    id: PublicId,
 
     /**
      * The date when the user created their account.
@@ -185,9 +186,9 @@ export default router({
         .input(
             z.object({
                 /**
-                 * The UUID of the profile to query. Can be undefined if `handle` is specified.
+                 * The ID of the profile to query. Can be undefined if `handle` is specified.
                  */
-                id: z.uuid().optional(),
+                id: PublicId.optional(),
 
                 /**
                  * The handle of the profile to query. Can be undefined if `id` is specified.
@@ -210,11 +211,12 @@ export default router({
 
             if (req.input.handle) {
                 dbUser = await database.user.findFirst({
-                    where: { handle: req.input.handle },
+                    where: { handle: req.input.handle.trim() },
                     include: { devices: true }
                 });
             }
             else {
+                assert(req.input.id != undefined, "Both req.input.handle and req.input.id were undefined");
                 dbUser = await database.user.findFirst({
                     where: { id: req.input.id },
                     include: { devices: true }
@@ -242,7 +244,7 @@ export default router({
                  * The ID of the target user to edit. If the calling user has their permissionLevel set to "USER",
                  * this field can only be set to their ID.
                  */
-                id: z.uuid(),
+                id: PublicId,
 
                 /**
                  * The changes to apply to the user profile.
@@ -365,7 +367,7 @@ export default router({
                 /**
                  * The ID of the device to remove. The device must be owned by the calling user.
                  */
-                id: z.uuid()
+                id: PublicId
             })
         )
         .output(apiResult({}))
