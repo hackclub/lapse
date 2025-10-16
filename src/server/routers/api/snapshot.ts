@@ -60,6 +60,8 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
+            logInfo(`snapshot/delete(id: ${req.input.id})`);
+
             const snapshot = await database.snapshot.findFirst({
                 where: { id: req.input.id },
                 include: { timelapse: true },
@@ -106,6 +108,8 @@ export default router({
             })
         )
         .query(async (req) => {
+            logInfo(`snapshot/findByTimelapse(id: ${req.input.timelapseId})`);
+
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.timelapseId },
             });

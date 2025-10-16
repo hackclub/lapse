@@ -251,8 +251,7 @@ export default router({
             })
         )
         .query(async (req) => {
-            // Generate the timelapse ID before upload so it can be used for encryption
-
+            logInfo("snapshot/beginUpload", req.input);
             const key = `timelapses/${req.ctx.user.id}/${crypto.randomUUID()}.${containerTypeToExtension(req.input.containerType)}`;
 
             const uploadUrl = await getSignedUrl(
@@ -316,6 +315,8 @@ export default router({
             })
         )
         .mutation(async (req) => {
+            logInfo("snapshot/create", req.input);
+
             const draft = await database.draftTimelapse.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id }
             });
@@ -416,6 +417,8 @@ export default router({
             })
         )
         .mutation(async (req) => {
+            logInfo("snapshot/update", req.input);
+
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
             });
@@ -463,6 +466,8 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
+            logInfo("snapshot/delete", req.input);
+
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
             });
@@ -514,6 +519,8 @@ export default router({
             })
         )
         .mutation(async (req) => {
+            logInfo("timelapse/publish", req.input);
+            
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
             });
@@ -599,6 +606,8 @@ export default router({
             })
         )
         .query(async (req) => {
+            logInfo("timelapse/findByUser", req.input);
+            
             const isViewingSelf = req.ctx.user && req.ctx.user.id === req.input.user;
             const isAdmin = req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT"));
 
@@ -635,6 +644,8 @@ export default router({
             })
         )
         .mutation(async (req) => {
+            logInfo("timelapse/syncWithHackatime", req.input);
+            
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id },
                 include: { owner: true }

@@ -162,6 +162,8 @@ export default router({
             user: UserSchema.nullable()
         }))
         .query(async (req) => {
+            logInfo("user/myself", req.input);
+            
             if (!req.ctx.user)
                 return ok({ user: null });
 
@@ -199,6 +201,8 @@ export default router({
             })
         )
         .query(async (req) => {
+            logInfo("user/query", req.input);
+            
             if (!req.input.handle && !req.input.id)
                 return err("MISSING_PARAMS", "No handle or user ID specified"); 
 
@@ -261,6 +265,8 @@ export default router({
             })
         )
         .mutation(async (req) => {
+            logInfo("user/update", req.input);
+            
             // Check if user can edit this profile
             if (req.ctx.user.permissionLevel === "USER" && req.ctx.user.id !== req.input.id)
                 return err("NO_PERMISSION", "You can only edit your own profile");
@@ -311,6 +317,8 @@ export default router({
             })
         )
         .query(async (req) => {
+            logInfo("user/getDevices", req.input);
+            
             const devices = await database.knownDevice.findMany({
                 where: { ownerId: req.ctx.user.id }
             });
@@ -336,6 +344,8 @@ export default router({
             })
         )
         .mutation(async (req) => {
+            logInfo("user/registerDevice", req.input);
+            
             const device = await database.knownDevice.create({
                 data: {
                     name: req.input.name,
@@ -360,6 +370,8 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
+            logInfo("user/removeDevice", req.input);
+            
             const device = await database.knownDevice.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id }
             });
@@ -397,6 +409,8 @@ export default router({
         .input(z.object({}))
         .output(apiResult({}))
         .mutation(async (req) => {
+            logInfo("user/signOut", req.input);
+            
             if (req.ctx.res) {
                 req.ctx.res.setHeader("Set-Cookie", [
                     "lapse-auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; HttpOnly; SameSite=Lax"
