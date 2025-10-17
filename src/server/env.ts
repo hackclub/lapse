@@ -64,3 +64,13 @@ export const SLACK_CLIENT_SECRET = requiredEnv("SLACK_CLIENT_SECRET");
  * The secret key used for JWT token generation and verification.
  */
 export const JWT_SECRET = requiredEnv("JWT_SECRET");
+
+/**
+ * The 32-byte secret key used to generate encrypted upload tokens, represented as a 64 character hex string.
+ */
+export const UPLOAD_TOKEN_PRIVATE_KEY = requiredEnv("UPLOAD_TOKEN_PRIVATE_KEY");
+
+/**
+ * The 16-byte IV used to generate encrypted upload tokens, represented as a 32 character hex string.
+ */
+export const UPLOAD_TOKEN_IV = requiredEnv("UPLOAD_TOKEN_IV");

@@ -17,20 +17,33 @@ function dataToLogString(data: unknown[]) {
             .replace(/"([A-Za-z0-9_$]+)":/g, "$1:");
     }
 
-    return data
-        .map(x => typeof x === "string" ? x : inlineJson(x))
-        .join(" ")
-        .trim();
+    function stringify(x: unknown) {
+        if (typeof x === "string")
+            return x;
+
+        if (x instanceof Error)
+            return `\t${x.stack?.replaceAll("\n", "\n\t") ?? `${x.name}: ${x.message}`}`;
+
+        return inlineJson(x);
+    }
+
+    return data.map(stringify).join(" ").trim();
+}
+
+function getLogContent(severity: string, scope: string, ...data: unknown[]) {
+    const prefix = `(${scope}) ${severity}:`;
+    const stringified = dataToLogString(data).replaceAll("\n", `\n${prefix} `);
+    return `${prefix} ${stringified}`;
 }
 
 export function logInfo(scope: string, ...data: unknown[]) {
-    console.log(`(${scope}) info: ${dataToLogString(data)}`);
+    console.log(getLogContent("info", scope, ...data));
 }
 
 export function logWarning(scope: string, ...data: unknown[]) {
-    console.warn(`(${scope}) warn: ${dataToLogString(data)}`);
+    console.warn(getLogContent("warn", scope, ...data));
 }
 
 export function logError(scope: string, ...data: unknown[]) {
-    console.error(`(${scope}) error: ${dataToLogString(data)}`);
+    console.error(getLogContent("error", scope, ...data));
 }
