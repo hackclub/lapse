@@ -39,5 +39,5 @@ You'll need at least one root user in order to promote other users to admins. Yo
 ```sh
 # You'd probably want to use your production database URL here.
 export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
-node ./prisma/promote.js --email ascpixi@hackclub.com
+node ./prisma/promote.mjs --email ascpixi@hackclub.com
 ```

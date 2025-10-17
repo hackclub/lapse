@@ -1,7 +1,7 @@
 // @ts-check
 "use strict";
 
-import { PrismaClient } from "../src/generated/prisma";
+import { PrismaClient } from "../src/generated/prisma/index.js";
 import { parseArgs } from "node:util";
 import { confirm } from "@inquirer/prompts";
 
@@ -12,6 +12,8 @@ async function main() {
             email: { type: "string" }
         }
     });
+
+    console.log("");
 
     if (!args.values.email) {
         console.error("(error) No e-mail specified. Aborting.");
@@ -27,14 +29,18 @@ async function main() {
         return;
     }
 
-    console.log(`(info) This will promote ${user.handle} (${user.displayName}, ${user.email}) to a root user.`);
-    if (!await confirm({ message: "(info) Do you wish to continue? (Y/N)" }))
+    console.log(`(info) This will promote ${user.handle} (${user.displayName}, ID ${user.id}, ${user.email}) to a root user.`);
+    if (!await confirm({ message: "Do you wish to continue? (Y/N)" })) {
+        console.log("(info) Aborted. No changes were made.");
         return;
+    }
 
     await prisma.user.update({
         where: { id: user.id },
         data: { permissionLevel: "ROOT" }
     });
+
+    console.log("(info) User promoted successfully.");
 }
 
 main()
