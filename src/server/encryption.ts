@@ -1,6 +1,7 @@
 import "@/server/allow-only-server";
 
 import crypto from "crypto";
+import * as cbor from "cbor2";
 
 function deriveSalts(timelapseId: string): { keySalt: Buffer; ivSalt: Buffer } {
     // Use HMAC to derive deterministic salts from the timelapse ID
@@ -48,4 +49,36 @@ export function decryptVideo(
     ]);
     
     return decryptedBuffer;
+}
+
+export function encryptData(data: Buffer | Uint8Array, key: string, iv: string): Buffer {
+    const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(key, "hex"), Buffer.from(iv, "hex"));
+    const inputBuffer = data instanceof Uint8Array ? Buffer.from(data) : data;
+    const encryptedBuffer = Buffer.concat([
+        cipher.update(inputBuffer),
+        cipher.final()
+    ]);
+    
+    return encryptedBuffer;
+}
+
+export function decryptData(encryptedData: Buffer | Uint8Array, key: string, iv: string): Buffer {
+    const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(key, "hex"), Buffer.from(iv, "hex"));
+    const inputBuffer = encryptedData instanceof Uint8Array ? Buffer.from(encryptedData) : encryptedData;
+    const decryptedBuffer = Buffer.concat([
+        decipher.update(inputBuffer),
+        decipher.final()
+    ]);
+    
+    return decryptedBuffer;
+}
+
+export function encryptObject<T>(obj: T, key: string, iv: string): string {
+    const serialized = cbor.encode(obj);
+    return encryptData(serialized, key, iv).toString("base64url");
+}
+
+export function decryptObject<T>(encryptedData: string, key: string, iv: string): T {
+    const decrypted = decryptData(Buffer.from(encryptedData, "base64url"), key, iv);
+    return cbor.decode(decrypted) as T;
 }

@@ -80,6 +80,13 @@ export class VideoProcessor {
         }
     }
 
+    private async ffmpegExec(args: string[]) {
+        console.log("(ffmpeg) invoking ffmpeg:", args);
+
+        assert(this.ffmpeg != null, "this.ffmpeg was null when ffmpegExec was invoked");
+        return await this.ffmpeg.exec(args);
+    }
+
     /**
      * Concatenates multiple separately recorded streams of video together.
      */
@@ -124,7 +131,7 @@ export class VideoProcessor {
         console.log("(ffmpeg) concatenating!");
         ffmpegStartStep = currentStep;
 
-        await this.ffmpeg.exec([
+        await this.ffmpegExec([
             "-f", "concat",
             "-itsscale", ((1000 / TIMELAPSE_FRAME_LENGTH) / TIMELAPSE_FPS).toString(),
             "-i", "inputs.txt",
@@ -168,14 +175,14 @@ export class VideoProcessor {
         
         onProgress?.("Processing thumbnail...", 50);
         
-        // Extract frame at 1 second (or beginning if video is shorter)
+        // Extract meaningful thumbnail using thumbnail filter
         // Generate a 480x360 JPEG thumbnail
-        await this.ffmpeg.exec([
+        await this.ffmpegExec([
             "-i", "input.webm",
-            "-ss", "1",
-            "-vframes", "1",
-            "-vf", "scale=480:360:force_original_aspect_ratio=decrease,pad=480:360:(ow-iw)/2:(oh-ih)/2",
+            "-vf", "thumbnail,scale=480:360:force_original_aspect_ratio=decrease,pad=480:360:(ow-iw)/2:(oh-ih)/2",
+            "-frames:v", "1",
             "-q:v", "3",
+            "-y",
             "thumbnail.jpg"
         ]);
         

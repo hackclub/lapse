@@ -6,36 +6,24 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 
-/**
- * Generates a thumbnail image from video data using FFmpeg on the server.
- */
-export async function generateServerThumbnail(
-    videoBuffer: Buffer,
-    options?: {
-        width?: number;
-        height?: number;
-        timeOffset?: number;
-        quality?: number;
-    }
-): Promise<Buffer> {
-    const { width = 480, height = 360, timeOffset = 1, quality = 3 } = options || {};
-    
+import { logWarning } from "./serverCommon";
+
+export async function generateThumbnail(videoBuffer: Buffer): Promise<Buffer> {
     const tempDir = tmpdir();
     const inputPath = join(tempDir, `input-${randomUUID()}.mp4`);
     const outputPath = join(tempDir, `thumbnail-${randomUUID()}.jpg`);
     
+    const WIDTH = 480, HEIGHT = 360, QUALITY = 3;
+
     try {
-        // Write video buffer to temporary file
         await fs.writeFile(inputPath, videoBuffer);
-        
-        // Generate thumbnail using fluent-ffmpeg
+
         await new Promise<void>((resolve, reject) => {
             ffmpeg(inputPath)
-                .seekInput(timeOffset)
                 .outputOptions([
-                    "-vframes 1",
-                    `-vf scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
-                    `-q:v ${quality}`
+                    "-frames:v 1",
+                    `-vf thumbnail,scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease,pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2`,
+                    `-q:v ${QUALITY}`
                 ])
                 .output(outputPath)
                 .on("end", () => resolve())
@@ -43,33 +31,16 @@ export async function generateServerThumbnail(
                 .run();
         });
         
-        // Read the generated thumbnail
-        const thumbnailBuffer = await fs.readFile(outputPath);
-        
-        return thumbnailBuffer;
+        return await fs.readFile(outputPath);
     }
     finally {
-        // Clean up temporary files
-        try {
-            await fs.unlink(inputPath);
+        for (const path of [inputPath, outputPath]) {
+            try {
+                await fs.unlink(path);
+            }
+            catch (ex) {
+                logWarning("video", `could not delete temporary file ${path}:`, ex);
+            }
         }
-        catch {}
-        
-        try {
-            await fs.unlink(outputPath);
-        }
-        catch {}
     }
-}
-
-/**
- * Checks if FFmpeg is available on the system.
- */
-export function checkFFmpegAvailability(): Promise<boolean> {
-    return new Promise((resolve) => {
-        ffmpeg()
-            .getAvailableFormats((err) => {
-                resolve(!err);
-            });
-    });
 }

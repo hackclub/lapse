@@ -105,6 +105,14 @@ export interface EncryptedVideoStream {
     ivSalt: string;
 }
 
+export interface EncryptedDataStream {
+    data: ArrayBuffer;
+    key: string;
+    iv: string;
+    keySalt: string;
+    ivSalt: string;
+}
+
 async function deriveKeyIvPair(timelapseId: string, passkey?: string): Promise<KeyIvPair> {
     const actualPasskey = passkey || (await getCurrentDevice()).passkey;
     const { keySalt, ivSalt } = await deriveSalts(timelapseId);
@@ -155,16 +163,16 @@ async function deriveKeyIvPair(timelapseId: string, passkey?: string): Promise<K
     };
 }
 
-export async function encryptVideo(
-    videoBlob: Blob, 
+export async function encryptData(
+    dataBlob: Blob, 
     timelapseId: string,
     onProgress?: (stage: string, progress: number) => void
-): Promise<EncryptedVideoStream> {
+): Promise<EncryptedDataStream> {
     onProgress?.("Deriving encryption keys...", 5);
     const { key, iv, keySalt, ivSalt } = await deriveKeyIvPair(timelapseId);
     
-    onProgress?.("Reading video data...", 15);
-    const videoBuffer = await videoBlob.arrayBuffer();
+    onProgress?.("Reading data...", 15);
+    const dataBuffer = await dataBlob.arrayBuffer();
 
     onProgress?.("Preparing encryption...", 25);
     const cryptoKey = await crypto.subtle.importKey(
@@ -174,17 +182,15 @@ export async function encryptVideo(
         false,
         ["encrypt"]
     );
-
-    const totalSize = videoBuffer.byteLength;
     
-    onProgress?.("Encrypting video data...", 30);
+    onProgress?.("Encrypting data...", 30);
     
-    // Encrypt the entire video as one continuous stream to avoid IV reuse
+    // Encrypt the entire data as one continuous stream to avoid IV reuse
     // AES-CBC requires unique IVs or proper chaining between blocks
     const encryptedBuffer = await crypto.subtle.encrypt(
         { name: "AES-CBC", iv: iv },
         cryptoKey,
-        videoBuffer
+        dataBuffer
     );
     
     onProgress?.("Encryption complete", 100);
@@ -198,7 +204,15 @@ export async function encryptVideo(
     };
 }
 
-export async function decryptVideo(
+export async function encryptVideo(
+    videoBlob: Blob, 
+    timelapseId: string,
+    onProgress?: (stage: string, progress: number) => void
+): Promise<EncryptedVideoStream> {
+    return encryptData(videoBlob, timelapseId, onProgress);
+}
+
+export async function decryptData(
     encryptedData: ArrayBuffer | Uint8Array,
     timelapseId: string,
     passkey: string
@@ -224,4 +238,12 @@ export async function decryptVideo(
     );
 
     return decryptedBuffer;
+}
+
+export async function decryptVideo(
+    encryptedData: ArrayBuffer | Uint8Array,
+    timelapseId: string,
+    passkey: string
+): Promise<ArrayBuffer> {
+    return decryptData(encryptedData, timelapseId, passkey);
 }
