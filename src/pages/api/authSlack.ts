@@ -161,14 +161,11 @@ export default async function handler(
             });
         }
 
-        // Generate JWT token for authentication
         const authToken = generateJWT(dbUser.id, dbUser.email);
-
         res.setHeader("Set-Cookie", [
             `lapse-auth=${authToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`, // 30 days
         ]);
 
-        // Redirect to homepage with success
         return res.redirect("/?auth=success");
     }
     catch (error) {

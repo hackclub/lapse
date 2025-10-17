@@ -3,8 +3,8 @@ import "@/server/allow-only-server";
 import jwt from "jsonwebtoken";
 import { NextApiRequest } from "next";
 
-import { PrismaClient } from "../../generated/prisma";
-import { JWT_SECRET } from "../env";
+import { PrismaClient } from "@/generated/prisma";
+import * as env from "@/server/env";
 
 const database = new PrismaClient();
 
@@ -18,14 +18,14 @@ export interface JWTPayload {
 export function generateJWT(userId: string, email: string): string {
     return jwt.sign(
         { userId, email },
-        JWT_SECRET,
+        env.JWT_SECRET,
         { expiresIn: "30d" }
     );
 }
 
 export function verifyJWT(token: string): JWTPayload | null {
     try {
-        const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
+        const decoded = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload;
         return decoded as JWTPayload;
     }
     catch {
