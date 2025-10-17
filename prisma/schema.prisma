@@ -53,23 +53,63 @@ model User {
 
   timelapses            Timelapse[]
   devices               KnownDevice[]
+  uploadTokens          UploadToken[]
   draftTimelapses       DraftTimelapse[]
 }
 
+/// Represents a timelapse that has not yet been uploaded to the server.
 model DraftTimelapse {
-  /// The unique ID of the timelapse. Will become the ID of a regular `Timelapse` when
-  /// the entity is realized.
-  id                String        @id @default(nanoid(12))
+  /// The unique ID of the timelapse.
+  id                    String    @id @default(nanoid(12))
 
-  /// The S3 key that points to the object. An object must be uploaded with this key before
-  /// the entity is realized.
-  s3Key             String
+  ownerId               String
+  owner                 User          @relation(fields: [ownerId], references: [id])
 
-  /// The format of the container that will be uploaded to the S3 key.
-  containerKind     VideoContainerKind
+  videoTokenId          String        @unique
+  videoToken            UploadToken   @relation("DraftTimelapseVideoToken", fields: [videoTokenId], references: [id], onDelete: Cascade)
 
-  ownerId             String
-  owner               User        @relation(fields: [ownerId], references: [id])
+  thumbnailTokenId      String        @unique
+  thumbnailToken        UploadToken   @relation("DraftTimelapseThumbnailToken", fields: [thumbnailTokenId], references: [id], onDelete: Cascade)
+}
+
+/// Represents active upload tokens. A token is considered "used" when the client uploads a resource
+/// represented by the token, *and* consumes it via an API endpoint. When a token is used, it is
+/// deleted from this model. If a token reaches its expiry date before it's used, it will be deleted,
+/// and if an S3 object has been uploaded (but not used), it will be irreversibly removed.
+model UploadToken {
+  /// The unique ID of the token, shared with the client.
+  id        String      @id @default(uuid())
+
+  /// The S3 key that points to the object.
+  key       String
+
+  /// The name of the target bucket.
+  bucket    String
+
+  /// The MIME type for the S3 upload.
+  mimeType  String
+
+  /// `true` if `/api/upload` has been called on this token, and an S3 resource under
+  /// `key` and `bucket` exists and is associated with this token.
+  uploaded  Boolean     @default(false)
+
+  /// The time at which the token expires. After a token expires, it is considered "stale" -
+  /// it cannot be used by the owner, and it, alongside its associated S3 object, is subject
+  /// to deletion at any time.
+  expires   DateTime
+
+  /// The file size limit for this upload, in bytes.
+  maxSize   Int
+
+  /// The ID of the user that this token has been issued to. Only this user can use this token.
+  ownerId   String
+  owner     User        @relation(fields: [ownerId], references: [id])
+
+  /// If this token is used for a draft timelapse video stream, this field points to said timelapse.
+  asVideoToken        DraftTimelapse?   @relation("DraftTimelapseVideoToken")
+
+  /// If this token is used in a draft timelapse thumbnail, this field points to said timelapse.
+  asThumbnailToken    DraftTimelapse?   @relation("DraftTimelapseThumbnailToken")
 }
 
 model Timelapse {
