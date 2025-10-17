@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+/**
+ * Represents the structure of a JSON API response.
+ */
+export type ApiResult<T> =
+    { ok: true, data: T } |
+    { ok: false, error: ApiError, message: string };
+
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 export const ApiErrorSchema = z.enum([
     "ERROR",
@@ -123,7 +130,7 @@ export function unwrap<T>(obj: T | undefined, err?: string): T {
  * });
  * ```
  */
-export function match<K extends string, T>(selector: K, cases: Record<K, T>) {
+export function match<K extends string | number, T>(selector: K, cases: Record<K, T>) {
     if (!(selector in cases)) {
         console.error("Could not find", selector, "from cases", cases);
         throw new Error(`Could not match value ${selector} in "match" block`);
@@ -218,3 +225,12 @@ export function* chunked<T>(array: T[], n: number) {
         yield array.slice(i, i + n);
     }
 }
+
+export type Ok<T> = { ok: true, value: T };
+export type Err = { ok: false, error: string };
+export type Result<T> = Ok<T> | Err;
+
+/**
+ * Represents an empty object (`{}`).
+ */
+export type Empty = Record<string, never>;
