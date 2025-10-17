@@ -1,7 +1,6 @@
 import "@/server/allow-only-server";
 
 import crypto from "crypto";
-import * as cbor from "cbor2";
 
 function deriveSalts(timelapseId: string): { keySalt: Buffer; ivSalt: Buffer } {
     // Use HMAC to derive deterministic salts from the timelapse ID
@@ -71,14 +70,4 @@ export function decryptData(encryptedData: Buffer | Uint8Array, key: string, iv:
     ]);
     
     return decryptedBuffer;
-}
-
-export function encryptObject<T>(obj: T, key: string, iv: string): string {
-    const serialized = cbor.encode(obj);
-    return encryptData(serialized, key, iv).toString("base64url");
-}
-
-export function decryptObject<T>(encryptedData: string, key: string, iv: string): T {
-    const decrypted = decryptData(Buffer.from(encryptedData, "base64url"), key, iv);
-    return cbor.decode(decrypted) as T;
 }
