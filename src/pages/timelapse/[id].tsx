@@ -25,7 +25,7 @@ import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
 import { SelectInput } from "@/client/components/ui/SelectInput";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
-import { createVideoProcessor, generateThumbnail } from "@/client/videoProcessing";
+
 
 export default function Page() {
   const router = useRouter();
@@ -134,9 +134,6 @@ export default function Page() {
           const url = URL.createObjectURL(videoBlob);
           setVideoObjUrl(url);
           video.src = url;
-
-          // Generate thumbnail for encrypted video if it doesn't have one yet
-          generateThumbnailForEncryptedVideo(videoBlob, timelapse.id);
         }
         catch (decryptionError) {
           console.warn("(timelapse/[id]) decryption failed:", decryptionError);
@@ -347,54 +344,7 @@ export default function Page() {
 
   const isApiKeyDisabled = !hackatimeApiKey.trim() || isSettingApiKey;
 
-  // Generate thumbnail for encrypted videos
-  const generateThumbnailForEncryptedVideo = async (videoBlob: Blob, timelapseId: string) => {
-    if (!timelapse || timelapse.isPublished || timelapse.thumbnailUrl)
-      return;
 
-    try {
-      console.log("(timelapse/[id]) generating thumbnail for encrypted video...");
-      
-      const processor = await createVideoProcessor();
-      const thumbnailBlob = await generateThumbnail(processor, videoBlob);
-      
-      // Get upload URL from server
-      const uploadResult = await trpc.timelapse.uploadThumbnail.query({ id: timelapseId });
-      if (!uploadResult.ok) {
-        console.warn("Failed to get thumbnail upload URL:", uploadResult);
-        return;
-      }
-
-      // Upload thumbnail
-      const uploadResponse = await fetch(uploadResult.data.uploadUrl, {
-        method: "PUT",
-        body: thumbnailBlob,
-        headers: {
-          "Content-Type": "image/jpeg",
-        },
-      });
-
-      if (!uploadResponse.ok) {
-        console.warn("Failed to upload thumbnail:", uploadResponse.status);
-        return;
-      }
-
-      // Confirm upload with server
-      const confirmResult = await trpc.timelapse.confirmThumbnailUpload.mutate({
-        id: timelapseId,
-        thumbnailKey: uploadResult.data.thumbnailKey
-      });
-
-      if (confirmResult.ok) {
-        setTimelapse(confirmResult.data.timelapse);
-        console.log("(timelapse/[id]) thumbnail generated and uploaded successfully!");
-      }
-    }
-    catch (error) {
-      console.warn("(timelapse/[id]) failed to generate thumbnail:", error);
-      // Don't show error to user - thumbnails are not critical
-    }
-  };
 
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;

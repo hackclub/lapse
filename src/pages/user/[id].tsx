@@ -16,6 +16,7 @@ import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
+import { ThumbnailImage } from "@/client/components/ThumbnailImage";
 import { matchOrDefault } from "@/shared/common";
 
 export default function Page() {
@@ -25,7 +26,6 @@ export default function Page() {
   const [user, setUser] = useState<User | PublicUser | null>(null);
   const [timelapses, setTimelapses] = useState<Timelapse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState("");
@@ -43,12 +43,10 @@ export default function Page() {
       const { id } = router.query;
       if (typeof id !== "string") {
         setError("Invalid user ID");
-        setLoading(false);
         return;
       }
 
       try {
-        setLoading(true);
 
         const userRes = await trpc.user.query.query(
           id.startsWith("@") ? { handle: id.substring(1).trim() } : { id } 
@@ -81,9 +79,6 @@ export default function Page() {
         console.error("Error fetching user data:", err);
         setError("Failed to load user profile");
       }
-      finally {
-        setLoading(false);
-      }
     }
 
     fetchUserData();
@@ -100,10 +95,10 @@ export default function Page() {
 
   const validateUrl = (url: string): boolean => {
     try {
-      const trimmedUrl = url.trim();
-      if (!trimmedUrl) return true; // Empty URLs are allowed and will be filtered out
+      if (!url.trim())
+        return true;
       
-      new URL(trimmedUrl);
+      new URL(url.trim());
       return true;
     }
     catch {
@@ -185,30 +180,15 @@ export default function Page() {
               className="bg-darkless rounded-lg overflow-hidden hover:bg-dark transition-colors cursor-pointer"
               onClick={() => router.push(`/timelapse/${timelapse.id}`)}
             >
-              <div className="w-full aspect-video bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center relative overflow-hidden">
-                {timelapse.thumbnailUrl ? (
-                  <>
-                    <img
-                      src={timelapse.thumbnailUrl}
-                      alt={`${timelapse.name} thumbnail`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Hide image on error and show fallback
-                        e.currentTarget.style.display = 'none';
-                        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                        if (fallback) fallback.style.display = 'flex';
-                      }}
-                    />
-                    <div 
-                      className="absolute inset-0 flex items-center justify-center" 
-                      style={{ display: 'none' }}
-                    >
-                      <Icon glyph="history" size={48} className="text-white opacity-80" />
-                    </div>
-                  </>
-                ) : (
-                  <Icon glyph="history" size={48} className="text-white opacity-80" />
-                )}
+              <div className="w-full aspect-video relative overflow-hidden">
+                <ThumbnailImage
+                  timelapseId={timelapse.id}
+                  thumbnailUrl={timelapse.thumbnailUrl}
+                  isPublished={timelapse.isPublished}
+                  deviceId={timelapse.private?.device?.id}
+                  alt={`${timelapse.name} thumbnail`}
+                  className="w-full h-full object-cover"
+                />
               </div>
 
               <div className="p-4">

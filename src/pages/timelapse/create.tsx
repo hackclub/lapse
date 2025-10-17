@@ -12,14 +12,15 @@ import { ErrorModal } from "@/client/components/ui/ErrorModal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { SelectInput } from "@/client/components/ui/SelectInput";
-import { deviceStorage, LocalTimelapse, LocalSnapshot, LocalChunk } from "@/client/deviceStorage";
+import { deviceStorage, LocalSnapshot } from "@/client/deviceStorage";
 import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "@/client/videoProcessing";
-import { encryptVideo, getCurrentDevice } from "@/client/encryption";
+import { encryptVideo, encryptData, getCurrentDevice } from "@/client/encryption";
 import { trpc } from "@/client/trpc";
 import { assert } from "@/shared/common";
 import { TIMELAPSE_FRAME_LENGTH } from "@/shared/constants";
 import { useOnce } from "@/client/hooks/useOnce";
 import { useAuth } from "@/client/hooks/useAuth";
+import { apiUpload } from "@/client/upload";
 
 export default function Page() {
   const router = useRouter();
@@ -91,6 +92,7 @@ export default function Page() {
         if (!sessionGroups.has(snapshot.session)) {
           sessionGroups.set(snapshot.session, []);
         }
+
         sessionGroups.get(snapshot.session)!.push(snapshot);
       }
 
@@ -154,7 +156,6 @@ export default function Page() {
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
-    // Request data from MediaRecorder after drawing frame
     if (recorder && recorder.state === "recording") {
       recorder.requestData();
     }
@@ -166,12 +167,11 @@ export default function Page() {
     const newFrameCount = frameCountRef.current;
     frameCountRef.current += 1;
     
-    const snapshot: LocalSnapshot = {
+    deviceStorage.saveSnapshot({
       createdAt: Date.now(),
       session: currentSession
-    };
+    });
 
-    deviceStorage.saveSnapshot(snapshot);
     setFrameCount(newFrameCount);
   }, [recorder, currentTimelapseId, currentSession]);
 
@@ -193,22 +193,20 @@ export default function Page() {
       frameCountRef.current = 0;
       setIsCreated(true);
 
-      const timelapseData: Omit<LocalTimelapse, "id"> = {
+      const timelapseId = await deviceStorage.saveTimelapse({
         name,
         description,
         startedAt: now.getTime(),
         chunks: [],
         isActive: true,
-      };
+      });
 
-      const timelapseId = await deviceStorage.saveTimelapse(timelapseData);
       setCurrentTimelapseId(timelapseId);
       activeTimelapseId = timelapseId;
 
       console.log(`(timelapse/create) new local timelapse created with ID ${timelapseId}`);
     }
     else {
-      // Updating existing timelapse
       if (currentTimelapseId) {
         const existingTimelapse = await deviceStorage.getTimelapse(currentTimelapseId);
 
@@ -402,42 +400,28 @@ export default function Page() {
         
         console.log("(upload) - merged session data:", merged);
 
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(merged);
-        a.download = "merged.webm";
-        a.click();
-        a.remove();
-
-        // Generate thumbnail from the merged video
         setUploadStage("Generating thumbnail...");
         setUploadProgress(25);
-        let thumbnailBlob: Blob | null = null;
-        
-        try {
-          thumbnailBlob = await videoProcessor.generateThumbnail(merged, (stage, progress) => {
-            setUploadStage(stage);
-            setUploadProgress(25 + Math.floor(progress * 0.05)); // 25-30%
-          });
 
-          console.log("(upload) thumbnail generated:", thumbnailBlob);
-        }
-        catch (thumbnailError) {
-          console.warn("(upload) failed to generate thumbnail:", thumbnailError);
-          // Continue without thumbnail - it's not critical for the upload process
-        }
+        const thumbnail = await videoProcessor.generateThumbnail(merged, (stage, progress) => {
+          setUploadStage(stage);
+          setUploadProgress(25 + Math.floor(progress * 0.05)); // 25-30%
+        });
+
+        console.log("(upload) thumbnail generated:", thumbnail);
 
         setUploadStage("Requesting upload URL...");
         setUploadProgress(30);
-        const uploadRes = await trpc.timelapse.beginUpload.query({ containerType: "WEBM" });
-        console.log("(upload) timelapse.beginUpload response:", uploadRes);
+        const uploadRes = await trpc.timelapse.createDraft.query({ containerType: "WEBM" });
+        console.log("(upload) timelapse.createDraft response:", uploadRes);
 
         if (!uploadRes.ok)
-          throw new Error(uploadRes.error);
+          throw new Error(uploadRes.message);
 
         setUploadStage("Encrypting video...");
         setUploadProgress(35);
 
-        const encrypted = await encryptVideo(merged, uploadRes.data.timelapseId, (stage, progress) => {
+        const encrypted = await encryptVideo(merged, uploadRes.data.id, (stage, progress) => {
           setUploadStage(stage);
           setUploadProgress(35 + Math.floor(progress * 0.25)); // 35-60%
         });
@@ -446,77 +430,41 @@ export default function Page() {
 
         setUploadStage("Uploading video to server...");
         setUploadProgress(60);
-        console.log(`(upload) uploading now to ${uploadRes.data.url}`);
+        console.log("(upload) uploading video via proxy endpoint");
 
-        // We're using XHR here instead of fetch() because we want to track the progress.
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          
-          xhr.upload.addEventListener("progress", (event) => {
-            if (event.lengthComputable) {
-              const uploadPercent = Math.floor((event.loaded / event.total) * 100);
-              const totalProgress = 60 + Math.floor(uploadPercent * 0.20); // upload takes 60-80% of total
-              setUploadStage(`Uploading video... ${uploadPercent}% (${Math.floor(event.loaded / 1024 / 1024)}MB / ${Math.floor(event.total / 1024 / 1024)}MB)`);
-              setUploadProgress(totalProgress);
-            }
-          });
+        const vidStatus = await apiUpload(
+          uploadRes.data.videoToken,
+          new Blob([encrypted.data], { type: "video/webm" })
+        );
+        
+        if (!vidStatus.ok)
+          throw new Error(vidStatus.message);
 
-          xhr.addEventListener("load", () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-            }
-            else {
-              reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}`));
-            }
-          });
+        setUploadProgress(80);
 
-          xhr.addEventListener("error", () => {
-            reject(new Error("Network error during upload"));
-          });
+        console.log("(upload) video uploaded successfully", vidStatus);
 
-          xhr.addEventListener("abort", () => {
-            reject(new Error("Upload was aborted"));
-          });
+        setUploadStage("Encrypting thumbnail...");
+        setUploadProgress(75);
 
-          xhr.open("PUT", uploadRes.data.url);
-          xhr.setRequestHeader("Content-Type", "video/webm");
-          xhr.send(encrypted.data);
+        const encryptedThumbnail = await encryptData(thumbnail, uploadRes.data.id, (stage, progress) => {
+          setUploadStage(stage);
+          setUploadProgress(75 + Math.floor(progress * 0.05)); // 75-80%
         });
 
-        console.log("(upload) S3 upload completed successfully");
+        console.log("(upload) - encrypted thumbnail:", encryptedThumbnail);
 
-        // Upload thumbnail if we generated one
-        if (thumbnailBlob) {
-          try {
-            setUploadStage("Uploading thumbnail...");
-            setUploadProgress(80);
-            
-            const thumbnailUploadRes = await trpc.timelapse.uploadThumbnail.query({ 
-              id: uploadRes.data.timelapseId 
-            });
-            
-            if (thumbnailUploadRes.ok) {
-              await fetch(thumbnailUploadRes.data.uploadUrl, {
-                method: "PUT",
-                body: thumbnailBlob,
-                headers: {
-                  "Content-Type": "image/jpeg",
-                },
-              });
-
-              await trpc.timelapse.confirmThumbnailUpload.mutate({
-                id: uploadRes.data.timelapseId,
-                thumbnailKey: thumbnailUploadRes.data.thumbnailKey
-              });
-              
-              console.log("(upload) - thumbnail uploaded successfully");
-            }
-          }
-          catch (thumbnailUploadError) {
-            console.warn("(upload) - failed to upload thumbnail:", thumbnailUploadError);
-            // Continue without thumbnail - it's not critical
-          }
-        }
+        setUploadStage("Uploading thumbnail...");
+        setUploadProgress(80);
+        
+        const thumbnailStatus = await apiUpload(
+          uploadRes.data.thumbnailToken,
+          new Blob([encryptedThumbnail.data], { type: "image/jpeg" })
+        );
+        if (!thumbnailStatus.ok)
+          throw new Error(thumbnailStatus.message);
+        
+        console.log("(upload) thumbnail uploaded successfully", thumbnailStatus);
 
         setUploadStage("Finalizing timelapse...");
         setUploadProgress(85);
@@ -528,8 +476,8 @@ export default function Page() {
         console.log("(upload) - description:", description);
         console.log("(upload) - snapshots:", snapshotTimestamps);
 
-        const createRes = await trpc.timelapse.create.mutate({
-          id: uploadRes.data.timelapseId,
+        const createRes = await trpc.timelapse.commit.mutate({
+          id: uploadRes.data.id,
           name,
           description,
           visibility: "UNLISTED",
@@ -650,7 +598,8 @@ export default function Page() {
                 ref={setupPreviewRef}
                 autoPlay
                 muted
-                className="w-full h-auto rounded-md"
+                className="h-auto rounded-md"
+                style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
               />
             </div>
           )}
@@ -721,7 +670,8 @@ export default function Page() {
               ref={mainPreviewRef}
               autoPlay
               muted
-              className="w-full h-full object-cover rounded-[48px]"
+              className="h-full rounded-[48px]"
+              style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
             />
             <canvas ref={canvasRef} className="hidden" />
           </div>
