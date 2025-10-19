@@ -217,6 +217,29 @@ export function* slicedView<T>(array: T[], start: number, end: number) {
 }
 
 /**
+ * Generates a random number between `min` (inclusive) and `max` (exclusive).
+ */
+export function rng(min: number, max: number) {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min)) + min;
+}
+
+/**
+ * Similar to `rng`, but generates a floating-point number instead.
+ */
+export function frng(min: number, max: number) {
+    return Math.random() * (max - min) + min;
+}
+
+/**
+ * Picks a random element from the given array.
+ */
+export function pickRandom<T>(array: T[]) {
+    return array[rng(0, array.length)];
+}
+
+/**
  * Creates an array of chunks of size `n` derived from `array`.
  * For example, an input of `( [1, 2, 3, 4, 5], 2 )` yields `[1, 2], [3, 4], [5]`.
  */

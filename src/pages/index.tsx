@@ -8,6 +8,7 @@ import RootLayout from "@/client/components/RootLayout";
 import { Button } from "@/client/components/ui/Button";
 
 import LapseIcon from "@/client/assets/icon.svg";
+import { frng, pickRandom } from "@/shared/common";
 
 export default function Home() {
   const router = useRouter();
@@ -29,7 +30,33 @@ export default function Home() {
             <div className="flex flex-col gap-8">
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col items-center justify-center gap-8">
-                  <LapseIcon className="w-32" />
+                  <LapseIcon
+                    className="w-32 select-none hover:scale-105 transition-transform active:scale-95"
+                    onClick={(ev: MouseEvent) => {
+                      // this plays a silly sound every time the user clicks on the logo! :D
+                      let sound = pickRandom([
+                        "eep.wav",
+                        "quack.wav"
+                      ]);
+
+                      if (Math.random() < 0.1) {
+                        sound = "chrismeow.wav"; // mr. chris walker meowing.
+                      }
+
+                      const audio = new Audio(`/audio/${sound}`);
+                      
+                      audio.preservesPitch = false;
+                      audio.playbackRate = frng(0.8, 1.2);
+                      audio.onended = () => audio.remove();
+                      audio.play();
+
+                      console.log(ev);
+                      if (ev.target instanceof SVGElement) {
+                        ev.target.style.cursor = "pointer";
+                      }
+                    }}
+                  />
+
                   <h1 className="text-6xl font-bold text-smoke leading-tight">
                     Lapse <sup>α</sup>
                   </h1>
