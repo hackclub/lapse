@@ -50,7 +50,6 @@ export default function Home() {
                       audio.onended = () => audio.remove();
                       audio.play();
 
-                      console.log(ev);
                       if (ev.target instanceof SVGElement) {
                         ev.target.style.cursor = "pointer";
                       }
