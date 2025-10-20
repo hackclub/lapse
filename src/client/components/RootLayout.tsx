@@ -162,7 +162,7 @@ export default function RootLayout({
     }
 
     const unpublishedTimelapses = res.data.timelapses.filter(
-      t => "private" in t && t.private && t.private.device?.id === deviceId && !t.isPublished
+      (t: Timelapse) => "private" in t && t.private && t.private.device?.id === deviceId && !t.isPublished
     );
 
     if (unpublishedTimelapses.length > 0) {
