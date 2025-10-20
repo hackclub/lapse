@@ -3,7 +3,7 @@
     Hack Club Lapse
 </h1>
 
-[**Lapse**](https://lapse.hackclub.com) is a place for Hack Clubbers to record and share timelapses. Integrates with [Hackatime](https://hackatime.hackclub.com)!
+[**Lapse**](https://lapse.hackclub.com) is a place for Hack Clubbers to record and share timelapses. Integrates with [Hackatime](https://hackatime.hackclub.com)! Lapse is currently in closed beta.
 
 ## Introduction
 Lapse helps you track time for anything that Hackatime is incapable of tracking. You record a timelapse of you doing something, publish it, and register your time in Hackatime! It's also a place for you to share your timelapses with others.
@@ -34,10 +34,21 @@ Deploying Lapse is largely the same as deploying [any other Next.js web app](htt
 
 Lapse uses Prisma with the PostgreSQL adapter - this means you'll also need a PostgreSQL database. Set the `DATABASE_URL` environment variable to the connection string of your database.
 
-You'll need at least one root user in order to promote other users to admins. You can do this via the [`./prisma/promote.js`](./prisma/promote.js) script:
+You'll need at least one root user in order to promote other users to admins. You can do this via the [`./prisma/promote.mjs`](./prisma/promote.mjs) script:
 
 ```sh
 # You'd probably want to use your production database URL here.
 export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
 node ./prisma/promote.mjs --email ascpixi@hackclub.com
+```
+
+As Lapse is a closed beta, all users that sign up will be assigned a permission level of `UNCONFIRMED`. In order to accept a user's request to join the beta, use the [`./prisma/approve.mjs`](./prisma/approve.mjs) script:
+
+```sh
+# Same deal as with promote.mjs.
+export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
+
+node ./prisma/approve.mjs # list all users pending approval
+node ./prisma/approve.mjs --email ascpixi@hackclub.com # approve via email
+node ./prisma/approve.mjs --slackId U082DPCGPST # approve via Slack ID
 ```
