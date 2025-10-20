@@ -263,7 +263,7 @@ export default router({
      * This endpoint is planned to support chunked video uploads in the future. This will make draft
      * timelapses have a longer lifespan, with their upload tokens being able to be re-used.
      */
-    createDraft: protectedProcedure
+    createDraft: protectedProcedure()
         .input(z.object({
             /**
              * The container format of the video stream. This will be used to derive the MIME type
@@ -330,7 +330,7 @@ export default router({
     /**
      * Commits a draft timelapse.
      */
-    commit: protectedProcedure
+    commit: protectedProcedure()
         .input(
             z.object({
                 id: PublicId,
@@ -430,7 +430,7 @@ export default router({
     /**
      * Updates the metadata of a timelapse.
      */
-    update: protectedProcedure
+    update: protectedProcedure()
         .input(
             z.object({
                 /**
@@ -498,7 +498,7 @@ export default router({
     /**
      * Permanently deletes a timelapse owned by the user.
      */
-    delete: protectedProcedure
+    delete: protectedProcedure()
         .input(
             z.object({
                 id: PublicId,
@@ -536,7 +536,7 @@ export default router({
      * Publishes a timelapse, making it immutable and accessible by administrators. This will decrypt
      * all of the segments contained within the timelapse. If not unlisted, will also make the timelapse public.
      */
-    publish: protectedProcedure
+    publish: protectedProcedure()
         .input(
             z.object({
                 /**
@@ -693,7 +693,7 @@ export default router({
      * Synchronizes a timelapse with a Hackatime project, converting all snapshots into heartbeats.
      * This procedure can only be called **once** for a timelapse.
      */
-    syncWithHackatime: protectedProcedure
+    syncWithHackatime: protectedProcedure()
         .input(
             z.object({
                 id: PublicId,

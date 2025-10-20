@@ -6,7 +6,7 @@ import type { User } from "@/server/routers/api/user";
 import { trpc } from "../trpc";
 import { useOnce } from "./useOnce";
 
-export function useAuth(required: boolean) {
+export function useAuth(required: boolean, allowUnconfirmed = true) {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -24,6 +24,13 @@ export function useAuth(required: boolean) {
                 router.push("/auth");
             }
 
+            setIsLoading(false);
+            return;
+        }
+
+        if (!allowUnconfirmed && req.data.user.private.permissionLevel == "UNCONFIRMED") {
+            console.log("(auth) user needs to be confirmed to access this page");
+            router.push("/");
             setIsLoading(false);
             return;
         }

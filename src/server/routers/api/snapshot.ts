@@ -51,7 +51,7 @@ export default router({
     /**
      * Deletes a snapshot.
      */
-    delete: protectedProcedure
+    delete: protectedProcedure()
         .input(
             z.object({
                 /**

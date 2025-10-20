@@ -5,7 +5,7 @@ import { z } from "zod";
 import * as db from "@/generated/prisma";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, assert, err, ok, when } from "@/shared/common";
-import { Hackatime, WakaTimeUserStats } from "@/server/hackatime";
+import { Hackatime } from "@/server/hackatime";
 import { logError, logWarning, logInfo } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { PublicId } from "../common";
@@ -17,6 +17,7 @@ const database = new db.PrismaClient();
  */
 export type PermissionLevel = z.infer<typeof PermissionLevelSchema>;
 export const PermissionLevelSchema = z.enum([
+    "UNCONFIRMED", // unconfirmed closed beta user, equivalent to unregistered
     "USER",  // normal permissions
     "ADMIN", // same as "USER", but adds the ability to remove and review projects
     "ROOT", // same as "ADMIN", but adds the ability to change the permissions of non-owners, alongside full project editing permissions
@@ -237,7 +238,7 @@ export default router({
     /**
      * Updates user profile information.
      */
-    update: protectedProcedure
+    update: protectedProcedure({ allowUnconfirmed: true })
         .input(
             z.object({
                 /**
@@ -285,18 +286,13 @@ export default router({
             if (changes.hackatimeApiKey) {
                 const hackatime = new Hackatime(changes.hackatimeApiKey);
 
-                let stats: WakaTimeUserStats;
-
                 try {
-                    stats = await hackatime.currentUserStats();
+                    await hackatime.currentUserStats();
                 }
                 catch (ex) {
                     logWarning("user.update", "Error caught when verifying a Hackatime API key!", ex);
                     return err("HACKATIME_ERROR", "You provided an invalid Hackatime API key!");
                 }
-
-                // Hackatime has these as Slack IDs - not entirely sure why, but we'll go with this
-                updateData.knownSlackId = stats.data.user_id ?? stats.data.username;
             }
 
             const updatedUser = await database.user.update({
@@ -311,7 +307,7 @@ export default router({
     /**
      * Gets all devices registered by the currently authenticated user.
      */
-    getDevices: protectedProcedure
+    getDevices: protectedProcedure({ allowUnconfirmed: true })
         .input(z.object({}))
         .output(
             apiResult({
@@ -331,7 +327,7 @@ export default router({
     /**
      * Creates a new device owned by a user, allocating a new, unique ID.
      */
-    registerDevice: protectedProcedure
+    registerDevice: protectedProcedure()
         .input(
             z.object({
                 /**
@@ -361,7 +357,7 @@ export default router({
     /**
      * Removes a device owned by a user.
      */
-    removeDevice: protectedProcedure
+    removeDevice: protectedProcedure()
         .input(
             z.object({
                 /**

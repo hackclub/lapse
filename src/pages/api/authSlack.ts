@@ -135,7 +135,7 @@ export default async function handler(
                     profilePictureUrl: slackUser.image_original || slackUser.image_192 || "",
                     bio: "",
                     urls: [],
-                    permissionLevel: "USER",
+                    permissionLevel: "UNCONFIRMED",
                     createdAt: new Date(),
                     hackatimeApiKey: null,
                 },
