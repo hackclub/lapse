@@ -57,15 +57,15 @@ export default function Home() {
                   />
 
                   <h1 className="text-6xl font-bold text-smoke leading-tight">
-                    Lapse <sup>α</sup>
+                    Lapse <sup>β</sup>
                   </h1>
                 </div>
                 
                 <p className="text-smoke text-xl leading-relaxed">
                   {
                     currentUser
-                      ? <>Thank you for participating in the alpha, <span className="text-cyan font-bold">{currentUser.displayName}</span>!</>
-                      : <>Lapse is a timelapse recording tool, currently in alpha.</>
+                      ? <>Thank you for participating in the beta, <span className="text-cyan font-bold">{currentUser.displayName}</span>!</>
+                      : <>Lapse is a timelapse recording tool, currently in closed beta.</>
                   }
                 </p>
               </div>
