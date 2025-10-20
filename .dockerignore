@@ -1,0 +1,48 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+.nyc_output
+
+# Next.js
+.next/
+out/
+build/
+
+# Production
+dist
+
+# Misc
+.DS_Store
+*.tsbuildinfo
+.env*.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
