@@ -4,7 +4,7 @@ FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS deps
 WORKDIR /app
 
 # Copy only lockfile & manifest so `bun install` can be cached
-COPY bun.lockb package.json ./
+COPY bun.lock package.json ./
 # Copy prisma directory for schema generation during postinstall
 COPY prisma ./prisma
 
@@ -64,5 +64,5 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
 EXPOSE 3000
 
-# Run migrations, then start NextJS (standalone ships server.js)
-CMD ["sh","-c","bun run db:migrate && HOSTNAME=0.0.0.0 bun run server.js"]
+# Run db push to create schema, then start NextJS (standalone ships server.js)
+CMD ["sh","-c","bun run db:push && HOSTNAME=0.0.0.0 bun run server.js"]
