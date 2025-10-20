@@ -1,44 +1,68 @@
-FROM node:22-alpine AS base
-
-FROM base AS builder
-
+# syntax=docker/dockerfile:1.7-labs
+############################  deps  ############################
+FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS deps
 WORKDIR /app
 
+# Copy only lockfile & manifest so `bun install` can be cached
+COPY bun.lockb package.json ./
+# Copy prisma directory for schema generation during postinstall
+COPY prisma ./prisma
+
+# Cache bun's global store to avoid network on rebuilds
+RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
+    --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
+    bun install --frozen-lockfile
+
+###########################  builder  ##########################
+FROM deps AS builder
+WORKDIR /app
+
+# Copy the rest of the source AFTER deps layer -> keeps cache hot
 COPY . .
-RUN yarn --frozen-lockfile
 
-# Only DATABASE_URL needed at build time for Prisma generation
-ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
+# Prisma engines download are also cached
+RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
+    --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
+    NODE_ENV=production bun run build
 
-ENV NODE_ENV=production
-RUN yarn build
+######################  prod-deps (runtime)  ####################
+# Install ONLY the packages required at runtime, plus Prisma for migrations
+FROM deps AS prod-deps
+WORKDIR /app
+RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
+    bun install --production --frozen-lockfile
 
-FROM base AS runner
+# Add just the Prisma CLI for migrations (it's in devDependencies but needed at runtime)
+RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
+    bun add prisma@^6.16.2 --exact
 
-RUN apk --no-cache add curl
-
+############################  runner  ###########################
+FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS runner
 WORKDIR /app
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Install curl for Coolify
+RUN apk add --no-cache curl
 
-# Copy node_modules and other necessary files for migrations
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/yarn.lock ./yarn.lock
-COPY --from=builder /app/prisma ./prisma
+# Non-root user (using Alpine syntax)
+RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
+# Copy runtime files with proper ownership
+COPY --from=prod-deps --chown=nextjs:nextjs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nextjs /app/public ./public
+COPY --from=builder --chown=nextjs:nextjs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
+
+# Switch to non-root user
 USER nextjs
 
-COPY --from=builder /app/public ./public
-
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
 EXPOSE 3000
-ENV PORT=3000
 
-# Run migrations at startup, then start the app  
-# All environment variables will be injected by Coolify at runtime
-CMD ["sh", "-c", "yarn db:migrate && HOSTNAME=0.0.0.0 node server.js"]
+# Run migrations, then start NextJS (standalone ships server.js)
+CMD ["sh","-c","bun run db:migrate && HOSTNAME=0.0.0.0 bun run server.js"]
