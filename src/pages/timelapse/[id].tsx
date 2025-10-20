@@ -376,7 +376,7 @@ export default function Page() {
           controls
           width={timelapse ? undefined : 850}
           height={timelapse ? undefined : 638}
-          poster={timelapse?.thumbnailUrl || undefined}
+          poster={timelapse?.isPublished ? timelapse?.thumbnailUrl || undefined : undefined}
           className={clsx(
             "h-full object-contain rounded-2xl",
             !timelapse && "w-full"

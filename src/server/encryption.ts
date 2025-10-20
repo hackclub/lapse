@@ -3,7 +3,6 @@ import "@/server/allow-only-server";
 import crypto from "crypto";
 
 function deriveSalts(timelapseId: string): { keySalt: Buffer; ivSalt: Buffer } {
-    // Use HMAC to derive deterministic salts from the timelapse ID
     const keySalt = crypto.createHmac('sha256', 'timelapse-key-salt').update(timelapseId).digest();
     const ivSalt = crypto.createHmac('sha256', 'timelapse-iv-salt').update(timelapseId).digest();
     
