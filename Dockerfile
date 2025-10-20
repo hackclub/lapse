@@ -5,12 +5,12 @@ FROM base AS builder
 WORKDIR /app
 
 COPY package.json yarn.lock ./
+COPY prisma ./prisma
 RUN yarn --frozen-lockfile
 
 COPY src ./src
 COPY public ./public
 COPY next.config.ts .
-COPY prisma ./prisma
 COPY tailwind.config.ts .
 COPY tsconfig.json .
 COPY postcss.config.mjs .
