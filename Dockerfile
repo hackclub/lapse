@@ -25,6 +25,8 @@ RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
     NODE_ENV=production bun run build
 
+RUN apk update && apk add bash 
+
 ######################  prod-deps (runtime)  ####################
 # Install ONLY the packages required at runtime, plus Prisma for migrations
 FROM deps AS prod-deps
