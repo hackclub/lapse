@@ -4,22 +4,14 @@ FROM base AS builder
 
 WORKDIR /app
 
-COPY package.json yarn.lock ./
-COPY prisma ./prisma
+COPY . .
 RUN yarn --frozen-lockfile
-
-COPY src ./src
-COPY public ./public
-COPY next.config.ts .
-COPY tailwind.config.ts .
-COPY tsconfig.json .
-COPY postcss.config.mjs .
-COPY eslint.config.mjs .
 
 # Only DATABASE_URL needed at build time for Prisma generation
 ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
 
+ENV NODE_ENV=production
 RUN yarn build
 
 FROM base AS runner
