@@ -1,4 +1,4 @@
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 FROM base AS builder
 
@@ -45,8 +45,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 EXPOSE 3000
-ENV PORT 3000
+ENV PORT=3000
 
 # Run migrations at startup, then start the app  
 # All environment variables will be injected by Coolify at runtime
-CMD yarn db:migrate && HOSTNAME=0.0.0.0 node server.js
+CMD ["sh", "-c", "yarn db:migrate && HOSTNAME=0.0.0.0 node server.js"]
