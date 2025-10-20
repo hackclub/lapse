@@ -3,6 +3,7 @@ import type { Configuration } from "webpack";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: "standalone",
 
   webpack: (config: Configuration, { isServer, dev }) => {
     // Configure SVGR for SVG imports
