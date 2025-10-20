@@ -2,6 +2,7 @@ import platform from "platform";
 
 import { deviceStorage, LocalDevice } from "./deviceStorage";
 import { trpc } from "./trpc";
+import type { KnownDevice } from "@/server/routers/api/user";
 
 /**
  * Derives deterministic key and IV salts from a timelapse ID.
@@ -59,7 +60,7 @@ export async function getCurrentDevice(): Promise<LocalDevice> {
         const res = await trpc.user.getDevices.query({});
 
         if (res.ok) {
-            if (res.data.devices.some(d => d.id === existing.id))
+            if (res.data.devices.some((d: KnownDevice) => d.id === existing.id))
                 return existing;
             
             console.warn("(encryption) this device has been removed remotely. re-registering!");
