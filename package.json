@@ -41,7 +41,8 @@
     "pretty-bytes": "^7.1.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "webpack": "^5.102.0"
+    "webpack": "^5.102.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.28.4",
