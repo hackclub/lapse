@@ -5,9 +5,7 @@ import RootLayout from "../client/components/RootLayout";
 
 const App: AppType = ({ Component, pageProps }) => {
   return (
-    <RootLayout>
-      <Component {...pageProps} />
-    </RootLayout>
+    <Component {...pageProps} />
   );
 };
 

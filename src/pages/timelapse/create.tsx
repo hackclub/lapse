@@ -4,6 +4,7 @@ import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 
+import RootLayout from "@/client/components/RootLayout";
 import { TimeSince } from "@/client/components/TimeSince";
 import { Button } from "@/client/components/ui/Button";
 import { WindowedModal } from "@/client/components/ui/WindowedModal";
@@ -544,7 +545,7 @@ export default function Page() {
   const isCreateDisabled = !name.trim() || videoSourceKind === "NONE";
 
   return (
-    <>
+    <RootLayout showHeader={false}>
       <WindowedModal
         icon="clock-fill"
         title={
@@ -696,6 +697,6 @@ export default function Page() {
           stopRecording();
         }}
       />
-    </>
+    </RootLayout>
   );
 }
