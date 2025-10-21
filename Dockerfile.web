@@ -10,18 +10,7 @@ COPY common ./common/
 # Copy prisma directory for schema generation during postinstall
 COPY web/prisma ./web/prisma
 
-# Create a Docker-specific package.json that only includes web and common workspaces
-RUN echo '{ \
-  "name": "lapse-monorepo", \
-  "private": true, \
-  "workspaces": [ \
-    "web", \
-    "common" \
-  ], \
-  "devDependencies": { \
-    "typescript": "^5" \
-  } \
-}' > package.json
+COPY package.json ./
 
 # Cache bun's global store to avoid network on rebuilds
 # Install from workspace root to resolve workspace dependencies

@@ -1,11 +1,7 @@
 {
   "name": "lapse-monorepo",
   "private": true,
-  "workspaces": [
-    "web",
-    "worker",
-    "common"
-  ],
+  "workspaces": ["*"],
   "scripts": {
     "dev:web": "bun --filter web run dev",
     "build:web": "bun --filter web run build",
