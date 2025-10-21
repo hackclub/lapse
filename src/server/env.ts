@@ -74,3 +74,18 @@ export const UPLOAD_TOKEN_PRIVATE_KEY = requiredEnv("UPLOAD_TOKEN_PRIVATE_KEY");
  * The 16-byte IV used to generate encrypted upload tokens, represented as a 32 character hex string.
  */
 export const UPLOAD_TOKEN_IV = requiredEnv("UPLOAD_TOKEN_IV");
+
+/**
+ * Passed to `Sentry.init`.
+ */
+export const SENTRY_DSN = requiredEnv("NEXT_PUBLIC_SENTRY_DSN");
+
+/**
+ * The organization name for Sentry monitoring.
+ */
+export const SENTRY_ORG = requiredEnv("SENTRY_ORG");
+
+/**
+ * The name of the Sentry project.
+ */
+export const SENTRY_PROJECT = requiredEnv("SENTRY_PROJECT");
