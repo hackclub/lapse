@@ -48,5 +48,5 @@ export interface CombineVideoResult {
 }
 
 export const combineVideo: Processor<CombineVideoJob, CombineVideoResult, string> = async (job) => {
-    
+    throw new Error("combineVideo is not yet implemented.");
 };

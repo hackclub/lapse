@@ -5,7 +5,6 @@ import { getLogContent } from "@../common/logging";
 import * as env from "./env";
 
 import { combineVideo, COMBINE_VIDEO_QUEUE_NAME } from "./workers/combineVideo";
-import { editVideo, EDIT_VIDEO_QUEUE_NAME } from "./workers/editVideo";
 
 const connection = new IORedis(env.REDIS_URL);
 
@@ -24,4 +23,3 @@ function register<TArgs, TReturn>(worker: Worker<TArgs, TReturn>) {
 }
 
 register(new Worker(COMBINE_VIDEO_QUEUE_NAME, combineVideo, { connection }));
-register(new Worker(EDIT_VIDEO_QUEUE_NAME, editVideo, { connection }));
