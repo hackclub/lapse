@@ -1,5 +1,5 @@
 <h1>
-    <img height="64" src="./src/client/assets/icon.svg">&nbsp;&nbsp;
+    <img height="64" src="./web/src/client/assets/icon.svg">&nbsp;&nbsp;
     Hack Club Lapse
 </h1>
 
@@ -25,6 +25,8 @@ Currently, the algorithm used to encrypt snapshots is the browser-provided imple
 When a timelapse is published, it can either be set to **public** or **unlisted**. An *unlisted* timelapse can only be viewed by administrators and the author, as well as anyone with a private, uniquely generated URL. A *public* timelapse is publicly shared on the website.
 
 Timelapses can be synchronized with Hackatime. This will create a WakaTime heartbeat for each snapshot. Timelapses that are synchronized can always be reviewed by administrators for fraud.
+
+Lapse is currently subdivided into two microservices: `web` and `worker`. `web` is the main Next.js application, doing most of the work. `worker` is a BullMQ worker that handles long-running tasks like final video encoding. Both `web` and `worker` have to share a single Redis server. 
 
 ## REST API endpoints
 Lapse uses tRPC with a REST interface being planned. This is currently not yet implemented.
