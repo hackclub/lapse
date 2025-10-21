@@ -70,4 +70,5 @@ html, body, #__next {
     margin: 0;
     display: flex;
     background: var(--color-dark);
+    overscroll-behavior: none;
 }
