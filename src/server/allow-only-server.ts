@@ -1,5 +1,3 @@
-"use server";
-
 export function serverSideOnly() {
     if ("process" in globalThis)
         return;
