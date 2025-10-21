@@ -1,3 +1,5 @@
+import * as db from "@/generated/prisma";
+
 function dataToLogString(data: unknown[]) {
     function inlineJson(x: unknown) {
         return JSON.stringify(x, (k, v) => {
@@ -31,7 +33,7 @@ function dataToLogString(data: unknown[]) {
 }
 
 function getLogContent(severity: string, scope: string, ...data: unknown[]) {
-    const prefix = `(${scope}) ${severity}:`;
+    const prefix = `(${severity}) ${scope}:`;
     const stringified = dataToLogString(data).replaceAll("\n", `\n${prefix} `);
     return `${prefix} ${stringified}`;
 }
@@ -46,4 +48,18 @@ export function logWarning(scope: string, ...data: unknown[]) {
 
 export function logError(scope: string, ...data: unknown[]) {
     console.error(getLogContent("error", scope, ...data));
+}
+
+type PartialTRPCRequest = {
+    input: Record<string, unknown>;
+    ctx: {
+        user: db.User | null
+    }
+};
+
+export function logRequest(endpoint: string, req: PartialTRPCRequest) {
+    console.log(getLogContent("request", endpoint, ...[
+        `${req.ctx.user ? `@${req.ctx.user.handle}` : "?"} -> `,
+        req.input
+    ]));
 }

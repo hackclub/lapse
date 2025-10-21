@@ -6,7 +6,7 @@ import * as db from "@/generated/prisma";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, assert, err, ok, when } from "@/shared/common";
 import { Hackatime } from "@/server/hackatime";
-import { logError, logWarning, logInfo } from "@/server/serverCommon";
+import { logError, logWarning, logRequest } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { PublicId } from "../common";
 
@@ -164,7 +164,7 @@ export default router({
             user: UserSchema.nullable()
         }))
         .query(async (req) => {
-            logInfo("user/myself", req.input);
+            logRequest("user/myself", req);
             
             if (!req.ctx.user)
                 return ok({ user: null });
@@ -203,7 +203,7 @@ export default router({
             })
         )
         .query(async (req) => {
-            logInfo("user/query", req.input);
+            logRequest("user/query", req);
             
             if (!req.input.handle && !req.input.id)
                 return err("MISSING_PARAMS", "No handle or user ID specified"); 
@@ -268,7 +268,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logInfo("user/update", req.input);
+            logRequest("user/update", req);
             
             // Check if user can edit this profile
             if (req.ctx.user.permissionLevel === "USER" && req.ctx.user.id !== req.input.id)
@@ -315,7 +315,7 @@ export default router({
             })
         )
         .query(async (req) => {
-            logInfo("user/getDevices", req.input);
+            logRequest("user/getDevices", req);
             
             const devices = await database.knownDevice.findMany({
                 where: { ownerId: req.ctx.user.id }
@@ -342,7 +342,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logInfo("user/registerDevice", req.input);
+            logRequest("user/registerDevice", req);
             
             const device = await database.knownDevice.create({
                 data: {
@@ -368,7 +368,7 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
-            logInfo("user/removeDevice", req.input);
+            logRequest("user/removeDevice", req);
             
             const device = await database.knownDevice.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id }
@@ -407,7 +407,7 @@ export default router({
         .input(z.object({}))
         .output(apiResult({}))
         .mutation(async (req) => {
-            logInfo("user/signOut", req.input);
+            logRequest("user/signOut", req);
             
             if (req.ctx.res) {
                 req.ctx.res.setHeader("Set-Cookie", [

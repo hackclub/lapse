@@ -13,7 +13,7 @@ import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE
 import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "@/server/routers/api/user";
 import * as db from "@/generated/prisma";
 import { Hackatime, WakaTimeHeartbeat } from "@/server/hackatime";
-import { logError, logInfo } from "@/server/serverCommon";
+import { logError, logInfo, logRequest } from "@/server/serverCommon";
 import { generateThumbnail } from "@/server/videoProcessing";
 import { PublicId } from "../common";
 
@@ -232,7 +232,7 @@ export default router({
             })
         )
         .query(async (req) => {
-            logInfo("snapshot/query", req.input);
+            logRequest("snapshot/query", req);
             
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
@@ -291,7 +291,7 @@ export default router({
             })
         )
         .query(async (req) => {
-            logInfo("timelapse/createDraft", req.input);
+            logRequest("timelapse/createDraft", req);
             const baseId = crypto.randomUUID();
 
             const video = await database.uploadToken.create({
@@ -358,7 +358,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logInfo("snapshot/create", req.input);
+            logRequest("snapshot/create", req);
 
             const draft = await database.draftTimelapse.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id },
@@ -457,7 +457,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logInfo("snapshot/update", req.input);
+            logRequest("snapshot/update", req);
 
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
@@ -506,7 +506,7 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
-            logInfo("snapshot/delete", req.input);
+            logRequest("snapshot/delete", req);
 
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
@@ -559,7 +559,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logInfo("timelapse/publish", req.input);
+            logRequest("timelapse/publish", req);
             
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
@@ -668,7 +668,7 @@ export default router({
             })
         )
         .query(async (req) => {
-            logInfo("timelapse/findByUser", req.input);
+            logRequest("timelapse/findByUser", req);
             
             const isViewingSelf = req.ctx.user && req.ctx.user.id === req.input.user;
             const isAdmin = req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT"));
@@ -706,7 +706,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logInfo("timelapse/syncWithHackatime", req.input);
+            logRequest("timelapse/syncWithHackatime", req);
             
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id },
