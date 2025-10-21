@@ -1,14 +1,8 @@
 import "./allow-only-server";
-
-function requiredEnv(key: string) {
-    const value = process.env[key];
-    if (value)
-        return value;
-
-    throw new Error(`The environment variable ${key} is missing.`);
-}
+import { requiredEnv } from "@hackclub/lapse-common";
 
 // The following values need to be defined as environment variables.
+// They will only be accessed during runtime.
 
 /**
  * The S3 name for the bucket that stores encrypted (private) user content.
@@ -79,13 +73,3 @@ export const UPLOAD_TOKEN_IV = requiredEnv("UPLOAD_TOKEN_IV");
  * Passed to `Sentry.init`.
  */
 export const SENTRY_DSN = requiredEnv("NEXT_PUBLIC_SENTRY_DSN");
-
-/**
- * The organization name for Sentry monitoring.
- */
-export const SENTRY_ORG = requiredEnv("SENTRY_ORG");
-
-/**
- * The name of the Sentry project.
- */
-export const SENTRY_PROJECT = requiredEnv("SENTRY_PROJECT");

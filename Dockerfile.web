@@ -3,12 +3,9 @@
 FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS deps
 WORKDIR /app
 
-# Copy root workspace configuration (create web-specific version)
-COPY web/bun.lock web/package.json ./web/
-# Copy common package for workspace dependency
 COPY common ./common/
-# Copy prisma directory for schema generation during postinstall
 COPY web/prisma ./web/prisma
+COPY web/bun.lock web/package.json ./web/
 
 COPY package.json ./
 
@@ -16,7 +13,7 @@ COPY package.json ./
 # Install from workspace root to resolve workspace dependencies
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
     --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
-    bun install --frozen-lockfile --filter web
+    bun install --frozen-lockfile
 
 ###########################  builder  ##########################
 FROM deps AS builder
@@ -38,7 +35,7 @@ FROM deps AS prod-deps
 WORKDIR /app
 
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
-    bun install --production --frozen-lockfile --filter web
+    bun install --production --frozen-lockfile
 
 # Add just the Prisma CLI for migrations (it's in devDependencies but needed at runtime)
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
