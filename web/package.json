@@ -1,5 +1,5 @@
 {
-  "name": "lapse",
+  "name": "web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -19,7 +19,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@hackclub/icons": "^0.0.15",
-    "@hackclub/lapse-common": "file:../common",
+    "@hackclub/lapse-common": "workspace:*",
     "@hackclub/theme": "^0.3.3",
     "@prisma/client": "^6.16.2",
     "@sentry/nextjs": "^10",

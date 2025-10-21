@@ -1,0 +1,43 @@
+# Node modules (will be installed during build)
+web/node_modules/
+common/node_modules/
+worker/node_modules/
+node_modules/
+
+# Next.js build output
+web/.next/
+web/out/
+
+# Environment files
+web/.env*
+!web/.env.example
+
+# Build artifacts
+web/dist/
+common/dist/
+worker/dist/
+
+# Logs
+*.log
+web/logs/
+common/logs/
+worker/logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Misc
+web/.dockerignore
+web/Dockerfile
+README.md

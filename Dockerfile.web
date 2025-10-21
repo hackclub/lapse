@@ -3,27 +3,43 @@
 FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS deps
 WORKDIR /app
 
-# Copy only lockfile & manifest so `bun install` can be cached
-COPY bun.lock package.json ./
+# Copy root workspace configuration (create web-specific version)
+COPY web/bun.lock web/package.json ./web/
+# Copy common package for workspace dependency
+COPY common ./common/
 # Copy prisma directory for schema generation during postinstall
-COPY prisma ./prisma
+COPY web/prisma ./web/prisma
+
+# Create a Docker-specific package.json that only includes web and common workspaces
+RUN echo '{ \
+  "name": "lapse-monorepo", \
+  "private": true, \
+  "workspaces": [ \
+    "web", \
+    "common" \
+  ], \
+  "devDependencies": { \
+    "typescript": "^5" \
+  } \
+}' > package.json
 
 # Cache bun's global store to avoid network on rebuilds
+# Install from workspace root to resolve workspace dependencies
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
     --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
-    bun install --frozen-lockfile
+    bun install --frozen-lockfile --filter web
 
 ###########################  builder  ##########################
 FROM deps AS builder
 WORKDIR /app
 
-# Copy the rest of the source AFTER deps layer -> keeps cache hot
-COPY . .
+# Copy the rest of the web source AFTER deps layer -> keeps cache hot
+COPY web ./web/
 
 # Prisma engines download are also cached
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
-    NODE_ENV=production bun run build
+    cd web && NODE_ENV=production bun run build
 
 RUN apk update && apk add bash 
 
@@ -31,12 +47,13 @@ RUN apk update && apk add bash
 # Install ONLY the packages required at runtime, plus Prisma for migrations
 FROM deps AS prod-deps
 WORKDIR /app
+
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
-    bun install --production --frozen-lockfile
+    bun install --production --frozen-lockfile --filter web
 
 # Add just the Prisma CLI for migrations (it's in devDependencies but needed at runtime)
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
-    bun add prisma@^6.16.2 --exact
+    cd web && bun add prisma@^6.16.2 --exact
 
 ############################  runner  ###########################
 FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS runner
@@ -49,11 +66,11 @@ RUN apk add --no-cache curl
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
 # Copy runtime files with proper ownership
-COPY --from=prod-deps --chown=nextjs:nextjs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nextjs /app/public ./public
-COPY --from=builder --chown=nextjs:nextjs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
+COPY --from=prod-deps --chown=nextjs:nextjs /app/web/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nextjs /app/web/public ./public
+COPY --from=builder --chown=nextjs:nextjs /app/web/prisma ./prisma
+COPY --from=builder --chown=nextjs:nextjs /app/web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nextjs /app/web/.next/static ./.next/static
 
 # Switch to non-root user
 USER nextjs

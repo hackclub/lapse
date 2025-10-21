@@ -1,0 +1,17 @@
+{
+  "name": "lapse-monorepo",
+  "private": true,
+  "workspaces": [
+    "web",
+    "worker",
+    "common"
+  ],
+  "scripts": {
+    "dev:web": "bun --filter web run dev",
+    "build:web": "bun --filter web run build",
+    "build:common": "bun --filter @hackclub/lapse-common run build"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
