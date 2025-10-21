@@ -19,6 +19,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@hackclub/icons": "^0.0.15",
+    "@hackclub/lapse-common": "file:../common",
     "@hackclub/theme": "^0.3.3",
     "@prisma/client": "^6.16.2",
     "@sentry/nextjs": "^10",
@@ -62,6 +63,7 @@
     "eslint-config-next": "15.5.3",
     "prisma": "^6.16.2",
     "tailwindcss": "^4",
+    "ts-loader": "^9.5.4",
     "tsx": "^4.20.5",
     "typescript": "^5"
   }
