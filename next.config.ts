@@ -7,6 +7,8 @@ import * as env from "@/server/env";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  productionBrowserSourceMaps: true,
+  poweredByHeader: false,
 
   webpack: (config: Configuration, { isServer, dev }) => {
     // Configure SVGR for SVG imports
