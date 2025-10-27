@@ -7,7 +7,7 @@
     "declaration": true,
     "outDir": "./dist",
     "esModuleInterop": true,
-    "module": "commonjs",
+    "module": "ESNext",
     "moduleResolution": "node",
     "isolatedModules": true,
     "incremental": true

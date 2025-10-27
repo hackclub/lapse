@@ -1,13 +1,18 @@
 {
-  "name": "lapse-monorepo",
+  "name": "@lapse/root",
   "private": true,
-  "workspaces": ["*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "packageManager": "bun@1.3.0",
   "scripts": {
     "dev:web": "bun --filter web run dev",
     "build:web": "bun --filter web run build",
-    "build:common": "bun --filter @hackclub/lapse-common run build"
+    "build:common": "bun --filter @lapse/common run build"
   },
   "devDependencies": {
+    "turbo": "^2.5.8",
     "typescript": "^5"
   }
 }

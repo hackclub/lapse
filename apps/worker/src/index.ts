@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
 
-import { getLogContent } from "@../common/logging";
+import { getLogContent } from "@lapse/common";
 import * as env from "./env";
 
 import { combineVideo, COMBINE_VIDEO_QUEUE_NAME } from "./workers/combineVideo";

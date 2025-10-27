@@ -1,4 +1,6 @@
-src/generated
+apps/web/src/generated
+
+.turbo
 
 # dependencies (bun install)
 node_modules

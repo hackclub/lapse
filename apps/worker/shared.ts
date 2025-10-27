@@ -6,9 +6,3 @@ export {
     type CombineVideoResult
 } from "./src/workers/combineVideo";
 
-export {
-    EDIT_VIDEO_QUEUE_NAME,
-    type BlurredArea,
-    type EditVideoJob,
-    type EditVideoResult
-} from "./src/workers/editVideo";

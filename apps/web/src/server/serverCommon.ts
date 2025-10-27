@@ -1,6 +1,6 @@
 import * as db from "@/generated/prisma";
 
-import { getLogContent } from "@hackclub/lapse-common";
+import { getLogContent } from "@lapse/common";
 
 export function logInfo(scope: string, ...data: unknown[]) {
     console.log(getLogContent("info", scope, ...data));

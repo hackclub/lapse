@@ -1,0 +1,23 @@
+{
+  "name": "@lapse/worker",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^24.9.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "bullmq": "^5.61.0",
+    "ioredis": "^5.8.2",
+    "@lapse/common": "*:workspace"
+  }
+}
