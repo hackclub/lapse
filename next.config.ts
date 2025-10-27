@@ -26,35 +26,6 @@ const nextConfig: NextConfig = {
         util: false,
         buffer: false,
       };
-
-      // Handle dynamic imports for FFmpeg
-      config.module!.rules!.push({
-        test: /\.js$/,
-        include: /node_modules\/@ffmpeg/,
-        use: {
-          loader: "babel-loader",
-          options: {
-            presets: ["@babel/preset-env"],
-            plugins: ["@babel/plugin-syntax-dynamic-import"]
-          }
-        }
-      });
-    }
-
-    // Handle WASM files
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-      layers: true,
-    };
-
-    // Ignore FFmpeg dynamic import warnings in development
-    if (dev) {
-      config.ignoreWarnings = [
-        ...(config.ignoreWarnings || []),
-        { message: /Failed to parse source map/ },
-        { message: /Cannot find module as expression is too dynamic/ },
-      ];
     }
 
     return config;

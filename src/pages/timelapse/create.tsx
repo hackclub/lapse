@@ -395,20 +395,14 @@ export default function Page() {
         setUploadProgress(5);
         const device = await getCurrentDevice();
 
-        const merged = await mergeVideoSessions(videoProcessor, timelapse, (stage, progress) => {
-          setUploadStage(stage);
-          setUploadProgress(5 + Math.floor(progress * 0.2));
-        });
+        const merged = await mergeVideoSessions(videoProcessor, timelapse);
         
         console.log("(upload) - merged session data:", merged);
 
         setUploadStage("Generating thumbnail...");
         setUploadProgress(25);
 
-        const thumbnail = await videoProcessor.generateThumbnail(merged, (stage, progress) => {
-          setUploadStage(stage);
-          setUploadProgress(25 + Math.floor(progress * 0.05)); // 25-30%
-        });
+        const thumbnail = await videoProcessor.generateThumbnail(merged);
 
         console.log("(upload) thumbnail generated:", thumbnail);
 
