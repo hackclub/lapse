@@ -21,12 +21,11 @@ WORKDIR /app
 
 # Copy the rest of the web source AFTER deps layer -> keeps cache hot
 COPY web ./web/
+COPY .env ./web/.env
 
 # Build common package first
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
     cd common && bun run build
-
-RUN printenv
 
 # Prisma engines download are also cached
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
