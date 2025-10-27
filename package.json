@@ -12,7 +12,7 @@
     "build:common": "bun --filter @lapse/common run build"
   },
   "devDependencies": {
-    "turbo": "^2.5.8",
+    "turbo": "canary",
     "typescript": "^5"
   }
 }
