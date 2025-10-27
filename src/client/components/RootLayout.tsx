@@ -239,11 +239,9 @@ export default function RootLayout({
       </Head>
 
       <div className={`w-full h-full p-6 text-text bg-dark ${jetBrainsMono.variable} ${phantomSans.className}`}>        
-        {currentUser && currentUser.private?.permissionLevel === "UNCONFIRMED" && (
-          <div className="absolute top-0 right-0 z-10 w-full bg-yellow-600 text-black py-2 px-6 text-center font-medium">
-            Your account is pending approval for the closed beta. Message ascpixi for access!
-          </div>
-        )}
+        <div className="absolute top-0 right-0 z-10 w-full opacity-50 pointer-events-none bg-yellow-600 text-black py-2 px-6 text-center font-medium">
+          Lapse is currently in beta. Timelapses and heartbeats may disappear at any time.
+        </div>
           
         {showHeader && (
           <div className="flex justify-between items-center">

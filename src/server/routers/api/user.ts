@@ -17,7 +17,6 @@ const database = new db.PrismaClient();
  */
 export type PermissionLevel = z.infer<typeof PermissionLevelSchema>;
 export const PermissionLevelSchema = z.enum([
-    "UNCONFIRMED", // unconfirmed closed beta user, equivalent to unregistered
     "USER",  // normal permissions
     "ADMIN", // same as "USER", but adds the ability to remove and review projects
     "ROOT", // same as "ADMIN", but adds the ability to change the permissions of non-owners, alongside full project editing permissions
@@ -238,7 +237,7 @@ export default router({
     /**
      * Updates user profile information.
      */
-    update: protectedProcedure({ allowUnconfirmed: true })
+    update: protectedProcedure()
         .input(
             z.object({
                 /**
@@ -307,7 +306,7 @@ export default router({
     /**
      * Gets all devices registered by the currently authenticated user.
      */
-    getDevices: protectedProcedure({ allowUnconfirmed: true })
+    getDevices: protectedProcedure()
         .input(z.object({}))
         .output(
             apiResult({

@@ -30,9 +30,8 @@ export const procedure = t.procedure;
 /**
  * Equivalent to `procedure`, but requires a user to be authenticated.
  */
-export function protectedProcedure(config: Partial<{ allowUnconfirmed: boolean }> = {}) {
-  const { allowUnconfirmed = false } = config;
-  
+export function protectedProcedure() {
+
   return procedure.use(async (opts) => {
     const { ctx } = opts;
     
@@ -42,14 +41,7 @@ export function protectedProcedure(config: Partial<{ allowUnconfirmed: boolean }
         message: "Authentication required",
       });
     }
-
-    if (!allowUnconfirmed && ctx.user.permissionLevel === "UNCONFIRMED") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Account approval required. Please wait for your account to be approved for the closed beta.",
-      });
-    }
-
+    
     return opts.next({
       ctx: {...ctx, user: ctx.user },
     });

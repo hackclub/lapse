@@ -65,7 +65,7 @@ export default function Home() {
                   {
                     currentUser
                       ? <>Thank you for participating in the beta, <span className="text-cyan font-bold">{currentUser.displayName}</span>!</>
-                      : <>Lapse is a timelapse recording tool, currently in closed beta.</>
+                      : <>Lapse is a timelapse recording tool, currently in beta.</>
                   }
                 </p>
               </div>

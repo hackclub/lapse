@@ -59,7 +59,8 @@ export default async function handler(
         return res.redirect("/?error=config-error");
 
     try {
-        const redirectUri = `${req.headers.origin || process.env.NEXTAUTH_URL || 'https://lapse.hackclub.com'}/api/authSlack`;
+        const defaultUriBase = process.env.NODE_ENV == "development" ? "http://localhost:3000" : "https://lapse.hackclub.com";
+        const redirectUri = `${req.headers.origin || process.env.NEXTAUTH_URL || defaultUriBase}/api/authSlack`;
         
         const tokenResponse = await fetch("https://slack.com/api/oauth.v2.access", {
             method: "POST",
@@ -78,15 +79,15 @@ export default async function handler(
         const tokenDataResult = SlackAuthResponseSchema.safeParse(tokenDataRaw);
 
         if (!tokenDataResult.success) {
-            logError("Invalid token response format.", tokenDataResult.error);
-            logError("Raw data:", tokenDataRaw);
+            logError("authSlack", "Invalid token response format.", tokenDataResult.error);
+            logError("authSlack", "Raw data is", tokenDataRaw);
             return res.redirect("/?error=invalid-token-response");
         }
 
         const tokenData = tokenDataResult.data;
 
         if (!tokenData.ok) {
-            logError("Failed to exchange code for token:", tokenData);
+            logError("authSlack", "Failed to exchange code for token:", tokenData);
             return res.redirect("/?error=token-exchange-failed");
         }
 
@@ -101,14 +102,14 @@ export default async function handler(
         const userDataResult = SlackUserResponseSchema.safeParse(userDataRaw);
 
         if (!userDataResult.success) {
-            logError("Invalid user response format:", userDataResult.error);
+            logError("authSlack", "Invalid user response format:", userDataResult.error);
             return res.redirect("/?error=invalid-user-response");
         }
 
         const userData = userDataResult.data;
 
         if (!userData.ok) {
-            logError("Failed to fetch user profile:", userData);
+            logError("authSlack", "Failed to fetch user profile:", userData);
             return res.redirect("/?error=profile-fetch-failed");
         }
 
@@ -139,7 +140,7 @@ export default async function handler(
                     profilePictureUrl: slackUser.image_original || slackUser.image_192 || "",
                     bio: "",
                     urls: [],
-                    permissionLevel: "UNCONFIRMED",
+                    permissionLevel: "USER",
                     createdAt: new Date(),
                     hackatimeApiKey: null,
                 },
@@ -173,7 +174,7 @@ export default async function handler(
         return res.redirect("/?auth=success");
     }
     catch (error) {
-        logError("Slack OAuth error:", error);
+        logError("authSlack", "Slack OAuth error:", error);
         return res.redirect("/?error=server-error");
     }
 }
