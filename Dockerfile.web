@@ -26,9 +26,7 @@ COPY web ./web/
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
     cd common && bun run build
 
-# Display Sentry environment variables for debugging
-RUN echo "SENTRY_ORG: $SENTRY_ORG"
-RUN echo "SENTRY_PROJECT: $SENTRY_PROJECT"
+RUN printenv
 
 # Prisma engines download are also cached
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
