@@ -5,13 +5,18 @@ RUN apk update
 RUN apk add --no-cache libc6-compat
 # Set working directory
 WORKDIR /app
-# Install turbo
-RUN yarn global add turbo@^2
+
+# Install Bun
+RUN npm install -g bun
+
 # Copy everything from root (Coolify build context)
 COPY . .
 
+# Install dependencies to get local turbo
+RUN bun install
+
 # Generate a partial monorepo with a pruned lockfile for a target workspace.
-RUN turbo prune @lapse/web --docker
+RUN bunx turbo prune @lapse/web --docker
 
 # Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer
@@ -24,7 +29,7 @@ RUN npm install -g bun
 
 # First install the dependencies (as they change less often)
 COPY --from=builder /app/out/json/ .
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Build the project
 COPY --from=builder /app/out/full/ .
