@@ -33,7 +33,7 @@ export class VideoProcessor {
         console.log("(encode.concat) - output:", out);
 
         const firstVideoTracks = await inputs[0].getVideoTracks();
-        assert(firstVideoTracks.length > 0, "The first media file passed in had no video tracks.")
+        assert(firstVideoTracks.length > 0, "The first media file passed in had no video tracks.");
         console.log("(encode.concat) - tracks of inputs[0]:", firstVideoTracks);
 
         const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
@@ -57,7 +57,7 @@ export class VideoProcessor {
             bitrate: mediabunny.QUALITY_MEDIUM
         });
 
-        out.addVideoTrack(source, { frameRate: TIMELAPSE_FPS })
+        out.addVideoTrack(source, { frameRate: TIMELAPSE_FPS });
 
         const timeScale = (1000 / TIMELAPSE_FRAME_LENGTH) / TIMELAPSE_FPS;
         console.log(`(encode.concat) computed timescale: ${timeScale}`);
