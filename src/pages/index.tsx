@@ -32,7 +32,7 @@ export default function Home() {
                 <div className="flex flex-col items-center justify-center gap-8">
                   <LapseIcon
                     className="w-32 select-none hover:scale-105 transition-transform active:scale-95"
-                    onClick={(ev: MouseEvent) => {
+                    onClick={(ev: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
                       // this plays a silly sound every time the user clicks on the logo! :D
                       let sound = pickRandom([
                         "eep.wav",
