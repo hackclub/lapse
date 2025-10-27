@@ -25,7 +25,7 @@ import { apiUpload } from "@/client/upload";
 
 export default function Page() {
   const router = useRouter();
-  useAuth(true, false);
+  useAuth(true);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
