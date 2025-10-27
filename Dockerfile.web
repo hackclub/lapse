@@ -9,12 +9,6 @@ COPY web/bun.lock web/package.json ./web/
 
 COPY package.json ./
 
-ARG SENTRY_ORG
-ENV SENTRY_ORG=${SENTRY_ORG}
-
-ARG SENTRY_PROJECT
-ENV SENTRY_PROJECT=${SENTRY_PROJECT}
-
 # Cache bun's global store to avoid network on rebuilds
 # Install from workspace root to resolve workspace dependencies
 RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
