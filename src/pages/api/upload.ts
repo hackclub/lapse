@@ -82,6 +82,8 @@ export default async function handler(
         const form = formidable({
             maxFileSize: 200 * 1024 * 1024, // 200MB max (higher than our limits to let token validation handle it)
             keepExtensions: true,
+            allowEmptyFiles: false,
+            maxFiles: 1
         });
 
         const [fields, files] = await form.parse(req);
@@ -120,7 +122,8 @@ export default async function handler(
             Bucket: token.bucket,
             Key: token.key,
             Body: fs.createReadStream(file.filepath),
-            ContentType: token.mimeType
+            ContentType: token.mimeType,
+            ContentLength: file.size
         }));
 
         logInfo("upload", `file ${token.bucket}/${token.key} uploaded!`);
