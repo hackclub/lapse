@@ -240,7 +240,7 @@ export default function RootLayout({
 
       <div className={`w-full h-full p-6 text-text bg-dark ${jetBrainsMono.variable} ${phantomSans.className}`}>        
         <div className="absolute top-0 right-0 z-10 w-full opacity-50 pointer-events-none bg-yellow-600 text-black py-2 px-6 text-center font-medium">
-          Lapse is currently in beta. Timelapses and heartbeats may disappear at any time.
+          Lapse is currently in beta. Timelapses and heartbeats may disappear at any time. Please disable AdBlock for error reporting.
         </div>
           
         {showHeader && (
