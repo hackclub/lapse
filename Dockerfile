@@ -34,12 +34,14 @@ RUN apk update && apk add bash
 # Install ONLY the packages required at runtime, plus Prisma for migrations
 FROM deps AS prod-deps
 WORKDIR /app
+# Install all deps first (including devDeps for prisma generate), then prune
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
-    pnpm install --production --frozen-lockfile
-
-# Add just the Prisma CLI for migrations (it's in devDependencies but needed at runtime)
+    pnpm install --frozen-lockfile
+# Keep prisma in production for migrations 
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
-    pnpm add prisma@^6.16.2 --save-exact
+    pnpm prune --production
+RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
+    pnpm add prisma
 
 ############################  runner  ###########################
 FROM --platform=$TARGETPLATFORM node:18-alpine AS runner
