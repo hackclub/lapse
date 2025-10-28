@@ -56,6 +56,8 @@ WORKDIR /app
 # Non-root user
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
+RUN pnpm add -g prisma
+
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/.next/standalone ./
@@ -71,8 +73,6 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PRISMA_HIDE_UPDATE_MESSAGE=1
-
-RUN pnpm add -g prisma
 
 EXPOSE 3000
 
