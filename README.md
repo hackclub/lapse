@@ -1,5 +1,5 @@
 <h1>
-    <img height="64" src="./src/client/assets/icon.svg">&nbsp;&nbsp;
+    <img height="64" src="./apps/web/src/client/assets/icon.svg">&nbsp;&nbsp;
     Hack Club Lapse
 </h1>
 
