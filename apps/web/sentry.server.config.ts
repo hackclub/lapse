@@ -3,7 +3,7 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
-import * as env from "./apps/web/src/server/env";
+import * as env from "@/server/env";
 
 Sentry.init({
   dsn: env.SENTRY_DSN,
