@@ -62,17 +62,17 @@ COPY --from=installer --chown=nextjs:nextjs /app/apps/web/.next/standalone ./
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/public ./apps/web/public
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/prisma ./apps/web/prisma
-COPY --from=installer --chown=nextjs:nextjs /app/node_modules/.prisma ./apps/web/node_modules/.prisma
-COPY --from=installer --chown=nextjs:nextjs /app/node_modules/@prisma ./apps/web/node_modules/@prisma
 
 # Switch to non-root user
 USER nextjs
 
-# Environment variables
+# Environment variables for nextjs user
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PRISMA_HIDE_UPDATE_MESSAGE=1
+ENV PNPM_HOME="/home/nextjs/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 
 EXPOSE 3000
 
