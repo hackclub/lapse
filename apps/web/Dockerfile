@@ -72,7 +72,9 @@ ENV PORT=3000
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
+RUN pnpm add -g prisma
+
 EXPOSE 3000
 
 # Run db push to create schema, then start NextJS (standalone ships server.js)
-CMD ["sh","-c","cd apps/web && npx prisma db push && cd ../.. && HOSTNAME=0.0.0.0 node apps/web/server.js"]
+CMD ["sh","-c","cd apps/web && prisma db push && cd ../.. && HOSTNAME=0.0.0.0 node apps/web/server.js"]
