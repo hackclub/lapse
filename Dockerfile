@@ -1,17 +1,20 @@
 # syntax=docker/dockerfile:1.7-labs
 ############################  deps  ############################
-FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS deps
+FROM --platform=$TARGETPLATFORM node:18-alpine AS deps
 WORKDIR /app
 
-# Copy only lockfile & manifest so `bun install` can be cached
-COPY bun.lock package.json ./
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy only lockfile & manifest so `pnpm install` can be cached
+COPY pnpm-lock.yaml package.json ./
 # Copy prisma directory for schema generation during postinstall
 COPY prisma ./prisma
 
-# Cache bun's global store to avoid network on rebuilds
-RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
+# Cache pnpm's global store to avoid network on rebuilds
+RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
-    bun install --frozen-lockfile
+    pnpm install --frozen-lockfile
 
 ###########################  builder  ##########################
 FROM deps AS builder
@@ -22,8 +25,8 @@ COPY . .
 
 # Prisma engines download are also cached
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
-    --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
-    NODE_ENV=production bun run build
+    --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
+    NODE_ENV=production pnpm run build
 
 RUN apk update && apk add bash 
 
@@ -31,18 +34,19 @@ RUN apk update && apk add bash
 # Install ONLY the packages required at runtime, plus Prisma for migrations
 FROM deps AS prod-deps
 WORKDIR /app
-RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
-    bun install --production --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
+    pnpm install --production --frozen-lockfile
 
 # Add just the Prisma CLI for migrations (it's in devDependencies but needed at runtime)
-RUN --mount=type=cache,id=bun-cache,target=/root/.cache/bun \
-    bun add prisma@^6.16.2 --exact
+RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
+    pnpm add prisma@^6.16.2 --save-exact
 
 ############################  runner  ###########################
-FROM --platform=$TARGETPLATFORM oven/bun:1-alpine AS runner
+FROM --platform=$TARGETPLATFORM node:18-alpine AS runner
 WORKDIR /app
 
-# Install curl for Coolify
+# Install pnpm and curl for Coolify
+RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN apk add --no-cache curl
 
 # Non-root user (using Alpine syntax)
@@ -67,4 +71,4 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 EXPOSE 3000
 
 # Run db push to create schema, then start NextJS (standalone ships server.js)
-CMD ["sh","-c","bun run db:push && HOSTNAME=0.0.0.0 bun run server.js"]
+CMD ["sh","-c","pnpm run db:push && HOSTNAME=0.0.0.0 node server.js"]
