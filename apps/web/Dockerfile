@@ -7,6 +7,10 @@ RUN apk update && apk add --no-cache libc6-compat curl bash
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# Equivalent to what we'd be doing with pnpm setup
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
 ############################  builder  ###########################
 FROM base AS builder
 WORKDIR /app
@@ -24,6 +28,10 @@ WORKDIR /app
 
 # First install dependencies (they change less often)
 COPY --from=builder /app/out/json/ .
+COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# Copy prisma schema before install so postinstall can generate client
+COPY --from=builder /app/out/full/apps/web/prisma ./apps/web/prisma
 
 # Cache pnpm's global store to avoid network on rebuilds
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
