@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   productionBrowserSourceMaps: true,
   poweredByHeader: false,
+  experimental: {
+    serverSourceMaps: true,
+    enablePrerenderSourceMaps: true
+  },
 
   webpack: (config: Configuration, { isServer, dev }) => {
     // Configure SVGR for SVG imports
