@@ -76,5 +76,5 @@ ENV PATH="$PNPM_HOME:$PATH"
 
 EXPOSE 3000
 
-# Run db push to create schema, then start NextJS (standalone ships server.js)
-CMD ["sh","-c","cd apps/web && npx prisma db push && cd ../.. && HOSTNAME=0.0.0.0 node apps/web/server.js"]
+# Start NextJS (standalone ships server.js)
+CMD ["sh","-c","HOSTNAME=0.0.0.0 node apps/web/server.js"]
