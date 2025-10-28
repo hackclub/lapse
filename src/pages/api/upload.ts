@@ -35,6 +35,8 @@ const s3 = new S3Client({
         accessKeyId: env.S3_ACCESS_KEY_ID,
         secretAccessKey: env.S3_SECRET_ACCESS_KEY,
     },
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 export const config = {
@@ -122,8 +124,7 @@ export default async function handler(
             Bucket: token.bucket,
             Key: token.key,
             Body: fs.createReadStream(file.filepath),
-            ContentType: token.mimeType,
-            ContentLength: file.size
+            ContentType: token.mimeType
         }));
 
         logInfo("upload", `file ${token.bucket}/${token.key} uploaded!`);
