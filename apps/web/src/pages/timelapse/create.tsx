@@ -14,7 +14,7 @@ import { TextareaInput } from "../../client/components/ui/TextareaInput";
 import { TextInput } from "../../client/components/ui/TextInput";
 import { SelectInput } from "../../client/components/ui/SelectInput";
 import { deviceStorage, LocalSnapshot } from "../../client/deviceStorage";
-import { createVideoProcessor, mergeVideoSessions, VideoProcessor } from "../../client/videoProcessing";
+import { mergeVideoSessions, videoGenerateThumbnail } from "../../client/videoProcessing";
 import { encryptVideo, encryptData, getCurrentDevice } from "../../client/encryption";
 import { trpc } from "../../client/trpc";
 import { assert } from "../../shared/common";
@@ -44,7 +44,6 @@ export default function Page() {
   const [currentTimelapseId, setCurrentTimelapseId] = useState<number | null>(null);
   const [needsVideoSource, setNeedsVideoSource] = useState(false);
   const [currentSession] = useState<number>(Date.now());
-  const [videoProcessor, setVideoProcessor] = useState<VideoProcessor | null>(null);
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
   
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -68,10 +67,6 @@ export default function Page() {
       : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
       : `🔴 REC: ${name} - Lapse`;
   }, [name, setupModalOpen, isFrozen]);
-
-  useOnce(async () => {
-    setVideoProcessor(await createVideoProcessor());
-  });
 
   useOnce(async () => {
     const activeTimelapse = await deviceStorage.getActiveTimelapse();
@@ -383,7 +378,6 @@ export default function Page() {
         setUploadStage("Preparing upload...");
         
         assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
-        assert(videoProcessor != null, "Attempted to stop the recording while videoProcessor is null");
 
         const timelapse = await deviceStorage.getTimelapse(currentTimelapseId);
         if (!timelapse)
@@ -393,16 +387,15 @@ export default function Page() {
         
         setUploadStage("Processing video...");
         setUploadProgress(5);
-        const device = await getCurrentDevice();
 
-        const merged = await mergeVideoSessions(videoProcessor, timelapse);
+        const merged = await mergeVideoSessions(timelapse);
         
         console.log("(upload) - merged session data:", merged);
 
         setUploadStage("Generating thumbnail...");
         setUploadProgress(25);
 
-        const thumbnail = await videoProcessor.generateThumbnail(merged);
+        const thumbnail = await videoGenerateThumbnail(merged);
 
         console.log("(upload) thumbnail generated:", thumbnail);
 
@@ -466,6 +459,8 @@ export default function Page() {
         setUploadProgress(85);
         const snapshots = await deviceStorage.getAllSnapshots();
         const snapshotTimestamps = snapshots.map(s => s.createdAt);
+
+        const device = await getCurrentDevice();
 
         console.log("(upload) finalizing upload now!");
         console.log("(upload) - name:", name);
