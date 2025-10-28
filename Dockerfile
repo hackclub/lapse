@@ -8,6 +8,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy only lockfile & manifest so `pnpm install` can be cached
 COPY pnpm-lock.yaml package.json ./
+
 # Copy prisma directory for schema generation during postinstall
 COPY prisma ./prisma
 
@@ -37,11 +38,6 @@ WORKDIR /app
 # Install all deps first (including devDeps for prisma generate), then prune
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     pnpm install --frozen-lockfile
-# Keep prisma in production for migrations 
-RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
-    pnpm prune --production
-RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
-    pnpm add prisma
 
 ############################  runner  ###########################
 FROM --platform=$TARGETPLATFORM node:18-alpine AS runner
