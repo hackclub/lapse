@@ -62,6 +62,8 @@ COPY --from=installer --chown=nextjs:nextjs /app/apps/web/.next/standalone ./
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/public ./apps/web/public
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/prisma ./apps/web/prisma
+COPY --from=installer --chown=nextjs:nextjs /app/node_modules/.prisma ./apps/web/node_modules/.prisma
+COPY --from=installer --chown=nextjs:nextjs /app/node_modules/@prisma ./apps/web/node_modules/@prisma
 
 # Switch to non-root user
 USER nextjs
