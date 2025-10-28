@@ -30,6 +30,10 @@ const nextConfig: NextConfig = {
       };
     }
 
+    if (isServer) {
+      config.devtool = "source-map";
+    }
+
     return config;
   },
   async headers() {
