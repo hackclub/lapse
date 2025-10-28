@@ -56,8 +56,6 @@ WORKDIR /app
 # Non-root user
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
-RUN pnpm add -g prisma
-
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=installer --chown=nextjs:nextjs /app/apps/web/.next/standalone ./
@@ -77,4 +75,4 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 EXPOSE 3000
 
 # Run db push to create schema, then start NextJS (standalone ships server.js)
-CMD ["sh","-c","cd apps/web && prisma db push && cd ../.. && HOSTNAME=0.0.0.0 node apps/web/server.js"]
+CMD ["sh","-c","cd apps/web && pnpm dlx prisma db push && cd ../.. && HOSTNAME=0.0.0.0 node apps/web/server.js"]
