@@ -358,7 +358,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logRequest("snapshot/create", req);
+            logRequest("timelapse/commit", req);
 
             const draft = await database.draftTimelapse.findFirst({
                 where: { id: req.input.id, ownerId: req.ctx.user.id },
@@ -457,7 +457,7 @@ export default router({
             })
         )
         .mutation(async (req) => {
-            logRequest("snapshot/update", req);
+            logRequest("timelapse/update", req);
 
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
@@ -506,7 +506,7 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
-            logRequest("snapshot/delete", req);
+            logRequest("timelapse/delete", req);
 
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.id },
@@ -527,7 +527,7 @@ export default router({
                 return ok({});
             }
             catch (error) {
-                logError("timelapse.delete", "Failed to delete timelapse:", error);
+                logError("timelapse.delete", "Failed to delete timelapse!", { error });
                 return err("ERROR", "Failed to delete timelapse");
             }
         }),
@@ -740,9 +740,7 @@ export default router({
             const assignedHeartbeats = await hackatime.pushHeartbeats(heartbeats);
             const failedHeartbeat = assignedHeartbeats.responses.find(x => x[1] < 200 || x[1] > 299);
             if (failedHeartbeat) {
-                logError("timelapse.syncWithHackatime", "Couldn't sync heartbeat:", failedHeartbeat);
-                logError("timelapse.syncWithHackatime", "All snapshots:", snapshots);
-                logError("timelapse.syncWithHackatime", "All heartbeats:", heartbeats);
+                logError("timelapse.syncWithHackatime", "Couldn't sync heartbeat!", { failedHeartbeat, snapshots, heartbeats });
                 return err("HACKATIME_ERROR", `Hackatime returned HTTP ${failedHeartbeat[1]} for heartbeat at ${failedHeartbeat[0]?.time}! Report this at https://github.com/hackclub/lapse.`);
             }
 
@@ -769,7 +767,5 @@ export default router({
             });
 
             return ok({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
-        }),
-
-
+        })
 });

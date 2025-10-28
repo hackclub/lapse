@@ -288,8 +288,8 @@ export default router({
                 try {
                     await hackatime.currentUserStats();
                 }
-                catch (ex) {
-                    logWarning("user.update", "Error caught when verifying a Hackatime API key!", ex);
+                catch (error) {
+                    logWarning("user.update", "Error caught when verifying a Hackatime API key!", { error });
                     return err("HACKATIME_ERROR", "You provided an invalid Hackatime API key!");
                 }
             }
@@ -381,8 +381,7 @@ export default router({
             });
 
             if (timelapses.some(x => x.ownerId != req.ctx.user.id)) {
-                logError("user.removeDevice", "A timelapse has a device that is not owned by the author!");
-                logError("user.removeDevice", `owner ID = ${req.ctx.user.id}, timelapses =`, timelapses);
+                logError("user.removeDevice", "A timelapse has a device that is not owned by the author!", { ownerId: req.ctx.user.id, timelapses });
                 return err("ERROR", "That device seems to be used by another user! Please report this to @ascpixi on Slack.");
             }
 

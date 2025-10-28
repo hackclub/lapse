@@ -6,7 +6,7 @@ import prettyBytes from "pretty-bytes";
 
 import * as env from "../../server/env";
 import * as db from "../../generated/prisma";
-import { logError, logInfo } from "../../server/serverCommon";
+import { logError, logInfo, logNextRequest } from "../../server/serverCommon";
 import { ApiResult, err, Empty, ok } from "../../shared/common";
 import { getAuthenticatedUser } from "../../server/lib/auth";
 
@@ -52,6 +52,8 @@ export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse<ApiResult<Empty>>
 ) {
+    logNextRequest("upload", req);
+
     if (req.method !== "POST")
         return res.status(405).json(err("ERROR", "Method not allowed - try POST-ing instead."));
 
@@ -66,7 +68,7 @@ export default async function handler(
     });
 
     for (const token of staleTokens) {
-        logInfo("upload", `removing stale upload token ${token.id} owned by @${token.owner.handle}`);
+        logInfo("upload", `removing stale upload token ${token.id} owned by @${token.owner.handle}`, { token });
 
         if (token.uploaded) {
             s3.send(new DeleteObjectCommand({
@@ -118,7 +120,7 @@ export default async function handler(
         if (file.mimetype && file.mimetype !== token.mimeType)
             return res.status(400).json(err("ERROR", `Invalid content type; expected ${token.mimeType}, got ${file.mimetype}.`));
 
-        logInfo("upload", `uploading ${token.mimeType} of size ${prettyBytes(file.size)} to ${token.bucket}/${token.key}`);
+        logInfo("upload", `uploading ${token.mimeType} of size ${prettyBytes(file.size)} to ${token.bucket}/${token.key}`, { token, file });
 
         await s3.send(new PutObjectCommand({
             Bucket: token.bucket,
@@ -127,7 +129,7 @@ export default async function handler(
             ContentType: token.mimeType
         }));
 
-        logInfo("upload", `file ${token.bucket}/${token.key} uploaded!`);
+        logInfo("upload", `file ${token.bucket}/${token.key} uploaded!`, { token });
 
         await database.uploadToken.update({
             where: { id: token.id },
@@ -137,7 +139,7 @@ export default async function handler(
         return res.status(200).json(ok({}));
     }
     catch (error) {
-        logError("upload", "Failed to upload file:", error);
+        logError("upload", "Failed to upload file!", { error });
         return res.status(500).json(err("ERROR", "An internal server error occured while uploading file"));
     }
 }

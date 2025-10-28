@@ -344,8 +344,6 @@ export default function Page() {
 
   const isApiKeyDisabled = !hackatimeApiKey.trim() || isSettingApiKey;
 
-
-
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;
 

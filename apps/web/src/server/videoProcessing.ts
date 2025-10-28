@@ -38,8 +38,8 @@ export async function generateThumbnail(videoBuffer: Buffer): Promise<Buffer> {
             try {
                 await fs.unlink(path);
             }
-            catch (ex) {
-                logWarning("video", `could not delete temporary file ${path}:`, ex);
+            catch (error) {
+                logWarning("video", `could not delete temporary file ${path}!`, { error });
             }
         }
     }

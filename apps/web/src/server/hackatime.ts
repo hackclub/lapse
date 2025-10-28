@@ -199,8 +199,7 @@ export class Hackatime {
         });
 
         if (!req.ok) {
-            logError("hackatime", "API request failed!", req);
-            logError("hackatime", `method = ${method}, params =`, params);
+            logError("hackatime", "API request failed!", { req, method, params });
             throw new Error(`Hackatime API request failed with HTTP ${req.status}`);
         }
 

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { PrismaClient } from "../../generated/prisma";
 import { generateJWT } from "../../server/lib/auth";
 import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET } from "../../server/env";
-import { logError } from "../../server/serverCommon";
+import { logError, logNextRequest } from "../../server/serverCommon";
 
 const database = new PrismaClient();
 
@@ -41,6 +41,8 @@ export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse
 ) {
+    logNextRequest("authSlack", req);
+
     if (req.method !== "GET")
         return res.status(405).redirect("/?error=invalid-method");
 
@@ -79,15 +81,14 @@ export default async function handler(
         const tokenDataResult = SlackAuthResponseSchema.safeParse(tokenDataRaw);
 
         if (!tokenDataResult.success) {
-            logError("authSlack", "Invalid token response format.", tokenDataResult.error);
-            logError("authSlack", "Raw data is", tokenDataRaw);
+            logError("authSlack", "Invalid token response format.", { error: tokenDataResult.error, tokenDataRaw });
             return res.redirect("/?error=invalid-token-response");
         }
 
         const tokenData = tokenDataResult.data;
 
         if (!tokenData.ok) {
-            logError("authSlack", "Failed to exchange code for token:", tokenData);
+            logError("authSlack", "Failed to exchange code for token!", { tokenData });
             return res.redirect("/?error=token-exchange-failed");
         }
 
@@ -102,14 +103,14 @@ export default async function handler(
         const userDataResult = SlackUserResponseSchema.safeParse(userDataRaw);
 
         if (!userDataResult.success) {
-            logError("authSlack", "Invalid user response format:", userDataResult.error);
+            logError("authSlack", "Invalid user response format.", { error: userDataResult.error });
             return res.redirect("/?error=invalid-user-response");
         }
 
         const userData = userDataResult.data;
 
         if (!userData.ok) {
-            logError("authSlack", "Failed to fetch user profile:", userData);
+            logError("authSlack", "Failed to fetch user profile.", { userData });
             return res.redirect("/?error=profile-fetch-failed");
         }
 
@@ -174,7 +175,7 @@ export default async function handler(
         return res.redirect("/?auth=success");
     }
     catch (error) {
-        logError("authSlack", "Slack OAuth error:", error);
+        logError("authSlack", "Slack OAuth error!", { error });
         return res.redirect("/?error=server-error");
     }
 }

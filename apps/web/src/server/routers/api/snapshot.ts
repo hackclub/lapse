@@ -5,7 +5,7 @@ import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, err, ok, oneOf } from "@/shared/common";
 import * as db from "@/generated/prisma";
 import { PublicId } from "@/server/routers/common";
-import { logInfo } from "@/server/serverCommon";
+import { logInfo, logRequest } from "@/server/serverCommon";
 
 const database = new db.PrismaClient();
 
@@ -62,7 +62,7 @@ export default router({
         )
         .output(apiResult({}))
         .mutation(async (req) => {
-            logInfo(`snapshot/delete(id: ${req.input.id})`);
+            logRequest("snapshot/delete", req);
 
             const snapshot = await database.snapshot.findFirst({
                 where: { id: req.input.id },
@@ -110,8 +110,8 @@ export default router({
             })
         )
         .query(async (req) => {
-            logInfo(`snapshot/findByTimelapse(id: ${req.input.timelapseId})`);
-
+            logRequest("snapshot/findByTimelapse", req);
+            
             const timelapse = await database.timelapse.findFirst({
                 where: { id: req.input.timelapseId },
             });

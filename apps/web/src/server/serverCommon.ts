@@ -1,24 +1,26 @@
 import * as db from "@/generated/prisma";
+import * as Sentry from "@sentry/nextjs";
+import type { NextApiRequest } from "next";
 
-function dataToLogString(data: unknown[]) {
-    function inlineJson(x: unknown) {
-        return JSON.stringify(x, (k, v) => {
-            if (v instanceof Array) {
-                const MAX_LENGTH = 10;
+function inlineJson(x: unknown) {
+    return JSON.stringify(x, (k, v) => {
+        if (v instanceof Array) {
+            const MAX_LENGTH = 10;
 
-                if (v.length > MAX_LENGTH)
-                    return [...v.slice(0, MAX_LENGTH), `(...${v.length - MAX_LENGTH} more)`];
-
-                return v;
-            }
+            if (v.length > MAX_LENGTH)
+                return [...v.slice(0, MAX_LENGTH), `(...${v.length - MAX_LENGTH} more)`];
 
             return v;
-        }, 1)
-            .replaceAll("\n", " ")
-            .replace(/ +/g, " ")
-            .replace(/"([A-Za-z0-9_$]+)":/g, "$1:");
-    }
+        }
 
+        return v;
+    }, 1)
+        .replaceAll("\n", " ")
+        .replace(/ +/g, " ")
+        .replace(/"([A-Za-z0-9_$]+)":/g, "$1:");
+}
+
+function dataToLogString(data: unknown[]) {
     function stringify(x: unknown) {
         if (typeof x === "string")
             return x;
@@ -29,25 +31,39 @@ function dataToLogString(data: unknown[]) {
         return inlineJson(x);
     }
 
-    return data.map(stringify).join(" ").trim();
+    return data.map(stringify).join("\n    ").trim();
 }
 
-function getLogContent(severity: string, scope: string, ...data: unknown[]) {
+function getPlain(severity: string, scope: string, message: string, data: Record<string, unknown>) {
     const prefix = `(${severity}) ${scope}:`;
-    const stringified = dataToLogString(data).replaceAll("\n", `\n${prefix} `);
+
+    const stringified = dataToLogString(
+        [ message, ...Object.entries(data).map(x => `${x[0]}: ${inlineJson(x[1])}`) ]
+    ).replaceAll("\n", `\n${prefix} `);
+
     return `${prefix} ${stringified}`;
 }
 
-export function logInfo(scope: string, ...data: unknown[]) {
-    console.log(getLogContent("info", scope, ...data));
+function remapData(data: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(data)
+            .map(x => [`lapse_${x[0]}`, x[1]])
+    );
 }
 
-export function logWarning(scope: string, ...data: unknown[]) {
-    console.warn(getLogContent("warn", scope, ...data));
+export function logInfo(scope: string, message: string, data: Record<string, unknown> = {}) {
+    console.log(getPlain("info", scope,  message, data));
+    Sentry.logger.info(`(${scope}) ${message}`, remapData(data));
 }
 
-export function logError(scope: string, ...data: unknown[]) {
-    console.error(getLogContent("error", scope, ...data));
+export function logWarning(scope: string, message: string, data: Record<string, unknown> = {}) {
+    console.warn(getPlain("warn", scope,  message, data));
+    Sentry.logger.warn(`(${scope}) ${message}`, remapData(data));
+}
+
+export function logError(scope: string, message: string, data: Record<string, unknown> = {}) {
+    console.error(getPlain("error", scope,  message, data));
+    Sentry.logger.error(`(${scope}) ${message}`, remapData(data));
 }
 
 type PartialTRPCRequest = {
@@ -58,8 +74,15 @@ type PartialTRPCRequest = {
 };
 
 export function logRequest(endpoint: string, req: PartialTRPCRequest) {
-    console.log(getLogContent("request", endpoint, ...[
-        `${req.ctx.user ? `@${req.ctx.user.handle}` : "?"} ->`,
-        req.input
-    ]));
+    Sentry.logger.info(`(request) ${endpoint}`, {
+        input: req.input,
+        user: req.ctx.user
+    });
+
+    console.log(getPlain("info", "request", endpoint, { user: req.ctx.user, args: req.input }));
+}
+
+export function logNextRequest(endpoint: string, req: NextApiRequest) {
+    Sentry.logger.info(`(request) ${endpoint}`, { req });
+    console.log(getPlain("info", "request", endpoint, { url: req.url }));
 }
