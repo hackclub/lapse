@@ -1,23 +1,16 @@
-import * as db from "@/generated/prisma";
 import * as Sentry from "@sentry/nextjs";
 import type { NextApiRequest } from "next";
+import { inspect } from "node:util";
 
-function inlineJson(x: unknown) {
-    return JSON.stringify(x, (k, v) => {
-        if (v instanceof Array) {
-            const MAX_LENGTH = 10;
+import * as db from "@/generated/prisma";
 
-            if (v.length > MAX_LENGTH)
-                return [...v.slice(0, MAX_LENGTH), `(...${v.length - MAX_LENGTH} more)`];
-
-            return v;
-        }
-
-        return v;
-    }, 1)
-        .replaceAll("\n", " ")
-        .replace(/ +/g, " ")
-        .replace(/"([A-Za-z0-9_$]+)":/g, "$1:");
+function inlineStringify(x: unknown) {
+    return inspect(x, {
+        breakLength: Infinity,
+        compact: true,
+        maxArrayLength: 10,
+        sorted: true
+    });
 }
 
 function dataToLogString(data: unknown[]) {
@@ -28,7 +21,7 @@ function dataToLogString(data: unknown[]) {
         if (x instanceof Error)
             return `\t${x.stack?.replaceAll("\n", "\n\t") ?? `${x.name}: ${x.message}`}`;
 
-        return inlineJson(x);
+        return inlineStringify(x);
     }
 
     return data.map(stringify).join("\n    ").trim();
@@ -38,7 +31,7 @@ function getPlain(severity: string, scope: string, message: string, data: Record
     const prefix = `(${severity}) ${scope}:`;
 
     const stringified = dataToLogString(
-        [ message, ...Object.entries(data).map(x => `${x[0]}: ${inlineJson(x[1])}`) ]
+        [ message, ...Object.entries(data).map(x => `${x[0]}: ${inlineStringify(x[1])}`) ]
     ).replaceAll("\n", `\n${prefix} `);
 
     return `${prefix} ${stringified}`;
