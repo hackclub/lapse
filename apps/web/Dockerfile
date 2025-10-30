@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7-labs
 
 ############################  base  ##############################
-FROM --platform=$TARGETPLATFORM node:18-alpine AS base
+FROM --platform=$TARGETPLATFORM node:25-alpine AS base
 RUN apk update && apk add --no-cache libc6-compat curl bash
 
 # Install pnpm
