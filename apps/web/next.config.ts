@@ -9,9 +9,6 @@ const nextConfig: NextConfig = {
   output: "standalone",
   productionBrowserSourceMaps: true,
   poweredByHeader: false,
-  experimental: {
-    serverSourceMaps: true
-  },
 
   webpack: (config: Configuration, { isServer, dev }) => {
     // Configure SVGR for SVG imports
@@ -33,9 +30,7 @@ const nextConfig: NextConfig = {
       };
     }
 
-    if (isServer) {
-      config.devtool = "source-map";
-    }
+    config.devtool = "source-map";
 
     return config;
   },
