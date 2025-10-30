@@ -10,8 +10,7 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: true,
   poweredByHeader: false,
   experimental: {
-    serverSourceMaps: true,
-    enablePrerenderSourceMaps: true
+    serverSourceMaps: true
   },
 
   webpack: (config: Configuration, { isServer, dev }) => {
