@@ -1,11 +1,10 @@
 import "../../allow-only-server";
 
 import { z } from "zod";
-import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { apiResult, err, ok, oneOf } from "@/shared/common";
+import { router, protectedProcedure } from "@/server/trpc";
+import { apiResult, ok } from "@/shared/common";
 import * as db from "@/generated/prisma";
-import { PublicId } from "@/server/routers/common";
-import { logInfo, logRequest, logTracing } from "@/server/serverCommon";
+import { logTracing } from "@/server/serverCommon";
 import * as env from "@/server/env";
 import { UPLOAD_TOKEN_LIFETIME_MS } from "@/shared/constants";
 
@@ -92,7 +91,7 @@ export default router({
                 keys.push(key);
             }
 
-            logTracing("encodingInputs", { keys, uploads })
+            logTracing("encodingInputs", { keys, uploads });
             return ok({ uploads });
         })
 });
