@@ -5,9 +5,7 @@ FROM --platform=$TARGETPLATFORM node:25-alpine AS base
 RUN apk update && apk add --no-cache libc6-compat curl bash
 
 # Install pnpm
-RUN npm install -g corepack
-RUN corepack enable
-RUN corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm@latest
 
 # Equivalent to what we'd be doing with pnpm setup
 ENV PNPM_HOME="/root/.local/share/pnpm"
