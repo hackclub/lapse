@@ -128,19 +128,23 @@ export async function videoConcat(streams: Blob[]) {
 
         let localFirstTimestamp: number | null = null;
         let localLastTimestamp = 0;
+
         for await (const sample of sink.samples()) {
+            const origTimestamp = sample.timestamp;
+
             if (localFirstTimestamp === null) {
-                localFirstTimestamp = sample.timestamp;
+                localFirstTimestamp = origTimestamp;
             }
 
-            const relTimestamp = sample.timestamp - localFirstTimestamp;
+            const relTimestamp = origTimestamp - localFirstTimestamp;
+
 
             sample.setTimestamp((relTimestamp * timeScale) + globalTimeOffset);
             sample.setDuration(sample.duration * timeScale);
 
             await source.add(sample);
-            
-            localLastTimestamp = sample.timestamp;
+
+            localLastTimestamp = origTimestamp;
         }
 
         if (localFirstTimestamp != null) {
@@ -149,7 +153,6 @@ export async function videoConcat(streams: Blob[]) {
     }
     
     await out.finalize();
-    source.close();
     inputs.forEach(x => x.dispose());
     
     if (bufTarget.buffer == null) {
