@@ -51,6 +51,10 @@ function remapData(data: Record<string, unknown>): Record<string, unknown> {
     );
 }
 
+export function logTracing(scope: string, data: Record<string, unknown> = {}) {
+    Sentry.logger.trace(`TRACING: (${scope})`, remapData(data));
+}
+
 export function logInfo(scope: string, message: string, data: Record<string, unknown> = {}) {
     console.log(getPlain("info", scope,  message, data));
     Sentry.logger.info(`(${scope}) ${message}`, remapData(data));

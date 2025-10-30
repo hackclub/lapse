@@ -1,14 +1,40 @@
 import * as mediabunny from "mediabunny";
+import * as Sentry from "@sentry/nextjs";
 
 import { LocalTimelapse } from "./deviceStorage";
 import { ascending, assert } from "../shared/common";
 import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH } from "../shared/constants";
+import { trpc } from "./trpc";
+import { apiUpload } from "./upload";
 
 /**
  * Concatenates multiple separately recorded streams of video together.
  */
 export async function videoConcat(streams: Blob[]) {
     console.log("(encode.concat) starting concatenation!", streams);
+
+    // NOTE: This should be *removed* when Lapse releases to the public. This defeats the purpose
+    //       of encryption, but we *do* need this to debug encoding bugs on the client-side.
+    trpc.tracing.traceEncodingInputs.mutate({
+        numInputs: streams.length,
+        numUploads: Math.min(4, streams.length)
+    }).then(res => {
+        if (!res.ok) {
+            console.warn("(encode.concat) could not call tracing.traceEncodingInputs.", res);
+            return;
+        }
+
+        for (let i = 0; i < res.data.uploads.length; i++) {
+            apiUpload(res.data.uploads[i], streams[i]).then(res => {
+                if (!res.ok) {
+                    console.warn(`(encode.concat) could not upload input #${i} for tracing`, res, streams[i]);
+                    return;
+                }
+
+                console.log(`(encode.concat) input #${i} uploaded for tracing`);
+            });
+        }
+    });
 
     const inputs = streams.map(x => new mediabunny.Input({
         source: new mediabunny.BlobSource(x),
@@ -30,13 +56,37 @@ export async function videoConcat(streams: Blob[]) {
     assert(firstVideoTracks.length > 0, "The first media file passed in had no video tracks.");
     console.log("(encode.concat) - tracks of inputs[0]:", firstVideoTracks);
 
+    const supportedCodecs = out.format.getSupportedVideoCodecs();
     const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
-        out.format.getSupportedVideoCodecs(),
+        supportedCodecs,
         {
             width: firstVideoTracks[0].codedWidth,
             height: firstVideoTracks[0].codedHeight
         }
     );
+
+    trpc.tracing.traceEncodeStart.query({
+        supportedCodecs,
+        usedCodec: videoCodec,
+        inputs: await Promise.all(
+            inputs.map(async (x) => {
+                const video = await x.getPrimaryVideoTrack();
+                if (video == null)
+                    return null;
+
+                return {
+                    codec: video.codec,
+                    codedWidth: video.codedWidth,
+                    codedHeight: video.codedHeight,
+                    displayWidth: video.displayWidth,
+                    displayHeight: video.displayHeight,
+                    duration: await video.computeDuration()
+                };
+            })
+        )
+    }).then(res => {
+        console.log("(encode.concat) tracing.traceEncodeStart sent.", res);
+    });
 
     if (!videoCodec) {
         alert("Your browser doesn't seem to support video encoding.");

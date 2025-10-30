@@ -21,6 +21,11 @@ export const S3_ENCRYPTED_BUCKET_NAME = requiredEnv("S3_ENCRYPTED_BUCKET_NAME");
 export const S3_PUBLIC_BUCKET_NAME = requiredEnv("S3_PUBLIC_BUCKET_NAME");
 
 /**
+ * The S3 name for the bucket that stores private data related to tracing.
+ */
+export const S3_TRACING_BUCKET_NAME = requiredEnv("S3_TRACING_BUCKET_NAME");
+
+/**
  * The private key used to encrypt S3 bucket keys.
  */
 export const PRIVATE_KEY_UPLOAD_KEY = requiredEnv("PRIVATE_KEY_UPLOAD_KEY");
