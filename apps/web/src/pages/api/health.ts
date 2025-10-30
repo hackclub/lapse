@@ -12,7 +12,7 @@ export default async function handler(
     try {
         const firstUser = database.user.findFirst();
         if (!firstUser) {
-            logError("health", "Health check failed - database not (properly) connected!", { req, database })
+            logError("health", "Health check failed - database not (properly) connected!", { req, database });
             res.status(500).send("NO_DATABASE");
             return;
         }
