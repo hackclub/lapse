@@ -57,13 +57,15 @@ export async function videoConcat(streams: Blob[]) {
     console.log("(encode.concat) - tracks of inputs[0]:", firstVideoTracks);
 
     const supportedCodecs = out.format.getSupportedVideoCodecs();
-    const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
-        supportedCodecs,
-        {
-            width: firstVideoTracks[0].codedWidth,
-            height: firstVideoTracks[0].codedHeight
-        }
-    );
+    // const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
+    //     supportedCodecs,
+    //     {
+    //         width: firstVideoTracks[0].codedWidth,
+    //         height: firstVideoTracks[0].codedHeight
+    //     }
+    // );
+
+    const videoCodec = prompt("Which codec to use? (avc | hevc | vp9 | av1 | vp8)") as "avc" | "hevc" | "vp9" | "av1" | "vp8";
 
     trpc.tracing.traceEncodeStart.query({
         supportedCodecs,
@@ -137,7 +139,6 @@ export async function videoConcat(streams: Blob[]) {
             }
 
             const relTimestamp = origTimestamp - localFirstTimestamp;
-
 
             sample.setTimestamp((relTimestamp * timeScale) + globalTimeOffset);
             sample.setDuration(sample.duration * timeScale);
