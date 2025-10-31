@@ -47,7 +47,7 @@ export async function videoConcat(streams: Blob[]) {
     const bufTarget = new mediabunny.BufferTarget();
     const out = new mediabunny.Output({
         target: bufTarget,
-        format: new mediabunny.WebMOutputFormat()
+        format: new mediabunny.MkvOutputFormat()
     });
 
     console.log("(encode.concat) - output:", out);
