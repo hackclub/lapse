@@ -3,9 +3,56 @@ import * as Sentry from "@sentry/nextjs";
 
 import { LocalTimelapse } from "./deviceStorage";
 import { ascending, assert } from "../shared/common";
-import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH } from "../shared/constants";
+import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "../shared/constants";
 import { trpc } from "./trpc";
 import { apiUpload } from "./upload";
+
+const BITS_PER_PIXEL = 1.1;
+
+/**
+ * Creates a `MediaRecorder` object, the output of which will be able to be decoded client-side.
+ */
+export function createMediaRecorder(stream: MediaStream) {
+    const tracks = stream.getVideoTracks();
+    assert(tracks.length > 0, "The stream provided to MediaRecorder had no video tracks");
+
+    const metadata = tracks[0].getSettings();
+
+    // Sorted by preference. Note that VP8 has shown to cause decoding errors with WebCodecs.
+    let mime = [
+        "video/mp4;codecs=avc1",
+        "video/x-matroska;codecs=avc1",
+        "video/x-matroska;codecs=av1",
+        "video/webm;codecs=av1",
+        "video/x-matroska;codecs=vp9",
+        "video/webm;codecs=vp9",
+        "video/mp4;codecs=hvc1",
+        "video/mp4;codecs=hev1",
+        "video/x-matroska;codecs=hvc1",
+        "video/x-matroska;codecs=hev1",
+        "video/mp4",
+        "video/x-matroska",
+        "video/webm"
+    ].find(x => MediaRecorder.isTypeSupported(x));
+
+    if (!mime) {
+        console.warn("(createMediaRecorder) no video codecs are supported for MediaRecorder...?!");
+        mime = "video/webm";
+    }
+
+    const w = metadata.width ?? 1920;
+    const h = metadata.height ?? 1080;
+    const fps = 1000 / TIMELAPSE_FRAME_LENGTH_MS;
+    const bitrate = w * h * fps * BITS_PER_PIXEL;
+
+    console.log(`(createMediaRecorder) bitrate=${bitrate} (${bitrate / 1000}kbit/s, ${bitrate / 1000 / 1000}mbit/s), format=${mime}`);
+
+    return new MediaRecorder(stream, {
+        videoBitsPerSecond: bitrate,
+        audioBitsPerSecond: 0,
+        mimeType: mime
+    });
+}
 
 /**
  * Concatenates multiple separately recorded streams of video together.
@@ -36,10 +83,12 @@ export async function videoConcat(streams: Blob[]) {
         }
     });
 
-    const inputs = streams.map(x => new mediabunny.Input({
-        source: new mediabunny.BlobSource(x),
-        formats: mediabunny.ALL_FORMATS
-    }));
+    const inputs = streams.map(
+        (x) => new mediabunny.Input({
+            source: new mediabunny.BlobSource(x),
+            formats: mediabunny.ALL_FORMATS
+        })
+    );
 
     console.log("(encode.concat) - inputs:", inputs);
     assert(inputs.length > 0, "No inputs were passed to concat().");
@@ -47,7 +96,7 @@ export async function videoConcat(streams: Blob[]) {
     const bufTarget = new mediabunny.BufferTarget();
     const out = new mediabunny.Output({
         target: bufTarget,
-        format: new mediabunny.MkvOutputFormat()
+        format: new mediabunny.WebMOutputFormat()
     });
 
     console.log("(encode.concat) - output:", out);
@@ -57,15 +106,13 @@ export async function videoConcat(streams: Blob[]) {
     console.log("(encode.concat) - tracks of inputs[0]:", firstVideoTracks);
 
     const supportedCodecs = out.format.getSupportedVideoCodecs();
-    // const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
-    //     supportedCodecs,
-    //     {
-    //         width: firstVideoTracks[0].codedWidth,
-    //         height: firstVideoTracks[0].codedHeight
-    //     }
-    // );
-
-    const videoCodec = prompt("Which codec to use? (avc | hevc | vp9 | av1 | vp8)") as "avc" | "hevc" | "vp9" | "av1" | "vp8";
+    const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
+        supportedCodecs,
+        {
+            width: firstVideoTracks[0].codedWidth,
+            height: firstVideoTracks[0].codedHeight
+        }
+    );
 
     trpc.tracing.traceEncodeStart.query({
         supportedCodecs,
@@ -100,12 +147,13 @@ export async function videoConcat(streams: Blob[]) {
     assert(firstVideoTracks[0].codec != null, "First video track has no codec (or an unsupported one)");
     const source = new mediabunny.VideoSampleSource({
         codec: videoCodec,
-        bitrate: mediabunny.QUALITY_MEDIUM
+        bitrate: mediabunny.QUALITY_HIGH,
+        sizeChangeBehavior: "contain"
     });
 
     out.addVideoTrack(source, { frameRate: TIMELAPSE_FPS });
 
-    const timeScale = (1000 / TIMELAPSE_FRAME_LENGTH) / TIMELAPSE_FPS;
+    const timeScale = (1000 / TIMELAPSE_FRAME_LENGTH_MS) / TIMELAPSE_FPS;
     console.log(`(encode.concat) computed timescale: ${timeScale}`);
 
     await out.start();
@@ -120,18 +168,17 @@ export async function videoConcat(streams: Blob[]) {
             throw new Error("A video input has no primary video track.");
         }
 
-        const decoderConfig = await video.getDecoderConfig();
-        if (!decoderConfig) {
-            console.error("(encode.concat) input", video, "has no decoder config!");
-            throw new Error("A video input has no decoder config."); 
-        }
-
         const sink = new mediabunny.VideoSampleSink(video);
 
         let localFirstTimestamp: number | null = null;
         let localLastTimestamp = 0;
 
         for await (const sample of sink.samples()) {
+            if (sample.duration == 0) {
+                console.warn("(encode.concat) uh oh... one of the samples has a duration of 0! skipping!", sample);
+                continue;
+            }
+
             const origTimestamp = sample.timestamp;
 
             if (localFirstTimestamp === null) {

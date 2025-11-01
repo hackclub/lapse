@@ -14,11 +14,11 @@ import { TextareaInput } from "../../client/components/ui/TextareaInput";
 import { TextInput } from "../../client/components/ui/TextInput";
 import { SelectInput } from "../../client/components/ui/SelectInput";
 import { deviceStorage, LocalSnapshot } from "../../client/deviceStorage";
-import { mergeVideoSessions, videoGenerateThumbnail } from "../../client/videoProcessing";
+import { createMediaRecorder, mergeVideoSessions, videoGenerateThumbnail } from "../../client/videoProcessing";
 import { encryptVideo, encryptData, getCurrentDevice } from "../../client/encryption";
 import { trpc } from "../../client/trpc";
 import { assert } from "../../shared/common";
-import { TIMELAPSE_FRAME_LENGTH } from "../../shared/constants";
+import { TIMELAPSE_FRAME_LENGTH_MS } from "../../shared/constants";
 import { useOnce } from "../../client/hooks/useOnce";
 import { useAuth } from "../../client/hooks/useAuth";
 import { apiUpload } from "../../client/upload";
@@ -218,9 +218,9 @@ export default function Page() {
     // Only set up recording if not already active (for new timelapses or resumed ones)
     if (!recorder || recorder.state === "inactive") {
       const canvas = canvasRef.current!;
-      const stream = canvas.captureStream(1000 / TIMELAPSE_FRAME_LENGTH);
+      const stream = canvas.captureStream(1000 / TIMELAPSE_FRAME_LENGTH_MS);
 
-      const newRecorder = new MediaRecorder(stream);
+      const newRecorder = createMediaRecorder(stream);
 
       newRecorder.ondataavailable = async (ev) => {
         if (ev.data.size <= 0)
@@ -236,7 +236,7 @@ export default function Page() {
 
       console.log("(timelapse/create) creating new recorder!", newRecorder);
       setRecorder(newRecorder);
-      newRecorder.start(TIMELAPSE_FRAME_LENGTH);
+      newRecorder.start(TIMELAPSE_FRAME_LENGTH_MS);
 
       if (frameInterval) {
         console.warn("(timelapse/create) clearing previous frame capture interval.");
@@ -245,7 +245,7 @@ export default function Page() {
 
       const newInterval = setInterval(
         () => captureFrame(activeTimelapseId!),
-        TIMELAPSE_FRAME_LENGTH
+        TIMELAPSE_FRAME_LENGTH_MS
       );
       
       setFrameInterval(newInterval);
