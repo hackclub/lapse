@@ -373,6 +373,10 @@ export default function Page() {
 
     recorder.onstop = async () => {
       try {
+        console.log("(upload) synchronizing deviceStorage...");
+        await deviceStorage.sync();
+        console.log("(upload) synchronized! proceeding!");
+
         setIsUploading(true);
         setUploadProgress(0);
         setUploadStage("Preparing upload...");

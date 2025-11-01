@@ -1,3 +1,5 @@
+import { AsyncQueue } from "@/shared/queuing";
+
 /**
  * Represents a locally stored snapshot. This will represent the structure on the server-side database.
  */
@@ -53,6 +55,7 @@ const DB_DEVICES_STORE_NAME = "devices";
  */
 export class DeviceStorage {
     db: IDBDatabase | null = null;
+    private serialQueue = new AsyncQueue();
 
     private async ensureInit(): Promise<void> {
         if (!this.db) {
@@ -107,7 +110,12 @@ export class DeviceStorage {
         });
     }
 
-    async saveTimelapse(timelapse: LocalTimelapse | Omit<LocalTimelapse, "id">): Promise<number> {
+    private async operation<T>(block: () => Promise<T>) {
+        return await this.serialQueue.enqueue(block);
+    }
+
+    private async _saveTimelapse(timelapse: LocalTimelapse | Omit<LocalTimelapse, "id">): Promise<number> {
+        await this.ensureInit();
         const result = await this.transact<number>(
             [DB_TIMELAPSES_STORE_NAME],
             "readwrite",
@@ -118,7 +126,12 @@ export class DeviceStorage {
         return result;
     }
 
-    async getTimelapse(id: number): Promise<LocalTimelapse | null> {
+    async saveTimelapse(timelapse: LocalTimelapse | Omit<LocalTimelapse, "id">): Promise<number> {
+        return await this.operation(() => this._saveTimelapse(timelapse));
+    }
+
+    private async _getTimelapse(id: number): Promise<LocalTimelapse | null> {
+        await this.ensureInit();
         const result = await this.transact<LocalTimelapse>(
             [DB_TIMELAPSES_STORE_NAME],
             "readonly",
@@ -128,124 +141,166 @@ export class DeviceStorage {
         return result || null;
     }
 
-    async getActiveTimelapse(): Promise<LocalTimelapse | null> {
-        const timelapses = await this.transact<LocalTimelapse[]>(
-            [DB_TIMELAPSES_STORE_NAME],
-            "readonly",
-            (store) => store.getAll()
-        );
+    async getTimelapse(id: number): Promise<LocalTimelapse | null> {
+        return await this.operation(() => this._getTimelapse(id));
+    }
 
-        return timelapses.find((t) => t.isActive) || null;
+    async getActiveTimelapse(): Promise<LocalTimelapse | null> {
+        return await this.operation(async () => {
+            await this.ensureInit();
+            const timelapses = await this.transact<LocalTimelapse[]>(
+                [DB_TIMELAPSES_STORE_NAME],
+                "readonly",
+                (store) => store.getAll()
+            );
+
+            return timelapses.find((t) => t.isActive) || null;
+        });
     }
 
     async appendChunk(timelapseId: number, chunk: Blob, session: number): Promise<void> {
-        const timelapse = await this.getTimelapse(timelapseId);
-        if (!timelapse)
-            return;
+        return await this.operation(async () => {
+            const timelapse = await this._getTimelapse(timelapseId);
+            if (!timelapse)
+                return;
 
-        const storedChunk: LocalChunk = {
-            data: chunk,
-            timestamp: Date.now(),
-            session
-        };
+            const storedChunk: LocalChunk = {
+                data: chunk,
+                timestamp: Date.now(),
+                session
+            };
 
-        timelapse.chunks.push(storedChunk);
-        await this.saveTimelapse(timelapse);
+            timelapse.chunks.push(storedChunk);
+            await this._saveTimelapse(timelapse);
 
-        console.debug(`(db) appendChunk(${timelapseId}) ->`, storedChunk);
+            console.debug(`(db) appendChunk(${timelapseId}) ->`, storedChunk);
+        });
     }
 
     async markComplete(timelapseId: number): Promise<void> {
-        const timelapse = await this.getTimelapse(timelapseId);
-        if (!timelapse)
-            return;
+        return await this.operation(async () => {
+            const timelapse = await this._getTimelapse(timelapseId);
+            if (!timelapse)
+                return;
 
-        timelapse.isActive = false;
-        await this.saveTimelapse(timelapse);
+            timelapse.isActive = false;
+            await this._saveTimelapse(timelapse);
 
-        console.log(`(db) markComplete(${timelapseId})`);
+            console.log(`(db) markComplete(${timelapseId})`);
+        }); 
     }
 
     async deleteTimelapse(id: number): Promise<void> {
-        await this.transact<void>(
-            [DB_TIMELAPSES_STORE_NAME],
-            "readwrite",
-            (store) => store.delete(id)
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            await this.transact<void>(
+                [DB_TIMELAPSES_STORE_NAME],
+                "readwrite",
+                (store) => store.delete(id)
+            );
 
-        console.log(`(db) deleteTimelapse(${id})`);
+            console.log(`(db) deleteTimelapse(${id})`);
+        });
     }
 
     async saveSnapshot(snapshot: LocalSnapshot): Promise<number> {
-        await this.transact<number>(
-            [DB_SNAPSHOTS_STORE_NAME],
-            "readwrite",
-            (store) => store.put(snapshot)
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            await this.transact<number>(
+                [DB_SNAPSHOTS_STORE_NAME],
+                "readwrite",
+                (store) => store.put(snapshot)
+            );
 
-        console.debug("(db) saveSnapshot ->", snapshot);
-        return snapshot.createdAt;
+            console.debug("(db) saveSnapshot ->", snapshot);
+            return snapshot.createdAt;
+        });
     }
 
     async getAllSnapshots(): Promise<LocalSnapshot[]> {
-        const result = await this.transact<LocalSnapshot[]>(
-            [DB_SNAPSHOTS_STORE_NAME],
-            "readonly",
-            (store) => store.getAll()
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            const result = await this.transact<LocalSnapshot[]>(
+                [DB_SNAPSHOTS_STORE_NAME],
+                "readonly",
+                (store) => store.getAll()
+            );
 
-        return result || [];
+            return result || [];
+        });
     }
 
     async deleteAllSnapshots(): Promise<void> {
-        await this.transact<void>(
-            [DB_SNAPSHOTS_STORE_NAME],
-            "readwrite",
-            (store) => store.clear()
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            await this.transact<void>(
+                [DB_SNAPSHOTS_STORE_NAME],
+                "readwrite",
+                (store) => store.clear()
+            );
 
-        console.log("(db) deleteAllSnapshots -> all snapshots deleted");
+            console.log("(db) deleteAllSnapshots -> all snapshots deleted");
+        });
     }
 
     async saveDevice(device: LocalDevice): Promise<string> {
-        await this.transact<string>(
-            [DB_DEVICES_STORE_NAME],
-            "readwrite",
-            (store) => store.put(device)
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            await this.transact<string>(
+                [DB_DEVICES_STORE_NAME],
+                "readwrite",
+                (store) => store.put(device)
+            );
 
-        console.log("(db) saveDevice ->", device);
-        return device.id;
+            console.log("(db) saveDevice ->", device);
+            return device.id;
+        });
     }
 
     async getDevice(id: string): Promise<LocalDevice | null> {
-        const result = await this.transact<LocalDevice>(
-            [DB_DEVICES_STORE_NAME],
-            "readonly",
-            (store) => store.get(id)
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            const result = await this.transact<LocalDevice>(
+                [DB_DEVICES_STORE_NAME],
+                "readonly",
+                (store) => store.get(id)
+            );
 
-        return result || null;
+            return result || null;
+        });
     }
 
     async getAllDevices(): Promise<LocalDevices> {
-        const result = await this.transact<LocalDevices>(
-            [DB_DEVICES_STORE_NAME],
-            "readonly",
-            (store) => store.getAll()
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            const result = await this.transact<LocalDevices>(
+                [DB_DEVICES_STORE_NAME],
+                "readonly",
+                (store) => store.getAll()
+            );
 
-        return result || [];
+            return result || [];
+        });
     }
 
     async deleteDevice(id: string): Promise<void> {
-        await this.transact<void>(
-            [DB_DEVICES_STORE_NAME],
-            "readwrite",
-            (store) => store.delete(id)
-        );
+        return await this.operation(async () => {
+            await this.ensureInit();
+            await this.transact<void>(
+                [DB_DEVICES_STORE_NAME],
+                "readwrite",
+                (store) => store.delete(id)
+            );
 
-        console.log(`(db) deleteDevice(${id})`);
+            console.log(`(db) deleteDevice(${id})`);
+        });
+    }
+
+    /**
+     * Ensures all pending database operations are complete.
+     */
+    async sync() {
+        await this.serialQueue.synchronize();
     }
 }
 
