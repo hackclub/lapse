@@ -257,3 +257,10 @@ export type Result<T> = Ok<T> | Err;
  * Represents an empty object (`{}`).
  */
 export type Empty = Record<string, never>;
+
+/**
+ * Returns `true` if `obj` is an array with at least one element.
+ */
+export function isNonEmptyArray(obj: unknown): obj is unknown[] {
+    return Array.isArray(obj) && obj.length != 0;
+}

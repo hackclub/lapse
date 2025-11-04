@@ -5,7 +5,7 @@ import { z } from "zod";
 import * as db from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
 import { apiResult, assert, err, ok, when } from "../../../shared/common";
-import { Hackatime } from "../../hackatime";
+import { HackatimeUserApi } from "../../hackatime";
 import { logError, logWarning, logRequest } from "../../serverCommon";
 import { deleteTimelapse } from "./timelapse";
 import { PublicId } from "../common";
@@ -283,7 +283,7 @@ export default router({
             };
 
             if (changes.hackatimeApiKey) {
-                const hackatime = new Hackatime(changes.hackatimeApiKey);
+                const hackatime = new HackatimeUserApi(changes.hackatimeApiKey);
 
                 try {
                     await hackatime.currentUserStats();

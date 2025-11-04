@@ -1,4 +1,7 @@
+import "@/server/allow-only-server";
+
 import { logError } from "./serverCommon";
+import { isNonEmptyArray } from "@/shared/common";
 
 export interface WakaTimeCategorizedStat {
     name: string;
@@ -180,17 +183,17 @@ export interface CreatedWakaTimeHeartbeat {
 
 export type WakaTimeResponse<T> = { data: T }
 
-export class Hackatime {
-    apiKey: string;
+class HackatimeBase {
+    private apiKey: string;
 
-    constructor(apiKey: string) {
-        this.apiKey = apiKey;
+    constructor (key: string) {
+        this.apiKey = key;
     }
 
-    private async query<T>(method: "GET" | "POST", endpoint: string, params: object = {}) {
+    protected async query<T>(method: "GET" | "POST", endpoint: string, params: object = {}) {
         const req = await fetch(`https://hackatime.hackclub.com/api/${endpoint}`, {
             method,
-            body: method === "GET" ? undefined : JSON.stringify(params),
+            body: (method === "GET" || !params) ? undefined : JSON.stringify(params),
             headers: new Headers({
                 "Authorization": `Bearer ${this.apiKey}`,
                 "User-Agent": "lapse/0.1.0",
@@ -204,6 +207,15 @@ export class Hackatime {
         }
 
         return await req.json() as T;
+    }
+}
+
+export class HackatimeUserApi extends HackatimeBase {
+    constructor (apiKey: string) {
+        if (apiKey.startsWith("hka_"))
+            throw new Error("Attempted to provide an admin API key to HackatimeUserApi.");
+
+        super(apiKey);
     }
 
     async currentUserStats() {
@@ -219,5 +231,53 @@ export class Hackatime {
             "POST", "hackatime/v1/users/current/heartbeats.bulk",
             { heartbeats }
         );
+    }
+}
+
+/**
+ * Exposes admin endpoints for Hackatime.
+ */
+export class HackatimeAdminApi extends HackatimeBase {
+    constructor (apiKey: string) {
+        if (!apiKey.startsWith("hka_"))
+            throw new Error("The API key provided to HackatimeAdminApi is not a valid admin key. Ensure it starts with 'hka_'.");
+        
+        super(apiKey);
+    }
+
+    /**
+     * Gets the first personal Hackatime API key for a user identified by their Slack ID.
+     */
+    async tokenForUser(slackId: string) {
+        if (!/^[UW][A-Z0-9]{4,}$/.test(slackId))
+            throw new Error(`${slackId} isn't a Slack ID.`);
+
+        // DANGEROUS!!! Make sure that we verify that `slackId` is indeed a Slack ID without any extra
+        // characters. We do NOT want an SQL injection here.
+        const sql = `SELECT token FROM api_keys JOIN users ON api_keys.user_id=users.id WHERE users.slack_uid='${slackId}'`;
+        
+        const res = await this.query<{
+            success: boolean,
+            query: string,
+            columns: string[],
+            rows: {
+                token: [string, string]
+            }[],
+            row_count: number,
+            executed_by: string,
+            executed_at: string
+        }>(
+            "POST", `admin/v1/execute?query=${encodeURIComponent(sql)}`
+        );
+
+        if (!res.success) {
+            logError("hackatime", `tokenForUser for user ${slackId} failed!`, { res });
+            throw new Error(`Could not get token for user ${slackId}.`);
+        }
+
+        if (!isNonEmptyArray(res.rows) || !isNonEmptyArray(res.rows[0]))
+            return null;
+
+        return res.rows[0].token[1];
     }
 }

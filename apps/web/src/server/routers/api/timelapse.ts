@@ -12,7 +12,7 @@ import * as env from "../../env";
 import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE, MAX_VIDEO_UPLOAD_SIZE, UPLOAD_TOKEN_LIFETIME_MS } from "../../../shared/constants";
 import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "./user";
 import * as db from "../../../generated/prisma";
-import { Hackatime, WakaTimeHeartbeat } from "../../hackatime";
+import { HackatimeUserApi, WakaTimeHeartbeat } from "../../hackatime";
 import { logError, logInfo, logRequest } from "../../serverCommon";
 import { generateThumbnail } from "../../videoProcessing";
 import { PublicId } from "../common";
@@ -722,7 +722,7 @@ export default router({
             if (!timelapse.owner.hackatimeApiKey)
                 return err("ERROR", "You don't have a Hackatime API key assigned to your profile!");
 
-            const hackatime = new Hackatime(timelapse.owner.hackatimeApiKey);
+            const hackatime = new HackatimeUserApi(timelapse.owner.hackatimeApiKey);
             
             const snapshots = await database.snapshot.findMany({
                 where: { timelapseId: timelapse.id }
