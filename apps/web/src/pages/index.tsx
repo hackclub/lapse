@@ -103,7 +103,7 @@ export default function Home() {
           {
             auth.currentUser ? (
               topUserProjects.map(x => (
-                <div className="flex gap-2.5">
+                <div id={x.name} className="flex gap-2.5">
                   <span className="tracking-tight">{x.name}</span>
                   <div className="w-full bg-darkless relative">
                     <div
@@ -136,7 +136,7 @@ export default function Home() {
             <div className="flex w-full justify-between py-12">
               {
                 reqLeaderboard.leaderboard.map(x => (
-                  <div className="flex flex-col gap-1 justify-center items-center">
+                  <div key={x.id} className="flex flex-col gap-1 justify-center items-center">
                     <img src={x.pfp} alt="" className="block w-30 h-30 rounded-full mb-2 shadow" />
                     <div className="text-3xl font-bold">{x.displayName}</div>
                     <div className="text-xl text-center leading-6">{`${formatDuration(x.secondsThisWeek)} recorded`}<br/>this week</div>
@@ -156,7 +156,7 @@ export default function Home() {
             />
 
             <div className="flex flex-wrap justify-between w-full gap-y-12">
-              { reqRecent?.timelapses.map(x => <TimelapseCard timelapse={x} />) }
+              { reqRecent?.timelapses.map(x => <TimelapseCard timelapse={x} key={x.id} />) }
             </div>
           </section>
         ) }

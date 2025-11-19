@@ -238,7 +238,7 @@ export default function Page() {
         </div>
 
         <div className="flex flex-wrap justify-between w-full gap-y-12 p-16">
-          { timelapses?.map(t => <TimelapseCard timelapse={t} /> ) }
+          { timelapses?.map(t => <TimelapseCard timelapse={t} key={t.id} /> ) }
         </div>
       </div>
 
