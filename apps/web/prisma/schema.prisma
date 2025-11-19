@@ -59,7 +59,10 @@ model User {
 /// Represents a timelapse that has not yet been uploaded to the server.
 model DraftTimelapse {
   /// The unique ID of the timelapse.
-  id                    String    @id @default(nanoid(12))
+  id                    String      @id @default(nanoid(12))
+
+  /// The date and time when the draft timelapse has been created.
+  createdAt             DateTime    @default(now())
 
   ownerId               String
   owner                 User          @relation(fields: [ownerId], references: [id])
@@ -115,6 +118,9 @@ model Timelapse {
   /// The unique ID of the timelapse.
   id                    String                  @id @default(nanoid(12))
 
+  /// The date when the timelapse was created.
+  createdAt             DateTime 
+
   /// The S3 key that points to the object. If `isPublished` is `false`, this refers to the
   /// encrypted bucket - otherwise, the public bucket.
   s3Key                 String
@@ -141,6 +147,9 @@ model Timelapse {
 
   /// The container type used to store the video.
   containerKind         VideoContainerKind
+
+  /// The amount of seconds that this timelapse lasts for. This is inferred from the snapshots.
+  duration              Float
 
   ownerId               String
   owner                 User                @relation(fields: [ownerId], references: [id])

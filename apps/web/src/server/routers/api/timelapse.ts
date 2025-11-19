@@ -9,13 +9,13 @@ import { procedure, router, protectedProcedure } from "../../trpc";
 import { apiResult, ascending, err, match, when, ok, oneOf, closest, chunked, assert } from "../../../shared/common";
 import { decryptVideo } from "../../encryption";
 import * as env from "../../env";
-import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE, MAX_VIDEO_UPLOAD_SIZE, UPLOAD_TOKEN_LIFETIME_MS } from "../../../shared/constants";
+import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE, MAX_VIDEO_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS, UPLOAD_TOKEN_LIFETIME_MS } from "../../../shared/constants";
 import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "./user";
 import * as db from "../../../generated/prisma";
 import { HackatimeUserApi, WakaTimeHeartbeat } from "../../hackatime";
 import { logError, logInfo, logRequest } from "../../serverCommon";
 import { generateThumbnail } from "../../videoProcessing";
-import { PublicId } from "../common";
+import { ApiDate, PublicId } from "../common";
 
 const database = new PrismaClient();
 const s3 = new S3Client({
@@ -27,16 +27,12 @@ const s3 = new S3Client({
     },
 });
 
-/**
- * Represents a `db.Timelapse` with related tables included.
- */
-export type DbCompositeTimelapse = db.Timelapse & { owner: db.User, device: db.KnownDevice | null };
-
-export function dtoTimelapse(entity: DbCompositeTimelapse): Timelapse {
+export function dtoTimelapse(entity: db.Timelapse & { owner: db.User }): Timelapse {
     // This lacks `isPublished` so that we have to mark it explicitly when creating a DTO
     // that might hold private data (e.g. device names).
     return {
         id: entity.id,
+        createdAt: entity.createdAt.getTime(),
         owner: dtoPublicUser(entity.owner),
         name: entity.name,
         description: entity.description,
@@ -53,7 +49,7 @@ export function dtoTimelapse(entity: DbCompositeTimelapse): Timelapse {
 /**
  * Converts a database representation of a timelapse to a runtime (API) one, including all private fields.
  */
-export function dtoOwnedTimelapse(entity: DbCompositeTimelapse): OwnedTimelapse {
+export function dtoOwnedTimelapse(entity: db.Timelapse & { owner: db.User, device: db.KnownDevice | null }): OwnedTimelapse {
     return {
         ...dtoTimelapse(entity),
         private: {
@@ -144,6 +140,11 @@ export const OwnedTimelapseSchema = z.object({
      * The ID of timelapse.
      */
     id: PublicId,
+
+    /**
+     * The date when the timelapse was created.
+     */
+    createdAt: ApiDate,
 
     /**
      * Information about the owner/author of the timelapse.
@@ -394,6 +395,7 @@ export default router({
                 include: { owner: true, device: true },
                 data: {
                     id: draft.id,
+                    createdAt: draft.createdAt,
                     ownerId: req.ctx.user.id,
                     name: req.input.name,
                     description: req.input.description,
@@ -402,7 +404,8 @@ export default router({
                     isPublished: false,
                     s3Key: videoUpload.key,
                     thumbnailS3Key: thumbnailUpload.key,
-                    deviceId: req.input.deviceId
+                    deviceId: req.input.deviceId,
+                    duration: (req.input.snapshots.length * TIMELAPSE_FRAME_LENGTH_MS) / 1000
                 }
             });
 

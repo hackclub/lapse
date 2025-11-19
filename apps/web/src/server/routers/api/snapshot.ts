@@ -4,7 +4,7 @@ import { z } from "zod";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { apiResult, err, ok, oneOf } from "@/shared/common";
 import * as db from "@/generated/prisma";
-import { PublicId } from "@/server/routers/common";
+import { ApiDate, PublicId } from "@/server/routers/common";
 import { logInfo, logRequest } from "@/server/serverCommon";
 
 const database = new db.PrismaClient();
@@ -44,7 +44,7 @@ export const SnapshotSchema = z.object({
     /**
      * The creation timestamp of the snapshot.
      */
-    createdAt: z.number().nonnegative(),
+    createdAt: ApiDate,
 });
 
 export default router({

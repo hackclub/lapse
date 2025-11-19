@@ -1,0 +1,359 @@
+import { useCallback, useEffect, useState } from "react";
+import Icon from "@hackclub/icons";
+
+import type { KnownDevice } from "@/server/routers/api/user";
+import type { Timelapse } from "@/server/routers/api/timelapse";
+
+import { trpc } from "@/client/trpc";
+import { deviceStorage, LocalDevice } from "@/client/deviceStorage";
+import { useAuth } from "@/client/hooks/useAuth";
+
+import { WindowedModal } from "../WindowedModal";
+import { TextInput } from "../TextInput";
+import { Button } from "../Button";
+import { PasskeyModal } from "../PasskeyModal";
+import { ErrorModal } from "../ErrorModal";
+
+export function SettingsView({ isOpen, setIsOpen }: {
+  isOpen: boolean,
+  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>
+}) {
+  const auth = useAuth(false);
+
+  const [hackatimeApiKey, setHackatimeApiKey] = useState("");
+  const [passkeyVisible, setPasskeyVisible] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [originalHackatimeApiKey, setOriginalHackatimeApiKey] = useState("");
+
+  const [currentDeviceForPin, setCurrentDeviceForPin] = useState<string | null>(null);
+  const [deviceToRemove, setDeviceToRemove] = useState<string | null>(null);
+  const [removeDeviceModalOpen, setRemoveDeviceModalOpen] = useState(false);
+  const [timelapsesToRemove, setTimelapsesToRemove] = useState<Timelapse[]>([]);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const [devices, setDevices] = useState<KnownDevice[]>([]);
+  const [localDevices, setLocalDevices] = useState<LocalDevice[]>([]);
+
+  useEffect(() => {
+    if (!auth.currentUser?.private.hackatimeApiKey)
+      return;
+
+    setHackatimeApiKey(auth.currentUser.private.hackatimeApiKey);
+    setOriginalHackatimeApiKey(auth.currentUser.private.hackatimeApiKey);
+  }, [auth]);
+
+  const saveApiKey = useCallback(async (apiKey: string) => {
+    if (!auth.currentUser)
+      return;
+
+    const res = await trpc.user.update.mutate({
+      id: auth.currentUser.id,
+      changes: { hackatimeApiKey: apiKey || undefined }
+    });
+
+    if (!res.ok) {
+      console.error("(settingsView) couldn't update Hackatime API key!", res);
+      setError(res.message);
+      return;
+    }
+
+    console.log("(settingsView) Hackatime API key updated!", res);
+  }, [auth]);
+
+  const isValidUUID = (value: string): boolean => {
+    if (!value)
+      return true;
+    
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(value);
+  };
+
+  function handleSaveSettings() {
+    if (!isValidUUID(hackatimeApiKey)) {
+      setError("That isn't a valid Hackatime API key!");
+      return;
+    }
+
+    saveApiKey(hackatimeApiKey);
+    setOriginalHackatimeApiKey(hackatimeApiKey);
+    setSettingsModalOpen(false);
+  }
+
+  function handleCancelSettings() {
+    setHackatimeApiKey(originalHackatimeApiKey);
+    setSettingsModalOpen(false);
+  }
+
+  useEffect(() => {
+    if (!settingsModalOpen)
+      return;
+
+    (async () => {
+      setLocalDevices(await deviceStorage.getAllDevices());
+
+      const res = await trpc.user.getDevices.query({});
+      console.log("(root) user.getDevices =", res);
+
+      if (res.ok) {
+        setDevices(res.data.devices);
+      }
+    })();
+  }, [settingsModalOpen]);
+
+  async function handleRemoveDevice(deviceId: string) {
+    if (!auth.currentUser)
+      return;
+
+    const res = await trpc.timelapse.findByUser.query({ user: auth.currentUser.id });
+    if (!res.ok) {
+      console.error("(root) timelapse.findByUser failed when trying to remove a device!", res);
+      setError(res.message);
+      return;
+    }
+
+    const unpublishedTimelapses = res.data.timelapses.filter(
+      (t: Timelapse) => "private" in t && t.private && t.private.device?.id === deviceId && !t.isPublished
+    );
+
+    if (unpublishedTimelapses.length > 0) {
+      setDeviceToRemove(deviceId);
+      setTimelapsesToRemove(unpublishedTimelapses);
+      setRemoveDeviceModalOpen(true);
+    }
+    else {
+      await confirmRemoveDevice(deviceId);
+    }
+  }
+
+  async function confirmRemoveDevice(deviceId: string) {
+    const req = await trpc.user.removeDevice.mutate({ id: deviceId });
+    if (!req.ok) {
+      setError(req.message);
+      return;
+    }
+
+    await deviceStorage.deleteDevice(deviceId);
+    setDevices(devices.filter(device => device.id !== deviceId));
+    setRemoveDeviceModalOpen(false);
+    setDeviceToRemove(null);
+    setTimelapsesToRemove([]);
+  }
+
+  function cancelRemoveDevice() {
+    setRemoveDeviceModalOpen(false);
+    setDeviceToRemove(null);
+    setTimelapsesToRemove([]);
+  }
+
+  function handleAddPasskey(deviceId: string) {
+    setCurrentDeviceForPin(deviceId);
+    setPinModalOpen(true);
+  }
+
+  async function handleRemovePasskey(deviceId: string) {
+    await deviceStorage.deleteDevice(deviceId);
+    setLocalDevices(await deviceStorage.getAllDevices());
+  }
+
+  async function handlePinSubmit(passkey: string) {
+    if (currentDeviceForPin) {
+      await deviceStorage.saveDevice({
+        id: currentDeviceForPin,
+        passkey: passkey,
+        thisDevice: false
+      });
+      setLocalDevices(await deviceStorage.getAllDevices());
+    }
+  }
+  
+  const handleHackatimeApiKeyChange = useCallback((value: string) => {
+    setHackatimeApiKey(value);
+  }, []);
+
+  function getCurrentDevicePasskey(): string | null {
+    const currentDevice = localDevices.find(d => d.thisDevice);
+    return currentDevice?.passkey || null;
+  }
+
+  function isDeviceLocal(deviceId: string): boolean {
+    return localDevices.some(d => d.id === deviceId && d.thisDevice);
+  }
+
+  function hasPasskeyForDevice(id: string) {
+    return localDevices.some(x => x.id == id);
+  }
+
+  return (<div>
+    <WindowedModal
+      icon="settings"
+      title="Settings"
+      description="Some of these settings will be synchronized"
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+    >
+      <div className="flex flex-col gap-6">
+        <TextInput
+          label="Hackatime API Key"
+          description="Your API key for importing timelapses to Hackatime"
+          value={hackatimeApiKey}
+          onChange={handleHackatimeApiKeyChange}
+          isSecret
+        />
+
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col">
+            <h3 className="font-bold">Device Passkey</h3>
+            <p className="text-muted">{"Click to show! You'll need this to access unpublished timelapses on other devices."}</p>
+          </div>
+
+          <div className="w-full flex justify-center">
+            <div 
+              className="bg-darkless w-min rounded-md p-3 px-8 cursor-pointer hover:bg-black transition-colors"
+              onClick={() => setPasskeyVisible(!passkeyVisible)}
+            >
+              <span className={`font-mono text-lg tracking-widest select-none transition-all ${passkeyVisible ? "" : "blur-xs"}`}>
+                {passkeyVisible ? getCurrentDevicePasskey() || "000000" : "000000"}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col">
+            <h3 className="text-lg font-semibold">Known Devices</h3>
+            <p className="text-muted">{"In order to access unpublished timelapses from another device, you'll need its passkey."}</p>
+          </div>
+
+          {devices.length === 0 ? (
+            <p className="text-muted text-sm">No devices found</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {devices.map(device => (
+                <div key={device.id} className="flex items-center justify-between p-3 px-6 bg-darkless rounded-md">
+                  <div className="flex flex-col">
+                    <span className="font-medium">{device.name}</span>
+                    <span className="text-sm text-muted">{device.id}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {
+                      isDeviceLocal(device.id)
+                      ? <span>This device</span>
+                      : <>
+                        <Button
+                          kind="primary"
+                          onClick={() => handleRemoveDevice(device.id)}
+                          className="p-2"
+                        >
+                          <Icon glyph="delete" size={16} />
+                          <p>Remove</p>
+                        </Button>
+
+                      {
+                        hasPasskeyForDevice(device.id) ? (
+                          <Button
+                            kind="primary"
+                            onClick={() => handleRemovePasskey(device.id)}
+                            className="p-2"
+                          >
+                            <Icon glyph="private" size={16} />
+                            <p>Remove passkey</p>
+                          </Button>
+                        ) : (
+                          <Button
+                            kind="primary"
+                            onClick={() => handleAddPasskey(device.id)}
+                            className="p-2"
+                          >
+                            <Icon glyph="private" size={16} />
+                            <p>Add passkey</p>
+                          </Button>
+                        )
+                      }
+                      </>
+                    }
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-4 pt-4">
+          <Button
+            kind="primary"
+            onClick={handleSaveSettings}
+            className="flex-1"
+          >
+            Save
+          </Button>
+          <Button
+            kind="regular"
+            onClick={handleCancelSettings}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </WindowedModal>
+
+    <PasskeyModal
+      isOpen={pinModalOpen}
+      setIsOpen={setPinModalOpen}
+      description={`Enter the 6-digit PIN for ${devices.find(d => d.id === currentDeviceForPin)?.name || "Unknown Device"}`}
+      onPasskeySubmit={handlePinSubmit}
+    />
+
+    <ErrorModal
+      isOpen={!!error} 
+      setIsOpen={(open) => !open && setError(null)}
+      message={error!}
+    />
+
+    <WindowedModal
+      icon="delete"
+      title="Remove Device"
+      description="This action cannot be undone"
+      isOpen={removeDeviceModalOpen}
+      setIsOpen={setRemoveDeviceModalOpen}
+    >
+      <div className="flex flex-col gap-4">
+        <p>
+          This device has {timelapsesToRemove.length} unpublished timelapse{timelapsesToRemove.length !== 1 ? "s" : ""} that will be permanently deleted:
+        </p>
+        
+        <div className="bg-darkless rounded-md p-3 px-4 max-h-32 overflow-y-auto">
+          {timelapsesToRemove.map(timelapse => (
+            <div key={timelapse.id} className="flex justify-between items-center py-1">
+              <div className="flex flex-col">
+                <span className="font-bold truncate">{timelapse.name}</span>
+                <span className="truncate text-muted">{timelapse.description}</span>
+              </div>
+
+              <span className="text-sm text-muted ml-2">{timelapse.id.slice(0, 8)}...</span>
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex gap-4">
+          <Button
+            kind="primary"
+            onClick={() => deviceToRemove && confirmRemoveDevice(deviceToRemove)}
+            className="flex-1"
+          >
+            Remove Device
+          </Button>
+          <Button
+            kind="regular"
+            onClick={cancelRemoveDevice}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </WindowedModal>
+  </div>);
+}

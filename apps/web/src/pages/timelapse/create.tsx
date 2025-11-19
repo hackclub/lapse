@@ -286,7 +286,7 @@ export default function Page() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: false,
+          audio: false
         });
       }
       catch (err) {

@@ -6,12 +6,14 @@ import timelapse from "./api/timelapse";
 import user from "./api/user";
 import snapshot from "./api/snapshot";
 import tracing from "./api/tracing";
+import global from "./api/global";
 
 export const appRouter = router({
     timelapse,
     user,
     snapshot,
-    tracing
+    tracing,
+    global
 });
 
 // type definition of API

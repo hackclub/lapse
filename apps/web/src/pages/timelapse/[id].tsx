@@ -336,7 +336,7 @@ export default function Page() {
     catch (error) {
       console.error("(timelapse/[id]) error setting Hackatime API key:", error);
       setRegularError(error instanceof Error ? error.message : "An error occurred while setting the API key.");
-    } 
+    }
     finally {
       setIsSettingApiKey(false);
     }
@@ -367,21 +367,19 @@ export default function Page() {
 
   return (
     <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
-      <div className="flex w-full h-full py-8 gap-6">
-        {/* Video Section */}
+      <div className="flex flex-col h-1/2 py-8 gap-6">
         <video 
           ref={videoRef} 
           controls
-          width={timelapse ? undefined : 850}
-          height={timelapse ? undefined : 638}
+          width={timelapse ? undefined : 1280}
+          height={timelapse ? undefined : 720}
           poster={timelapse?.isPublished ? timelapse?.thumbnailUrl || undefined : undefined}
           className={clsx(
-            "h-full object-contain rounded-2xl",
+            "object-contain rounded-2xl",
             !timelapse && "w-full"
           )}
         />
 
-        {/* Content Section */}
         <div className="p-6 w-full pl-3">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">

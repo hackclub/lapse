@@ -4,11 +4,12 @@ import { z } from "zod";
 
 import * as db from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, assert, err, ok, when } from "../../../shared/common";
+import { apiResult, assert, descending, err, ok, when } from "../../../shared/common";
 import { HackatimeUserApi } from "../../hackatime";
 import { logError, logWarning, logRequest } from "../../serverCommon";
 import { deleteTimelapse } from "./timelapse";
-import { PublicId } from "../common";
+import { ApiDate, PublicId } from "../common";
+import { name } from "platform";
 
 const database = new db.PrismaClient();
 
@@ -68,7 +69,7 @@ export const PublicUserSchema = z.object({
     /**
      * The date when the user created their account.
      */
-    createdAt: z.number().nonnegative(),
+    createdAt: ApiDate,
 
     /**
      * The unique handle of the user.
@@ -413,5 +414,57 @@ export default router({
                 ]);
             }
             return ok({});
+        }),
+
+    hackatimeProjects: protectedProcedure()
+        .input(z.object({}))
+        .output(apiResult({
+            /**
+             * All of the Hackatime projects associated with timelapses.
+             */
+            projects: z.array(
+                z.object({
+                    /**
+                     * The name of the project.
+                     */
+                    name: z.string().min(1),
+
+                    /**
+                     * The amount of time spend timelapsing.
+                     */
+                    time: z.number().nonnegative()
+                })
+            )
+        }))
+        .query(async (req) => {
+            const projects = new Map<string, number>();
+            const timelapses = await database.timelapse.findMany({
+                select: {
+                    name: true,
+                    duration: true
+                },
+                where: {
+                    ownerId: req.ctx.user.id,
+                    hackatimeProject: { not: null }
+                }
+            });
+
+            for (const timelapse of timelapses) {
+                projects.set(
+                    timelapse.name,
+                    (projects.get(timelapse.name) ?? 0) + timelapse.duration
+                );
+            }
+
+            return ok({
+                projects: projects
+                    .entries()
+                    .map(x => ({
+                        name: x[0],
+                        time: x[1]
+                    }))
+                    .toArray()
+                    .toSorted(descending(x => x.time))
+            });
         })
 });

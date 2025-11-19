@@ -264,3 +264,92 @@ export type Empty = Record<string, never>;
 export function isNonEmptyArray(obj: unknown): obj is unknown[] {
     return Array.isArray(obj) && obj.length != 0;
 }
+
+/**
+ * Returns a one-element array when `condition` is `true` - otherwise, returns `[]`.
+ */
+export function maybe<T>(element: T, condition: boolean) {
+    return condition ? [element] as const : [] as const;
+}
+
+/**
+ * Returns a `Date` equal to the current date, `days` days ago.
+ */
+export function daysAgo(days: number) {
+    const now = new Date();
+    now.setDate(now.getDate() - days);
+    return now;
+}
+
+function extractTimespanComponents(seconds: number) {
+    seconds = Math.floor(seconds);
+
+    return {
+        h: Math.floor(seconds / 3600),
+        m: Math.floor((seconds % 3600) / 60),
+        s: seconds % 60
+    };
+}
+
+function extractDateComponents(seconds: number) {
+  seconds = Math.floor(seconds);
+
+  const years = Math.floor(seconds / 31557600); // 365.25 days
+  seconds %= 31557600;
+
+  const months = Math.floor(seconds / 2629746); // ~30.44 days
+  seconds %= 2629746;
+
+  const weeks = Math.floor(seconds / 604800);
+  seconds %= 604800;
+
+  const days = Math.floor(seconds / 86400);
+  seconds %= 86400;
+
+  const hours = Math.floor(seconds / 3600);
+  seconds %= 3600;
+
+  const minutes = Math.floor(seconds / 60);
+  seconds %= 60;
+
+  return {
+    y: years,
+    mo: months,
+    w: weeks,
+    d: days,
+    h: hours,
+    m: minutes,
+    s: seconds
+  };
+}
+
+/**
+ * Formats a duration, represented in the form of a number of seconds, to a string like `3h 2m`.
+ */
+export function formatDuration(seconds: number) {
+    const { h, m, s } = extractTimespanComponents(seconds);
+
+    return [
+        ...maybe(`${h}h`, h != 0),
+        ...maybe(`${m}m`, m != 0),
+        ...maybe(`${s}s`, s != 0)
+    ].join(" ");
+}
+
+/**
+ * Formats a date in the past to a string like `3 minutes ago`.
+ */
+export function formatTimeElapsed(date: Date) {
+    const secondsPast = (new Date().getTime() - date.getTime()) / 1000;
+    const { y, mo, d, h, m, s } = extractDateComponents(secondsPast);
+
+    return (
+        (y >= 1) ? `${y} years ago` :
+        (mo >= 1) ? `${mo} months ago` :
+        (d >= 1) ? `${d} days ago` :
+        (h >= 1) ? `${h} hours ago` :
+        (m >= 1) ? `${m} minutes ago` :
+        (s <= 1) ? "just now" :
+        `${s} seconds ago`
+    );
+}
