@@ -9,15 +9,15 @@ import { useAuth } from "@/client/hooks/useAuth";
 import { Button } from "@/client/components/ui/Button";
 import { ProfilePicture } from "@/client/components/ProfilePicture";
 import { SettingsView } from "@/client/components/ui/layout/SettingsView";
+import { useCachedState } from "@/client/hooks/useCachedState";
 import { useInterval } from "@/client/hooks/useInterval";
 import { trpc } from "@/client/trpc";
-
 
 export function Header() {
   const auth = useAuth(false);
 
   const [areSettingsOpen, setAreSettingsOpen] = useState(false);
-  const [usersActive, setUsersActive] = useState(0);
+  const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
 
   useInterval(async () => {
     const res = await trpc.global.activeUsers.query({});
