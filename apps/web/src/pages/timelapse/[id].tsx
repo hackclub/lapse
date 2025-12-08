@@ -6,7 +6,7 @@ import clsx from "clsx";
 
 import type { Timelapse, TimelapseVisibility } from "../../server/routers/api/timelapse";
 
-import { assert } from "../../shared/common";
+import { assert, formatTimeElapsed } from "../../shared/common";
 
 import { trpc } from "../../client/trpc";
 import { useAsyncEffect } from "../../client/hooks/useAsyncEffect";
@@ -59,6 +59,18 @@ export default function Page() {
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [hackatimeApiKey, setHackatimeApiKey] = useState("");
   const [isSettingApiKey, setIsSettingApiKey] = useState(false);
+
+  const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
+  const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
+  useEffect(() => {
+    if (!timelapse)
+      return;
+
+    setFormattedDescription(markdownToJsx(timelapse.description));
+    setLocalComments(timelapse.comments);
+  }, [timelapse]);
+
+  const isOwned = timelapse && currentUser && currentUser.id === timelapse.owner.id;
   
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -148,12 +160,12 @@ export default function Page() {
         }
       }
     }
-    catch (err) {
-      console.error("(timelapse/[id]) error loading timelapse:", err);
+    catch (apiErr) {
+      console.error("(timelapse/[id]) error loading timelapse:", apiErr);
 
       setCriticalError(
-        err instanceof Error
-          ? err.message
+        apiErr instanceof Error
+          ? apiErr.message
           : "An unknown error occurred while loading the timelapse"
         );
     }
@@ -168,7 +180,7 @@ export default function Page() {
     };
   }, [videoObjUrl]);
 
-  const handlePublish = async () => {
+  async function handlePublish() {
     if (!timelapse || !currentUser) return;
 
     try {
@@ -210,19 +222,7 @@ export default function Page() {
     }
   };
 
-  const canPublish = timelapse && currentUser && 
-    currentUser.id === timelapse.owner.id && 
-    !timelapse.isPublished;
-
-  const canEdit = timelapse && currentUser && 
-    currentUser.id === timelapse.owner.id;
-
-  const canSyncWithHackatime = timelapse && currentUser &&
-    currentUser.id === timelapse.owner.id &&
-    timelapse.isPublished &&
-    !timelapse.private?.hackatimeProject;
-
-  const handleEdit = () => {
+  function handleEdit() {
     if (!timelapse)
       return;
 
@@ -232,7 +232,7 @@ export default function Page() {
     setEditModalOpen(true);
   };
 
-  const handleUpdate = async () => {
+  async function handleUpdate() {
     if (!timelapse) return;
 
     try {
@@ -266,7 +266,7 @@ export default function Page() {
 
   const isUpdateDisabled = !editName.trim() || isUpdating;
 
-  const handleSyncWithHackatime = async () => {
+  async function handleSyncWithHackatime() {
     if (!timelapse || !currentUser)
       return;
 
@@ -280,8 +280,9 @@ export default function Page() {
     setSyncModalOpen(true);
   };
 
-  const handleConfirmSync = async () => {
-    if (!timelapse || !hackatimeProject.trim()) return;
+  async function handleConfirmSync() {
+    if (!timelapse || !hackatimeProject.trim())
+      return;
 
     try {
       setIsSyncing(true);
@@ -371,85 +372,92 @@ export default function Page() {
 
   return (
     <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
-      <div className="flex flex-col h-1/2 py-8 gap-6">
-        <video 
-          ref={videoRef} 
-          controls
-          width={timelapse ? undefined : 1280}
-          height={timelapse ? undefined : 720}
-          poster={timelapse?.isPublished ? timelapse?.thumbnailUrl || undefined : undefined}
-          className={clsx(
-            "object-contain rounded-2xl",
-            !timelapse && "w-full"
-          )}
-        />
+      <div className="flex h-full gap-12 px-16 pb-16">
+        <div className="w-2/3 h-min">
+          <video 
+            ref={videoRef} 
+            controls
+            poster={timelapse?.isPublished ? timelapse?.thumbnailUrl || undefined : undefined}
+            className="aspect-video w-full h-min rounded-2xl bg-[#000]"
+          />
 
-        <div className="p-6 w-full pl-3">
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold text-smoke leading-tight">
-                  {timelapse?.name || <Skeleton />}
-                                  
-                  {timelapse && !timelapse.isPublished && (
-                    <Badge variant="warning" className="ml-4">UNPUBLISHED</Badge>
-                  )}
-                  {timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
-                    <Badge variant="default" className="ml-4">UNLISTED</Badge>
-                  )}
-                </h1>
-              </div>
-              
-              <div className="flex items-center gap-3 mb-4">
-                <ProfilePicture 
-                  isSkeleton={timelapse == null}
-                  profilePictureUrl={timelapse?.owner.profilePictureUrl}
-                  displayName={timelapse?.owner.displayName ?? "?"}
-                  size="sm"
-                  handle={timelapse?.owner.handle}
-                />
+          <div className="flex gap-3 w-full">
+            {
+              isOwned ? (
+                <>
+                  <Button className="gap-2 w-full" onClick={handleEdit}>
+                    <Icon glyph="edit" size={24} />
+                    Edit details
+                  </Button>
 
-                <span className="text-smoke">
-                  by {
-                    timelapse == null
-                    ? <Skeleton />
-                    : <span className="text-cyan underline">{timelapse.owner.displayName}</span>
-                  }
+                  { !timelapse.isPublished && (
+                    <Button kind="primary" className="gap-2 w-full" onClick={handlePublish} disabled={isPublishing}>
+                      <Icon glyph="send-fill" size={24} />
+                      {isPublishing ? "Publishing..." : "Publish"}
+                    </Button>
+                  ) }
+
+                  { timelapse.isPublished && !timelapse.private?.hackatimeProject && (
+                    <Button className="gap-2 w-full" onClick={handleSyncWithHackatime} kind="primary">
+                      <Icon glyph="history" size={24} />
+                      Sync with Hackatime
+                    </Button>
+                  ) }
+                </>
+              ) : (
+                <>
+                  <Button onClick={() => alert("Sorry, not implemented yet!")} className="gap-2 w-full">
+                    <Icon glyph="flag-fill" size={24} />
+                    Report
+                  </Button>
+                </>
+              )
+            }
+          </div>
+        </div>
+
+        <div className="w-1/3 pl-3 flex flex-col gap-4 h-[70vh]">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-bold text-smoke leading-tight">
+                { timelapse?.name || <Skeleton /> }
+                
+                { timelapse && !timelapse.isPublished && (
+                  <Badge variant="warning" className="ml-4">UNPUBLISHED</Badge>
+                )}
+
+                { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
+                  <Badge variant="default" className="ml-4">UNLISTED</Badge>
+                ) }
+              </h1>
+            </div>
+            
+            <div className="flex items-center gap-3 mb-4">
+              <ProfilePicture 
+                isSkeleton={timelapse == null}
+                user={timelapse?.owner ?? null}
+                size="sm"
+              />
+
+              <div className="text-secondary text-xl flex gap-3">
+                <span>
+                  by { !timelapse ? <Skeleton /> : <span className="font-bold">@{timelapse.owner.displayName}</span> }
+                </span>
+
+                <Bullet />
+
+                <span>
+                  { !timelapse ? <Skeleton /> : <TimeAgo date={timelapse.createdAt} /> }
                 </span>
               </div>
-
-              <p className="text-smoke text-lg leading-relaxed">
-                {
-                  timelapse != null
-                  ? timelapse?.description || "(no description)"
-                  : <Skeleton lines={3} />
-                }
-              </p>
             </div>
 
-            <div className="flex gap-3 w-full">
-              {canEdit && (
-                <Button className="gap-2 w-full" onClick={handleEdit} kind="primary">
-                  <Icon glyph="edit" size={24} />
-                  Edit
-                </Button>
-              )}
-              
-              {canPublish && (
-                <Button className="gap-2 w-full" onClick={handlePublish} disabled={isPublishing}>
-                  <Icon glyph="send-fill" size={24} />
-                  {isPublishing ? "Publishing..." : "Publish"}
-                </Button>
-              )}
-              
-              {canSyncWithHackatime && (
-                <Button className="gap-2 w-full" onClick={handleSyncWithHackatime} kind="primary">
-                  <Icon glyph="history" size={24} />
-                  Sync with Hackatime
-                </Button>
-              )}
-            </div>
+            <p className="text-white text-xl leading-relaxed">
+              { timelapse != null ? formattedDescription : <Skeleton lines={3} /> }
+            </p>
           </div>
+          
+          { timelapse && timelapse.isPublished && <CommentSection timelapseId={timelapse.id} comments={localComments} setComments={setLocalComments} /> }
         </div>
       </div>
 
