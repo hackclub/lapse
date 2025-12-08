@@ -37,7 +37,7 @@ export function TextInput({ value, label, description, maxLength, onBlur, onChan
         onFocus={() => setIsFocused(true)}
         onBlur={handleBlur}
         className={clsx(
-          "bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full",
+          "border border-slate outline-red focus:outline-2 transition-all rounded-xl p-2 px-4 w-full",
           isSecret && "font-mono"
         )}
         type={inputIsPassword ? "password" : "text"}

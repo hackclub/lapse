@@ -3,6 +3,7 @@ import { PropsWithChildren } from "react";
 import { IconGlyph } from "./util";
 import Icon from "@hackclub/icons";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 export type ButtonKind =
   "primary" |
@@ -13,15 +14,21 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
     kind?: ButtonKind,
     disabled?: boolean,
     className?: string,
-    icon?: IconGlyph,
+    icon?: IconGlyph
   } & (
     { href?: undefined, onClick: () => void } |
     { href: string, onClick?: undefined }
   )
 >) {
+  const router = useRouter();
+
   kind ??= "regular";
 
-  const btn = (
+  if (href) {
+    onClick = () => router.push(href);
+  }
+
+  return (
     <button
       onClick={disabled ? undefined : onClick}
       className={clsx(
@@ -38,9 +45,4 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
       {children}
     </button>
   );
-
-  if (href)
-    return <Link href={href}>{btn}</Link>;
-
-  return btn;
 }
