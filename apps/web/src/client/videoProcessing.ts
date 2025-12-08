@@ -7,7 +7,7 @@ import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "../sha
 import { trpc } from "./trpc";
 import { apiUpload } from "./upload";
 
-const BITS_PER_PIXEL = 1.1;
+const BITS_PER_PIXEL = 1.5;
 
 /**
  * Creates a `MediaRecorder` object, the output of which will be able to be decoded client-side.
