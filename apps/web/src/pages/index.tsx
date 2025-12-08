@@ -162,7 +162,7 @@ export default function Home() {
         ) }
 
         <footer className="py-16 text-placeholder text-center">
-          A Hack Club production. Build {process.env.NEXT_PUBLIC_BUILD_ID ?? ""} from {formatTimeElapsed(new Date(parseInt(process.env.NEXT_PUBLIC_BUILD_DATE ?? "0")))}.
+          A Hack Club production. Build {process.env.NEXT_PUBLIC_BUILD_ID ?? ""} from <TimeAgo date={parseInt(process.env.NEXT_PUBLIC_BUILD_DATE ?? "0")} />.
           Report issues at <Link newTab href="https://github.com/hackclub/lapse" />. 
         </footer>
       </div>

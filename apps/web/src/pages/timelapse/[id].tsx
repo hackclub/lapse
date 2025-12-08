@@ -25,7 +25,11 @@ import { PasskeyModal } from "../../client/components/ui/PasskeyModal";
 import { SelectInput } from "../../client/components/ui/SelectInput";
 import { Skeleton } from "../../client/components/ui/Skeleton";
 import { Badge } from "../../client/components/ui/Badge";
-
+import { markdownToJsx } from "@/client/markdown";
+import { Bullet } from "@/client/components/ui/Bullet";
+import { TimeAgo } from "@/client/components/TimeAgo";
+import { CommentSection } from "@/client/components/CommentSection";
+import { Comment } from "@/client/api";
 
 export default function Page() {
   const router = useRouter();
