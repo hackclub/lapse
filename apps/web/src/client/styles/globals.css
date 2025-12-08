@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+* {
+    scrollbar-color: var(--color-placeholder) var(--color-darkless);
+}
+
 :root {
     --text: #ffffff;
     --background: #17171d;
@@ -44,6 +48,12 @@
     --color-secondary: var(--secondary);
     --color-primary: #ec3750;
     --color-accent: var(--accent);
+
+    --animate-blink: blink 2s infinite steps(1, end);
+    @keyframes blink {
+        0%, 75%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
 }
 
 body {
@@ -67,3 +77,4 @@ html, body, #__next {
         linear-gradient(to right, var(--color-darkless) 1px, transparent 1px) 0 0 / 40px 40px repeat,
         linear-gradient(to bottom, var(--color-darkless) 1px, transparent 1px) 0 0 / 40px 40px repeat;
 }
+

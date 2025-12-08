@@ -1,5 +1,4 @@
 import { ApiResult } from "@/shared/common";
-import { trpc } from "../trpc";
 
 import { useState } from "react";
 import { useOnce } from "./useOnce";

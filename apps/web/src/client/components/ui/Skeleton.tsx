@@ -9,12 +9,12 @@ export function Skeleton({ className, circular, lines = 1 }: {
 
   if (lines === 1) {
     return (
-      <span className={`inline-block h-4 bg-slate ${rounding} animate-pulse ${className}`} />
+      <span aria-hidden className={`inline-block h-4 bg-slate ${rounding} animate-pulse ${className}`} />
     );
   }
 
   return (
-    <span className={`flex flex-col gap-2 ${className}`}>
+    <span aria-hidden className={`flex flex-col gap-2 ${className}`}>
       {Array.from({ length: lines }).map((_, i) => (
         <span
           key={i}
