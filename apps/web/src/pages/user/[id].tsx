@@ -240,8 +240,10 @@ export default function Page() {
       >
         <div className="flex flex-col gap-6">
           <TextInput
-            label="Display Name"
-            description="Your public display name."
+            field={{
+              label: "Display Name",
+              description: "Your public display name."
+            }}
             value={editDisplayName}
             onChange={setEditDisplayName}
             maxLength={24}
@@ -266,17 +268,15 @@ export default function Page() {
             <div className="flex flex-col gap-2">
               {editUrls.map((url, index) => (
                 <div key={index} className="flex gap-2">
-                  <input
-                    className="bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full"
-                    type="text"
+                  <TextInput
                     value={url}
-                    onChange={(e) => {
-                      const newUrls = [...editUrls];
-                      newUrls[index] = e.target.value;
-                      setEditUrls(newUrls);
-                    }}
                     placeholder="https://example.com"
                     maxLength={64}
+                    onChange={(x) => {
+                      const newUrls = [...editUrls];
+                      newUrls[index] = x;
+                      setEditUrls(newUrls);
+                    }}
                   />
                   
                   <Button

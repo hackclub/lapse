@@ -193,8 +193,10 @@ export function SettingsView({ isOpen, setIsOpen }: {
     >
       <div className="flex flex-col gap-6">
         <TextInput
-          label="Hackatime API Key"
-          description="Your API key for importing timelapses to Hackatime"
+          field={{
+            label: "Hackatime API Key",
+            description: "Your API key for importing timelapses to Hackatime"
+          }}
           value={hackatimeApiKey}
           onChange={handleHackatimeApiKeyChange}
           isSecret

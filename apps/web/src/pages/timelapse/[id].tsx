@@ -470,8 +470,10 @@ export default function Page() {
       >
         <div className="flex flex-col gap-6">
           <TextInput
-            label="Name"
-            description="The title of your timelapse."
+            field={{
+              label: "Name",
+              description: "The title of your timelapse."
+            }}
             value={editName}
             onChange={setEditName}
             maxLength={60}
@@ -518,8 +520,10 @@ export default function Page() {
           </div>
 
           <TextInput
-            label="Project Name"
-            description="The name of the Hackatime project to sync with."
+            field={{
+              label: "Project Name",
+              description: "The name of the Hackatime project to sync with."
+            }}
             value={hackatimeProject}
             onChange={setHackatimeProject}
             maxLength={128}
@@ -548,8 +552,10 @@ export default function Page() {
           </div>
 
           <TextInput
-            label="API Key"
-            description="Your Hackatime API key for syncing timelapses."
+            field={{
+              label: "API Key",
+              description: "Your Hackatime API key for syncing timelapses."
+            }}
             value={hackatimeApiKey}
             onChange={setHackatimeApiKey}
             isSecret={true}

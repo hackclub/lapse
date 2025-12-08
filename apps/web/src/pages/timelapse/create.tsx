@@ -603,8 +603,10 @@ export default function Page() {
       >
         <div className="flex flex-col gap-6">
           <TextInput
-            label="Name"
-            description="The title of your timelapse. You can change it later!"
+            field={{
+              label: "Name",
+              description: "The title of your timelapse. You can change it later!"
+            }}
             value={name}
             onChange={setName}
             maxLength={60}
