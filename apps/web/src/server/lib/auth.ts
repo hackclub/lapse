@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { NextApiRequest } from "next";
 
 import { PrismaClient } from "@/generated/prisma";
-import * as env from "@/server/env";
+import { env } from "@/server/env";
 
 const database = new PrismaClient();
 
