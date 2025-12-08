@@ -22,7 +22,6 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
   const [hackatimeApiKey, setHackatimeApiKey] = useState("");
   const [passkeyVisible, setPasskeyVisible] = useState(false);
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [originalHackatimeApiKey, setOriginalHackatimeApiKey] = useState("");
 
@@ -78,16 +77,16 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
     saveApiKey(hackatimeApiKey);
     setOriginalHackatimeApiKey(hackatimeApiKey);
-    setSettingsModalOpen(false);
+    setIsOpen(false);
   }
 
   function handleCancelSettings() {
     setHackatimeApiKey(originalHackatimeApiKey);
-    setSettingsModalOpen(false);
+    setIsOpen(false);
   }
 
   useEffect(() => {
-    if (!settingsModalOpen)
+    if (!isOpen)
       return;
 
     (async () => {
@@ -100,7 +99,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
         setDevices(res.data.devices);
       }
     })();
-  }, [settingsModalOpen]);
+  }, [isOpen]);
 
   async function handleRemoveDevice(deviceId: string) {
     if (!auth.currentUser)
@@ -173,8 +172,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
   }, []);
 
   function getCurrentDevicePasskey(): string | null {
-    const currentDevice = localDevices.find(d => d.thisDevice);
-    return currentDevice?.passkey || null;
+    return localDevices.find(d => d.thisDevice)?.passkey || null;
   }
 
   function isDeviceLocal(deviceId: string): boolean {
@@ -210,11 +208,11 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
           <div className="w-full flex justify-center">
             <div 
-              className="bg-darkless w-min rounded-md p-3 px-8 cursor-pointer hover:bg-black transition-colors"
+              className="border border-slate w-full flex justify-center rounded-md p-3 px-8 cursor-pointer hover:bg-darker transition-colors shadow"
               onClick={() => setPasskeyVisible(!passkeyVisible)}
             >
               <span className={`font-mono text-lg tracking-widest select-none transition-all ${passkeyVisible ? "" : "blur-xs"}`}>
-                {passkeyVisible ? getCurrentDevicePasskey() || "000000" : "000000"}
+                { getCurrentDevicePasskey() || "000000" }
               </span>
             </div>
           </div>
@@ -229,9 +227,9 @@ export function SettingsView({ isOpen, setIsOpen }: {
           {devices.length === 0 ? (
             <p className="text-muted text-sm">No devices found</p>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-4">
               {devices.map(device => (
-                <div key={device.id} className="flex items-center justify-between p-3 px-6 bg-darkless rounded-md">
+                <div key={device.id} className="flex items-center justify-between p-3 border-l-8 border-primary rounded-md">
                   <div className="flex flex-col">
                     <span className="font-medium">{device.name}</span>
                     <span className="text-sm text-muted">{device.id}</span>
@@ -239,39 +237,40 @@ export function SettingsView({ isOpen, setIsOpen }: {
                   <div className="flex gap-2">
                     {
                       isDeviceLocal(device.id)
-                      ? <span>This device</span>
-                      : <>
-                        <Button
-                          kind="primary"
-                          onClick={() => handleRemoveDevice(device.id)}
-                          className="p-2"
-                        >
-                          <Icon glyph="delete" size={16} />
-                          <p>Remove</p>
-                        </Button>
+                      ? <span>(this device)</span>
+                      : (
+                        <>
+                          {
+                            hasPasskeyForDevice(device.id) ? (
+                              <Button
+                                kind="regular"
+                                onClick={() => handleRemovePasskey(device.id)}
+                                className="p-2"
+                              >
+                                <Icon glyph="private" size={16} />
+                                <span>Remove passkey</span>
+                              </Button>
+                            ) : (
+                              <Button
+                                kind="regular"
+                                onClick={() => handleAddPasskey(device.id)}
+                                className="p-2"
+                              >
+                                <Icon glyph="private" size={16} />
+                                <span>Add passkey</span>
+                              </Button>
+                            )
+                          }
 
-                      {
-                        hasPasskeyForDevice(device.id) ? (
                           <Button
-                            kind="primary"
-                            onClick={() => handleRemovePasskey(device.id)}
-                            className="p-2"
+                            kind="regular"
+                            onClick={() => handleRemoveDevice(device.id)}
+                            className="!px-5"
                           >
-                            <Icon glyph="private" size={16} />
-                            <p>Remove passkey</p>
+                            <Icon glyph="delete" size={20} />
                           </Button>
-                        ) : (
-                          <Button
-                            kind="primary"
-                            onClick={() => handleAddPasskey(device.id)}
-                            className="p-2"
-                          >
-                            <Icon glyph="private" size={16} />
-                            <p>Add passkey</p>
-                          </Button>
-                        )
-                      }
-                      </>
+                        </>
+                      )
                     }
                   </div>
                 </div>
