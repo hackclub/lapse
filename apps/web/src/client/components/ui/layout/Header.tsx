@@ -51,7 +51,7 @@ export function Header() {
 
                 <Icon
                   width={32} height={32}
-                  className="cursor-pointer"
+                  className="cursor-pointer transition-transform hover:scale-110 active:scale-90"
                   glyph="settings"
                   onClick={() => setAreSettingsOpen(true)}
                 />

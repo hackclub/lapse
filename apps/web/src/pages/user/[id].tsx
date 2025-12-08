@@ -172,7 +172,7 @@ export default function Page() {
               ) }
 
               <div className="flex flex-col text-muted">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
                   <Icon glyph="clock" size={16} />
                   <span>{ user ? `Joined ${formatJoinDate(user.createdAt)}` : <Skeleton className="w-64 !h-3" /> }</span>
                 </div>
@@ -180,21 +180,24 @@ export default function Page() {
                 { (user?.urls ?? []).length > 0 && (
                   user!.urls.map(url => (
                     <div key={url} className="flex items-center gap-2">
-                      <Icon glyph={
-                        matchOrDefault(new URL(url).hostname, {
-                          "x.com": "twitter", // seriously?
-                          "twitter.com": "twitter",
-                          "twitch.tv": "twitch",
-                          "github.com": "github",
-                          "messenger.com": "messenger-fill",
-                          "instagram.com": "instagram",
-                          "hackclub.slack.com": "slack-fill",
-                          "medium.com": "medium-fill",
-                          "facebook.com": "facebook",
-                          "youtube.com": "youtube",
-                          "youtu.be": "youtube"
-                        }) ?? "link"
-                      } size={16} />
+                      <Icon
+                        size={16}
+                        glyph={
+                          matchOrDefault(new URL(url).hostname, {
+                            "x.com": "twitter", // seriously?
+                            "twitter.com": "twitter",
+                            "twitch.tv": "twitch",
+                            "github.com": "github",
+                            "messenger.com": "messenger-fill",
+                            "instagram.com": "instagram",
+                            "hackclub.slack.com": "slack-fill",
+                            "medium.com": "medium-fill",
+                            "facebook.com": "facebook",
+                            "youtube.com": "youtube",
+                            "youtu.be": "youtube"
+                          }) ?? "link"
+                        }
+                      />
 
                       <a
                         href={url}
