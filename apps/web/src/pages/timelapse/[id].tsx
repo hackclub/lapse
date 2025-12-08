@@ -15,7 +15,7 @@ import { decryptVideo } from "../../client/encryption";
 import { useAuth } from "../../client/hooks/useAuth";
 import { ErrorModal } from "../../client/components/ui/ErrorModal";
 import { LoadingModal } from "../../client/components/ui/LoadingModal";
-import { ProfilePicture } from "../../client/components/ui/ProfilePicture";
+import { ProfilePicture } from "../../client/components/ProfilePicture";
 import RootLayout from "../../client/components/RootLayout";
 import { Button } from "../../client/components/ui/Button";
 import { WindowedModal } from "../../client/components/ui/WindowedModal";

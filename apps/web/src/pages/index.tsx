@@ -5,23 +5,25 @@ import { useEffect, useState } from "react";
 
 import { useAuth } from "@/client/hooks/useAuth";
 import RootLayout from "@/client/components/RootLayout";
-import { TimelapseCard } from "@/client/components/ui/TimelapseCard";
+import { TimelapseCard } from "@/client/components/TimelapseCard";
 
 import { trpc } from "@/client/trpc";
-import { useApiCall } from "@/client/hooks/useApiCall";
 import { descending, formatDuration, formatTimeElapsed } from "@/shared/common";
-import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
-import { ProfilePicture } from "@/client/components/ui/ProfilePicture";
 import { Button } from "@/client/components/ui/Button";
 import { Link } from "@/client/components/ui/Link";
+import { TimeAgo } from "@/client/components/TimeAgo";
+import { useCache } from "@/client/hooks/useCache";
+import { useCachedApiCall } from "@/client/hooks/useCachedApiCall";
 
 export default function Home() {
   const router = useRouter();
   const auth = useAuth(false);
 
-  const reqLeaderboard = useApiCall(() => trpc.global.weeklyLeaderboard.query({}));
-  const reqRecent = useApiCall(() => trpc.global.recentTimelapses.query({}));
+  const reqLeaderboard = useCachedApiCall(() => trpc.global.weeklyLeaderboard.query({}), "leaderboard");
+  const reqRecent = useCachedApiCall(() => trpc.global.recentTimelapses.query({}), "recent");
 
+  const [totalTimeCache, setTotalTimeCache] = useCache<string>("currentUserTotalTime");
+  const [totalTime, setTotalTime] = useState<string | null>(null);
   const [topUserProjects, setTopUserProjects] = useState<{
     name: string,
     time: string,
