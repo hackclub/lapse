@@ -4,7 +4,7 @@ import * as fs from "fs";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import prettyBytes from "pretty-bytes";
 
-import * as env from "../../server/env";
+import { env } from "../../server/env";
 import * as db from "../../generated/prisma";
 import { logError, logInfo, logNextRequest } from "../../server/serverCommon";
 import { ApiResult, apiErr, Empty, apiOk } from "../../shared/common";

@@ -8,7 +8,7 @@ import { PrismaClient } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
 import { apiResult, ascending, match, when, apiOk, apiErr, oneOf, closest, chunked, assert, ApiResult, Result, Err } from "../../../shared/common";
 import { decryptVideo } from "../../encryption";
-import * as env from "../../env";
+import { env } from "../../env";
 import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE, MAX_VIDEO_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS, UPLOAD_TOKEN_LIFETIME_MS } from "../../../shared/constants";
 import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema, User } from "./user";
 import * as db from "../../../generated/prisma";

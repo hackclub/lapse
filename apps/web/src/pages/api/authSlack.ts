@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { PrismaClient } from "../../generated/prisma";
 import { generateJWT } from "../../server/lib/auth";
-import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET } from "../../server/env";
+import { env } from "../../server/env";
 import { logError, logNextRequest } from "../../server/serverCommon";
 
 // GET /api/authSlack
@@ -62,11 +62,8 @@ export default async function handler(
     if (!code || typeof code !== "string")
         return res.redirect("/?error=missing-code");
 
-    const clientId = SLACK_CLIENT_ID;
-    const clientSecret = SLACK_CLIENT_SECRET;
-
-    if (!clientId || !clientSecret)
-        return res.redirect("/?error=config-error");
+    const clientId = env.SLACK_CLIENT_ID;
+    const clientSecret = env.SLACK_CLIENT_SECRET;
 
     try {
         const defaultUriBase = process.env.NODE_ENV == "development" ? "http://localhost:3000" : "https://lapse.hackclub.com";
