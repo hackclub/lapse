@@ -1,10 +1,13 @@
 import Head from "next/head";
 import localFont from "next/font/local";
 import { JetBrains_Mono } from "next/font/google";
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, useEffect } from "react";
 
 import { Header } from "./ui/layout/Header";
 import clsx from "clsx";
+import { useInterval } from "@/client/hooks/useInterval";
+import { trpc } from "@/client/trpc";
+import { useAuth } from "@/client/hooks/useAuth";
 
 const phantomSans = localFont({
   variable: "--font-phantom-sans",
@@ -42,6 +45,14 @@ export default function RootLayout({
   description?: string;
   showHeader?: boolean;
 }>) {
+  const auth = useAuth(false);
+
+  useInterval(async () => {
+    if (auth.currentUser) {
+      await trpc.user.emitHeartbeat.mutate({});
+    }
+  }, 30 * 1000);
+
   return (
     <>
       <Head>
