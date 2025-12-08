@@ -1,26 +1,27 @@
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Icon from "@hackclub/icons";
 
-import type { Timelapse } from "../../server/routers/api/timelapse";
-import type { User, PublicUser } from "../../server/routers/api/user";
+import type { Timelapse } from "@/server/routers/api/timelapse";
+import type { User, PublicUser } from "@/server/routers/api/user";
 
-import { trpc } from "../../client/trpc";
-import { useAuth } from "../../client/hooks/useAuth";
-import { ErrorModal } from "../../client/components/ui/ErrorModal";
-import { ProfilePicture } from "../../client/components/ui/ProfilePicture";
-import RootLayout from "../../client/components/RootLayout";
-import { Button } from "../../client/components/ui/Button";
-import { WindowedModal } from "../../client/components/ui/WindowedModal";
-import { TextInput } from "../../client/components/ui/TextInput";
-import { TextareaInput } from "../../client/components/ui/TextareaInput";
-import { Skeleton } from "../../client/components/ui/Skeleton";
-import { Badge } from "../../client/components/ui/Badge";
-import { ThumbnailImage } from "../../client/components/ThumbnailImage";
-import { assert, matchOrDefault } from "../../shared/common";
-import { useApiCall } from "@/client/hooks/useApiCall";
+import { trpc } from "@/client/trpc";
+import { markdownToJsx } from "@/client/markdown";
+import { assert, matchOrDefault, validateUrl } from "@/shared/common";
+
+import { useAuth } from "@/client/hooks/useAuth";
 import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
-import { TimelapseCard } from "@/client/components/ui/TimelapseCard";
+
+import RootLayout from "@/client/components/RootLayout";
+import { ProfilePicture } from "@/client/components/ProfilePicture";
+
+import { Button } from "@/client/components/ui/Button";
+import { Skeleton } from "@/client/components/ui/Skeleton";
+import { TextInput } from "@/client/components/ui/TextInput";
+import { ErrorModal } from "@/client/components/ui/ErrorModal";
+import { TimelapseCard } from "@/client/components/TimelapseCard";
+import { WindowedModal } from "@/client/components/ui/WindowedModal";
+import { TextareaInput } from "@/client/components/ui/TextareaInput";
 
 export default function Page() {
   const router = useRouter();
@@ -73,8 +74,8 @@ export default function Page() {
 
       setTimelapses(timelapsesRes.data.timelapses);
     }
-    catch (err) {
-      console.error("Error fetching user data:", err);
+    catch (apiErr) {
+      console.error("Error fetching user data:", apiErr);
       setError("Failed to load user profile");
     }
   }, [router.isReady, router.query]);
@@ -89,24 +90,10 @@ export default function Page() {
     setEditModalOpen(true);
   };
 
-  const validateUrl = (url: string): boolean => {
-    try {
-      if (!url.trim())
-        return true;
-      
-      new URL(url.trim());
-      return true;
-    }
-    catch {
-      return false;
-    }
-  };
-
   const handleUpdateProfile = async () => {
     if (!user || !isMyself)
       return;
 
-    // Validate URLs before submitting
     const validUrls = editUrls.filter(url => url.trim() !== "");
     const invalidUrls = validUrls.filter(url => !validateUrl(url));
 
@@ -175,19 +162,19 @@ export default function Page() {
             />
 
             <div className="flex flex-col">
-              <h1 className="text-4xl font-bold">{ user ? user.displayName : <Skeleton /> }</h1>
-              <p className="text-secondary text-lg m-0">{ user ? `@${user.handle}` : <Skeleton /> }</p>
+              <h1 className="text-4xl font-bold">{ user ? user.displayName : <Skeleton className="w-48" /> }</h1>
+              <p className="text-secondary text-lg m-0">{ user ? `@${user.handle}` : <Skeleton className="w-32 !h-3" /> }</p>
 
               { user?.bio && user.bio.trim().length > 0 && (
-                <p className="text-smoke text-lg leading-relaxed mb-4 max-w-2xl">
-                  {user.bio}
+                <p className="text-smoke text-lg leading-relaxed mb-4 max-w-2xl mt-2">
+                  { markdownToJsx(user.bio) }
                 </p>
               ) }
 
               <div className="flex flex-col text-muted">
                 <div className="flex items-center gap-1">
                   <Icon glyph="clock" size={16} />
-                  <span>{ user ? `Joined ${formatJoinDate(user.createdAt)}` : <Skeleton /> }</span>
+                  <span>{ user ? `Joined ${formatJoinDate(user.createdAt)}` : <Skeleton className="w-64 !h-3" /> }</span>
                 </div>
 
                 { (user?.urls ?? []).length > 0 && (
@@ -225,24 +212,25 @@ export default function Page() {
           </div>
 
           <div className="flex gap-4">
-            <Button icon="slack-fill" onClick={() => {}}>
-              Open in Slack
-            </Button>
+            { user && user.slackId && (
+              <Button icon="slack-fill" onClick={() => window.open(`https://hackclub.slack.com/team/${user.slackId}`, "_blank")}>
+                Open in Slack
+              </Button>
+            ) }
 
-            {isMyself && (
+            { isMyself && (
               <Button icon="edit" onClick={handleEditProfile}>
                 Edit Profile
               </Button>
-            )}
+            ) }
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-between w-full gap-y-12 p-16">
+        <div className="flex flex-wrap gap-16 w-full p-16">
           { timelapses?.map(t => <TimelapseCard timelapse={t} key={t.id} /> ) }
         </div>
       </div>
 
-      {/* Edit Profile Modal */}
       <WindowedModal
         icon="edit"
         title="Edit Profile"
@@ -292,21 +280,21 @@ export default function Page() {
                   />
                   
                   <Button
-                    kind="primary"
+                    kind="regular"
                     onClick={() => {
                       const newUrls = editUrls.filter((_, i) => i !== index);
                       setEditUrls(newUrls);
                     }}
                     className="px-3"
                   >
-                    <Icon glyph="delete" size={16} />
+                    <Icon glyph="delete" size={24} />
                   </Button>
                 </div>
               ))}
 
               {editUrls.length < 4 && (
                 <Button
-                  kind="secondary"
+                  kind="regular"
                   onClick={() => setEditUrls([...editUrls, ""])}
                   className="gap-2 w-full"
                 >
