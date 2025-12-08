@@ -138,7 +138,7 @@ model Timelapse {
   /// The name (title) of the timelapse.
   name                  String
 
-  /// The description of the timelapse.
+  /// The description of the timelapse. This can contain a limited subset of Markdown (bold, italic, strikethrough, code).
   description           String                  @default("")
 
   /// If `isPublished` is `true`, specifies whether the timelapse can only be accessed via its URL.
