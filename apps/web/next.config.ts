@@ -2,7 +2,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
 
-import * as env from "@/server/env";
+import { env } from "@/server/env";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
