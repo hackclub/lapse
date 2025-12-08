@@ -49,9 +49,11 @@ model User {
   urls                      String[]          @default([])
   hackatimeApiKey           String?
   slackId                   String?
+  lastHeartbeat             DateTime          @default(now())
 
   timelapses            Timelapse[]
   devices               KnownDevice[]
+  postedComments        Comment[]
   uploadTokens          UploadToken[]
   draftTimelapses       DraftTimelapse[]
 }
@@ -158,6 +160,26 @@ model Timelapse {
   device                KnownDevice?        @relation(fields: [deviceId], references: [id])
 
   snapshots             Snapshot[]
+  comments              Comment[]
+}
+
+/// Represents a comment that belongs to a timelapse.
+model Comment {
+  /// The unique ID of the comment.
+  id          String                  @id @default(nanoid(12))
+
+  /// The ID of the user that created this comment.
+  authorId      String
+  author        User                  @relation(fields: [authorId], references: [id])
+
+  timelapseId   String
+  timelapse     Timelapse             @relation(fields: [timelapseId], references: [id])
+
+  /// The content of the comment. This can contain a limited subset of Markdown (bold, italic, strikethrough, code).
+  content     String
+
+  /// The date when the comment was created.
+  createdAt   DateTime                @default(now())
 }
 
 /// Represents a single frame in a `TimelapseSegment`.
