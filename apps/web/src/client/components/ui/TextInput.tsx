@@ -1,15 +1,18 @@
 import { ChangeEvent, useState } from "react";
 import clsx from "clsx";
 
-import { InputField } from "./InputField";
+import { InputField } from "@/client/components/ui/InputField";
 
-export function TextInput({ value, label, description, maxLength, onBlur, onChange, isSecret }: {
-  label: string,
-  description: string,
+export function TextInput({ field, value, placeholder, maxLength, onBlur, onChange, isSecret }: {
+  field?: {
+    label: string,
+    description: string
+  },
   value: string,
-  onChange: (x: string) => void,
-  onBlur?: () => void,
+  placeholder?: string,
   maxLength?: number,
+  onBlur?: () => void,
+  onChange: (x: string) => void,
   isSecret?: boolean
 }) {
   const [isFocused, setIsFocused] = useState(false);
@@ -28,24 +31,30 @@ export function TextInput({ value, label, description, maxLength, onBlur, onChan
     onBlur?.();
   }
 
-  return (
-    <InputField
-      label={label}
-      description={description}
-    >
-      <input
-        onFocus={() => setIsFocused(true)}
-        onBlur={handleBlur}
-        className={clsx(
-          "bg-darkless outline-red focus:outline-2 transition-all rounded-md p-2 px-4 w-full",
-          isSecret && "font-mono"
-        )}
-        type={inputIsPassword ? "password" : "text"}
-        value={value}
-        maxLength={maxLength}
-        onChange={handleChange}
-        autoComplete={inputIsPassword ? "new-password" : "off"}
-      />
-    </InputField>
+  const input = (
+    <input
+      onFocus={() => setIsFocused(true)}
+      onBlur={handleBlur}
+      className={clsx(
+        "border border-slate outline-red focus:outline-2 transition-all rounded-xl p-2 px-4 w-full",
+        isSecret && "font-mono"
+      )}
+      type={inputIsPassword ? "password" : "text"}
+      value={value}
+      maxLength={maxLength}
+      onChange={handleChange}
+      autoComplete={inputIsPassword ? "new-password" : "off"}
+      placeholder={placeholder}
+    />
   );
+
+  if (field) {
+    return (
+      <InputField label={field.label} description={field.description}>
+        {input}
+      </InputField>
+    );
+  }
+
+  return input;
 }

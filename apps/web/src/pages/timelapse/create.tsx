@@ -22,6 +22,12 @@ import { TIMELAPSE_FRAME_LENGTH_MS } from "../../shared/constants";
 import { useOnce } from "../../client/hooks/useOnce";
 import { useAuth } from "../../client/hooks/useAuth";
 import { apiUpload } from "../../client/upload";
+import clsx from "clsx";
+import { PillControlButton } from "@/client/components/ui/PillControlButton";
+
+import RecordIcon from "@/client/assets/icons/record.svg";
+import PauseIcon from "@/client/assets/icons/pause.svg";
+import StopIcon from "@/client/assets/icons/stop.svg";
 
 export default function Page() {
   const router = useRouter();
@@ -30,6 +36,7 @@ export default function Page() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [setupModalOpen, setSetupModalOpen] = useState(true);
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [isCreated, setIsCreated] = useState(false);
   const [videoSourceKind, setVideoSourceKind] = useState("NONE");
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -115,8 +122,6 @@ export default function Page() {
       console.log("(timelapse/create) total elapsed time:", totalElapsedTime);
     }
 
-    setName(activeTimelapse.name);
-    setDescription(activeTimelapse.description);
     const lastFrameCount = snapshots.length;
     setFrameCount(lastFrameCount);
     frameCountRef.current = lastFrameCount;
@@ -286,11 +291,11 @@ export default function Page() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: false,
+          audio: false
         });
       }
-      catch (err) {
-        console.error("(timelapse/create) could not request permissions for camera stream.", err);
+      catch (apiErr) {
+        console.error("(timelapse/create) could not request permissions for camera stream.", apiErr);
         setChangingSource(false);
         return;
       }
@@ -316,8 +321,8 @@ export default function Page() {
           audio: false,
         });
       }
-      catch (err) {
-        console.error("(timelapse/create) could not request permissions for screen capture.", err);
+      catch (apiErr) {
+        console.error("(timelapse/create) could not request permissions for screen capture.", apiErr);
         setChangingSource(false);
         return;
       }
@@ -501,10 +506,10 @@ export default function Page() {
         
         router.push(`/timelapse/${createRes.data.timelapse.id}`);
       }
-      catch (err) {
-        console.error("(timelapse/create) upload failed:", err);
+      catch (apiErr) {
+        console.error("(timelapse/create) upload failed:", apiErr);
         setIsUploading(false);
-        setError(err instanceof Error ? err.message : "An unknown error occurred during upload");
+        setError(apiErr instanceof Error ? apiErr.message : "An unknown error occurred during upload");
       }
     };
 
@@ -525,7 +530,7 @@ export default function Page() {
     setFreeze(true);
   }
 
-  function onModalClose() {
+  function onSubmitModalClose() {
     if (!isCreated || !currentStream) {
       router.back();
     }
@@ -535,7 +540,7 @@ export default function Page() {
     }
   }
 
-  const isCreateDisabled = !name.trim() || videoSourceKind === "NONE";
+  const isCreateDisabled = videoSourceKind === "NONE";
 
   return (
     <RootLayout showHeader={false}>
@@ -552,29 +557,9 @@ export default function Page() {
           : "After you click Create, your timelapse will start recording!"
         }
         isOpen={setupModalOpen}
-        setIsOpen={onModalClose}
+        setIsOpen={onSubmitModalClose}
       >
         <div className="flex flex-col gap-6">
-          {!needsVideoSource && (
-            <>
-              <TextInput
-                label="Name"
-                description="The title of your timelapse. You can change it later!"
-                value={name}
-                onChange={setName}
-                maxLength={60}
-              />
-
-              <TextareaInput
-                label="Description"
-                description="Displayed under your timelapse. Optional."
-                value={description}
-                onChange={setDescription}
-                maxLength={280}
-              />
-            </>
-          )}
-
           <SelectInput
             label="Video source"
             description="Record your screen, camera, or any other video source."
@@ -609,69 +594,81 @@ export default function Page() {
         </div>
       </WindowedModal>
 
-      <div className="flex w-full h-screen bg-dark">
-        <div
-          className={"flex flex-col p-8 py-16 h-full gap-8 bg-dark text-smoke"}
-        >
-          <div className="flex gap-2 font-bold font-mono">
-            <div>
-              <div
-                className={`rounded-full inline-block w-4 h-4 ${isRecording ? "bg-red" : "bg-muted"}`}
-              ></div>
-            </div>
+      <WindowedModal
+        icon="send-fill"
+        title="Submit your timelapse"
+        description="Submitting will end your timelapse and save all of your progress!"
+        isOpen={submitModalOpen}
+        setIsOpen={x => setSubmitModalOpen(x)}
+      >
+        <div className="flex flex-col gap-6">
+          <TextInput
+            field={{
+              label: "Name",
+              description: "The title of your timelapse. You can change it later!"
+            }}
+            value={name}
+            onChange={setName}
+            maxLength={60}
+          />
 
-            <div className="translate-y-[-2px]">
-              {isRecording ? "REC" : "PAUSE"}{" "}
-              <br></br>
-              <TimeSince active={isRecording} startTime={startedAt} initialElapsedSeconds={initialElapsedSeconds} /> <br></br>
-              <span className="opacity-70">
-                {frameCount.toString().padStart(4, "0")}
-              </span>
-            </div>
-          </div>
+          <TextareaInput
+            label="Description"
+            description="Displayed under your timelapse. Optional."
+            value={description}
+            onChange={setDescription}
+            maxLength={280}
+          />
 
-          <div className="flex flex-col items-center gap-1">
-            <Button
-              kind={isFrozen ? "primary" : "secondary"}
-              isSquare
-              onClick={toggleFreeze}
-            >
-              <Icon glyph="freeze" size={56} />
-            </Button>
-
-            <div className="text-red font-bold font-mono">PAUSE</div>
-          </div>
-
-          <div className="flex flex-col items-center gap-1">
-            <Button kind="secondary" isSquare onClick={() => openSetupModal()}>
-              <Icon glyph="settings" size={56} />
-            </Button>
-
-            <div className="text-red font-bold font-mono">SETTINGS</div>
-          </div>
-
-          <div className="flex flex-col items-center gap-1">
-            <Button kind="secondary" isSquare onClick={stopRecording}>
-              <Icon glyph="send-fill" size={56} />
-            </Button>
-
-            <div className="text-red font-bold font-mono">END</div>
+          <div className="flex gap-4 w-full">
+            <Button onClick={() => stopRecording()} disabled={!name || name.trim().length == 0} kind="primary">Submit</Button>
+            <Button onClick={() => setSubmitModalOpen(false)} kind="regular">Cancel</Button>
           </div>
         </div>
+      </WindowedModal>
 
-        <div className="w-full h-full py-12 pr-8">
-          <div className="relative w-full h-full">
-            <video
-              ref={mainPreviewRef}
-              autoPlay
-              muted
-              className="h-full rounded-[48px]"
-              style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
-            />
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
+      <div className="flex w-screen h-screen bg-dark p-8 relative">
+        {/* stats (overlay) */}
+        <div className="z-10 absolute top-12 left-24 bg-dark shadow-xl text-xl font-mono font-bold px-8 py-4 flex gap-4 items-center border border-black rounded-[64px]">
+          <div
+            className={clsx(
+              "rounded-full w-4 h-4",
+              isRecording ? "bg-red animate-blink" : "bg-secondary"
+            )}
+          />
+
+          <TimeSince active={isRecording} startTime={startedAt} initialElapsedSeconds={initialElapsedSeconds} />
+        </div>
+
+        {/* controls (overlay) */}
+        <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">
+          <PillControlButton onClick={toggleFreeze}>
+            { isFrozen ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} /> }
+          </PillControlButton>
+
+          <PillControlButton onClick={() => setSubmitModalOpen(true)}>
+            <StopIcon className="p-3" width={48} height={48} />
+          </PillControlButton>
+
+          <PillControlButton onClick={() => setSetupModalOpen(true)}>
+            <Icon glyph="settings" width={48} height={48} />
+          </PillControlButton>
+        </div>
+
+        {/* video (main) */}
+        <div className="w-full h-full flex justify-center">
+          <video
+            ref={mainPreviewRef}
+            autoPlay
+            muted
+            className="h-full rounded-[48px]"
+            style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
+          />
         </div>
       </div>
+
+      {/* This canvas isn't displayed to the user - we only use this as a buffer. */}
+      <canvas ref={canvasRef} className="hidden" />
 
       <LoadingModal
         isOpen={isUploading}

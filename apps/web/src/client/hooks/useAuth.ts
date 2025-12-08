@@ -5,9 +5,12 @@ import type { User } from "../../server/routers/api/user";
 
 import { trpc } from "../trpc";
 import { useOnce } from "./useOnce";
+import { useCache } from "./useCache";
 
 export function useAuth(required: boolean) {
     const router = useRouter();
+    
+    const [userCache, setUserCache] = useCache<User>("user");
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -19,6 +22,7 @@ export function useAuth(required: boolean) {
 
         if (!req.ok || req.data.user === null) {
             console.log("(auth) user is not authenticated");
+            setUserCache(null);
 
             if (required) {
                 router.push("/auth");
@@ -29,6 +33,7 @@ export function useAuth(required: boolean) {
         }
 
         console.log("(auth) user is authenticated");
+        setUserCache(req.data.user);
 
         setCurrentUser(req.data.user);
         setIsLoading(false);
@@ -43,7 +48,7 @@ export function useAuth(required: boolean) {
     };
 
     return {
-        currentUser,
+        currentUser: isLoading ? userCache : currentUser,
         isLoading,
         signOut
     };

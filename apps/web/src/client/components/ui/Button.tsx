@@ -1,30 +1,48 @@
 import clsx from "clsx";
 import { PropsWithChildren } from "react";
+import { IconGlyph } from "./util";
+import Icon from "@hackclub/icons";
+import Link from "next/link";
+import { useRouter } from "next/router";
 
-const noop = () => {};
+export type ButtonKind =
+  "primary" |
+  "regular";
 
-export function Button({ children, kind, isSquare, disabled, onClick, className }: PropsWithChildren<{
-  kind?: "primary" | "secondary" | "dark",
-  isSquare?: boolean,
-  disabled?: boolean,
-  onClick: () => void,
-  className?: string
-}>) {
-  kind ??= "primary";
+export function Button({ children, kind, disabled, onClick, href, className, icon }: PropsWithChildren<
+  {
+    kind?: ButtonKind,
+    disabled?: boolean,
+    className?: string,
+    icon?: IconGlyph
+  } & (
+    { href?: undefined, onClick: () => void } |
+    { href: string, onClick?: undefined }
+  )
+>) {
+  const router = useRouter();
+
+  kind ??= "regular";
+
+  if (href) {
+    onClick = () => router.push(href);
+  }
 
   return (
     <button
-      onClick={disabled ? noop : onClick}
+      onClick={disabled ? undefined : onClick}
       className={clsx(
-        "rounded-2xl px-4 py-3 cursor-pointer font-bold transition-all flex items-center justify-center",
-        (kind == "primary") && "bg-red text-white",
-        (kind == "secondary") && "border-2 border-red text-red",
-        (kind == "dark") && "bg-black text-white",
-        disabled && "!bg-darkless !text-white !cursor-not-allowed",
-        !disabled && "hover:scale-[102%] active:scale-[98%]",
-        isSquare && "aspect-square",
+        "flex items-center gap-2 justify-center rounded-2xl h-12 px-8 font-bold text-white",
+        "cursor-pointer transition-all",
+        (kind == "primary") && "bg-red",
+        (kind == "regular") && "bg-dark border-slate border shadow",
+        (disabled) && "!bg-darkless",
+        (!disabled) && "hover:scale-[102%] active:scale-[98%]",
         className
       )}
-    >{children}</button>
+    >
+      {icon ? <Icon glyph={icon} width={20} height={20} /> : undefined}
+      {children}
+    </button>
   );
 }

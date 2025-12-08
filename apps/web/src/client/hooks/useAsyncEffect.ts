@@ -4,5 +4,5 @@ export function useAsyncEffect(callback: () => Promise<void>, deps: DependencyLi
     useEffect(() => {
         callback();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [callback, ...deps]);
+    }, deps);
 }

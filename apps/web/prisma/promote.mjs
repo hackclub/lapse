@@ -1,9 +1,10 @@
 // @ts-check
 "use strict";
 
-import { PrismaClient } from "../src/generated/prisma/index.js";
 import { parseArgs } from "node:util";
 import { confirm } from "@inquirer/prompts";
+
+import { PrismaClient } from "../src/generated/prisma/index.js";
 
 const prisma = new PrismaClient();
 async function main() {

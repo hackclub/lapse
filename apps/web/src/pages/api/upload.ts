@@ -7,13 +7,18 @@ import prettyBytes from "pretty-bytes";
 import * as env from "../../server/env";
 import * as db from "../../generated/prisma";
 import { logError, logInfo, logNextRequest } from "../../server/serverCommon";
-import { ApiResult, err, Empty, ok } from "../../shared/common";
+import { ApiResult, apiErr, Empty, apiOk } from "../../shared/common";
 import { getAuthenticatedUser } from "../../server/lib/auth";
 
-// This endpoint is separate from all of the other tRPC endpoints because of the unfortunate fact
-// that JSON isn't really good at transporting large bits of data.
+// POST /api/upload
+//    Consumes an upload token, and starts uploading a file to the S3 bucket associated with the
+//    given upload token. This endpoint accepts multipart form inputs, with two fields:
+///   tokenId and file.
 //
-// The flow for uploading a file looks something like this:
+//    This endpoint is separate from all of the other tRPC endpoints because of the unfortunate fact
+//    that JSON isn't really good at transporting large bits of data.
+//
+//    The flow for uploading a file looks something like this:
 //  
 //              user gets a upload token via e.g. timelapse.createDraft
 //                                      |
@@ -21,12 +26,12 @@ import { getAuthenticatedUser } from "../../server/lib/auth";
 //                                      |
 //                 token gets used up via e.g. timelapse.create
 //
-// ...where /api/upload does the job of transferring the file onto S3. In an ideal world,
-// we'd do everything from one singular endpoint. But we don't live in an ideal world... :(
-// And we definitely do not want to force API consumers to use FormData for every API surface.
+//    ...where /api/upload does the job of transferring the file onto S3. In an ideal world,
+//    we'd do everything from one singular endpoint. But we don't live in an ideal world... :(
+//    And we definitely do not want to force API consumers to use FormData for every API surface.
 //
-// An upload token represents a transitional state anywhere in the diagram above. Expired
-// upload tokens should have all S3 data associated with them removed.
+//    An upload token represents a transitional state anywhere in the diagram above. Expired
+//    upload tokens should have all S3 data associated with them removed.
 
 const s3 = new S3Client({
     region: "auto",
@@ -55,11 +60,11 @@ export default async function handler(
     logNextRequest("upload", req);
 
     if (req.method !== "POST")
-        return res.status(405).json(err("ERROR", "Method not allowed - try POST-ing instead."));
+        return res.status(405).json(apiErr("ERROR", "Method not allowed - try POST-ing instead."));
 
     const user = await getAuthenticatedUser(req);
     if (!user)
-        return res.status(401).json(err("NO_PERMISSION", "This endpoint requires authentication."));
+        return res.status(401).json(apiErr("NO_PERMISSION", "This endpoint requires authentication."));
 
     // TODO: This would probably be better with a cronjob instead...
     const staleTokens = await database.uploadToken.findMany({
@@ -96,29 +101,29 @@ export default async function handler(
         const file = Array.isArray(files.file) ? files.file[0] : files.file;
 
         if (!tokenId)
-            return res.status(400).json(err("MISSING_PARAMS", "Upload token hasn't been provided. You might be missing a 'token' field in your form data."));
+            return res.status(400).json(apiErr("MISSING_PARAMS", "Upload token hasn't been provided. You might be missing a 'token' field in your form data."));
 
         if (!file)
-            return res.status(400).json(err("MISSING_PARAMS", "File hasn't been provided. Make sure to include at least one file in your form data."));
+            return res.status(400).json(apiErr("MISSING_PARAMS", "File hasn't been provided. Make sure to include at least one file in your form data."));
 
         const token = await database.uploadToken.findFirst({
             where: { id: tokenId, ownerId: user.id }
         });
 
         if (!token)
-            return res.status(400).json(err("ERROR", "Upload token is invalid."));
+            return res.status(400).json(apiErr("ERROR", "Upload token is invalid."));
 
         if (token.expires < new Date())
-            return res.status(401).json(err("ERROR", "Upload token is expired."));
+            return res.status(401).json(apiErr("ERROR", "Upload token is expired."));
 
         if (token.uploaded)
-            return res.status(409).json(err("ALREADY_PUBLISHED", "This upload token has already been used."));
+            return res.status(409).json(apiErr("ALREADY_PUBLISHED", "This upload token has already been used."));
 
         if (file.size > token.maxSize)
-            return res.status(413).json(err("SIZE_LIMIT", `File size ${file.size} bytes exceeds limit of ${token.maxSize} bytes.`));
+            return res.status(413).json(apiErr("SIZE_LIMIT", `File size ${file.size} bytes exceeds limit of ${token.maxSize} bytes.`));
 
         if (file.mimetype && file.mimetype !== token.mimeType)
-            return res.status(400).json(err("ERROR", `Invalid content type; expected ${token.mimeType}, got ${file.mimetype}.`));
+            return res.status(400).json(apiErr("ERROR", `Invalid content type; expected ${token.mimeType}, got ${file.mimetype}.`));
 
         logInfo("upload", `uploading ${token.mimeType} of size ${prettyBytes(file.size)} to ${token.bucket}/${token.key}`, { token, file });
 
@@ -136,10 +141,10 @@ export default async function handler(
             data: { uploaded: true }
         });
 
-        return res.status(200).json(ok({}));
+        return res.status(200).json(apiOk({}));
     }
     catch (error) {
         logError("upload", "Failed to upload file!", { error });
-        return res.status(500).json(err("ERROR", "An internal server error occured while uploading file"));
+        return res.status(500).json(apiErr("ERROR", "An internal server error occured while uploading file"));
     }
 }

@@ -6,6 +6,14 @@ import { generateJWT } from "../../server/lib/auth";
 import { SLACK_CLIENT_ID, SLACK_CLIENT_SECRET } from "../../server/env";
 import { logError, logNextRequest } from "../../server/serverCommon";
 
+// GET /api/authSlack
+//    Meant to be used as a callback URL - the user will be redirected to this API endpoint when
+//    authenticating with Slack.
+//
+//    Parameters:
+//      - code: the OAuth code, given by Slack
+//      - error: redirects user to /auth?error=oauth-<error> when present
+
 const database = new PrismaClient();
 
 const SlackUserIdentitySchema = z.object({
@@ -123,6 +131,7 @@ export default async function handler(
         });
 
         if (!dbUser) {
+            // The user is creating a new account via Slack.
             const baseHandle = slackUser.name.toLowerCase().replace(/[^a-z0-9]/g, "");
             let handle = baseHandle;
             let counter = 1;
@@ -147,21 +156,12 @@ export default async function handler(
                 },
             });
         }
-        else if (!dbUser.slackId) {
-            // Update existing user with Slack ID if they signed up with a different method
+        else {
+            // The user already signed up for Lapse - link their Slack ID with the account.
             dbUser = await database.user.update({
                 where: { id: dbUser.id },
                 data: { 
                     slackId: slackUser.id,
-                    profilePictureUrl: slackUser.image_original || slackUser.image_192 || dbUser.profilePictureUrl,
-                },
-            });
-        }
-        else {
-            // Update profile picture for existing Slack users
-            dbUser = await database.user.update({
-                where: { id: dbUser.id },
-                data: { 
                     profilePictureUrl: slackUser.image_original || slackUser.image_192 || dbUser.profilePictureUrl,
                 },
             });

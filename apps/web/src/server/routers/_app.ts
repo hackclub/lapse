@@ -1,17 +1,21 @@
 import "../allow-only-server";
 
-import { router } from "../trpc";
+import { router } from "@/server/trpc";
 
 import timelapse from "./api/timelapse";
 import user from "./api/user";
 import snapshot from "./api/snapshot";
 import tracing from "./api/tracing";
+import global from "./api/global";
+import comment from "./api/comment";
 
 export const appRouter = router({
     timelapse,
     user,
     snapshot,
-    tracing
+    tracing,
+    global,
+    comment
 });
 
 // type definition of API

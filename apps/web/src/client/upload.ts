@@ -15,8 +15,8 @@ export async function apiUpload(token: string, data: Blob): Promise<ApiResult<Em
     try {
         return await rawRes.json() as ApiResult<Empty>;
     }
-    catch (err) {
-        console.error("(upload) couldn't parse /api/upload response!", err);
+    catch (apiErr) {
+        console.error("(upload) couldn't parse /api/upload response!", apiErr);
         return { ok: false, error: "ERROR", message: await rawRes.text() };
     }
 }

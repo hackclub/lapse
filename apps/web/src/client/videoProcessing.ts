@@ -7,7 +7,7 @@ import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "../sha
 import { trpc } from "./trpc";
 import { apiUpload } from "./upload";
 
-const BITS_PER_PIXEL = 1.1;
+const BITS_PER_PIXEL = 1.5;
 
 /**
  * Creates a `MediaRecorder` object, the output of which will be able to be decoded client-side.
@@ -59,29 +59,6 @@ export function createMediaRecorder(stream: MediaStream) {
  */
 export async function videoConcat(streams: Blob[]) {
     console.log("(encode.concat) starting concatenation!", streams);
-
-    // NOTE: This should be *removed* when Lapse releases to the public. This defeats the purpose
-    //       of encryption, but we *do* need this to debug encoding bugs on the client-side.
-    trpc.tracing.traceEncodingInputs.mutate({
-        numInputs: streams.length,
-        numUploads: Math.min(4, streams.length)
-    }).then(res => {
-        if (!res.ok) {
-            console.warn("(encode.concat) could not call tracing.traceEncodingInputs.", res);
-            return;
-        }
-
-        for (let i = 0; i < res.data.uploads.length; i++) {
-            apiUpload(res.data.uploads[i], streams[i]).then(res => {
-                if (!res.ok) {
-                    console.warn(`(encode.concat) could not upload input #${i} for tracing`, res, streams[i]);
-                    return;
-                }
-
-                console.log(`(encode.concat) input #${i} uploaded for tracing`);
-            });
-        }
-    });
 
     const inputs = streams.map(
         (x) => new mediabunny.Input({

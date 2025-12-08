@@ -1,14 +1,45 @@
 import { z } from "zod";
 
 /**
- * Represents the structure of a JSON API response.
+ * Represents the structure of a JSON API response. For local operations, see `Result<T>`.
  */
 export type ApiResult<T> =
     { ok: true, data: T } |
-    { ok: false, error: ApiError, message: string };
+    { ok: false, error: KnownError, message: string };
 
-export type ApiError = z.infer<typeof ApiErrorSchema>;
-export const ApiErrorSchema = z.enum([
+/**
+ * Represents a successful local operation.
+ */
+export type Ok<T> = T extends Err ? never : T;
+
+/**
+ * Represents a failed local operation.
+ */
+export class Err {
+    error: KnownError;
+    message: string;
+
+    constructor (error: KnownError, message: string) {
+        this.error = error;
+        this.message = message;
+    }
+
+    toApiError() {
+        return apiErr(this.error, this.message);
+    }
+}
+
+/**
+ * Represents a local operation. For API responses, see `ApiResult<T>`.
+ */
+export type Result<T> = Ok<T> | Err;
+
+/**
+ * Represents errors that are shared between both the client and the server. These identifiers specify the exact
+ * class of error that an `ApiResult<T>` *or* `Result<T>` describe.
+ */
+export type KnownError = z.infer<typeof KnownErrorSchema>;
+export const KnownErrorSchema = z.enum([
     "ERROR",
     "NOT_FOUND",
     "DEVICE_NOT_FOUND",
@@ -30,7 +61,7 @@ export function createResultSchema<T extends z.ZodType>(dataSchema: T) {
 
         z.object({
             ok: z.literal(false),
-            error: ApiErrorSchema,
+            error: KnownErrorSchema,
             message: z.string()
         })
     ]);
@@ -40,11 +71,17 @@ export function apiResult<T extends z.core.$ZodLooseShape>(shape: T) {
     return createResultSchema(z.object(shape));
 }
 
-export function ok<T>(data: T) {
+/**
+ * Returns an `ApiResult<T>` object that represents a successful API response.
+ */
+export function apiOk<T>(data: T) {
     return { ok: true as const, data };
 }
 
-export function err(error: ApiError, message: string) {
+/**
+ * Returns an `ApiResult<T>` object that represents a failed API response.
+ */
+export function apiErr(error: KnownError, message: string) {
     return { ok: false as const, error, message };
 }
 
@@ -110,11 +147,11 @@ export function typeName<T>(obj: T) {
 /**
  * Throws an error when `obj` is not truthy.
  */
-export function unwrap<T>(obj: T | undefined, err?: string): T {
+export function unwrap<T>(obj: T | undefined, apiErr?: string): T {
     if (obj)
         return obj;
 
-    throw new Error(err ?? "Object was undefined.");
+    throw new Error(apiErr ?? "Object was undefined.");
 }
 
 /**
@@ -249,10 +286,6 @@ export function* chunked<T>(array: T[], n: number) {
     }
 }
 
-export type Ok<T> = { ok: true, value: T };
-export type Err = { ok: false, error: string };
-export type Result<T> = Ok<T> | Err;
-
 /**
  * Represents an empty object (`{}`).
  */
@@ -263,4 +296,109 @@ export type Empty = Record<string, never>;
  */
 export function isNonEmptyArray(obj: unknown): obj is unknown[] {
     return Array.isArray(obj) && obj.length != 0;
+}
+
+/**
+ * Returns a one-element array when `condition` is `true` - otherwise, returns `[]`.
+ */
+export function maybe<T>(element: T, condition: boolean) {
+    return condition ? [element] as const : [] as const;
+}
+
+/**
+ * Returns a `Date` equal to the current date, `days` days ago.
+ */
+export function daysAgo(days: number) {
+    const now = new Date();
+    now.setDate(now.getDate() - days);
+    return now;
+}
+
+function extractTimespanComponents(seconds: number) {
+    seconds = Math.floor(seconds);
+
+    return {
+        h: Math.floor(seconds / 3600),
+        m: Math.floor((seconds % 3600) / 60),
+        s: seconds % 60
+    };
+}
+
+function extractDateComponents(seconds: number) {
+  seconds = Math.floor(seconds);
+
+  const years = Math.floor(seconds / 31557600); // 365.25 days
+  seconds %= 31557600;
+
+  const months = Math.floor(seconds / 2629746); // ~30.44 days
+  seconds %= 2629746;
+
+  const weeks = Math.floor(seconds / 604800);
+  seconds %= 604800;
+
+  const days = Math.floor(seconds / 86400);
+  seconds %= 86400;
+
+  const hours = Math.floor(seconds / 3600);
+  seconds %= 3600;
+
+  const minutes = Math.floor(seconds / 60);
+  seconds %= 60;
+
+  return {
+    y: years,
+    mo: months,
+    w: weeks,
+    d: days,
+    h: hours,
+    m: minutes,
+    s: seconds
+  };
+}
+
+/**
+ * Formats a duration, represented in the form of a number of seconds, to a string like `3h 2m`.
+ */
+export function formatDuration(seconds: number) {
+    const { h, m, s } = extractTimespanComponents(seconds);
+
+    return [
+        ...maybe(`${h}h`, h != 0),
+        ...maybe(`${m}m`, m != 0),
+        ...maybe(`${s}s`, s != 0)
+    ].join(" ");
+}
+
+/**
+ * Formats a date in the past to a string like `3 minutes ago`.
+ */
+export function formatTimeElapsed(date: Date) {
+    const secondsPast = (new Date().getTime() - date.getTime()) / 1000;
+    const { y, mo, d, h, m, s } = extractDateComponents(secondsPast);
+
+    return (
+        (y >= 1) ? `${y} year${y > 1 ? 's' : ''} ago` :
+        (mo >= 1) ? `${mo} month${mo > 1 ? 's' : ''} ago` :
+        (d >= 1) ? `${d} day${d > 1 ? 's' : ''} ago` :
+        (h >= 1) ? `${h} hour${h > 1 ? 's' : ''} ago` :
+        (m >= 1) ? `${m} minute${m > 1 ? 's' : ''} ago` :
+        (s <= 1) ? "just now" :
+        `${s} second${s > 1 ? 's' : ''} ago`
+    );
+}
+
+/**
+ * Checks if the given URL is valid.
+ */
+export function validateUrl(url: string) {
+    try {
+        if (!url.trim())
+            return true;
+        
+        new URL(url.trim());
+        return true;
+    }
+    catch {
+        return false;
+    }
 }

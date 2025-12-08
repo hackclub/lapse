@@ -26,7 +26,7 @@ export function SelectInput({
       description={description}
     >
       <select
-        className="p-2 rounded-md disabled:bg-dark bg-darkless transition-colors"
+        className="p-2 rounded-md disabled:bg-dark border border-transparent outline outline-slate border-l-4 border-r-12 transition-colors"
         value={value}
         onChange={handleChange}
         disabled={disabled}

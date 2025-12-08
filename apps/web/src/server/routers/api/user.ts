@@ -4,11 +4,11 @@ import { z } from "zod";
 
 import * as db from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, assert, err, ok, when } from "../../../shared/common";
+import { apiResult, assert, descending, apiErr, when, apiOk } from "../../../shared/common";
 import { HackatimeUserApi } from "../../hackatime";
 import { logError, logWarning, logRequest } from "../../serverCommon";
 import { deleteTimelapse } from "./timelapse";
-import { PublicId } from "../common";
+import { ApiDate, PublicId } from "../common";
 
 const database = new db.PrismaClient();
 
@@ -68,7 +68,7 @@ export const PublicUserSchema = z.object({
     /**
      * The date when the user created their account.
      */
-    createdAt: z.number().nonnegative(),
+    createdAt: ApiDate,
 
     /**
      * The unique handle of the user.
@@ -91,9 +91,14 @@ export const PublicUserSchema = z.object({
     bio: UserBio,
 
     /**
-     * Featured URLs that should be displayed on the user"s page. This array has a maximum of 4 members.
+     * Featured URLs that should be displayed on the user's page. This array has a maximum of 4 members.
      */
-    urls: UserUrlList
+    urls: UserUrlList,
+
+    /**
+     * The ID of the user in the Hack Club Slack.
+     */
+    slackId: z.string().regex(/^U[A-Z0-9]+$/).nullable()
 });
 
 /**
@@ -134,7 +139,8 @@ export function dtoPublicUser(entity: db.User): PublicUser {
         profilePictureUrl: entity.profilePictureUrl,
         bio: entity.bio,
         handle: entity.handle,
-        urls: entity.urls
+        urls: entity.urls,
+        slackId: entity.slackId
     };
 }
 
@@ -166,7 +172,7 @@ export default router({
             logRequest("user/myself", req);
             
             if (!req.ctx.user)
-                return ok({ user: null });
+                return apiOk({ user: null });
 
             const user = await database.user.findFirst({
                 include: { devices: true },
@@ -174,9 +180,9 @@ export default router({
             });
 
             if (!user)
-                return err("NOT_FOUND", "Could not find your user account.");
+                return apiErr("NOT_FOUND", "Could not find your user account.");
 
-            return ok({ user: dtoUser(user) });
+            return apiOk({ user: dtoUser(user) });
         }),
 
     /**
@@ -205,7 +211,7 @@ export default router({
             logRequest("user/query", req);
             
             if (!req.input.handle && !req.input.id)
-                return err("MISSING_PARAMS", "No handle or user ID specified"); 
+                return apiErr("MISSING_PARAMS", "No handle or user ID specified"); 
 
             let dbUser: DbCompositeUser | null;
 
@@ -224,14 +230,14 @@ export default router({
             }
 
             if (!dbUser)
-                return ok({ user: null });
+                return apiOk({ user: null });
             
             // Watch out! Make sure we never return a `User` to an unauthorized user here.
             const user: User | PublicUser = req.ctx.user?.id == dbUser.id
                 ? dtoUser(dbUser)
                 : dtoPublicUser(dbUser);
             
-            return ok({ user });
+            return apiOk({ user });
         }),
 
     /**
@@ -271,7 +277,7 @@ export default router({
             
             // Check if user can edit this profile
             if (req.ctx.user.permissionLevel === "USER" && req.ctx.user.id !== req.input.id)
-                return err("NO_PERMISSION", "You can only edit your own profile");
+                return apiErr("NO_PERMISSION", "You can only edit your own profile");
 
             const changes = req.input.changes;
             const updateData: Partial<db.User> = {
@@ -290,7 +296,7 @@ export default router({
                 }
                 catch (error) {
                     logWarning("user.update", "Error caught when verifying a Hackatime API key!", { error });
-                    return err("HACKATIME_ERROR", "You provided an invalid Hackatime API key!");
+                    return apiErr("HACKATIME_ERROR", "You provided an invalid Hackatime API key!");
                 }
             }
 
@@ -300,7 +306,7 @@ export default router({
                 include: { devices: true }
             });
 
-            return ok({ user: dtoUser(updatedUser) });
+            return apiOk({ user: dtoUser(updatedUser) });
         }),
 
     /**
@@ -320,7 +326,7 @@ export default router({
                 where: { ownerId: req.ctx.user.id }
             });
 
-            return ok({ devices: devices.map(dtoKnownDevice) });
+            return apiOk({ devices: devices.map(dtoKnownDevice) });
         }),
 
     /**
@@ -350,7 +356,7 @@ export default router({
                 }
             });
 
-            return ok({ device: dtoKnownDevice(device) });
+            return apiOk({ device: dtoKnownDevice(device) });
         }),
 
     /**
@@ -374,7 +380,7 @@ export default router({
             });
 
             if (!device)
-                return err("DEVICE_NOT_FOUND", "That device doesn't seem to exist!");
+                return apiErr("DEVICE_NOT_FOUND", "That device doesn't seem to exist!");
 
             const timelapses = await database.timelapse.findMany({
                 where: { deviceId: device.id }
@@ -382,12 +388,12 @@ export default router({
 
             if (timelapses.some(x => x.ownerId != req.ctx.user.id)) {
                 logError("user.removeDevice", "A timelapse has a device that is not owned by the author!", { ownerId: req.ctx.user.id, timelapses });
-                return err("ERROR", "That device seems to be used by another user! Please report this to @ascpixi on Slack.");
+                return apiErr("ERROR", "That device seems to be used by another user! Please report this to @ascpixi on Slack.");
             }
 
             await Promise.all(
                 timelapses.map(async (timelapse) => {
-                    await deleteTimelapse(timelapse.id);
+                    await deleteTimelapse(timelapse.id, req.ctx.user);
                 })
             );
 
@@ -395,7 +401,7 @@ export default router({
                 where: { id: req.input.id, ownerId: req.ctx.user.id }
             });
 
-            return ok({});
+            return apiOk({});
         }),
 
     /**
@@ -412,6 +418,106 @@ export default router({
                     "lapse-auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; HttpOnly; SameSite=Lax"
                 ]);
             }
-            return ok({});
+            return apiOk({});
+        }),
+
+    /**
+     * Gets a list of Hackatime projects that have been associated with the user's timelapses, including the total hour counts.
+     */
+    hackatimeProjects: protectedProcedure()
+        .input(z.object({}))
+        .output(apiResult({
+            /**
+             * All of the Hackatime projects associated with timelapses.
+             */
+            projects: z.array(
+                z.object({
+                    /**
+                     * The name of the project.
+                     */
+                    name: z.string().min(1),
+
+                    /**
+                     * The amount of time spend timelapsing.
+                     */
+                    time: z.number().nonnegative()
+                })
+            )
+        }))
+        .query(async (req) => {
+            const projects = new Map<string, number>();
+            const timelapses = await database.timelapse.findMany({
+                select: {
+                    hackatimeProject: true,
+                    duration: true
+                },
+                where: {
+                    ownerId: req.ctx.user.id,
+                    hackatimeProject: { not: null }
+                }
+            });
+
+            for (const timelapse of timelapses) {
+                assert(timelapse.hackatimeProject != null, "Timelapse had hackatimeProject == null when { not: null } was specified");
+
+                projects.set(
+                    timelapse.hackatimeProject,
+                    (projects.get(timelapse.hackatimeProject) ?? 0) + timelapse.duration
+                );
+            }
+
+            return apiOk({
+                projects: projects
+                    .entries()
+                    .map(x => ({
+                        name: x[0],
+                        time: x[1]
+                    }))
+                    .toArray()
+                    .toSorted(descending(x => x.time))
+            });
+        }),
+
+    /**
+     * Queries the aggregate duration of all timelapses of a given user.
+     */
+    getTotalTimelapseTime: procedure
+        .input(z.object({
+            /**
+             * The ID of the user to query the total timelapse time of. If `null`, and the user is authenticated, the user's ID is used instead.
+             */
+            id: PublicId.nullable()
+        }))
+        .output(apiResult({
+            /**
+             * The aggregate duration of all timelapses of the queried user.
+             */
+            time: z.number().nonnegative()
+        }))
+        .query(async (req) => {
+            if (!req.input.id && !req.ctx.user)
+                return apiErr("MISSING_PARAMS", "'id' is required when not authenticated.");
+            
+            const aggregate = await database.timelapse.aggregate({
+                _sum: { duration: true },
+                where: { ownerId: req.input.id ?? req.ctx.user!.id }
+            });
+
+            return apiOk({ time: aggregate._sum.duration ?? 0 });
+        }),
+
+    /**
+     * Updates the last heartbeat time of the calling user to the current date. This is used to detect active users.
+     */
+    emitHeartbeat: protectedProcedure()
+        .input(z.object({}))
+        .output(apiResult({}))
+        .mutation(async (req) => {
+            await database.user.update({
+                data: { lastHeartbeat: new Date() },
+                where: { id: req.ctx.user.id }
+            });
+
+            return apiOk({});
         })
 });
