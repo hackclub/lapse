@@ -41,14 +41,34 @@ export default function Home() {
         return;
       }
 
-      const sorted = res.data.projects.toSorted(descending(x => x.time));
+      const sorted = res.data.projects
+        .toSorted(descending(x => x.time))
+        .slice(0, 5);
+
       setTopUserProjects(
         sorted.map(x => ({
           name: x.name,
           time: formatDuration(x.time),
-          percentage: sorted[0].time / x.time
+          percentage: x.time / sorted[0].time
         }))
       );
+    })();
+  }, [auth.currentUser]);
+
+  useEffect(() => {
+    (async () => {
+      if (!auth.currentUser)
+        return;
+
+      const res = await trpc.user.getTotalTimelapseTime.query({ id: auth.currentUser.id });
+      if (!res.ok) {
+        console.error("(error) Could not fetch the user's total timelapse time!", res);
+        return;
+      }
+
+      const duration = formatDuration(res.data.time);
+      setTotalTime(duration);
+      setTotalTimeCache(duration);
     })();
   }, [auth.currentUser]);
 
@@ -79,8 +99,8 @@ export default function Home() {
 
   return (
     <RootLayout showHeader={true}>
-      <section className="flex justify-between w-full px-32 py-12 bg-grid-gradient border-y border-black">
-        <div className="flex w-full gap-8 items-center content-center">
+      <section className="flex justify-between items-center w-full px-32 py-12 bg-grid-gradient border-y border-black">
+        <div className="flex w-2/3 gap-8 items-center content-center">
           <NextImage
             src="/images/orpheus-time.png" alt=""
             width={1200} height={1200}
@@ -91,7 +111,24 @@ export default function Home() {
             auth.currentUser ? (
               <h1 className="text-3xl tracking-tight">
                 Hi, <b className="text-nowrap">@{auth.currentUser.displayName}</b>! <br />
-                You've recorded a total of <b className="text-nowrap">0d 0m 0s</b> of timelapses so far.
+                { 
+                  (totalTime || totalTimeCache)
+                    ? (
+                      <>
+                        You've recorded a total of <br />
+                        <b className="text-nowrap">{totalTime || totalTimeCache}</b> of timelapses so far.
+                      </>
+                    )
+                    : (
+                      <>
+                        You haven't recorded any timelapses so far! <br />
+                        Go change that!
+                      </>
+                    )
+                }
+
+                
+                
               </h1>
             ) : (
               <h1 className="text-3xl tracking-tight">
@@ -101,13 +138,13 @@ export default function Home() {
           }
         </div>
 
-        <div className="flex flex-col w-full content-around justify-end text-right">
+        <div className="flex flex-col gap-4 w-1/3 content-around justify-end text-right">
           {
             auth.currentUser ? (
               topUserProjects.map(x => (
                 <div id={x.name} className="flex gap-2.5">
                   <span className="tracking-tight">{x.name}</span>
-                  <div className="w-full bg-darkless relative">
+                  <div className="w-full bg-darkless relative rounded-2xl overflow-hidden">
                     <div
                       style={{ width: `${x.percentage * 100}%` }}
                       className="bg-red text-dark absolute text-right px-4"
@@ -139,7 +176,10 @@ export default function Home() {
               {
                 reqLeaderboard.leaderboard.map(x => (
                   <div key={x.id} className="flex flex-col gap-1 justify-center items-center">
-                    <img src={x.pfp} alt="" className="block w-30 h-30 rounded-full mb-2 shadow" />
+                    <NextLink href={`/user/@${x.handle}`}>
+                      <img src={x.pfp} alt="" className="block w-30 h-30 rounded-full mb-2 shadow transition-all hover:brightness-75" />
+                    </NextLink>
+
                     <div className="text-3xl font-bold">{x.displayName}</div>
                     <div className="text-xl text-center leading-6">{`${formatDuration(x.secondsThisWeek)} recorded`}<br/>this week</div>
                   </div>
