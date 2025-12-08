@@ -27,7 +27,7 @@ export async function generateThumbnail(videoBuffer: Buffer): Promise<Buffer> {
                 ])
                 .output(outputPath)
                 .on("end", () => resolve())
-                .on("error", (err) => reject(err))
+                .on("error", (apiErr) => reject(apiErr))
                 .run();
         });
         

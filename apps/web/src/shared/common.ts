@@ -1,14 +1,45 @@
 import { z } from "zod";
 
 /**
- * Represents the structure of a JSON API response.
+ * Represents the structure of a JSON API response. For local operations, see `Result<T>`.
  */
 export type ApiResult<T> =
     { ok: true, data: T } |
-    { ok: false, error: ApiError, message: string };
+    { ok: false, error: KnownError, message: string };
 
-export type ApiError = z.infer<typeof ApiErrorSchema>;
-export const ApiErrorSchema = z.enum([
+/**
+ * Represents a successful local operation.
+ */
+export type Ok<T> = T extends Err ? never : T;
+
+/**
+ * Represents a failed local operation.
+ */
+export class Err {
+    error: KnownError;
+    message: string;
+
+    constructor (error: KnownError, message: string) {
+        this.error = error;
+        this.message = message;
+    }
+
+    toApiError() {
+        return apiErr(this.error, this.message);
+    }
+}
+
+/**
+ * Represents a local operation. For API responses, see `ApiResult<T>`.
+ */
+export type Result<T> = Ok<T> | Err;
+
+/**
+ * Represents errors that are shared between both the client and the server. These identifiers specify the exact
+ * class of error that an `ApiResult<T>` *or* `Result<T>` describe.
+ */
+export type KnownError = z.infer<typeof KnownErrorSchema>;
+export const KnownErrorSchema = z.enum([
     "ERROR",
     "NOT_FOUND",
     "DEVICE_NOT_FOUND",
@@ -30,7 +61,7 @@ export function createResultSchema<T extends z.ZodType>(dataSchema: T) {
 
         z.object({
             ok: z.literal(false),
-            error: ApiErrorSchema,
+            error: KnownErrorSchema,
             message: z.string()
         })
     ]);
@@ -40,11 +71,17 @@ export function apiResult<T extends z.core.$ZodLooseShape>(shape: T) {
     return createResultSchema(z.object(shape));
 }
 
-export function ok<T>(data: T) {
+/**
+ * Returns an `ApiResult<T>` object that represents a successful API response.
+ */
+export function apiOk<T>(data: T) {
     return { ok: true as const, data };
 }
 
-export function err(error: ApiError, message: string) {
+/**
+ * Returns an `ApiResult<T>` object that represents a failed API response.
+ */
+export function apiErr(error: KnownError, message: string) {
     return { ok: false as const, error, message };
 }
 
@@ -110,11 +147,11 @@ export function typeName<T>(obj: T) {
 /**
  * Throws an error when `obj` is not truthy.
  */
-export function unwrap<T>(obj: T | undefined, err?: string): T {
+export function unwrap<T>(obj: T | undefined, apiErr?: string): T {
     if (obj)
         return obj;
 
-    throw new Error(err ?? "Object was undefined.");
+    throw new Error(apiErr ?? "Object was undefined.");
 }
 
 /**
@@ -249,10 +286,6 @@ export function* chunked<T>(array: T[], n: number) {
     }
 }
 
-export type Ok<T> = { ok: true, value: T };
-export type Err = { ok: false, error: string };
-export type Result<T> = Ok<T> | Err;
-
 /**
  * Represents an empty object (`{}`).
  */
@@ -344,12 +377,28 @@ export function formatTimeElapsed(date: Date) {
     const { y, mo, d, h, m, s } = extractDateComponents(secondsPast);
 
     return (
-        (y >= 1) ? `${y} years ago` :
-        (mo >= 1) ? `${mo} months ago` :
-        (d >= 1) ? `${d} days ago` :
-        (h >= 1) ? `${h} hours ago` :
-        (m >= 1) ? `${m} minutes ago` :
+        (y >= 1) ? `${y} year${y > 1 ? 's' : ''} ago` :
+        (mo >= 1) ? `${mo} month${mo > 1 ? 's' : ''} ago` :
+        (d >= 1) ? `${d} day${d > 1 ? 's' : ''} ago` :
+        (h >= 1) ? `${h} hour${h > 1 ? 's' : ''} ago` :
+        (m >= 1) ? `${m} minute${m > 1 ? 's' : ''} ago` :
         (s <= 1) ? "just now" :
-        `${s} seconds ago`
+        `${s} second${s > 1 ? 's' : ''} ago`
     );
+}
+
+/**
+ * Checks if the given URL is valid.
+ */
+export function validateUrl(url: string) {
+    try {
+        if (!url.trim())
+            return true;
+        
+        new URL(url.trim());
+        return true;
+    }
+    catch {
+        return false;
+    }
 }

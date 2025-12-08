@@ -1,5 +1,7 @@
 import z from "zod";
 
+import type * as db from "@/generated/prisma";
+
 /**
  * A 12-character Nano ID, used to represent all public entities.
  */
@@ -10,3 +12,15 @@ export const PublicId = z.string();
  * dates for the API.
  */
 export const ApiDate = z.number().nonnegative();
+
+/**
+ * For functions that access protected resources, specifies that no specific actor should be used, and all resources
+ * should be considered owned. This usually shouldn't be used.
+ */
+export type ServerActor = "SERVER";
+
+/**
+ * Represents an actor. This type is usually used in functions that access protected resources - if a protected resource is accessed using an
+ * `Actor` that does not have access to said resource, an error result will be returned.
+ */
+export type Actor = db.User | ServerActor | null;

@@ -6,16 +6,17 @@ import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sd
 
 import { PrismaClient } from "../../../generated/prisma";
 import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ascending, err, match, when, ok, oneOf, closest, chunked, assert } from "../../../shared/common";
+import { apiResult, ascending, match, when, apiOk, apiErr, oneOf, closest, chunked, assert, ApiResult, Result, Err } from "../../../shared/common";
 import { decryptVideo } from "../../encryption";
 import * as env from "../../env";
 import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE, MAX_VIDEO_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS, UPLOAD_TOKEN_LIFETIME_MS } from "../../../shared/constants";
-import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "./user";
+import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema, User } from "./user";
 import * as db from "../../../generated/prisma";
 import { HackatimeUserApi, WakaTimeHeartbeat } from "../../hackatime";
 import { logError, logInfo, logRequest } from "../../serverCommon";
 import { generateThumbnail } from "../../videoProcessing";
-import { ApiDate, PublicId } from "../common";
+import { Actor, ApiDate, PublicId } from "../common";
+import { CommentSchema, DbComment, dtoComment } from "@/server/routers/api/comment";
 
 const database = new PrismaClient();
 const s3 = new S3Client({
@@ -27,7 +28,13 @@ const s3 = new S3Client({
     },
 });
 
-export function dtoTimelapse(entity: db.Timelapse & { owner: db.User }): Timelapse {
+export type DbTimelapse = db.Timelapse & { owner: db.User, comments: DbComment[] };
+export type DbOwnedTimelapse = DbTimelapse & { owner: db.User, device: db.KnownDevice | null };
+
+/**
+ * Converts a database representation of a timelapse to a runtime (API) one. This excludes private fields.
+ */
+export function dtoTimelapse(entity: DbTimelapse): Timelapse {
     // This lacks `isPublished` so that we have to mark it explicitly when creating a DTO
     // that might hold private data (e.g. device names).
     return {
@@ -36,6 +43,7 @@ export function dtoTimelapse(entity: db.Timelapse & { owner: db.User }): Timelap
         owner: dtoPublicUser(entity.owner),
         name: entity.name,
         description: entity.description,
+        comments: entity.comments.map(dtoComment),
         visibility: entity.visibility,
         playbackUrl: `${entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED}/${entity.s3Key}`,
         thumbnailUrl: entity.thumbnailS3Key 
@@ -49,7 +57,7 @@ export function dtoTimelapse(entity: db.Timelapse & { owner: db.User }): Timelap
 /**
  * Converts a database representation of a timelapse to a runtime (API) one, including all private fields.
  */
-export function dtoOwnedTimelapse(entity: db.Timelapse & { owner: db.User, device: db.KnownDevice | null }): OwnedTimelapse {
+export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
     return {
         ...dtoTimelapse(entity),
         private: {
@@ -93,15 +101,55 @@ export function containerTypeToExtension(container: TimelapseVideoContainer) {
 }
 
 /**
+ * Finds a timelapse by its ID.
+ */
+export async function getTimelapseById(id: string, actor: Actor): Promise<Result<Timelapse | OwnedTimelapse>> {
+    const timelapse = await database.timelapse.findFirst({
+        where: { id },
+        include: TIMELAPSE_INCLUDES
+    });
+
+    if (!timelapse)
+        return new Err("NOT_FOUND", "Couldn't find that timelapse!");
+
+    const isOwner = (
+        (actor === "SERVER")
+            ? true
+            : (
+                (actor && actor.id === timelapse.ownerId) ||
+                (actor && (actor.permissionLevel in oneOf("ADMIN", "ROOT"))
+            )
+        )
+    );
+
+    if (!timelapse.isPublished && !isOwner)
+        return new Err("NOT_FOUND", "Couldn't find that timelapse!");
+
+    return isOwner ? dtoOwnedTimelapse(timelapse) : dtoTimelapse(timelapse);
+}
+
+/**
  * Permanently deletes a timelapse, including all its snapshots and S3 files.
  */
-export async function deleteTimelapse(timelapseId: string): Promise<void> {
+export async function deleteTimelapse(timelapseId: string, actor: Actor): Promise<Result<void>> {
     const timelapse = await database.timelapse.findFirst({
         where: { id: timelapseId }
     });
 
     if (!timelapse)
-        throw new Error(`Timelapse ${timelapseId} not found`);
+        return new Err("NOT_FOUND", "Couldn't find that timelapse!");
+
+    if (actor !== "SERVER") {
+        const canDelete =
+            actor && (
+                actor.id === timelapse.ownerId ||
+                actor.permissionLevel in oneOf("ADMIN", "ROOT")
+            );
+
+        if (!canDelete) {
+            return new Err("NO_PERMISSION", "You don't have permission to delete this timelapse");
+        }
+    }
 
     await database.snapshot.deleteMany({
         where: { timelapseId: timelapse.id }
@@ -162,6 +210,12 @@ export const OwnedTimelapseSchema = z.object({
     description: TimelapseDescription,
 
     /**
+     * All comments for this timelapse.
+     */
+    // TODO: If we get to the point where timelapses can actually get viral and have a lot of comments, we'll have to paginate this.
+    comments: z.array(CommentSchema),
+
+    /**
      * Determines the discoverability of the timelapse.
      */
     visibility: TimelapseVisibilitySchema,
@@ -206,6 +260,20 @@ export const OwnedTimelapseSchema = z.object({
 });
 
 /**
+ * Specify this for `include` when querying `Timelapse` entities in order to retrieve the data required for a `DbOwnedTimelapse`.
+ */
+export const TIMELAPSE_INCLUDES = {
+    owner: true,
+    device: true,
+    comments: {
+        include: { author: true },
+        orderBy: {
+            createdAt: "desc"
+        }
+    }
+} as const satisfies db.Prisma.TimelapseInclude;
+
+/**
  * Represents a timelapse that may or may not be owned by the calling user.
  */
 export type Timelapse = z.infer<typeof TimelapseSchema>;
@@ -233,23 +301,13 @@ export default router({
             })
         )
         .query(async (req) => {
-            logRequest("snapshot/query", req);
-            
-            const timelapse = await database.timelapse.findFirst({
-                where: { id: req.input.id },
-                include: { owner: true, device: true }
-            });
+            logRequest("timelapse/query", req);
 
-            if (!timelapse)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
+            const timelapse = await getTimelapseById(req.input.id, req.ctx.user);
+            if (timelapse instanceof Err)
+                return timelapse.toApiError();
 
-            const isOwner = (req.ctx.user && req.ctx.user.id === timelapse.ownerId) ||
-                (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
-
-            if (!timelapse.isPublished && !isOwner)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
-
-            return ok({ timelapse: isOwner ? dtoOwnedTimelapse(timelapse) : dtoTimelapse(timelapse) });
+            return apiOk({ timelapse });
         }),
 
     /**
@@ -325,7 +383,7 @@ export default router({
                 }
             });
 
-            return ok({ id: draft.id, videoToken: video.id, thumbnailToken: thumbnail.id });
+            return apiOk({ id: draft.id, videoToken: video.id, thumbnailToken: thumbnail.id });
         }),
 
     /**
@@ -367,7 +425,7 @@ export default router({
             });
 
             if (!draft)
-                return err("NOT_FOUND", `The draft timelapse ${req.input.id} couldn't be found.`);
+                return apiErr("NOT_FOUND", `The draft timelapse ${req.input.id} couldn't be found.`);
 
             const videoUpload = draft.videoToken;
             const thumbnailUpload = draft.thumbnailToken;
@@ -376,23 +434,23 @@ export default router({
             assert(thumbnailUpload.ownerId == req.ctx.user.id, "Thumbnail upload token wasn't owned by draft owner");
 
             if (!videoUpload.uploaded)
-                return err("NO_FILE", "The video hasn't yet been uploaded.");
+                return apiErr("NO_FILE", "The video hasn't yet been uploaded.");
 
             if (!thumbnailUpload.uploaded)
-                return err("NO_FILE", "The thumbnail hasn't yet been uploaded.");
+                return apiErr("NO_FILE", "The thumbnail hasn't yet been uploaded.");
 
             const device = await database.knownDevice.findFirst({
                 where: { id: req.input.deviceId }
             });
 
             if (!device)
-                return err("DEVICE_NOT_FOUND", "The device creating this snapshot hasn't been registered with the server.");
+                return apiErr("DEVICE_NOT_FOUND", "The device creating this snapshot hasn't been registered with the server.");
 
             if (device.ownerId != req.ctx.user.id)
-                return err("NO_PERMISSION", "The specified device doesn't belong to the logged in user.");
+                return apiErr("NO_PERMISSION", "The specified device doesn't belong to the logged in user.");
 
             const timelapse = await database.timelapse.create({
-                include: { owner: true, device: true },
+                include: TIMELAPSE_INCLUDES,
                 data: {
                     id: draft.id,
                     createdAt: draft.createdAt,
@@ -427,7 +485,7 @@ export default router({
                 where: { id: draft.id }
             });
 
-            return ok({ timelapse: dtoOwnedTimelapse(timelapse) });
+            return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
         }),
 
     /**
@@ -467,14 +525,14 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
+                return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
 
             const canEdit =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canEdit)
-                return err("NOT_FOUND", "You don't have permission to edit this timelapse");
+                return apiErr("NOT_FOUND", "You don't have permission to edit this timelapse");
 
             const updateData: Partial<db.Timelapse> = {};
             if (req.input.changes.name) {
@@ -492,10 +550,10 @@ export default router({
             const updatedTimelapse = await database.timelapse.update({
                 where: { id: req.input.id },
                 data: updateData,
-                include: { owner: true, device: true }
+                include: TIMELAPSE_INCLUDES
             });
 
-            return ok({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
+            return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
         }),
 
     /**
@@ -511,27 +569,13 @@ export default router({
         .mutation(async (req) => {
             logRequest("timelapse/delete", req);
 
-            const timelapse = await database.timelapse.findFirst({
-                where: { id: req.input.id },
-            });
-
-            if (!timelapse)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
-
-            const canDelete =
-                req.ctx.user.id === timelapse.ownerId ||
-                req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
-
-            if (!canDelete)
-                return err("NO_PERMISSION", "You don't have permission to delete this timelapse");
-
             try {
-                await deleteTimelapse(req.input.id);
-                return ok({});
+                await deleteTimelapse(req.input.id, req.ctx.user);
+                return apiOk({});
             }
             catch (error) {
                 logError("timelapse.delete", "Failed to delete timelapse!", { error });
-                return err("ERROR", "Failed to delete timelapse");
+                return apiErr("ERROR", "Failed to delete timelapse");
             }
         }),
 
@@ -569,17 +613,17 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
+                return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
 
             const canPublish =
                 req.ctx.user.id === timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canPublish)
-                return err("NO_PERMISSION", "You don't have permission to publish this timelapse");
+                return apiErr("NO_PERMISSION", "You don't have permission to publish this timelapse");
 
             if (timelapse.isPublished)
-                return err("ALREADY_PUBLISHED", "Timelapse already published");
+                return apiErr("ALREADY_PUBLISHED", "Timelapse already published");
 
             try {
                 const encryptedObject = await s3.send(new GetObjectCommand({
@@ -590,7 +634,7 @@ export default router({
                 const encryptedBuffer = await encryptedObject.Body?.transformToByteArray();
 
                 if (!encryptedBuffer)
-                    return err("NO_FILE", "Failed to retrieve encrypted video");
+                    return apiErr("NO_FILE", "Failed to retrieve encrypted video");
 
                 let decryptedBuffer: Buffer;
 
@@ -602,7 +646,7 @@ export default router({
                     );
                 }
                 catch {
-                    return err("ERROR", "Invalid passkey provided. Please check your 6-digit PIN.");
+                    return apiErr("ERROR", "Invalid passkey provided. Please check your 6-digit PIN.");
                 }
 
                 await s3.send(new PutObjectCommand({
@@ -642,14 +686,14 @@ export default router({
                         deviceId: null,
                         thumbnailS3Key: thumbnailS3Key
                     },
-                    include: { owner: true, device: true }
+                    include: TIMELAPSE_INCLUDES
                 });
 
-                return ok({ timelapse: dtoOwnedTimelapse(publishedTimelapse) });
+                return apiOk({ timelapse: dtoOwnedTimelapse(publishedTimelapse) });
             }
             catch (error) {
                 console.error("Failed to decrypt and publish timelapse:", error);
-                return err("ERROR", "Failed to process timelapse for publishing");
+                return apiErr("ERROR", "Failed to process timelapse for publishing");
             }
         }),
 
@@ -677,7 +721,8 @@ export default router({
             const isAdmin = req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT"));
 
             const timelapses = await database.timelapse.findMany({
-                include: { owner: true, device: true },
+                include: TIMELAPSE_INCLUDES,
+                orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: req.input.user,
                     ...when(!isViewingSelf && !isAdmin, {
@@ -687,7 +732,7 @@ export default router({
                 }
             });
 
-            return ok({
+            return apiOk({
                 timelapses: timelapses.map(x => x.ownerId == req.ctx.user?.id ? dtoOwnedTimelapse(x) : dtoTimelapse(x) ),
             });
         }),
@@ -717,13 +762,13 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
+                return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
 
             if (timelapse.hackatimeProject)
-                return err("HACKATIME_ERROR", "Timelapse already has an associated Hackatime project");
+                return apiErr("HACKATIME_ERROR", "Timelapse already has an associated Hackatime project");
 
             if (!timelapse.owner.hackatimeApiKey)
-                return err("ERROR", "You don't have a Hackatime API key assigned to your profile!");
+                return apiErr("ERROR", "You don't have a Hackatime API key assigned to your profile!");
 
             const hackatime = new HackatimeUserApi(timelapse.owner.hackatimeApiKey);
             
@@ -744,7 +789,7 @@ export default router({
             const failedHeartbeat = assignedHeartbeats.responses.find(x => x[1] < 200 || x[1] > 299);
             if (failedHeartbeat) {
                 logError("timelapse.syncWithHackatime", "Couldn't sync heartbeat!", { failedHeartbeat, snapshots, heartbeats });
-                return err("HACKATIME_ERROR", `Hackatime returned HTTP ${failedHeartbeat[1]} for heartbeat at ${failedHeartbeat[0]?.time}! Report this at https://github.com/hackclub/lapse.`);
+                return apiErr("HACKATIME_ERROR", `Hackatime returned HTTP ${failedHeartbeat[1]} for heartbeat at ${failedHeartbeat[0]?.time}! Report this at https://github.com/hackclub/lapse.`);
             }
 
             logInfo("timelapse.syncWithHackatime", `Synchronizing ${heartbeats.length} heartbeats with ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}`);
@@ -766,9 +811,9 @@ export default router({
             const updatedTimelapse = await database.timelapse.update({
                 where: { id: req.input.id, ownerId: req.ctx.user.id },
                 data: { hackatimeProject: req.input.hackatimeProject },
-                include: { owner: true, device: true }
+                include: TIMELAPSE_INCLUDES
             });
 
-            return ok({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
+            return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
         })
 });

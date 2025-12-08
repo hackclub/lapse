@@ -2,7 +2,7 @@ import "../../allow-only-server";
 
 import { z } from "zod";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { apiResult, err, ok, oneOf } from "@/shared/common";
+import { apiResult, apiErr, apiOk, oneOf } from "@/shared/common";
 import * as db from "@/generated/prisma";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { logInfo, logRequest } from "@/server/serverCommon";
@@ -70,23 +70,23 @@ export default router({
             });
 
             if (!snapshot)
-                return err("NOT_FOUND", "Snapshot not found");
+                return apiErr("NOT_FOUND", "Snapshot not found");
 
             const canDelete =
                 req.ctx.user.id === snapshot.timelapse.ownerId ||
                 req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
 
             if (!canDelete)
-                return err("NO_PERMISSION", "You don't have permission to delete this snapshot");
+                return apiErr("NO_PERMISSION", "You don't have permission to delete this snapshot");
 
             if (snapshot.timelapse.isPublished)
-                return err("NOT_MUTABLE", "Cannot delete snapshots from published timelapse");
+                return apiErr("NOT_MUTABLE", "Cannot delete snapshots from published timelapse");
 
             await database.snapshot.delete({
                 where: { id: req.input.id },
             });
 
-            return ok({});
+            return apiOk({});
         }),
 
     /**
@@ -117,7 +117,7 @@ export default router({
             });
 
             if (!timelapse)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
+                return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
 
             // Check if user can access this timelapse
             const canAccess =
@@ -126,14 +126,14 @@ export default router({
                 (req.ctx.user && (req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT")));
 
             if (!canAccess)
-                return err("NOT_FOUND", "Couldn't find that timelapse!");
+                return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
 
             const snapshots = await database.snapshot.findMany({
                 where: { timelapseId: req.input.timelapseId },
                 orderBy: { frame: "asc" },
             });
 
-            return ok({
+            return apiOk({
                 snapshots: snapshots.map(dtoSnapshot),
             });
         }),
