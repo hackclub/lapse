@@ -14,13 +14,11 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const { error: queryError, auth } = router.query;
-
-    if (queryError) {
-      assert(typeof queryError === "string", "queryError wasn't a string");
+    if (router.query.error) {
+      assert(typeof router.query.error === "string", "queryError wasn't a string");
 
       setError(
-        matchOrDefault(queryError, {
+        matchOrDefault(router.query.error, {
           "invalid-method": "Invalid request method",
           "oauth-access_denied": "Access denied by Slack",
           "oauth-error": "OAuth error occurred",
@@ -31,16 +29,16 @@ export default function Auth() {
           "invalid-user-response": "Invalid user response from Slack",
           "profile-fetch-failed": "Failed to fetch user profile",
           "server-error": "Server error occurred"
-        }) ?? queryError
+        }) ?? router.query.error
       );
     }
 
-    if (auth === "success") {
+    if (router.query.auth === "success") {
       router.push("/");
     }
   }, [router.query, router]);
 
-  const handleSlackSignIn = () => {
+  function handleSlackSignIn() {
     const clientId = process.env.NEXT_PUBLIC_SLACK_CLIENT_ID;
 
     if (!clientId) {
@@ -81,7 +79,7 @@ export default function Auth() {
 
             <Button 
               className="gap-3 w-full" 
-              onClick={handleSlackSignIn} 
+              onClick={handleSlackSignIn}
               disabled={isLoading}
               kind="primary"
             >
