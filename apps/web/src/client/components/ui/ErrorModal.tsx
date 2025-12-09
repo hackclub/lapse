@@ -8,7 +8,7 @@ import { IconGlyph } from "./util";
 export interface ErrorModalButton {
   label: string;
   onClick: () => void;
-  kind?: "primary" | "secondary";
+  kind?: "primary" | "regular";
 }
 
 export function ErrorModal({
@@ -75,7 +75,7 @@ export function ErrorModal({
               <Button
                 key={index}
                 onClick={button.onClick}
-                kind={button.kind || "secondary"}
+                kind={button.kind || "regular"}
                 className="w-full"
               >
                 {button.label}
