@@ -82,6 +82,9 @@ ENV DATABASE_URL=$DATABASE_URL \
     UPLOAD_TOKEN_IV=$UPLOAD_TOKEN_IV \
     UPLOAD_TOKEN_PRIVATE_KEY=$UPLOAD_TOKEN_PRIVATE_KEY
 
+# Debug: print env vars to verify they're being passed
+RUN echo "DEBUG: SENTRY_ORG=$SENTRY_ORG" && echo "DEBUG: DATABASE_URL is set: $([ -n \"$DATABASE_URL\" ] && echo 'yes' || echo 'no')"
+
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     NODE_ENV=production pnpm turbo run build
