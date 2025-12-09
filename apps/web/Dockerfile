@@ -26,27 +26,6 @@ RUN turbo prune @lapse/web --docker
 FROM base AS installer
 WORKDIR /app
 
-# Build-time arguments for environment variables
-ARG S3_ENCRYPTED_BUCKET_NAME
-ARG S3_PUBLIC_BUCKET_NAME
-ARG S3_TRACING_BUCKET_NAME
-ARG PRIVATE_KEY_UPLOAD_KEY
-ARG S3_ENDPOINT
-ARG S3_ACCESS_KEY_ID
-ARG S3_SECRET_ACCESS_KEY
-ARG S3_PUBLIC_URL_ENCRYPTED
-ARG S3_PUBLIC_URL_PUBLIC
-ARG NEXT_PUBLIC_SLACK_CLIENT_ID
-ARG SLACK_CLIENT_SECRET
-ARG JWT_SECRET
-ARG UPLOAD_TOKEN_PRIVATE_KEY
-ARG UPLOAD_TOKEN_IV
-ARG NEXT_PUBLIC_SENTRY_DSN
-ARG SENTRY_ORG
-ARG SENTRY_PROJECT
-ARG SENTRY_AUTH_TOKEN
-ARG DATABASE_URL
-
 # First install dependencies (they change less often)
 COPY --from=builder /app/out/json/ .
 COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
@@ -62,9 +41,8 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
 # Build the project and apps
 COPY --from=builder /app/out/full/ .
 
-# Copy .env file from root to apps/web if it exists
-RUN --mount=from=builder,source=/app,target=/source \
-    if [ -f /source/.env ]; then cp /source/.env ./apps/web/; fi
+# Copy .env file from root to apps/web if it exists (Coolify creates this)
+COPY --from=builder /app/.env* ./apps/web/
 
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
