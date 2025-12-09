@@ -41,8 +41,9 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
 # Build the project and apps
 COPY --from=builder /app/out/full/ .
 
-# Copy .env file from root to apps/web if it exists (Coolify creates this)
-COPY --from=builder /app/.env* ./apps/web/
+# Copy .env file from root to apps/web if it exists
+RUN --mount=from=builder,source=/app,target=/source \
+    if [ -f /source/.env ]; then cp /source/.env ./apps/web/; fi
 
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
