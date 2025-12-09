@@ -42,9 +42,9 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
 COPY --from=builder /app/out/full/ .
 
 # Copy .env file to apps/web if it exists
-# Coolify stores build-time env vars in /artifacts/.env (outside Docker context)
-RUN --mount=type=bind,source=/artifacts/.env,target=/tmp/artifacts.env,readonly \
-    cp /tmp/artifacts.env ./apps/web/.env || true
+# Coolify stores build-time env vars in /artifacts/build-time.env (outside Docker context)
+RUN --mount=type=bind,source=/artifacts/build-time.env,target=/tmp/build-time.env,readonly \
+    cp /tmp/build-time.env ./apps/web/.env || true
 
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
