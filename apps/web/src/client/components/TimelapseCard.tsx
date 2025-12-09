@@ -107,7 +107,7 @@ export function TimelapseCard({ timelapse }: {
         }
       </div>
       
-      <div className="flex gap-3 w-full justify-center">
+      <div className="flex gap-3 w-80 justify-center">
         <ProfilePicture user={timelapse.owner} size="sm" />
 
         <div className="flex flex-col w-full">
