@@ -360,6 +360,9 @@ function extractDateComponents(seconds: number) {
  * Formats a duration, represented in the form of a number of seconds, to a string like `3h 2m`.
  */
 export function formatDuration(seconds: number) {
+    if (seconds == 0)
+        return "0s";
+
     const { h, m, s } = extractTimespanComponents(seconds);
 
     return [
