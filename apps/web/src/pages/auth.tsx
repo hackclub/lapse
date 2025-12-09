@@ -2,11 +2,12 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
 
-import RootLayout from "../client/components/RootLayout";
-import { Button } from "../client/components/ui/Button";
-import { ErrorModal } from "../client/components/ui/ErrorModal";
-import { LoadingModal } from "../client/components/ui/LoadingModal";
-import { assert, matchOrDefault } from "../shared/common";
+import { assert, matchOrDefault } from "@/shared/common";
+
+import RootLayout from "@/client/components/RootLayout";
+import { Button } from "@/client/components/ui/Button";
+import { ErrorModal } from "@/client/components/ui/ErrorModal";
+import { LoadingModal } from "@/client/components/ui/LoadingModal";
 
 export default function Auth() {
   const router = useRouter();

@@ -1,5 +1,6 @@
-import { useCache } from "@/client/hooks/useCache";
 import { useEffect, useState } from "react";
+
+import { useCache } from "@/client/hooks/useCache";
 
 export function useCachedState<T>(key: string, initialValue: T) {
     const [value, setValue] = useState(initialValue);

@@ -1,4 +1,4 @@
-import "./allow-only-server";
+import "@/server/allow-only-server";
 
 function createEnv<T extends Record<string, string>>(keys: T): { [K in keyof T]: string } {
     return new Proxy({} as { [K in keyof T]: string }, {

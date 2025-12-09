@@ -1,4 +1,4 @@
-import "./allow-only-server";
+import "@/server/allow-only-server";
 
 import crypto from "crypto";
 

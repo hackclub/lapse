@@ -1,13 +1,13 @@
-import "../allow-only-server";
+import "@/server/allow-only-server";
 
 import { router } from "@/server/trpc";
 
-import timelapse from "./api/timelapse";
-import user from "./api/user";
-import snapshot from "./api/snapshot";
-import tracing from "./api/tracing";
-import global from "./api/global";
-import comment from "./api/comment";
+import timelapse from "@/server/routers/api/timelapse";
+import user from "@/server/routers/api/user";
+import snapshot from "@/server/routers/api/snapshot";
+import tracing from "@/server/routers/api/tracing";
+import global from "@/server/routers/api/global";
+import comment from "@/server/routers/api/comment";
 
 export const appRouter = router({
     timelapse,

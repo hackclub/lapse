@@ -3,17 +3,18 @@ import NextImage from "next/image";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
-import { useAuth } from "@/client/hooks/useAuth";
-import RootLayout from "@/client/components/RootLayout";
+import { descending, formatDuration } from "@/shared/common";
+
+import { TimeAgo } from "@/client/components/TimeAgo";
+import { Button } from "@/client/components/ui/Button";
+import { Link } from "@/client/components/ui/Link";
 import { TimelapseCard } from "@/client/components/TimelapseCard";
 
 import { trpc } from "@/client/trpc";
-import { descending, formatDuration, formatTimeElapsed } from "@/shared/common";
-import { Button } from "@/client/components/ui/Button";
-import { Link } from "@/client/components/ui/Link";
-import { TimeAgo } from "@/client/components/TimeAgo";
+import { useAuth } from "@/client/hooks/useAuth";
 import { useCache } from "@/client/hooks/useCache";
 import { useCachedApiCall } from "@/client/hooks/useCachedApiCall";
+import RootLayout from "@/client/components/RootLayout";
 
 export default function Home() {
   const router = useRouter();

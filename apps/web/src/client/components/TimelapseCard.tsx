@@ -1,7 +1,6 @@
-import NextLink from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 
-import { formatTimeElapsed } from "@/shared/common"
 import { Timelapse } from "@/client/api"
 import { deviceStorage } from "@/client/deviceStorage";
 import { decryptData, getCurrentDevice } from "@/client/encryption";
@@ -9,7 +8,6 @@ import { decryptData, getCurrentDevice } from "@/client/encryption";
 import { ProfilePicture } from "@/client/components/ProfilePicture"
 import { Bullet } from "@/client/components/ui/Bullet";
 import { TimeAgo } from "@/client/components/TimeAgo";
-import { useRouter } from "next/router";
 
 const thumbnailCache = new Map<string, string>();
 

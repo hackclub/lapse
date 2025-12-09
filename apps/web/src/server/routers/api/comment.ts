@@ -1,17 +1,18 @@
-import "../../allow-only-server";
+import "@/server/allow-only-server";
 
 import { z } from "zod";
 
-import { PrismaClient } from "../../../generated/prisma";
-import { router, protectedProcedure } from "../../trpc";
-import { apiResult, apiErr, apiOk, Err } from "../../../shared/common";
-import { dtoPublicUser, PublicUserSchema } from "./user";
-import * as db from "../../../generated/prisma";
-import { logRequest } from "../../serverCommon";
-import { ApiDate, PublicId } from "../common";
+import { apiResult, apiErr, apiOk, Err } from "@/shared/common";
+
+import { router, protectedProcedure } from "@/server/trpc";
+import { dtoPublicUser, PublicUserSchema } from "@/server/routers/api/user";
+import { logRequest } from "@/server/serverCommon";
+import { ApiDate, PublicId } from "@/server/routers/common";
 import { getTimelapseById } from "@/server/routers/api/timelapse";
 
-const database = new PrismaClient();
+import * as db from "@/generated/prisma";
+
+const database = new db.PrismaClient();
 
 export type Comment = z.infer<typeof CommentSchema>;
 export const CommentSchema = z.object({

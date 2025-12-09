@@ -1,10 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
-import { PrismaClient } from "../../generated/prisma";
-import { generateJWT } from "../../server/lib/auth";
-import { env } from "../../server/env";
-import { logError, logNextRequest } from "../../server/serverCommon";
+import { PrismaClient } from "@/generated/prisma";
+
+import { generateJWT } from "@/server/auth";
+import { env } from "@/server/env";
+import { logError, logNextRequest } from "@/server/serverCommon";
 
 // GET /api/authSlack
 //    Meant to be used as a callback URL - the user will be redirected to this API endpoint when

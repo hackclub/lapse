@@ -1,9 +1,9 @@
 import NextLink from "next/link";
+import clsx from "clsx";
 
 import { match } from "@/shared/common";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { PublicUser } from "@/client/api";
-import clsx from "clsx";
 
 export function ProfilePicture({
   user,

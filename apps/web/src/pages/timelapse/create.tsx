@@ -3,26 +3,29 @@
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
-
-import RootLayout from "../../client/components/RootLayout";
-import { TimeSince } from "../../client/components/TimeSince";
-import { Button } from "../../client/components/ui/Button";
-import { WindowedModal } from "../../client/components/ui/WindowedModal";
-import { LoadingModal } from "../../client/components/ui/LoadingModal";
-import { ErrorModal } from "../../client/components/ui/ErrorModal";
-import { TextareaInput } from "../../client/components/ui/TextareaInput";
-import { TextInput } from "../../client/components/ui/TextInput";
-import { SelectInput } from "../../client/components/ui/SelectInput";
-import { deviceStorage, LocalSnapshot } from "../../client/deviceStorage";
-import { createMediaRecorder, mergeVideoSessions, videoGenerateThumbnail } from "../../client/videoProcessing";
-import { encryptVideo, encryptData, getCurrentDevice } from "../../client/encryption";
-import { trpc } from "../../client/trpc";
-import { assert } from "../../shared/common";
-import { TIMELAPSE_FRAME_LENGTH_MS } from "../../shared/constants";
-import { useOnce } from "../../client/hooks/useOnce";
-import { useAuth } from "../../client/hooks/useAuth";
-import { apiUpload } from "../../client/upload";
 import clsx from "clsx";
+
+import { TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
+import { assert } from "@/shared/common";
+
+import { createMediaRecorder, mergeVideoSessions, videoGenerateThumbnail } from "@/client/videoProcessing";
+import { encryptVideo, encryptData, getCurrentDevice } from "@/client/encryption";
+import { deviceStorage, LocalSnapshot } from "@/client/deviceStorage";
+import { apiUpload } from "@/client/upload";
+import { trpc } from "@/client/trpc";
+
+import { useOnce } from "@/client/hooks/useOnce";
+import { useAuth } from "@/client/hooks/useAuth";
+
+import RootLayout from "@/client/components/RootLayout";
+import { TimeSince } from "@/client/components/TimeSince";
+import { Button } from "@/client/components/ui/Button";
+import { WindowedModal } from "@/client/components/ui/WindowedModal";
+import { LoadingModal } from "@/client/components/ui/LoadingModal";
+import { ErrorModal } from "@/client/components/ui/ErrorModal";
+import { TextareaInput } from "@/client/components/ui/TextareaInput";
+import { TextInput } from "@/client/components/ui/TextInput";
+import { SelectInput } from "@/client/components/ui/SelectInput";
 import { PillControlButton } from "@/client/components/ui/PillControlButton";
 
 import RecordIcon from "@/client/assets/icons/record.svg";

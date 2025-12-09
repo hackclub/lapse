@@ -1,14 +1,16 @@
-import "../../allow-only-server";
+import "@/server/allow-only-server";
 
 import z from "zod";
 
-import * as db from "../../../generated/prisma";
-import { procedure, router } from "@/server/trpc";
 import { apiResult, daysAgo, descending, apiOk } from "@/shared/common";
-import { UserDisplayName, UserHandle } from "./user";
+
+import { procedure, router } from "@/server/trpc";
 import { logError } from "@/server/serverCommon";
-import { dtoTimelapse, TimelapseSchema } from "./timelapse";
-import { PublicId } from "../common";
+import { dtoTimelapse, TimelapseSchema } from "@/server/routers/api/timelapse";
+import { UserDisplayName, UserHandle } from "@/server/routers/api/user";
+import { PublicId } from "@/server/routers/common";
+
+import * as db from "@/generated/prisma";
 
 export type LeaderboardUserEntry = z.infer<typeof LeaderboardUserEntrySchema>;
 export const LeaderboardUserEntrySchema = z.object({

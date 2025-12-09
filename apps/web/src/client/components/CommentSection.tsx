@@ -1,12 +1,12 @@
+import { useEffect, useRef, useState } from "react";
+import clsx from "clsx";
+
 import type { Comment } from "@/client/api";
 import { CommentRenderer } from "@/client/components/CommentRenderer";
 import { ProfilePicture } from "@/client/components/ProfilePicture";
 import { Button } from "@/client/components/ui/Button";
 import { useAuth } from "@/client/hooks/useAuth";
 import { trpc } from "@/client/trpc";
-import clsx from "clsx";
-import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
 
 export function CommentSection({ comments, setComments, timelapseId }: {
   comments: Comment[],

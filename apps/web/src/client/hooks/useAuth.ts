@@ -1,11 +1,10 @@
 import { useRouter } from "next/router";
 import { useState } from "react";
 
-import type { User } from "../../server/routers/api/user";
-
-import { trpc } from "../trpc";
-import { useOnce } from "./useOnce";
-import { useCache } from "./useCache";
+import type { User } from "@/client/api";
+import { trpc } from "@/client/trpc";
+import { useOnce } from "@/client/hooks/useOnce";
+import { useCache } from "@/client/hooks/useCache";
 
 export function useAuth(required: boolean) {
     const router = useRouter();

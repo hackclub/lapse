@@ -1,24 +1,25 @@
-import "../../allow-only-server";
+import "@/server/allow-only-server";
 
 import { z } from "zod";
 import { S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
-import { PrismaClient } from "../../../generated/prisma";
-import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, ascending, match, when, apiOk, apiErr, oneOf, closest, chunked, assert, ApiResult, Result, Err } from "../../../shared/common";
-import { decryptVideo } from "../../encryption";
-import { env } from "../../env";
-import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_STREAM_SIZE, MAX_VIDEO_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS, UPLOAD_TOKEN_LIFETIME_MS } from "../../../shared/constants";
-import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema, User } from "./user";
-import * as db from "../../../generated/prisma";
-import { HackatimeUserApi, WakaTimeHeartbeat } from "../../hackatime";
-import { logError, logInfo, logRequest } from "../../serverCommon";
-import { generateThumbnail } from "../../videoProcessing";
-import { Actor, ApiDate, PublicId } from "../common";
+import { apiResult, ascending, match, when, apiOk, apiErr, oneOf, closest, chunked, assert, Result, Err } from "@/shared/common";
+import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS, UPLOAD_TOKEN_LIFETIME_MS } from "@/shared/constants";
+
+import { procedure, router, protectedProcedure } from "@/server/trpc";
+import { decryptVideo } from "@/server/encryption";
+import { env } from "@/server/env";
+import { HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
+import { logError, logInfo, logRequest } from "@/server/serverCommon";
+import { generateThumbnail } from "@/server/videoProcessing";
+import { Actor, ApiDate, PublicId } from "@/server/routers/common";
+import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "@/server/routers/api/user";
 import { CommentSchema, DbComment, dtoComment } from "@/server/routers/api/comment";
 
-const database = new PrismaClient();
+import * as db from "@/generated/prisma";
+
+const database = new db.PrismaClient();
 const s3 = new S3Client({
     region: "auto",
     endpoint: `https://${env.S3_ENDPOINT}`,

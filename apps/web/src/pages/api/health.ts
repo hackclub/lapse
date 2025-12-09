@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
-import * as db from "../../generated/prisma";
-import { logError } from "../../server/serverCommon";
+import { logError } from "@/server/serverCommon";
+
+import * as db from "@/generated/prisma";
 
 // GET /api/health
 //     Returns an HTTP 200 response with "OK" if basic health checks have passed.

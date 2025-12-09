@@ -1,7 +1,7 @@
-import { ApiResult } from "@/shared/common";
-
 import { useState } from "react";
-import { useOnce } from "./useOnce";
+
+import { ApiResult } from "@/shared/common";
+import { useOnce } from "@/client/hooks/useOnce";
 
 export function useApiCall<TRes>(caller: () => Promise<ApiResult<TRes>>) {
     const [value, setValue] = useState<TRes | null>(null);

@@ -1,10 +1,11 @@
-import "./allow-only-server";
+import "@/server/allow-only-server";
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import { NextApiRequest, NextApiResponse } from "next";
 
-import { getAuthenticatedUser } from "./lib/auth";
-import type { User } from "../generated/prisma";
+import { getAuthenticatedUser } from "@/server/auth";
+
+import type { User } from "@/generated/prisma";
 
 export interface Context {
   req: NextApiRequest;

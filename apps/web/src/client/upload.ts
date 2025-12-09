@@ -1,5 +1,5 @@
-import { ApiResult, Empty } from "../shared/common";
-import { createFormData } from "./clientCommon";
+import { ApiResult, Empty } from "@/shared/common";
+import { createFormData } from "@/client/common";
 
 export async function apiUpload(token: string, data: Blob): Promise<ApiResult<Empty>> {
     const rawRes = await fetch("/api/upload", {

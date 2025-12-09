@@ -1,5 +1,6 @@
-import { formatTimeElapsed } from "@/shared/common";
 import { useEffect, useState } from "react";
+
+import { formatTimeElapsed } from "@/shared/common";
 
 export function TimeAgo({ date }: {
   date: Date | number

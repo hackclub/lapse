@@ -1,11 +1,14 @@
-import "../../allow-only-server";
+import "@/server/allow-only-server";
 
 import { z } from "zod";
-import { procedure, router, protectedProcedure } from "@/server/trpc";
+
 import { apiResult, apiErr, apiOk, oneOf } from "@/shared/common";
-import * as db from "@/generated/prisma";
+
+import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { ApiDate, PublicId } from "@/server/routers/common";
-import { logInfo, logRequest } from "@/server/serverCommon";
+import { logRequest } from "@/server/serverCommon";
+
+import * as db from "@/generated/prisma";
 
 const database = new db.PrismaClient();
 

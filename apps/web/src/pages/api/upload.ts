@@ -4,11 +4,12 @@ import * as fs from "fs";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import prettyBytes from "pretty-bytes";
 
-import { env } from "../../server/env";
-import * as db from "../../generated/prisma";
-import { logError, logInfo, logNextRequest } from "../../server/serverCommon";
-import { ApiResult, apiErr, Empty, apiOk } from "../../shared/common";
-import { getAuthenticatedUser } from "../../server/lib/auth";
+import { env } from "@/server/env";
+import { logError, logInfo, logNextRequest } from "@/server/serverCommon";
+import { ApiResult, apiErr, Empty, apiOk } from "@/shared/common";
+import { getAuthenticatedUser } from "@/server/auth";
+
+import * as db from "@/generated/prisma";
 
 // POST /api/upload
 //    Consumes an upload token, and starts uploading a file to the S3 bucket associated with the

@@ -1,7 +1,8 @@
 import "@/server/allow-only-server";
 
-import { logError } from "./serverCommon";
 import { isNonEmptyArray } from "@/shared/common";
+
+import { logError } from "@/server/serverCommon";
 
 export interface WakaTimeCategorizedStat {
     name: string;

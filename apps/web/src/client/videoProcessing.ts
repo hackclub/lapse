@@ -1,11 +1,9 @@
 import * as mediabunny from "mediabunny";
-import * as Sentry from "@sentry/nextjs";
 
-import { LocalTimelapse } from "./deviceStorage";
-import { ascending, assert } from "../shared/common";
-import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "../shared/constants";
-import { trpc } from "./trpc";
-import { apiUpload } from "./upload";
+import { trpc } from "@/client/trpc";
+import { LocalTimelapse } from "@/client/deviceStorage";
+import { ascending, assert } from "@/shared/common";
+import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
 
 const BITS_PER_PIXEL = 1.5;
 

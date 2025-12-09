@@ -1,10 +1,10 @@
 import Head from "next/head";
 import localFont from "next/font/local";
 import { JetBrains_Mono } from "next/font/google";
-import { PropsWithChildren, useEffect } from "react";
-
-import { Header } from "./ui/layout/Header";
+import { PropsWithChildren } from "react";
 import clsx from "clsx";
+
+import { Header } from "@/client/components/ui/layout/Header";
 import { useInterval } from "@/client/hooks/useInterval";
 import { trpc } from "@/client/trpc";
 import { useAuth } from "@/client/hooks/useAuth";

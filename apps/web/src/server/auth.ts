@@ -1,4 +1,4 @@
-import "../allow-only-server";
+import "@/server/allow-only-server";
 
 import jwt from "jsonwebtoken";
 import { NextApiRequest } from "next";

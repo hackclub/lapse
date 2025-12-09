@@ -1,4 +1,4 @@
-import "./allow-only-server";
+import "@/server/allow-only-server";
 
 import ffmpeg from "fluent-ffmpeg";
 import { tmpdir } from "os";
@@ -6,7 +6,7 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 
-import { logWarning } from "./serverCommon";
+import { logWarning } from "@/server/serverCommon";
 
 export async function generateThumbnail(videoBuffer: Buffer): Promise<Buffer> {
     const tempDir = tmpdir();

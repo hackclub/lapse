@@ -1,8 +1,8 @@
 import platform from "platform";
 
-import { deviceStorage, LocalDevice } from "./deviceStorage";
-import { trpc } from "./trpc";
-import type { KnownDevice } from "../server/routers/api/user";
+import type { KnownDevice } from "@/client/api";
+import { deviceStorage, LocalDevice } from "@/client/deviceStorage";
+import { trpc } from "@/client/trpc";
 
 /**
  * Derives deterministic key and IV salts from a timelapse ID.

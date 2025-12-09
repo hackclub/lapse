@@ -1,14 +1,16 @@
-import "../../allow-only-server";
+import "@/server/allow-only-server";
 
 import { z } from "zod";
 
-import * as db from "../../../generated/prisma";
-import { procedure, router, protectedProcedure } from "../../trpc";
-import { apiResult, assert, descending, apiErr, when, apiOk } from "../../../shared/common";
-import { HackatimeUserApi } from "../../hackatime";
-import { logError, logWarning, logRequest } from "../../serverCommon";
-import { deleteTimelapse } from "./timelapse";
-import { ApiDate, PublicId } from "../common";
+import { apiResult, assert, descending, apiErr, when, apiOk } from "@/shared/common";
+
+import { procedure, router, protectedProcedure } from "@/server/trpc";
+import { HackatimeUserApi } from "@/server/hackatime";
+import { logError, logWarning, logRequest } from "@/server/serverCommon";
+import { deleteTimelapse } from "@/server/routers/api/timelapse";
+import { ApiDate, PublicId } from "@/server/routers/common";
+
+import * as db from "@/generated/prisma";
 
 const database = new db.PrismaClient();
 

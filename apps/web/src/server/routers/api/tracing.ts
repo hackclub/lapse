@@ -1,12 +1,13 @@
-import "../../allow-only-server";
+import "@/server/allow-only-server";
 
 import { z } from "zod";
-import { router, protectedProcedure } from "@/server/trpc";
+
 import { apiOk, apiResult } from "@/shared/common";
-import * as db from "@/generated/prisma";
+
+import { router, protectedProcedure } from "@/server/trpc";
 import { logTracing } from "@/server/serverCommon";
-import { env } from "@/server/env";
-import { UPLOAD_TOKEN_LIFETIME_MS } from "@/shared/constants";
+
+import * as db from "@/generated/prisma";
 
 // These endpoints are used for internal statistics. All tracing is anonymized.
 // Some of the endpoints in this router will be removed after the beta period ends.

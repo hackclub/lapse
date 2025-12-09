@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
 
-import { decryptData, getCurrentDevice } from "../encryption";
-import { deviceStorage } from "../deviceStorage";
+import { decryptData, getCurrentDevice } from "@/client/encryption";
+import { deviceStorage } from "@/client/deviceStorage";
 
 const thumbnailCache = new Map<string, string>();
 

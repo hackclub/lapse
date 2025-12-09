@@ -2,7 +2,7 @@ import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import { CreateReactUtils } from "@trpc/react-query/shared";
 import { NextPageContext } from "next";
 
-import type { AppRouter } from "../server/routers/_app";
+import type { AppRouter } from "@/server/routers/_app";
 
 export type Api = CreateReactUtils<AppRouter, NextPageContext>;
 
