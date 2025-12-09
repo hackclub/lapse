@@ -9,7 +9,7 @@ export function useApiCall<TRes>(caller: () => Promise<ApiResult<TRes>>) {
     useOnce(async () => {
         const res = await caller();
         if (!res.ok) {
-            console.error("(api) API call failed!", res);
+            console.error("(useApiCall.ts) API call failed!", res);
             return;
         }
 

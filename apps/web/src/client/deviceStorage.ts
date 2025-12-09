@@ -88,7 +88,7 @@ export class DeviceStorage {
                     db.createObjectStore(DB_DEVICES_STORE_NAME, { keyPath: "id" });
                 }
                 
-                console.log("(db) upgrade completed");
+                console.log("(deviceStorage.ts) upgrade completed");
             };
         });
     }
@@ -122,7 +122,7 @@ export class DeviceStorage {
             (store) => store.put(timelapse)
         );
 
-        console.log("(db) saveTimelapse ->", timelapse);
+        console.log("(deviceStorage.ts) saveTimelapse ->", timelapse);
         return result;
     }
 
@@ -173,7 +173,7 @@ export class DeviceStorage {
             timelapse.chunks.push(storedChunk);
             await this._saveTimelapse(timelapse);
 
-            console.debug(`(db) appendChunk(${timelapseId}) ->`, storedChunk);
+            console.debug(`(deviceStorage.ts) appendChunk(${timelapseId}) ->`, storedChunk);
         });
     }
 
@@ -186,7 +186,7 @@ export class DeviceStorage {
             timelapse.isActive = false;
             await this._saveTimelapse(timelapse);
 
-            console.log(`(db) markComplete(${timelapseId})`);
+            console.log(`(deviceStorage.ts) markComplete(${timelapseId})`);
         }); 
     }
 
@@ -199,7 +199,7 @@ export class DeviceStorage {
                 (store) => store.delete(id)
             );
 
-            console.log(`(db) deleteTimelapse(${id})`);
+            console.log(`(deviceStorage.ts) deleteTimelapse(${id})`);
         });
     }
 
@@ -212,7 +212,7 @@ export class DeviceStorage {
                 (store) => store.put(snapshot)
             );
 
-            console.debug("(db) saveSnapshot ->", snapshot);
+            console.debug("(deviceStorage.ts) saveSnapshot ->", snapshot);
             return snapshot.createdAt;
         });
     }
@@ -239,7 +239,7 @@ export class DeviceStorage {
                 (store) => store.clear()
             );
 
-            console.log("(db) deleteAllSnapshots -> all snapshots deleted");
+            console.log("(deviceStorage.ts) deleteAllSnapshots -> all snapshots deleted");
         });
     }
 
@@ -252,7 +252,7 @@ export class DeviceStorage {
                 (store) => store.put(device)
             );
 
-            console.log("(db) saveDevice ->", device);
+            console.log("(deviceStorage.ts) saveDevice ->", device);
             return device.id;
         });
     }
@@ -292,7 +292,7 @@ export class DeviceStorage {
                 (store) => store.delete(id)
             );
 
-            console.log(`(db) deleteDevice(${id})`);
+            console.log(`(deviceStorage.ts) deleteDevice(${id})`);
         });
     }
 

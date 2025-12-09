@@ -28,7 +28,7 @@ async function decryptThumbnail(
     }
 
     if (!device) {
-      console.warn(`(thumbnail) no device found for timelapse ${timelapseId}!`);
+      console.warn(`(ThumbnailImage.tsx) no device found for timelapse ${timelapseId}!`);
       return null;
     }
 
@@ -50,7 +50,7 @@ async function decryptThumbnail(
     return url;
   }
   catch (error) {
-    console.warn(`(thumbnail) Failed to decrypt thumbnail for timelapse ${timelapseId}:`, error);
+    console.warn(`(ThumbnailImage.tsx) Failed to decrypt thumbnail for timelapse ${timelapseId}:`, error);
     return null;
   }
 }

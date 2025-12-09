@@ -14,13 +14,13 @@ export function useAuth(required: boolean) {
     const [isLoading, setIsLoading] = useState(true);
 
     useOnce(async () => {
-        console.log("(auth) authenticating...");
+        console.log("(useAuth.ts) authenticating...");
         const req = await trpc.user.myself.query({});
 
-        console.log("(auth) response:", req);
+        console.log("(useAuth.ts) response:", req);
 
         if (!req.ok || req.data.user === null) {
-            console.log("(auth) user is not authenticated");
+            console.log("(useAuth.ts) user is not authenticated");
             setUserCache(null);
 
             if (required) {
@@ -31,7 +31,7 @@ export function useAuth(required: boolean) {
             return;
         }
 
-        console.log("(auth) user is authenticated");
+        console.log("(useAuth.ts) user is authenticated");
         setUserCache(req.data.user);
 
         setCurrentUser(req.data.user);
@@ -39,7 +39,7 @@ export function useAuth(required: boolean) {
     });
 
     async function signOut() {
-        console.log("(auth) signing out...");
+        console.log("(useAuth.ts) signing out...");
         await trpc.user.signOut.mutate({});
         setCurrentUser(null);
         router.push("/");

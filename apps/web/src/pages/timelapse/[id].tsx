@@ -96,17 +96,17 @@ export default function Page() {
 
       setFetchStarted(true);
 
-      console.log("(timelapse/[id]) querying timelapse...");
+      console.log("([id].tsx) querying timelapse...");
       const res = await trpc.timelapse.query.query({ id });
       if (!res.ok) {
-        console.error("(timelapse/[id]) couldn't fetch that timelapse!", res);
+        console.error("([id].tsx) couldn't fetch that timelapse!", res);
         setCriticalError(res.message);
         return;
       }
 
       const timelapse = res.data.timelapse;
 
-      console.log("(timelapse/[id]) timelapse fetched!", timelapse);
+      console.log("([id].tsx) timelapse fetched!", timelapse);
       setTimelapse(timelapse);
 
       const video = videoRef.current;
@@ -150,7 +150,7 @@ export default function Page() {
           video.src = url;
         }
         catch (decryptionError) {
-          console.warn("(timelapse/[id]) decryption failed:", decryptionError);
+          console.warn("([id].tsx) decryption failed:", decryptionError);
           setMissingDeviceName(timelapse.private.device.name);
           setInvalidPasskeyAttempt(true);
           setPasskeyModalOpen(true);
@@ -159,7 +159,7 @@ export default function Page() {
       }
     }
     catch (apiErr) {
-      console.error("(timelapse/[id]) error loading timelapse:", apiErr);
+      console.error("([id].tsx) error loading timelapse:", apiErr);
 
       setCriticalError(
         apiErr instanceof Error
@@ -208,7 +208,7 @@ export default function Page() {
       }
     } 
     catch (error) {
-      console.error("(timelapse/[id]) error publishing timelapse:", error);
+      console.error("([id].tsx) error publishing timelapse:", error);
       setCriticalError(
         error instanceof Error
           ? error.message
@@ -254,7 +254,7 @@ export default function Page() {
       }
     } 
     catch (error) {
-      console.error("(timelapse/[id]) error updating timelapse:", error);
+      console.error("([id].tsx) error updating timelapse:", error);
       setRegularError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
     } 
     finally {
@@ -300,7 +300,7 @@ export default function Page() {
       }
     } 
     catch (error) {
-      console.error("(timelapse/[id]) error syncing with Hackatime:", error);
+      console.error("([id].tsx) error syncing with Hackatime:", error);
       setRegularError(error instanceof Error ? error.message : "An error occurred while syncing with Hackatime.");
     } 
     finally {
@@ -337,7 +337,7 @@ export default function Page() {
       }
     } 
     catch (error) {
-      console.error("(timelapse/[id]) error setting Hackatime API key:", error);
+      console.error("([id].tsx) error setting Hackatime API key:", error);
       setRegularError(error instanceof Error ? error.message : "An error occurred while setting the API key.");
     }
     finally {
@@ -363,7 +363,7 @@ export default function Page() {
       setPasskeyModalOpen(false);
     }
     catch (error) {
-      console.error("Error saving device passkey:", error);
+      console.error("([id].tsx) Error saving device passkey:", error);
       setRegularError("Failed to save passkey. Please try again.");
     }
   }

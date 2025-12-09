@@ -24,7 +24,7 @@ export function CommentRenderer({ comment }: {
 
     const element = mainRef.current;
     if (!element) {
-      console.warn("(CommentRenderer) attempted to call highlight() with main ref being null");
+      console.warn("(CommentRenderer.tsx) attempted to call highlight() with main ref being null");
       return;
     }
 

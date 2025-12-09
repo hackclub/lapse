@@ -22,7 +22,7 @@ export function Header() {
   useInterval(async () => {
     const res = await trpc.global.activeUsers.query({});
     if (!res.ok) {
-      console.error("(header) could not query active users!", res);
+      console.error("(Header.tsx) could not query active users!", res);
       return;
     }
 

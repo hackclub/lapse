@@ -67,7 +67,7 @@ export async function getAuthenticatedUser(req: NextApiRequest) {
         return user;
     }
     catch (error) {
-        console.error("Failed to fetch authenticated user:", error);
+        console.error("(auth.ts)", "Failed to fetch authenticated user:", error);
         return null;
     }
 }

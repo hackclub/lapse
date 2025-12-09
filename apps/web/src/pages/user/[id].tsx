@@ -75,7 +75,7 @@ export default function Page() {
       setTimelapses(timelapsesRes.data.timelapses);
     }
     catch (apiErr) {
-      console.error("Error fetching user data:", apiErr);
+      console.error("([id].tsx) Error fetching user data:", apiErr);
       setError("Failed to load user profile");
     }
   }, [router.isReady, router.query]);
@@ -123,7 +123,7 @@ export default function Page() {
       }
     }
     catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("([id].tsx) Error updating profile:", error);
       setError("Failed to update profile");
     }
     finally {

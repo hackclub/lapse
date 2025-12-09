@@ -53,12 +53,12 @@ export function SettingsView({ isOpen, setIsOpen }: {
     });
 
     if (!res.ok) {
-      console.error("(settingsView) couldn't update Hackatime API key!", res);
+      console.error("(SettingsView.tsx) couldn't update Hackatime API key!", res);
       setError(res.message);
       return;
     }
 
-    console.log("(settingsView) Hackatime API key updated!", res);
+    console.log("(SettingsView.tsx) Hackatime API key updated!", res);
   }, [auth]);
 
   const isValidUUID = (value: string): boolean => {
@@ -93,7 +93,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
       setLocalDevices(await deviceStorage.getAllDevices());
 
       const res = await trpc.user.getDevices.query({});
-      console.log("(root) user.getDevices =", res);
+      console.log("(SettingsView.tsx) user.getDevices =", res);
 
       if (res.ok) {
         setDevices(res.data.devices);
@@ -107,7 +107,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
     const res = await trpc.timelapse.findByUser.query({ user: auth.currentUser.id });
     if (!res.ok) {
-      console.error("(root) timelapse.findByUser failed when trying to remove a device!", res);
+      console.error("(SettingsView.tsx) timelapse.findByUser failed when trying to remove a device!", res);
       setError(res.message);
       return;
     }

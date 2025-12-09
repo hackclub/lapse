@@ -63,12 +63,12 @@ export async function getCurrentDevice(): Promise<LocalDevice> {
             if (res.data.devices.some((d: KnownDevice) => d.id === existing.id))
                 return existing;
             
-            console.warn("(encryption) this device has been removed remotely. re-registering!");
+            console.warn("(encryption.ts) this device has been removed remotely. re-registering!");
             await deviceStorage.deleteDevice(existing.id);
         }
         else {
-            console.error("(encryption) user.getDevices failed!", res);
-            console.error("(encryption) assuming this device exists on the server, but something went ary!");
+            console.error("(encryption.ts) user.getDevices failed!", res);
+            console.error("(encryption.ts) assuming this device exists on the server, but something went ary!");
         }
     }
 

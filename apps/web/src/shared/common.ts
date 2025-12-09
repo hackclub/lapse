@@ -169,7 +169,7 @@ export function unwrap<T>(obj: T | undefined, apiErr?: string): T {
  */
 export function match<K extends string | number, T>(selector: K, cases: Record<K, T>) {
     if (!(selector in cases)) {
-        console.error("Could not find", selector, "from cases", cases);
+        console.error("(common.ts) Could not find", selector, "from cases", cases);
         throw new Error(`Could not match value ${selector} in "match" block`);
     }
 

@@ -10,13 +10,13 @@ export async function apiUpload(token: string, data: Blob): Promise<ApiResult<Em
         })
     });
 
-    console.log("(upload) /api/upload finished", rawRes);
+    console.log("(upload.ts) /api/upload finished", rawRes);
     
     try {
         return await rawRes.json() as ApiResult<Empty>;
     }
     catch (apiErr) {
-        console.error("(upload) couldn't parse /api/upload response!", apiErr);
+        console.error("(upload.ts) couldn't parse /api/upload response!", apiErr);
         return { ok: false, error: "ERROR", message: await rawRes.text() };
     }
 }

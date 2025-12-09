@@ -34,7 +34,7 @@ export function createMediaRecorder(stream: MediaStream) {
     ].find(x => MediaRecorder.isTypeSupported(x));
 
     if (!mime) {
-        console.warn("(createMediaRecorder) no video codecs are supported for MediaRecorder...?!");
+        console.warn("(videoProcessing.ts) no video codecs are supported for MediaRecorder...?!");
         mime = "video/webm";
     }
 
@@ -43,7 +43,7 @@ export function createMediaRecorder(stream: MediaStream) {
     const fps = 1000 / TIMELAPSE_FRAME_LENGTH_MS;
     const bitrate = w * h * fps * BITS_PER_PIXEL;
 
-    console.log(`(createMediaRecorder) bitrate=${bitrate} (${bitrate / 1000}kbit/s, ${bitrate / 1000 / 1000}mbit/s), format=${mime}`);
+    console.log(`(videoProcessing.ts) bitrate=${bitrate} (${bitrate / 1000}kbit/s, ${bitrate / 1000 / 1000}mbit/s), format=${mime}`);
 
     return new MediaRecorder(stream, {
         videoBitsPerSecond: bitrate,
@@ -56,7 +56,7 @@ export function createMediaRecorder(stream: MediaStream) {
  * Concatenates multiple separately recorded streams of video together.
  */
 export async function videoConcat(streams: Blob[]) {
-    console.log("(encode.concat) starting concatenation!", streams);
+    console.log("(videoProcessing.ts) starting concatenation!", streams);
 
     const inputs = streams.map(
         (x) => new mediabunny.Input({
@@ -65,7 +65,7 @@ export async function videoConcat(streams: Blob[]) {
         })
     );
 
-    console.log("(encode.concat) - inputs:", inputs);
+    console.log("(videoProcessing.ts) - inputs:", inputs);
     assert(inputs.length > 0, "No inputs were passed to concat().");
 
     const bufTarget = new mediabunny.BufferTarget();
@@ -74,11 +74,11 @@ export async function videoConcat(streams: Blob[]) {
         format: new mediabunny.WebMOutputFormat()
     });
 
-    console.log("(encode.concat) - output:", out);
+    console.log("(videoProcessing.ts) - output:", out);
 
     const firstVideoTracks = await inputs[0].getVideoTracks();
     assert(firstVideoTracks.length > 0, "The first media file passed in had no video tracks.");
-    console.log("(encode.concat) - tracks of inputs[0]:", firstVideoTracks);
+    console.log("(videoProcessing.ts) - tracks of inputs[0]:", firstVideoTracks);
 
     const supportedCodecs = out.format.getSupportedVideoCodecs();
     const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
@@ -109,7 +109,7 @@ export async function videoConcat(streams: Blob[]) {
             })
         )
     }).then(res => {
-        console.log("(encode.concat) tracing.traceEncodeStart sent.", res);
+        console.log("(videoProcessing.ts) tracing.traceEncodeStart sent.", res);
     });
 
     if (!videoCodec) {
@@ -117,7 +117,7 @@ export async function videoConcat(streams: Blob[]) {
         throw new Error("This browser does not support video encoding.");
     }
 
-    console.log(`(encode.concat) using ${videoCodec} to encode the video`);
+    console.log(`(videoProcessing.ts) using ${videoCodec} to encode the video`);
 
     assert(firstVideoTracks[0].codec != null, "First video track has no codec (or an unsupported one)");
     const source = new mediabunny.VideoSampleSource({
@@ -129,17 +129,17 @@ export async function videoConcat(streams: Blob[]) {
     out.addVideoTrack(source, { frameRate: TIMELAPSE_FPS });
 
     const timeScale = (1000 / TIMELAPSE_FRAME_LENGTH_MS) / TIMELAPSE_FPS;
-    console.log(`(encode.concat) computed timescale: ${timeScale}`);
+    console.log(`(videoProcessing.ts) computed timescale: ${timeScale}`);
 
     await out.start();
 
     let globalTimeOffset = 0;
     for (const input of inputs) {
-        console.log("(encode.concat) processing input", input);
+        console.log("(videoProcessing.ts) processing input", input);
 
         const video = await input.getPrimaryVideoTrack();
         if (!video) {
-            console.error("(encode.concat) input", input, "has no primary video track!");
+            console.error("(videoProcessing.ts) input", input, "has no primary video track!");
             throw new Error("A video input has no primary video track.");
         }
 
@@ -150,7 +150,7 @@ export async function videoConcat(streams: Blob[]) {
 
         for await (const sample of sink.samples()) {
             if (sample.duration == 0) {
-                console.warn("(encode.concat) uh oh... one of the samples has a duration of 0! skipping!", sample);
+                console.warn("(videoProcessing.ts) uh oh... one of the samples has a duration of 0! skipping!", sample);
                 continue;
             }
 
@@ -179,7 +179,7 @@ export async function videoConcat(streams: Blob[]) {
     inputs.forEach(x => x.dispose());
     
     if (bufTarget.buffer == null) {
-        console.error("(encode.concat) Buffer target was null, even though we finalized the recording!", out);
+        console.error("(videoProcessing.ts) Buffer target was null, even though we finalized the recording!", out);
         throw new Error("bufTarget.buffer was null.");
     }
 

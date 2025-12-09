@@ -38,7 +38,7 @@ export default function Home() {
 
       const res = await trpc.user.hackatimeProjects.query({});
       if (!res.ok) {
-        console.error("(error) Could not fetch the user's Hackatime projects!", res);
+        console.error("(index.tsx) Could not fetch the user's Hackatime projects!", res);
         return;
       }
 
@@ -63,7 +63,7 @@ export default function Home() {
 
       const res = await trpc.user.getTotalTimelapseTime.query({ id: auth.currentUser.id });
       if (!res.ok) {
-        console.error("(error) Could not fetch the user's total timelapse time!", res);
+        console.error("(index.tsx) Could not fetch the user's total timelapse time!", res);
         return;
       }
 

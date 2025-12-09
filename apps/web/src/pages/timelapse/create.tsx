@@ -81,15 +81,15 @@ export default function Page() {
   useOnce(async () => {
     const activeTimelapse = await deviceStorage.getActiveTimelapse();
     if (!activeTimelapse) {
-      console.log("(timelapse/create) no timelapse was started previously.");
+      console.log("(create.tsx) no timelapse was started previously.");
       return;
     }
 
-    console.group("(timelapse/create) An incomplete timelapse has been detected!");
-    console.log("(timelapse/create) - timelapse:", activeTimelapse);
+    console.group("(create.tsx) An incomplete timelapse has been detected!");
+    console.log("(create.tsx) - timelapse:", activeTimelapse);
 
     const snapshots = await deviceStorage.getAllSnapshots();
-    console.log("(timelapse/create) - snapshots:", snapshots);
+    console.log("(create.tsx) - snapshots:", snapshots);
     console.groupEnd();
 
     let adjustedStartTime = new Date(activeTimelapse.startedAt);
@@ -103,7 +103,7 @@ export default function Page() {
         sessionGroups.get(snapshot.session)!.push(snapshot);
       }
 
-      console.group("(timelapse/create) Sessions:");
+      console.group("(create.tsx) Sessions:");
       let totalElapsedTime = 0;
       for (const [session, sessionSnapshots] of sessionGroups) {
         if (sessionSnapshots.length > 1) {
@@ -113,7 +113,7 @@ export default function Page() {
           const sessionDuration = sessionEnd - sessionStart;
           totalElapsedTime += sessionDuration;
           
-          console.log(`(timelapse/create) Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
+          console.log(`(create.tsx) Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
         }
       }
       console.groupEnd();
@@ -121,8 +121,8 @@ export default function Page() {
       adjustedStartTime = new Date(Date.now() - totalElapsedTime);
       setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
 
-      console.log("(timelapse/create) session groups:", sessionGroups);
-      console.log("(timelapse/create) total elapsed time:", totalElapsedTime);
+      console.log("(create.tsx) session groups:", sessionGroups);
+      console.log("(create.tsx) total elapsed time:", totalElapsedTime);
     }
 
     const lastFrameCount = snapshots.length;
@@ -181,7 +181,7 @@ export default function Page() {
   }, [recorder, currentTimelapseId, currentSession]);
 
   async function onCreate() {
-    console.log("(timelapse/create) creating a new timelapse!");
+    console.log("(create.tsx) creating a new timelapse!");
 
     mainPreviewRef.current!.srcObject = currentStream!;
     setSetupModalOpen(false);
@@ -209,7 +209,7 @@ export default function Page() {
       setCurrentTimelapseId(timelapseId);
       activeTimelapseId = timelapseId;
 
-      console.log(`(timelapse/create) new local timelapse created with ID ${timelapseId}`);
+      console.log(`(create.tsx) new local timelapse created with ID ${timelapseId}`);
     }
     else {
       if (currentTimelapseId) {
@@ -242,12 +242,12 @@ export default function Page() {
         );
       };
 
-      console.log("(timelapse/create) creating new recorder!", newRecorder);
+      console.log("(create.tsx) creating new recorder!", newRecorder);
       setRecorder(newRecorder);
       newRecorder.start(TIMELAPSE_FRAME_LENGTH_MS);
 
       if (frameInterval) {
-        console.warn("(timelapse/create) clearing previous frame capture interval.");
+        console.warn("(create.tsx) clearing previous frame capture interval.");
         clearInterval(frameInterval);
       }
 
@@ -265,7 +265,7 @@ export default function Page() {
       return; // no change
 
     if (changingSource) {
-      console.warn("(timelapse/create) attempted to change the video source while we're still processing a previous change. Ignoring.");
+      console.warn("(create.tsx) attempted to change the video source while we're still processing a previous change. Ignoring.");
       return;
     }
 
@@ -286,7 +286,7 @@ export default function Page() {
       }
     }
 
-    console.log("(timelapse/create) video source changed to", ev.target.value);
+    console.log("(create.tsx) video source changed to", ev.target.value);
 
     if (ev.target.value == "CAMERA") {
       let stream: MediaStream;
@@ -298,12 +298,12 @@ export default function Page() {
         });
       }
       catch (apiErr) {
-        console.error("(timelapse/create) could not request permissions for camera stream.", apiErr);
+        console.error("(create.tsx) could not request permissions for camera stream.", apiErr);
         setChangingSource(false);
         return;
       }
 
-      console.log("(timelapse/create) stream retrieved!", stream);
+      console.log("(create.tsx) stream retrieved!", stream);
 
       const cameraLabel = stream
         .getVideoTracks()[0]
@@ -325,12 +325,12 @@ export default function Page() {
         });
       }
       catch (apiErr) {
-        console.error("(timelapse/create) could not request permissions for screen capture.", apiErr);
+        console.error("(create.tsx) could not request permissions for screen capture.", apiErr);
         setChangingSource(false);
         return;
       }
 
-      console.log("(timelapse/create) screen stream retrieved!", stream);
+      console.log("(create.tsx) screen stream retrieved!", stream);
 
       let screenLabel: string | null = stream.getVideoTracks()[0].label;
       if (screenLabel.includes("://") || screenLabel.includes("window:")) {
@@ -375,7 +375,7 @@ export default function Page() {
     }
 
     if (!recorder) {
-      console.warn("(timelapse/create) attempted to stop the recording while recorder was null!");
+      console.warn("(create.tsx) attempted to stop the recording while recorder was null!");
       return;
     }
 
@@ -510,7 +510,7 @@ export default function Page() {
         router.push(`/timelapse/${createRes.data.timelapse.id}`);
       }
       catch (apiErr) {
-        console.error("(timelapse/create) upload failed:", apiErr);
+        console.error("(create.tsx) upload failed:", apiErr);
         setIsUploading(false);
         setError(apiErr instanceof Error ? apiErr.message : "An unknown error occurred during upload");
       }

@@ -671,7 +671,7 @@ export default router({
                     }));
                 }
                 catch (thumbnailError) {
-                    console.warn("Failed to generate thumbnail for published timelapse:", thumbnailError);
+                    console.warn("(timelapse.ts)", "Failed to generate thumbnail for published timelapse:", thumbnailError);
                     // Continue without thumbnail
                 }
 
@@ -693,7 +693,7 @@ export default router({
                 return apiOk({ timelapse: dtoOwnedTimelapse(publishedTimelapse) });
             }
             catch (error) {
-                console.error("Failed to decrypt and publish timelapse:", error);
+                console.error("(timelapse.ts)", "Failed to decrypt and publish timelapse:", error);
                 return apiErr("ERROR", "Failed to process timelapse for publishing");
             }
         }),
