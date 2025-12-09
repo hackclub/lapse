@@ -41,10 +41,26 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
 # Build the project and apps
 COPY --from=builder /app/out/full/ .
 
-# TODO: Coolify stores build-time env vars in /artifacts/build-time.env but it's outside Docker context
-# and not accessible via bind mount. Need to find alternative approach.
-# RUN --mount=type=bind,source=/artifacts/build-time.env,target=/tmp/build-time.env,readonly \
-#     cp /tmp/build-time.env ./apps/web/.env || true
+# Declare build args passed by Coolify so they become env vars during build
+ARG DATABASE_URL
+ARG JWT_SECRET
+ARG NEXT_PUBLIC_SENTRY_DSN
+ARG NEXT_PUBLIC_SLACK_CLIENT_ID
+ARG PRIVATE_KEY_UPLOAD_KEY
+ARG S3_ACCESS_KEY_ID
+ARG S3_ENCRYPTED_BUCKET_NAME
+ARG S3_ENDPOINT
+ARG S3_PUBLIC_BUCKET_NAME
+ARG S3_PUBLIC_URL_ENCRYPTED
+ARG S3_PUBLIC_URL_PUBLIC
+ARG S3_SECRET_ACCESS_KEY
+ARG S3_TRACING_BUCKET_NAME
+ARG SENTRY_AUTH_TOKEN
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
+ARG SLACK_CLIENT_SECRET
+ARG UPLOAD_TOKEN_IV
+ARG UPLOAD_TOKEN_PRIVATE_KEY
 
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
