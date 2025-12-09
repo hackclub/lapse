@@ -44,6 +44,15 @@ COPY --from=builder /app/out/full/ .
 # Write env vars to .env file for Next.js to read at build time
 RUN printenv | grep -E '^(DATABASE_URL|JWT_SECRET|NEXT_PUBLIC_|PRIVATE_KEY_|S3_|SENTRY_|SLACK_|UPLOAD_TOKEN_)' > ./apps/web/.env || true
 
+# Fetch commit timestamp from GitHub API and set as build date
+RUN if [ -n "$SOURCE_COMMIT" ]; then \
+      COMMIT_DATE=$(curl -sf "https://api.github.com/repos/hackclub/lapse/commits/$SOURCE_COMMIT" | grep -m1 '"date"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/'); \
+      if [ -n "$COMMIT_DATE" ]; then \
+        TIMESTAMP_MS=$(($(date -d "$COMMIT_DATE" +%s) * 1000)); \
+        echo "NEXT_PUBLIC_BUILD_DATE=$TIMESTAMP_MS" >> ./apps/web/.env; \
+      fi; \
+    fi
+
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     NODE_ENV=production pnpm turbo run build
