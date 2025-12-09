@@ -41,10 +41,10 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
 # Build the project and apps
 COPY --from=builder /app/out/full/ .
 
-# Copy .env file to apps/web if it exists
-# Coolify stores build-time env vars in /artifacts/build-time.env (outside Docker context)
-RUN --mount=type=bind,source=/artifacts/build-time.env,target=/tmp/build-time.env,readonly \
-    cp /tmp/build-time.env ./apps/web/.env || true
+# TODO: Coolify stores build-time env vars in /artifacts/build-time.env but it's outside Docker context
+# and not accessible via bind mount. Need to find alternative approach.
+# RUN --mount=type=bind,source=/artifacts/build-time.env,target=/tmp/build-time.env,readonly \
+#     cp /tmp/build-time.env ./apps/web/.env || true
 
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
