@@ -97,5 +97,45 @@ export default router({
             });
 
             return apiOk({ comment: dtoComment(comment) });
+        }),
+
+    /**
+     * Deletes a comment. Only the author of the comment can delete it.
+     */
+    delete: protectedProcedure()
+        .input(
+            z.object({
+                /**
+                 * The ID of the comment to delete.
+                 */
+                commentId: PublicId
+            })
+        )
+        .output(
+            apiResult({
+                success: z.boolean()
+            })
+        )
+        .mutation(async (req) => {
+            logRequest("comment/delete", req);
+
+            // Find the comment
+            const comment = await database.comment.findUnique({
+                where: { id: req.input.commentId }
+            });
+
+            if (!comment)
+                return apiErr("NOT_FOUND", "Comment not found.");
+
+            // Check if the user is the author
+            if (comment.authorId !== req.ctx.user.id)
+                return apiErr("FORBIDDEN", "You can only delete your own comments.");
+
+            // Delete the comment
+            await database.comment.delete({
+                where: { id: req.input.commentId }
+            });
+
+            return apiOk({ success: true });
         })
 });
