@@ -129,7 +129,7 @@ export default router({
 
             // Check if the user is the author
             if (comment.authorId !== req.ctx.user.id)
-                return apiErr("FORBIDDEN", "You can only delete your own comments.");
+                return apiErr("NO_PERMISSION", "You can only delete your own comments.");
 
             // Delete the comment
             await database.comment.delete({

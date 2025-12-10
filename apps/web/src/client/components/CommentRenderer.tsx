@@ -106,7 +106,7 @@ export function CommentRenderer({ comment, onDelete }: {
                 }
               }}
             >
-              <Icon glyph="trash" className="w-5 h-5" />
+              <Icon glyph="delete" className="w-5 h-5" />
             </div>
           )}
         </div>
