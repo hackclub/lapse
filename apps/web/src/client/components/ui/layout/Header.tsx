@@ -36,7 +36,7 @@ export function Header() {
   return (
     <>
       <header className={clsx(
-        "fixed bottom-0 bg-dark border border-black shadow", // mobile
+        "fixed bottom-0 bg-dark border-t border-black shadow", // mobile
         "sm:static sm:bg-transparent sm:border-none sm:shadow-none", // desktop
         "w-full"
       )}>
@@ -78,13 +78,13 @@ export function Header() {
         </div>
 
         {/* mobile */}
-        <div className="sm:hidden flex px-12 py-8 pt-12 justify-between items-center w-full">
+        <div className="sm:hidden flex px-12 py-6 justify-between items-center w-full">
           <button
             className="flex flex-col items-center gap-2"
             onClick={() => router.push("/")}
           >
-            <Icon glyph="home" width={48} height={48} />
-            <span className="text-xl">Home</span>
+            <Icon glyph="home" width={32} height={32} />
+            <span className="text-lg">Home</span>
           </button>
 
           <button
@@ -97,8 +97,8 @@ export function Header() {
           <button
             className="flex flex-col items-center gap-2"
           >
-            <ProfilePicture user={auth.currentUser} size="xl" />
-            <span className="text-xl">You</span>
+            <ProfilePicture user={auth.currentUser} size="lg" />
+            <span className="text-lg">You</span>
           </button>
         </div>
       </header>

@@ -102,8 +102,8 @@ export default function Home() {
   return (
     <RootLayout showHeader={true}>
       <section className={clsx(
-        "p-12", // mobile
-        "sm:px-32 sm:py-12", // desktop
+        "p-12 flex-col gap-12", // mobile
+        "sm:px-32 sm:py-12 sm:flex-row sm:gap-0", // desktop
         "flex justify-between items-center w-full bg-grid-gradient border-y border-black" // all
       )}>
         <div className={clsx(
@@ -225,7 +225,7 @@ export default function Home() {
           </section>
         ) }
 
-        <footer className="py-16 text-placeholder text-center">
+        <footer className="py-16 text-placeholder text-center mb-24 sm:mb-0">
           A Hack Club production. Build {process.env.NEXT_PUBLIC_BUILD_ID ?? ""} from <TimeAgo date={parseInt(process.env.NEXT_PUBLIC_BUILD_DATE ?? "0")} />.
           Report issues at <Link newTab href="https://github.com/hackclub/lapse" />. 
         </footer>

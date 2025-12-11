@@ -39,7 +39,7 @@ export default function RootLayout({
   children,
   title = "Lapse",
   description = "Track time with timelapses",
-  showHeader = false
+  showHeader = false,
 }: PropsWithChildren<{
   title?: string;
   description?: string;
