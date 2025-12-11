@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "prisma generate && next build --webpack",
+    "build": "prisma generate && tsx scripts/generate-openapi.ts && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "preinstall": "npx only-allow pnpm",
@@ -13,7 +13,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "generate:openapi": "tsx scripts/generate-openapi.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.948.0",
@@ -44,8 +45,9 @@
     "pretty-bytes": "^7.1.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "webpack": "^5.103.0",
-    "zod": "^4.1.13"
+    "trpc-to-openapi": "^3.1.0",
+    "webpack": "^5.102.1",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
@@ -63,9 +65,10 @@
     "babel-loader": "^10.0.0",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.1",
-    "prisma": "^6.19.1",
-    "tailwindcss": "^4.1.17",
-    "tsx": "^4.21.0",
+    "prisma": "^6.18.0",
+    "tailwindcss": "^4.1.16",
+    "ts-morph": "^27.0.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
 }
