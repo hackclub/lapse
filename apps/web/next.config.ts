@@ -1,8 +1,6 @@
-import { withSentryConfig } from "@sentry/nextjs";
+import { SentryBuildOptions, withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
-
-import { env } from "@/server/env";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -34,6 +32,7 @@ const nextConfig: NextConfig = {
 
     return config;
   },
+
   async headers() {
     return [
       {
@@ -53,12 +52,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+const sentryConfig: SentryBuildOptions = {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-  org: env.SENTRY_ORG,
-  project: env.SENTRY_PROJECT,
+  org: env("SENTRY_ORG"),
+  project: env("SENTRY_PROJECT"),
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
@@ -73,7 +72,7 @@ export default withSentryConfig(nextConfig, {
   // This can increase your server load as well as your hosting bill.
   // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
   // side errors will fail.
-  tunnelRoute: "/monitoring",
+  tunnelRoute: true,
 
   // Automatically tree-shake Sentry logger statements to reduce bundle size
   disableLogger: true,
@@ -83,4 +82,10 @@ export default withSentryConfig(nextConfig, {
   // https://docs.sentry.io/product/crons/
   // https://vercel.com/docs/cron-jobs
   automaticVercelMonitors: true,
-});
+};
+
+function env(name: string) {
+  return process.env[name] ?? (() => { throw new Error(`Missing build-time environment variable: ${name}`) })();
+}
+
+export default withSentryConfig(nextConfig, sentryConfig);
