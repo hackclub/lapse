@@ -1,6 +1,8 @@
 import NextLink from "next/link";
+import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import clsx from "clsx";
 
 import LapseLogo from "@/client/assets/icon.svg";
 
@@ -13,8 +15,10 @@ import { useCachedState } from "@/client/hooks/useCachedState";
 import { useInterval } from "@/client/hooks/useInterval";
 import { trpc } from "@/client/trpc";
 
+
 export function Header() {
   const auth = useAuth(false);
+  const router = useRouter();
 
   const [areSettingsOpen, setAreSettingsOpen] = useState(false);
   const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
@@ -31,39 +35,71 @@ export function Header() {
 
   return (
     <>
-      <header className="flex px-16 py-8 pt-12 w-full justify-between">
-        <div className="flex gap-6 items-center">
-          <NextLink href="/">
-            <LapseLogo className="w-12 h-12 transition-transform hover:scale-105 active:scale-95" />
-          </NextLink>
+      <header className={clsx(
+        "fixed bottom-0 bg-dark border border-black shadow", // mobile
+        "sm:static sm:bg-transparent sm:border-none sm:shadow-none", // desktop
+        "w-full"
+      )}>
+        {/* desktop */}
+        <div className="hidden sm:flex px-16 py-8 pt-12 w-full justify-between">
+          <div className="flex gap-6 items-center">
+            <NextLink href="/">
+              <LapseLogo className="w-12 h-12 transition-transform hover:scale-105 active:scale-95" />
+            </NextLink>
 
-          <div className="flex gap-1.5 px-6 py-2 h-min justify-center items-center rounded-2xl bg-dark border border-black shadow">
-            <div aria-hidden className="w-2 h-2 rounded-full bg-green" />
-            <div>{usersActive} lapsers right now</div>
+            <div className="flex gap-1.5 px-6 py-2 h-min justify-center items-center rounded-2xl bg-dark border border-black shadow">
+              <div aria-hidden className="w-2 h-2 rounded-full bg-green" />
+              <div>{usersActive} lapsers right now</div>
+            </div>
+          </div>
+
+          <div className="flex gap-6 items-center">
+            {
+              (auth.isLoading || auth.currentUser) ? (
+                <>
+                  <Button href="/timelapse/create" kind="primary" icon="plus-fill">Create</Button>
+
+                  <Icon
+                    width={32} height={32}
+                    className="cursor-pointer transition-transform hover:scale-110 active:scale-90"
+                    glyph="settings"
+                    onClick={() => setAreSettingsOpen(true)}
+                  />
+
+                  <ProfilePicture user={auth.currentUser} size="md" />
+                </>
+              ) : (
+                <>
+                  <Button href="/auth" kind="primary" icon="welcome">Sign in</Button>
+                </>
+              )
+            }
           </div>
         </div>
 
-        <div className="flex gap-6 items-center">
-          {
-            (auth.isLoading || auth.currentUser) ? (
-              <>
-                <Button href="/timelapse/create" kind="primary" icon="plus-fill">Create</Button>
+        {/* mobile */}
+        <div className="sm:hidden flex px-12 py-8 pt-12 justify-between items-center w-full">
+          <button
+            className="flex flex-col items-center gap-2"
+            onClick={() => router.push("/")}
+          >
+            <Icon glyph="home" width={48} height={48} />
+            <span className="text-xl">Home</span>
+          </button>
 
-                <Icon
-                  width={32} height={32}
-                  className="cursor-pointer transition-transform hover:scale-110 active:scale-90"
-                  glyph="settings"
-                  onClick={() => setAreSettingsOpen(true)}
-                />
+          <button
+            className="p-4 rounded-full bg-red"
+            onClick={() => router.push("/timelapse/create")}
+          >
+            <Icon glyph="plus-fill" width={36} height={36} />
+          </button>
 
-                <ProfilePicture user={auth.currentUser} size="md" />
-              </>
-            ) : (
-              <>
-                <Button href="/auth" kind="primary" icon="welcome">Sign in</Button>
-              </>
-            )
-          }
+          <button
+            className="flex flex-col items-center gap-2"
+          >
+            <ProfilePicture user={auth.currentUser} size="xl" />
+            <span className="text-xl">You</span>
+          </button>
         </div>
       </header>
 
