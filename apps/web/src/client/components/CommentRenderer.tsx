@@ -82,7 +82,6 @@ export function CommentRenderer({ comment, onDelete }: {
             <Icon glyph="link" className="w-5 h-5" />
           </div>
 
-          {/* Show delete button only if the current user is the author */}
           {auth.currentUser && auth.currentUser.id === comment.author.id && (
             <div
               className="cursor-pointer transition-all opacity-0 group-hover:opacity-100 hover:scale-120 active:scale-95 hover:text-red"

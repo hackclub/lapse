@@ -100,7 +100,7 @@ export default router({
         }),
 
     /**
-     * Deletes a comment. Only the author of the comment can delete it.
+     * Deletes a comment owned by the calling user.
      */
     delete: protectedProcedure()
         .input(
@@ -111,15 +111,10 @@ export default router({
                 commentId: PublicId
             })
         )
-        .output(
-            apiResult({
-                success: z.boolean()
-            })
-        )
+        .output(apiResult({}))
         .mutation(async (req) => {
             logRequest("comment/delete", req);
 
-            // Find the comment
             const comment = await database.comment.findUnique({
                 where: { id: req.input.commentId }
             });
@@ -127,15 +122,13 @@ export default router({
             if (!comment)
                 return apiErr("NOT_FOUND", "Comment not found.");
 
-            // Check if the user is the author
             if (comment.authorId !== req.ctx.user.id)
                 return apiErr("NO_PERMISSION", "You can only delete your own comments.");
 
-            // Delete the comment
             await database.comment.delete({
                 where: { id: req.input.commentId }
             });
 
-            return apiOk({ success: true });
+            return apiOk({});
         })
 });

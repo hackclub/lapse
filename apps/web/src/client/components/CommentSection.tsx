@@ -10,7 +10,7 @@ import { trpc } from "@/client/trpc";
 
 export function CommentSection({ comments, setComments, timelapseId }: {
   comments: Comment[],
-  setComments: (x: Comment[]) => void,
+  setComments: React.Dispatch<React.SetStateAction<Comment[]>>,
   timelapseId: string
 }) {
   const auth = useAuth(false);
@@ -92,8 +92,7 @@ export function CommentSection({ comments, setComments, timelapseId }: {
             comment={x}
             key={x.id}
             onDelete={(commentId) => {
-              // Remove the deleted comment from the list
-              setComments(comments.filter(c => c.id !== commentId));
+              setComments(prev => prev.filter(c => c.id !== commentId));
             }}
           />
         ))}
