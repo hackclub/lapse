@@ -10,7 +10,7 @@ import { trpc } from "@/client/trpc";
 
 export function CommentSection({ comments, setComments, timelapseId }: {
   comments: Comment[],
-  setComments: (x: Comment[]) => void,
+  setComments: React.Dispatch<React.SetStateAction<Comment[]>>,
   timelapseId: string
 }) {
   const auth = useAuth(false);
@@ -87,7 +87,15 @@ export function CommentSection({ comments, setComments, timelapseId }: {
       }
 
       <div className="flex flex-col gap-4">
-        { comments.map(x => <CommentRenderer comment={x} key={x.id} />) }
+        { comments.map(x => (
+          <CommentRenderer
+            comment={x}
+            key={x.id}
+            onDelete={(commentId) => {
+              setComments(prev => prev.filter(c => c.id !== commentId));
+            }}
+          />
+        ))}
       </div>
     </div>
   )

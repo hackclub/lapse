@@ -97,5 +97,38 @@ export default router({
             });
 
             return apiOk({ comment: dtoComment(comment) });
+        }),
+
+    /**
+     * Deletes a comment owned by the calling user.
+     */
+    delete: protectedProcedure()
+        .input(
+            z.object({
+                /**
+                 * The ID of the comment to delete.
+                 */
+                commentId: PublicId
+            })
+        )
+        .output(apiResult({}))
+        .mutation(async (req) => {
+            logRequest("comment/delete", req);
+
+            const comment = await database.comment.findUnique({
+                where: { id: req.input.commentId }
+            });
+
+            if (!comment)
+                return apiErr("NOT_FOUND", "Comment not found.");
+
+            if (comment.authorId !== req.ctx.user.id)
+                return apiErr("NO_PERMISSION", "You can only delete your own comments.");
+
+            await database.comment.delete({
+                where: { id: req.input.commentId }
+            });
+
+            return apiOk({});
         })
 });

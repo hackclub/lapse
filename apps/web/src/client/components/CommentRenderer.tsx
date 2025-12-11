@@ -5,11 +5,15 @@ import { Bullet } from "@/client/components/ui/Bullet";
 
 import type { Comment } from "@/client/api";
 import { TimeAgo } from "@/client/components/TimeAgo";
+import { useAuth } from "@/client/hooks/useAuth";
+import { trpc } from "@/client/trpc";
 import Icon from "@hackclub/icons";
 
-export function CommentRenderer({ comment }: {
-  comment: Comment
+export function CommentRenderer({ comment, onDelete }: {
+  comment: Comment,
+  onDelete?: (commentId: string) => void
 }) {
+  const auth = useAuth(false);
   const [formattedContent, setFormattedContent] = useState<React.ReactNode>("");
   const [isHighlighting, setIsHighlighting] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
@@ -77,6 +81,33 @@ export function CommentRenderer({ comment }: {
           >
             <Icon glyph="link" className="w-5 h-5" />
           </div>
+
+          {auth.currentUser && auth.currentUser.id === comment.author.id && (
+            <div
+              className="cursor-pointer transition-all opacity-0 group-hover:opacity-100 hover:scale-120 active:scale-95 hover:text-red"
+              role="button"
+              title="Delete this comment"
+              onClick={async () => {
+                if (!confirm("Are you sure you want to delete this comment?"))
+                  return;
+
+                const res = await trpc.comment.delete.mutate({
+                  commentId: comment.id
+                });
+
+                if (!res.ok) {
+                  alert(`Couldn't delete your comment!\n\n${res.message}`);
+                  return;
+                }
+
+                if (onDelete) {
+                  onDelete(comment.id);
+                }
+              }}
+            >
+              <Icon glyph="delete" className="w-5 h-5" />
+            </div>
+          )}
         </div>
       </div>
 
