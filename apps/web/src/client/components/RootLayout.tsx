@@ -63,7 +63,7 @@ export default function RootLayout({
       </Head>
 
       <div className={clsx(
-        "flex flex-col w-full h-full gap-2.5",
+        "flex flex-col w-full h-full sm:gap-2.5",
         jetBrainsMono.variable,
         phantomSans.className
       )}>          

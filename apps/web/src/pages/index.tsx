@@ -15,6 +15,7 @@ import { useAuth } from "@/client/hooks/useAuth";
 import { useCache } from "@/client/hooks/useCache";
 import { useCachedApiCall } from "@/client/hooks/useCachedApiCall";
 import RootLayout from "@/client/components/RootLayout";
+import clsx from "clsx";
 
 export default function Home() {
   const router = useRouter();
@@ -92,7 +93,7 @@ export default function Home() {
         
         <div className="flex flex-col">
           <h1 className="font-bold text-3xl">{title}</h1>
-          <p className="text-xl">{description}</p>
+          <p className="text-lg sm:text-xl">{description}</p>
         </div>
       </div>
     );
@@ -100,8 +101,16 @@ export default function Home() {
 
   return (
     <RootLayout showHeader={true}>
-      <section className="flex justify-between items-center w-full px-32 py-12 bg-grid-gradient border-y border-black">
-        <div className="flex w-2/3 gap-8 items-center content-center">
+      <section className={clsx(
+        "p-12", // mobile
+        "sm:px-32 sm:py-12", // desktop
+        "flex justify-between items-center w-full bg-grid-gradient border-y border-black" // all
+      )}>
+        <div className={clsx(
+          "flex flex-col min-w-full", // mobile
+          "sm:flex-row sm:w-2/3 sm:items-center sm:min-w-auto", // desktop
+          "gap-8 content-center" // all
+        )}>
           <NextImage
             src="/images/orpheus-time.png" alt=""
             width={1200} height={1200}
@@ -110,14 +119,14 @@ export default function Home() {
 
           {
             auth.currentUser ? (
-              <h1 className="text-3xl tracking-tight">
-                Hi, <b className="text-nowrap">@{auth.currentUser.displayName}</b>! <br />
+              <h1 className="text-3xl tracking-tight text-pretty">
+                Hi, <b className="sm:text-nowrap">@{auth.currentUser.displayName}</b>! <br />
                 { 
                   (totalTime || totalTimeCache)
                     ? (
                       <>
                         You've recorded a total of <br />
-                        <b className="text-nowrap">{totalTime || totalTimeCache}</b> of timelapses so far.
+                        <b className="sm:text-nowrap">{totalTime || totalTimeCache}</b> of timelapses so far.
                       </>
                     )
                     : (
@@ -136,7 +145,10 @@ export default function Home() {
           }
         </div>
 
-        <div className="flex flex-col gap-4 w-1/3 content-around justify-end text-right">
+        <div className={clsx(
+          "sm:w-1/3",
+          "flex flex-col gap-4 content-around justify-end text-right"
+        )}>
           {
             auth.currentUser ? (
               topUserProjects.map(x => (
@@ -161,7 +173,7 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="flex flex-col px-32 py-8">
+      <div className="flex flex-col px-12 sm:px-32 py-8">
         { reqLeaderboard && reqLeaderboard.leaderboard.length != 0 && (
           <section className="flex flex-col w-full">
             <ShelfHeader
@@ -170,16 +182,28 @@ export default function Home() {
               description="These Hack Clubbers spent the most time documenting their work!"
             />
 
-            <div className="flex w-full justify-between py-12">
+            <div className={clsx(
+              "flex-wrap", // mobile
+              "sm:flex-nowrap", // desktop
+              "flex w-full justify-between py-12", // all
+            )}>
               {
                 reqLeaderboard.leaderboard.map(x => (
-                  <div key={x.id} className="flex flex-col gap-1 justify-center items-center">
+                  <div key={x.id} className="flex flex-col sm:gap-1 justify-center items-center">
                     <NextLink href={`/user/@${x.handle}`}>
-                      <img src={x.pfp} alt="" className="block w-30 h-30 rounded-full mb-2 shadow transition-all hover:brightness-75" />
+                      <img
+                        src={x.pfp}
+                        alt=""
+                        className={clsx(
+                          "w-16 h-16", // mobile
+                          "sm:w-30 sm:h-30", // desktop
+                          "block rounded-full mb-2 shadow transition-all hover:brightness-75" // all
+                        )}
+                      />
                     </NextLink>
 
-                    <div className="text-3xl font-bold">{x.displayName}</div>
-                    <div className="text-xl text-center leading-6">{`${formatDuration(x.secondsThisWeek)} recorded`}<br/>this week</div>
+                    <div className="text-2xl sm:text-3xl font-bold">{x.displayName}</div>
+                    <div className="text-lg sm:text-xl text-center leading-6">{`${formatDuration(x.secondsThisWeek)} recorded`}<br/>this week</div>
                   </div>
                 ))
               }
