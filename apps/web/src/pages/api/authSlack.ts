@@ -67,7 +67,11 @@ export default async function handler(
     const clientSecret = env.SLACK_CLIENT_SECRET;
 
     try {
-        const defaultUriBase = process.env.NODE_ENV == "development" ? "http://localhost:3000" : "https://lapse.hackclub.com";
+        console.log(req);
+        const defaultUriBase = process.env.NODE_ENV == "development"
+            ? (req.headers.host ? `http://${req.headers.host}` : "http://localhost:3000")
+            : "https://lapse.hackclub.com";
+
         const redirectUri = `${req.headers.origin || process.env.NEXTAUTH_URL || defaultUriBase}/api/authSlack`;
         
         const tokenResponse = await fetch("https://slack.com/api/oauth.v2.access", {
