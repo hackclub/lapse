@@ -78,6 +78,7 @@ export default function Page() {
       : `🔴 REC: ${name} - Lapse`;
   }, [name, setupModalOpen, isFrozen]);
 
+
   useOnce(async () => {
     const activeTimelapse = await deviceStorage.getActiveTimelapse();
     if (!activeTimelapse) {

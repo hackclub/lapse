@@ -39,7 +39,7 @@ export default function RootLayout({
   children,
   title = "Lapse",
   description = "Track time with timelapses",
-  showHeader = false
+  showHeader = false,
 }: PropsWithChildren<{
   title?: string;
   description?: string;
@@ -63,7 +63,7 @@ export default function RootLayout({
       </Head>
 
       <div className={clsx(
-        "flex flex-col w-full h-full gap-2.5",
+        "flex flex-col w-full h-full sm:gap-2.5",
         jetBrainsMono.variable,
         phantomSans.className
       )}>          
