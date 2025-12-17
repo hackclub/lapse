@@ -1,11 +1,12 @@
 {
-    "$schema": "https://raw.githubusercontent.com/slackapi/manifest-schema/main/manifest.schema.json",
     "display_information": {
-        "name": "Lapse",
-        "description": "Log in to Lapse using Slack"
+        "name": "Lapse (Mock Environment)"
     },
     "oauth_config": {
-        "redirect_urls": [],
+        "redirect_urls": [
+            "https://lapse.hackclub.com/api/authSlack",
+            "http://localhost:3000/api/authSlack"
+        ],
         "scopes": {
             "user": [
                 "identity.avatar",
