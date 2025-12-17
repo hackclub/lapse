@@ -3,7 +3,7 @@ import clsx from "clsx";
 
 import { InputField } from "@/client/components/ui/InputField";
 
-export function TextInput({ field, value, placeholder, maxLength, onBlur, onChange, isSecret }: {
+export function TextInput({ field, value, placeholder, maxLength, onBlur, onChange, isSecret, autoComplete, isApiKey }: {
   field?: {
     label: string,
     description: string
@@ -13,11 +13,11 @@ export function TextInput({ field, value, placeholder, maxLength, onBlur, onChan
   maxLength?: number,
   onBlur?: () => void,
   onChange: (x: string) => void,
-  isSecret?: boolean
+  isSecret?: boolean,
+  autoComplete?: string,
+  isApiKey?: boolean
 }) {
   const [isFocused, setIsFocused] = useState(false);
-
-  const inputIsPassword = isSecret && !isFocused;
 
   function handleChange(ev: ChangeEvent<HTMLInputElement>) {
     if (!ev.target.reportValidity())
@@ -31,6 +31,8 @@ export function TextInput({ field, value, placeholder, maxLength, onBlur, onChan
     onBlur?.();
   }
 
+  const displayValue = isSecret && !isFocused && !isApiKey ? "•".repeat(value.length) : value;
+
   const input = (
     <input
       onFocus={() => setIsFocused(true)}
@@ -39,11 +41,11 @@ export function TextInput({ field, value, placeholder, maxLength, onBlur, onChan
         "border border-slate outline-red focus:outline-2 transition-all rounded-xl p-2 px-4 w-full",
         isSecret && "font-mono"
       )}
-      type={inputIsPassword ? "password" : "text"}
-      value={value}
+      type="text"
+      value={displayValue}
       maxLength={maxLength}
       onChange={handleChange}
-      autoComplete={inputIsPassword ? "new-password" : "off"}
+      autoComplete={autoComplete ?? (isSecret && !isApiKey ? "new-password" : "off")}
       placeholder={placeholder}
     />
   );

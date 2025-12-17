@@ -200,6 +200,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
           value={hackatimeApiKey}
           onChange={handleHackatimeApiKeyChange}
           isSecret
+          isApiKey
         />
 
         <div className="flex flex-col gap-2">
