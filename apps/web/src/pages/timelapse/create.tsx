@@ -65,6 +65,11 @@ export default function Page() {
   const isFrozenRef = useRef(false);
   const frameCountRef = useRef(0);
 
+  const [isPWA, setIsPWA] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(true);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+
   const setupPreviewRef = useRef<HTMLVideoElement>(null);
   const mainPreviewRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,6 +82,37 @@ export default function Page() {
       : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
       : `🔴 REC: ${name} - Lapse`;
   }, [name, setupModalOpen, isFrozen]);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setIsPWA(isStandalone);
+
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    setIsIOS(isIOSDevice);
+
+    if (isIOSDevice && !isStandalone) {
+      const dismissed = localStorage.getItem("lapse-pwa-prompt-dismissed");
+      if (!dismissed) {
+        setShowInstallPrompt(true);
+      }
+    }
+
+    const checkOrientation = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+
+    checkOrientation();
+    window.addEventListener("resize", checkOrientation);
+    window.addEventListener("orientationchange", checkOrientation);
+
+    return () => {
+      window.removeEventListener("resize", checkOrientation);
+      window.removeEventListener("orientationchange", checkOrientation);
+    };
+  }, []);
 
 
   useOnce(async () => {
@@ -691,6 +727,55 @@ export default function Page() {
           stopRecording();
         }}
       />
+
+      {isPWA && !isLandscape && (
+        <div className="fixed inset-0 z-50 bg-dark flex flex-col items-center justify-center gap-6 p-8">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+            <path d="M12 18h.01" />
+          </svg>
+          <svg className="animate-bounce" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 1l4 4-4 4" />
+            <path d="M3 11V9a4 4 0 014-4h14" />
+          </svg>
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">Rotate your device</h2>
+            <p className="text-secondary">Please rotate your device to landscape mode to record your timelapse.</p>
+          </div>
+        </div>
+      )}
+
+      {isIOS && !isPWA && showInstallPrompt && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-darker border-t border-black p-6 safe-area-inset-bottom">
+          <div className="flex items-start gap-4">
+            <div className="flex-1">
+              <h3 className="font-bold text-lg mb-1">Install Lapse</h3>
+              <p className="text-secondary text-sm mb-3">
+                Lapse isn't fully supported on iOS Safari.
+                For the best experience, add Lapse to your home screen.
+              </p>
+
+              <div className="flex items-center gap-2 text-sm text-secondary">
+                <span>Tap</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L12 14M12 2L8 6M12 2L16 6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  <rect x="4" y="10" width="16" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                </svg>
+                <span>then &quot;Add to Home Screen&quot;</span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setShowInstallPrompt(false);
+                localStorage.setItem("lapse-pwa-prompt-dismissed", "true");
+              }}
+              className="text-secondary hover:text-white p-1"
+            >
+              <Icon glyph="view-close" size={24} />
+            </button>
+          </div>
+        </div>
+      )}
     </RootLayout>
   );
 }

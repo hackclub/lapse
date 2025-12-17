@@ -18,7 +18,7 @@ export function Modal({
 
   return (
     <div role="dialog" className={clsx(
-      "flex fixed w-screen h-screen p-8 top-0 left-0 text-text bg-[#00000088] duration-500 transition-colors justify-center items-center shadow z-20",
+      "flex fixed w-screen h-screen sm:p-8 top-0 left-0 text-text bg-[#00000088] duration-500 transition-colors justify-center items-center shadow z-20",
       !isOpen && "hidden",
       className
     )}>
@@ -26,8 +26,8 @@ export function Modal({
         "flex flex-col bg-dark text-smoke max-h-full rounded-lg overflow-hidden transition-transform",
         isOpen && "scale-100",
         !isOpen && "scale-0",
-        size == "SMALL"   && "w-1/3 min-w-[100px]",
-        size == "REGULAR" && "w-1/2 min-w-[600px]"
+        size == "SMALL" && "sm:w-1/3 sm:min-w-[100px]",
+        size == "REGULAR" && "sm:w-1/2 sm:min-w-[600px]"
       )}>
         {children}
       </section>

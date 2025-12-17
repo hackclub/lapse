@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev --webpack --inspect",
     "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
@@ -40,6 +40,7 @@
     "jsonwebtoken": "^9.0.3",
     "mediabunny": "^1.25.8",
     "next": "^16.0.8",
+    "next-pwa": "^5.6.0",
     "platform": "^1.3.6",
     "pretty-bytes": "^7.1.0",
     "react": "19.2.0",
