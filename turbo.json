@@ -13,6 +13,14 @@
     "dev": {
       "persistent": true,
       "cache": false
+    },
+    "db:dev": {
+      "persistent": true,
+      "cache": true,
+      "interactive": true
+    },
+    "db:push": {
+      "cache": false
     }
   }
 }
