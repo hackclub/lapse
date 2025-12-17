@@ -5,48 +5,63 @@
 
 [**Lapse**](https://lapse.hackclub.com) is a place for Hack Clubbers to record and share timelapses. Integrates with [Hackatime](https://hackatime.hackclub.com)! Lapse is currently in beta.
 
-## Introduction
-Lapse helps you track time for anything that Hackatime is incapable of tracking. You record a timelapse of you doing something, publish it, and register your time in Hackatime! It's also a place for you to share your timelapses with others.
-
 Think of it like a fancy WakaTime plugin. Just as you can install WakaTime for VS Code, Lapse serves to be the WakaTime plugin for timelapses.
 
-Before you publish your timelapses, they're encrypted on your end. That means that you (and only you!) can access them. That way, we can synchronize your progress with our servers, while still making it possible for you to censor or remove anything you wouldn't want other people to see.
+All timelapses are encrypted before being published. That means that you (and *only* you!) can access them. That way, we can synchronize your progress with our servers, while still making it possible for you to censor or remove anything you wouldn't want other people to see.
 
-We currently only officially support Hackatime. Sorry!
+## 🧑‍💻 Development
+In order to get started with developing Lapse, run these commands:
+```bash
+# Install all packages
+pnpm install
 
-## Nerdy Details
-Lapse captures timestamped snapshots of a video feed (e.g. a user's screen or camera). Snapshots are always synchronized with the server, _and_ encrypted client-side with a key derived from:
-- the user's password (which is not stored on the server),
-- the ID of the timelapse.
-- a salt stored in the server's .env
+# Use example environment variables
+cp ./apps/web/.env.example ./apps/web/.env
+```
 
-Currently, the algorithm used to encrypt snapshots is the browser-provided implementation of AES-256. Users can censor and remove snapshots before publishing them (giving the server the key and IV).
+You'll have to change some environment variables in `./apps/web/.env`. Don't worry - everything is explained in the comments in the `.env` file! After you're done, run these two commands in parallel to get started:
 
-When a timelapse is published, it can either be set to **public** or **unlisted**. An *unlisted* timelapse can only be viewed by administrators and the author, as well as anyone with a private, uniquely generated URL. A *public* timelapse is publicly shared on the website.
+```bash
+# In terminal 1...
+pnpm turbo run dev
 
-Timelapses can be synchronized with Hackatime. This will create a WakaTime heartbeat for each snapshot. Timelapses that are synchronized can always be reviewed by administrators for fraud.
+# In terminal 2...
+pnpm turbo run db:dev
+```
 
-## REST API endpoints
-Lapse uses tRPC with a REST interface being planned. This is currently not yet implemented.
+If you're running `db:dev` for the very first time, you'll have to create the schema:
 
-## Deployment
-Deploying Lapse is largely the same as deploying [any other Next.js web app](https://coolify.io/docs/applications/nextjs). You'll need to set a couple of environment variables, though - you'll find them in [`apps/web/src/server/env.ts`](./apps/web/src/server/env.ts).
+```bash
+# While `pnpm turbo run db:dev` is running...
+pnpm turbo run db:push
+```
 
-Lapse uses Prisma with the PostgreSQL adapter - this means you'll also need a PostgreSQL database. Set the `DATABASE_URL` environment variable to the connection string of your database.
+You also have a couple of development scripts at hand:
+```bash
+# You'll need this to use any of the scripts in ./apps/web/prisma!
+export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
 
-You'll need at least one root user in order to promote other users to admins. You can do this via the [`./prisma/promote.mjs`](./prisma/promote.mjs) script:
+# Generate a JWT cookie to log in without having to auth through Slack
+node ./apps/web/prisma/create-jwt.mjs --email ascpixi@hackclub.com
+
+# Create a mock user without going through Slack
+node ./apps/web/prisma/create-user.mjs --email ascpixi@hackclub.com --sid U082DPCGPST --handle ascpixi --name ascpixi --pfp https://ca.slack-edge.com/T0266FRGM-U082DPCGPST-0c4754eb6211-512
+```
+
+## 🛠️ Deployment
+Lapse is meant to be deployed via Docker. In order to deploy the main frontend/backend microservice, use `Dockerfile.web`, located in the root of this repo.
+
+For example - when deploying with Coolify, set these settings:
+- `Base Directory`: `/`
+- `Dockerfile Location`: `/Dockerfile.web`
+- `Ports Exposes`: `3000`
+
+You'll also need a PostgreSQL database running. The connection string to that database should be present in `DATABASE_URL`.
+
+You'll need at least one root user in order to promote other users to admins. You can do this via the [`./apps/web/prisma/promote.mjs`](./apps/web/prisma/promote.mjs) script:
 
 ```sh
 # You'd probably want to use your production database URL here.
 export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
 node ./prisma/promote.mjs --email ascpixi@hackclub.com
-```
-
-```sh
-# Same deal as with promote.mjs.
-export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
-
-node ./prisma/approve.mjs # list all users pending approval
-node ./prisma/approve.mjs --email ascpixi@hackclub.com # approve via email
-node ./prisma/approve.mjs --slackId U082DPCGPST # approve via Slack ID
 ```
