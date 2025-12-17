@@ -556,7 +556,7 @@ export default function Page() {
             }}
             value={hackatimeApiKey}
             onChange={setHackatimeApiKey}
-            isSecret={true}
+            type="secret"
           />
 
           <Button onClick={handleSetApiKey} disabled={isApiKeyDisabled} kind="primary">
