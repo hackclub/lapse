@@ -37,7 +37,7 @@ export function ProfilePicture({
         src={user.profilePictureUrl}
         alt=""
         className={clsx(
-          "rounded-full object-cover transition-all",
+          "rounded-full object-cover transition-all max-w-none",
           sizeClass,
           user && "cursor-pointer hover:opacity-80 transition-opacity",
           className

@@ -370,16 +370,16 @@ export default function Page() {
 
   return (
     <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
-      <div className="flex h-full gap-12 px-16 pb-16">
-        <div className="w-2/3 h-min">
+      <div className="flex flex-col md:flex-row h-full pb-48 gap-8 md:gap-12 md:px-16 md:pb-16">
+        <div className="flex flex-col gap-4 md:gap-0 w-full md:w-2/3 h-min">
           <video 
             ref={videoRef} 
             controls
             poster={timelapse?.isPublished ? timelapse?.thumbnailUrl || undefined : undefined}
-            className="aspect-video w-full h-min rounded-2xl bg-[#000]"
+            className="aspect-video w-full h-min md:rounded-2xl bg-[#000]"
           />
 
-          <div className="flex gap-3 w-full">
+          <div className="flex gap-3 w-full px-6 md:px-0">
             {
               isOwned ? (
                 <>
@@ -414,8 +414,8 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="w-1/3 pl-3 flex flex-col gap-4 h-[70vh]">
-          <div className="flex flex-col gap-2">
+        <div className="w-full md:w-1/3 pl-3 flex flex-col gap-4 md:h-[70vh]">
+          <div className="flex flex-col gap-2 px-4 md:px-0">
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-bold text-smoke leading-tight">
                 { timelapse?.name || <Skeleton /> }
@@ -437,7 +437,7 @@ export default function Page() {
                 size="sm"
               />
 
-              <div className="text-secondary text-xl flex gap-3">
+              <div className="text-secondary text-xl flex gap-x-3 text-nowrap flex-wrap">
                 <span>
                   by { !timelapse ? <Skeleton /> : <span className="font-bold">@{timelapse.owner.displayName}</span> }
                 </span>
