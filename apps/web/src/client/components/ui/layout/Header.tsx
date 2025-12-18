@@ -88,8 +88,12 @@ export function Header() {
           </button>
 
           <button
-            className="p-4 rounded-full bg-red transition-transform active:scale-90"
-            onClick={() => router.push("/timelapse/create")}
+            className={clsx(
+              "p-4 rounded-full transition-transform",
+              auth.currentUser ? "bg-red active:scale-90" : "bg-muted cursor-not-allowed"
+            )}
+            onClick={() => auth.currentUser && router.push("/timelapse/create")}
+            disabled={!auth.currentUser}
           >
             <Icon glyph="plus-fill" width={36} height={36} />
           </button>
