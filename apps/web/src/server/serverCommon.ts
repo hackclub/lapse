@@ -40,7 +40,20 @@ function getPlain(severity: string, scope: string, message: string, data: Record
 function remapData(data: Record<string, unknown>): Record<string, unknown> {
     return Object.fromEntries(
         Object.entries(data)
-            .map(x => [`lapse_${x[0]}`, x[1]])
+            .flatMap(([k, v]) => {
+                // Apparently, when we log an Error to Sentry, the field is always empty.
+                if (v instanceof Error) {
+                    return [
+                        [`${k}_name`, v.name],
+                        [`${k}_message`, v.message],
+                        [`${k}_cause`, v.cause],
+                        [`${k}_stack`, v.stack]
+                    ];
+                }
+
+                return [[k, v]];
+            })
+            .map(([k, v]) => [`lapse_${k}`, v])
     );
 }
 
