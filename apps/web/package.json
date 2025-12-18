@@ -29,7 +29,7 @@
     "@trpc/client": "^11.7.2",
     "@trpc/next": "^11.7.2",
     "@trpc/react-query": "^11.7.2",
-    "@trpc/server": "^11.7.2",
+    "@trpc/server": "^11.8.0",
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/formidable": "^3.4.6",
     "@types/jsonwebtoken": "^9.0.10",
