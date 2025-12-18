@@ -94,6 +94,7 @@ export function Header() {
             )}
             onClick={() => auth.currentUser && router.push("/timelapse/create")}
             disabled={!auth.currentUser}
+            aria-label="Create new timelapse"
           >
             <Icon glyph="plus-fill" width={36} height={36} />
           </button>
