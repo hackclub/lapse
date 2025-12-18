@@ -23,9 +23,6 @@ importers:
       '@hackclub/icons':
         specifier: ^0.0.15
         version: 0.0.15(react@19.2.0)
-      '@hackclub/theme':
-        specifier: ^0.3.3
-        version: 0.3.3
       '@prisma/client':
         specifier: ^6.19.1
         version: 6.19.1(prisma@6.19.1(typescript@5.9.3))(typescript@5.9.3)
@@ -6308,8 +6305,6 @@ snapshots:
   '@hackclub/icons@0.0.15(react@19.2.0)':
     dependencies:
       react: 19.2.0
-
-  '@hackclub/theme@0.3.3': {}
 
   '@humanfs/core@0.19.1': {}
 
