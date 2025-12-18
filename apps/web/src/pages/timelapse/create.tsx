@@ -361,15 +361,6 @@ export default function Page() {
 
       console.log("(create.tsx) stream retrieved!", stream);
 
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cameras = devices.filter(device => device.kind === "videoinput");
-        setAvailableCameras(cameras);
-      }
-      catch (err) {
-        console.log("(create.tsx) Could not re-enumerate cameras:", err);
-      }
-
       const cameraLabel = stream
         .getVideoTracks()[0]
         .label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "")
