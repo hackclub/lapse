@@ -631,7 +631,7 @@ export default function Page() {
                       ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
                       : `Camera ${index + 1}`;
                     return (
-                      <option key={camera.deviceId || index} value={`CAMERA:${camera.deviceId}`}>
+                      <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
                         {displayLabel}
                       </option>
                     );
