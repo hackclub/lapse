@@ -58,6 +58,8 @@ export default function Page() {
   const [hackatimeApiKey, setHackatimeApiKey] = useState("");
   const [isSettingApiKey, setIsSettingApiKey] = useState(false);
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
   const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
   useEffect(() => {
@@ -133,6 +135,12 @@ export default function Page() {
         }
 
         const vidRes = await fetch(timelapse.playbackUrl, { method: "GET" });
+        if (!vidRes.ok) {
+          console.error("([id].tsx) could not fetch timelapse playback URL!", vidRes);
+          setCriticalError("Failed to load timelapse video. Please try again later.");
+          return;
+        }
+        
         const vidData = await vidRes.arrayBuffer();
         
         try {
@@ -368,6 +376,41 @@ export default function Page() {
     }
   }
 
+  async function handleDeleteTimelapse() {
+    if (!timelapse || !isOwned) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this timelapse? This action cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsDeleting(true);
+      setPasskeyModalOpen(false);
+
+      const result = await trpc.timelapse.delete.mutate({ id: timelapse.id });
+
+      if (result.ok) {
+        router.push("/");
+      }
+      else {
+        setRegularError(`Failed to delete: ${result.error}`);
+      }
+    }
+    catch (error) {
+      console.error("([id].tsx) error deleting timelapse:", error);
+      setRegularError(
+        error instanceof Error
+          ? error.message
+          : "An error occurred while deleting the timelapse."
+      );
+    }
+    finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
       <div className="flex flex-col md:flex-row h-full pb-48 gap-8 md:gap-12 md:px-16 md:pb-16">
@@ -498,6 +541,15 @@ export default function Page() {
           <Button onClick={handleUpdate} disabled={isUpdateDisabled} kind="primary">
             {isUpdating ? "Updating..." : "Update"}
           </Button>
+
+          { !timelapse?.isPublished && (
+            <div className="flex flex-col gap-2 pt-4 border-t border-slate">
+              <Button onClick={handleDeleteTimelapse} disabled={isDeleting} kind="destructive">
+                <Icon glyph="delete" size={24} />
+                {isDeleting ? "Deleting..." : "Delete Timelapse"}
+              </Button>
+            </div>
+          )}
         </div>
       </WindowedModal>
 
@@ -589,6 +641,7 @@ export default function Page() {
         setIsOpen={setPasskeyModalOpen}
         description={`Enter the 6-digit PIN for ${missingDeviceName} to decrypt the timelapse`}
         onPasskeySubmit={handlePasskeySubmit}
+        onDelete={isOwned && !timelapse?.isPublished ? handleDeleteTimelapse : undefined}
       >
         {invalidPasskeyAttempt && (
           <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
