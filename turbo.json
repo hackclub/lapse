@@ -11,6 +11,7 @@
       "dependsOn": ["^check-types"]
     },
     "dev": {
+      "with": ["dev", "db:dev"],
       "persistent": true,
       "cache": false
     },
