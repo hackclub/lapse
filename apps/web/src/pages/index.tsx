@@ -31,7 +31,7 @@ export default function Home() {
     time: string,
     percentage: number // [0.0, 1.0], relative to top project. topUserProjects[0].percentage is always 1.0
   }[]>([]);
-  
+
   useEffect(() => {
     (async () => {
       if (!auth.currentUser)
@@ -189,8 +189,16 @@ export default function Home() {
               "flex w-full justify-between py-12", // all
             )}>
               {
-                reqLeaderboard.leaderboard.map(x => (
-                  <div key={x.id} className="flex flex-col sm:gap-1 justify-center items-center">
+                reqLeaderboard.leaderboard.slice(0, 7).map((x, i) => (
+                  <div
+                    key={x.id}
+                    className={clsx(
+                      "flex flex-col sm:gap-1 justify-center items-center",
+                      i >= 3 && "hidden sm:flex",
+                      i >= 5 && "sm:hidden md:flex",
+                      i >= 7 && "md:hidden lg:flex",
+                    )}
+                  >
                     <NextLink href={`/user/@${x.handle}`}>
                       <img
                         src={x.pfp}
