@@ -32,13 +32,13 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
     <button
       onClick={disabled ? undefined : onClick}
       className={clsx(
-    "flex items-center gap-2 justify-center rounded-2xl h-12 px-8 font-bold text-white",
-    "cursor-pointer transition-all",
-    (kind == "primary") && "bg-red",
-    (kind == "regular") && "bg-dark border-slate border shadow",
-    (disabled) && "!bg-darkless",
-    (!disabled) && "hover:scale-[102%] active:scale-[98%]",
-    className
+        "flex items-center gap-2 justify-center rounded-2xl h-12 px-8 font-bold text-white text-nowrap flex-nowrap",
+        "cursor-pointer transition-all",
+        (kind == "primary") && "bg-red",
+        (kind == "regular") && "bg-dark border-slate border shadow",
+        (disabled) && "!bg-darkless",
+        (!disabled) && "hover:scale-[102%] active:scale-[98%]",
+        className
       )}
     >
       {icon ? <Icon glyph={icon} width={20} height={20} /> : undefined}

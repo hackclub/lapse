@@ -103,12 +103,12 @@ export default function Home() {
     <RootLayout showHeader={true}>
       <section className={clsx(
         "p-12 flex-col gap-12", // mobile
-        "sm:px-32 sm:py-12 sm:flex-row sm:gap-0", // desktop
+        "md:px-32 md:py-12 md:flex-row md:gap-0", // desktop
         "flex justify-between items-center w-full bg-grid-gradient border-y border-black" // all
       )}>
         <div className={clsx(
           "flex flex-col min-w-full", // mobile
-          "sm:flex-row sm:w-2/3 sm:items-center sm:min-w-auto", // desktop
+          "md:flex-row md:w-2/3 md:items-center md:min-w-auto", // desktop
           "gap-8 content-center" // all
         )}>
           <NextImage
