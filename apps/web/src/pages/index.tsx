@@ -186,7 +186,7 @@ export default function Home() {
             <div className={clsx(
               "flex-wrap", // mobile
               "sm:flex-nowrap", // desktop
-              "flex w-full justify-between py-12", // all
+              "flex w-full justify-between py-12 gap-y-12", // all
             )}>
               {
                 reqLeaderboard.leaderboard.slice(0, 7).map((x, i) => (
