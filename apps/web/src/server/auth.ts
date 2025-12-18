@@ -3,10 +3,8 @@ import "@/server/allow-only-server";
 import jwt from "jsonwebtoken";
 import { NextApiRequest } from "next";
 
-import { PrismaClient } from "@/generated/prisma";
 import { env } from "@/server/env";
-
-const database = new PrismaClient();
+import { database } from "@/server/db";
 
 export interface JWTPayload {
     userId: string

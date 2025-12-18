@@ -1,14 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
 import { logError } from "@/server/serverCommon";
-
-import * as db from "@/generated/prisma";
+import { database } from "@/server/db";
 
 // GET /api/health
 //     Returns an HTTP 200 response with "OK" if basic health checks have passed.
 //     Otherwise, returns an HTTP 500 with an error code. Designed to be used with Coolify.
-
-const database = new db.PrismaClient();
 
 export default async function handler(
     req: NextApiRequest,

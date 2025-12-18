@@ -1,11 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
-import { PrismaClient } from "@/generated/prisma";
-
 import { generateJWT } from "@/server/auth";
 import { env } from "@/server/env";
 import { logError, logNextRequest } from "@/server/serverCommon";
+import { database } from "@/server/db";
 
 // GET /api/authSlack
 //    Meant to be used as a callback URL - the user will be redirected to this API endpoint when
@@ -14,8 +13,6 @@ import { logError, logNextRequest } from "@/server/serverCommon";
 //    Parameters:
 //      - code: the OAuth code, given by Slack
 //      - error: redirects user to /auth?error=oauth-<error> when present
-
-const database = new PrismaClient();
 
 const SlackUserIdentitySchema = z.object({
     id: z.string(),

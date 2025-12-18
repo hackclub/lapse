@@ -9,8 +9,7 @@ import { logError } from "@/server/serverCommon";
 import { dtoTimelapse, TimelapseSchema } from "@/server/routers/api/timelapse";
 import { UserDisplayName, UserHandle } from "@/server/routers/api/user";
 import { PublicId } from "@/server/routers/common";
-
-import * as db from "@/generated/prisma";
+import { database } from "@/server/db";
 
 export type LeaderboardUserEntry = z.infer<typeof LeaderboardUserEntrySchema>;
 export const LeaderboardUserEntrySchema = z.object({
@@ -25,8 +24,6 @@ let leaderboardCacheUpdatedOn: Date | null = null;
 let leaderboardCache: LeaderboardUserEntry[] = [];
 
 const ACTIVE_USERS_EXPIRY_MS = 60 * 1000;
-
-const database = new db.PrismaClient();
 
 export default router({
     /**
@@ -126,12 +123,15 @@ export default router({
             count: z.number().nonnegative()
         }))
         .query(async () => {
+            console.log("activeUsers START");
             const res = await database.user.aggregate({
                 _count: { lastHeartbeat: true },
                 where: {
                     lastHeartbeat: { gt: new Date(new Date().getTime() - ACTIVE_USERS_EXPIRY_MS) }
                 }
             });
+
+            console.log("activeUsers END");
 
             return apiOk({ count: res._count.lastHeartbeat });
         })

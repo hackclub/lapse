@@ -16,10 +16,9 @@ import { generateThumbnail } from "@/server/videoProcessing";
 import { Actor, ApiDate, PublicId } from "@/server/routers/common";
 import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "@/server/routers/api/user";
 import { CommentSchema, DbComment, dtoComment } from "@/server/routers/api/comment";
+import { database } from "@/server/db";
 
 import * as db from "@/generated/prisma";
-
-const database = new db.PrismaClient();
 const s3 = new S3Client({
     region: "auto",
     endpoint: `https://${env.S3_ENDPOINT}`,

@@ -8,9 +8,11 @@ import { assert, matchOrDefault } from "@/shared/common";
 import RootLayout from "@/client/components/RootLayout";
 import { Button } from "@/client/components/ui/Button";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
+import { LoadingModal } from "@/client/components/ui/LoadingModal";
 
 export default function Auth() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,6 +48,7 @@ export default function Auth() {
       return;
     }
 
+    setIsLoading(true);
     setError(null);
 
     const redirectUri = `${window.location.origin}/api/authSlack`;
@@ -83,10 +86,11 @@ export default function Auth() {
             <Button 
               className="gap-3 w-full" 
               onClick={handleSlackSignIn}
+              disabled={isLoading}
               kind="primary"
             >
               <Icon glyph="slack-fill" />
-              Sign in with Slack
+              {isLoading ? "Redirecting..." : "Sign in with Slack"}
             </Button>
           </div>
         </div>
@@ -96,6 +100,12 @@ export default function Auth() {
         isOpen={!!error}
         setIsOpen={(open) => !open && setError(null)}
         message={error || ""}
+      />
+
+      <LoadingModal
+        isOpen={isLoading}
+        title="Signing In"
+        message="Redirecting to Slack for authentication..."
       />
     </RootLayout>
   );

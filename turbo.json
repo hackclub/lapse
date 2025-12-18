@@ -16,7 +16,7 @@
     },
     "db:dev": {
       "persistent": true,
-      "cache": true,
+      "cache": false,
       "interactive": true
     },
     "db:push": {

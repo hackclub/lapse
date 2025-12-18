@@ -9,10 +9,9 @@ import { HackatimeUserApi } from "@/server/hackatime";
 import { logError, logWarning, logRequest } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { ApiDate, PublicId } from "@/server/routers/common";
+import { database } from "@/server/db";
 
 import * as db from "@/generated/prisma";
-
-const database = new db.PrismaClient();
 
 /**
  * Represents the permissions of a user.

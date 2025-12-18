@@ -1,15 +1,8 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
-import withPWA from "next-pwa";
 
-const withPWAConfig = withPWA({
-  dest: "public",
-  register: true,
-  skipWaiting: true,
-});
-
-let config: NextConfig = withPWAConfig({
+let config: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
   productionBrowserSourceMaps: true,
@@ -34,9 +27,7 @@ let config: NextConfig = withPWAConfig({
         buffer: false,
       };
     }
-
-    config.devtool = "source-map";
-
+    
     return config;
   },
 
@@ -57,7 +48,7 @@ let config: NextConfig = withPWAConfig({
       },
     ];
   },
-});
+};
 
 // If we have Sentry environment variables set up, then use Sentry.
 if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT) {

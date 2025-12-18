@@ -6,13 +6,10 @@ import { apiOk, apiResult } from "@/shared/common";
 
 import { router, protectedProcedure } from "@/server/trpc";
 import { logTracing } from "@/server/serverCommon";
-
-import * as db from "@/generated/prisma";
+import { database } from "@/server/db";
 
 // These endpoints are used for internal statistics. All tracing is anonymized.
 // Some of the endpoints in this router will be removed after the beta period ends.
-
-const database = new db.PrismaClient();
 
 export default router({
     /**

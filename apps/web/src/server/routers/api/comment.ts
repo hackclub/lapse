@@ -9,10 +9,9 @@ import { dtoPublicUser, PublicUserSchema } from "@/server/routers/api/user";
 import { logRequest } from "@/server/serverCommon";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { getTimelapseById } from "@/server/routers/api/timelapse";
+import { database } from "@/server/db";
 
 import * as db from "@/generated/prisma";
-
-const database = new db.PrismaClient();
 
 export type Comment = z.infer<typeof CommentSchema>;
 export const CommentSchema = z.object({

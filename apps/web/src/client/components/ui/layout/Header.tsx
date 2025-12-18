@@ -24,18 +24,13 @@ export function Header() {
   const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
 
   useInterval(async () => {
-    try {
-      const res = await trpc.global.activeUsers.query({});
-      if (!res.ok) {
-        console.error("(Header.tsx) could not query active users!", res);
-        return;
-      }
+    const res = await trpc.global.activeUsers.query({});
+    if (!res.ok) {
+      console.error("(Header.tsx) could not query active users!", res);
+      return;
+    }
 
-      setUsersActive(res.data.count);
-    }
-    catch (ex) {
-      console.warn("(Header.tsx) an error has occured while querying active users!", ex);
-    }
+    setUsersActive(res.data.count);
   }, 30 * 1000);
 
   return (
@@ -101,22 +96,9 @@ export function Header() {
 
           <button
             className="flex flex-col items-center gap-2"
-            onClick={ auth.currentUser ? () => router.push(`/@${auth.currentUser!.handle}`) : () => router.push("/auth") }
           >
-            {
-              auth.currentUser ? (
-                <>
-                  <ProfilePicture user={auth.currentUser} size="lg" />
-                  <span className="text-lg">You</span>
-                </>
-
-              ) : (
-                <>
-                  <Icon glyph="door-enter" width={32} height={32} />
-                  <span className="text-lg">Log in</span>
-                </>
-              )
-            }
+            <ProfilePicture user={auth.currentUser} size="lg" />
+            <span className="text-lg">You</span>
           </button>
         </div>
       </header>
