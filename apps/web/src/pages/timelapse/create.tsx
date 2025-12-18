@@ -560,6 +560,11 @@ export default function Page() {
           : isCreated ? "Update your timelapse settings."
           : "After you click Create, your timelapse will start recording!"
         }
+        shortDescription={
+          needsVideoSource ? "Select a video source to resume."
+          : isCreated ? "Update your timelapse settings."
+          : "Select a video source"
+        }
         isOpen={setupModalOpen}
         setIsOpen={onSubmitModalClose}
       >
