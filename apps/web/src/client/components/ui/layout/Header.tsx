@@ -80,7 +80,7 @@ export function Header() {
         {/* mobile */}
         <div className="sm:hidden flex px-12 py-6 justify-between items-center w-full">
           <button
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-2 cursor-pointer transition-transform active:scale-90"
             onClick={() => router.push("/")}
           >
             <Icon glyph="home" width={32} height={32} />
@@ -88,18 +88,30 @@ export function Header() {
           </button>
 
           <button
-            className="p-4 rounded-full bg-red"
+            className="p-4 rounded-full bg-red transition-transform active:scale-90"
             onClick={() => router.push("/timelapse/create")}
           >
             <Icon glyph="plus-fill" width={36} height={36} />
           </button>
 
-          <button
-            className="flex flex-col items-center gap-2"
-          >
-            <ProfilePicture user={auth.currentUser} size="lg" />
-            <span className="text-lg">You</span>
-          </button>
+          {
+            auth.currentUser ? (
+              <button
+                className="flex flex-col items-center gap-2 transition-transform active:scale-90"
+              >
+                <ProfilePicture user={auth.currentUser} size="lg" />
+                <span className="text-lg">You</span>
+              </button>
+            ) : (
+              <button
+                className="flex flex-col items-center gap-2 cursor-pointer transition-transform active:scale-90"
+                onClick={() => router.push("/auth")}
+              >
+                <Icon glyph="welcome" width={32} height={32} />
+                <span className="text-lg">Sign up</span>
+              </button>
+            )
+          }
         </div>
       </header>
 
