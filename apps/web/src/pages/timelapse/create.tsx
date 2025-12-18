@@ -47,7 +47,7 @@ export default function Page() {
   const [cameraLabel, setCameraLabel] = useState("Camera");
   const [screenLabel, setScreenLabel] = useState("Screen");
   const [changingSource, setChangingSource] = useState(false);
-  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]); // this should help make this better :pf:
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]); // this should help make this better
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
