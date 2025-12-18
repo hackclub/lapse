@@ -22,7 +22,7 @@
     "@hackclub/icons": "^0.0.15",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
-    "@sentry/nextjs": "^10.31.0",
+    "@sentry/nextjs": "^10.32.0",
     "@smithy/core": "^3.19.0",
     "@tanstack/react-query": "^5.90.12",
     "@traversable/zod": "^0.0.57",
@@ -46,7 +46,7 @@
     "pretty-bytes": "^7.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "webpack": "^5.104.0",
+    "webpack": "^5.104.1",
     "zod": "^4.2.1"
   },
   "devDependencies": {
