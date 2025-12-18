@@ -101,12 +101,6 @@ export default function Page() {
     };
   }, []);
 
-  useEffect(() => {
-    if (setupPreviewRef.current && currentStream) {
-      setupPreviewRef.current.srcObject = currentStream;
-    }
-  }, [currentStream]);
-
   useOnce(async () => {
     const activeTimelapse = await deviceStorage.getActiveTimelapse();
     if (!activeTimelapse) {
