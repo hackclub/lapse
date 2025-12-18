@@ -196,7 +196,6 @@ export default function Home() {
                       "flex flex-col sm:gap-1 justify-center items-center",
                       i >= 3 && "hidden sm:flex",
                       i >= 5 && "sm:hidden md:flex",
-                      i >= 7 && "md:hidden lg:flex",
                     )}
                   >
                     <NextLink href={`/user/@${x.handle}`}>
