@@ -371,7 +371,7 @@ export default function Page() {
   return (
     <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
       <div className="flex flex-col md:flex-row h-full pb-48 gap-8 md:gap-12 md:px-16 md:pb-16">
-        <div className="flex flex-col gap-4 md:gap-0 w-full md:w-2/3 h-min">
+        <div className="flex flex-col gap-4 w-full md:w-2/3 h-min">
           <video 
             ref={videoRef} 
             controls

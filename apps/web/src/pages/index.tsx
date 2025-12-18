@@ -103,7 +103,8 @@ export default function Home() {
     <RootLayout showHeader={true}>
       <section className={clsx(
         "p-12 flex-col gap-12", // mobile
-        "md:px-32 md:py-12 md:flex-row md:gap-0", // desktop
+        "md:px-16", // tablet
+        "lg:px-32 md:py-12 md:flex-row md:gap-0", // desktop
         "flex justify-between items-center w-full bg-grid-gradient border-y border-black" // all
       )}>
         <div className={clsx(
@@ -173,7 +174,7 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="flex flex-col px-12 sm:px-32 py-8">
+      <div className="flex flex-col px-12 sm:px-16 md:px-24 lg:px-32 py-8">
         { reqLeaderboard && reqLeaderboard.leaderboard.length != 0 && (
           <section className="flex flex-col w-full">
             <ShelfHeader

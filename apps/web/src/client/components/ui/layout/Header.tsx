@@ -47,7 +47,7 @@ export function Header() {
               <LapseLogo className="w-12 h-12 transition-transform hover:scale-105 active:scale-95" />
             </NextLink>
 
-            <div className="flex gap-1.5 px-6 py-2 h-min justify-center items-center rounded-2xl bg-dark border border-black shadow">
+            <div className="flex gap-1.5 px-6 py-2 h-min justify-center items-center rounded-2xl bg-dark border border-black shadow text-nowrap">
               <div aria-hidden className="w-2 h-2 rounded-full bg-green" />
               <div>{usersActive} lapsers right now</div>
             </div>
