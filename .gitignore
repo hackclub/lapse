@@ -8,6 +8,9 @@ generated/
 node_modules
 .next
 
+# We use pnpm - some VSCode extensions can sometimes generate package-lock.json files.
+package-lock.json
+
 /.pnp
 .pnp.*
 .yarn/*

@@ -5,7 +5,7 @@ import { LocalTimelapse } from "@/client/deviceStorage";
 import { ascending, assert } from "@/shared/common";
 import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
 
-const BITS_PER_PIXEL = 1.5;
+const BITS_PER_PIXEL = 48;
 
 /**
  * Creates a `MediaRecorder` object, the output of which will be able to be decoded client-side.
@@ -40,8 +40,7 @@ export function createMediaRecorder(stream: MediaStream) {
 
     const w = metadata.width ?? 1920;
     const h = metadata.height ?? 1080;
-    const fps = 1000 / TIMELAPSE_FRAME_LENGTH_MS;
-    const bitrate = w * h * fps * BITS_PER_PIXEL;
+    const bitrate = w * h * BITS_PER_PIXEL;
 
     console.log(`(videoProcessing.ts) bitrate=${bitrate} (${bitrate / 1000}kbit/s, ${bitrate / 1000 / 1000}mbit/s), format=${mime}`);
 
@@ -123,7 +122,8 @@ export async function videoConcat(streams: Blob[]) {
     const source = new mediabunny.VideoSampleSource({
         codec: videoCodec,
         bitrate: mediabunny.QUALITY_HIGH,
-        sizeChangeBehavior: "contain"
+        sizeChangeBehavior: "contain",
+        latencyMode: "realtime"
     });
 
     out.addVideoTrack(source, { frameRate: TIMELAPSE_FPS });
