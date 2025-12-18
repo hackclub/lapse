@@ -47,6 +47,8 @@ export default function Page() {
   const [cameraLabel, setCameraLabel] = useState("Camera");
   const [screenLabel, setScreenLabel] = useState("Screen");
   const [changingSource, setChangingSource] = useState(false);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]); // this should help make this better :pf:
+  const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(null);
@@ -77,6 +79,51 @@ export default function Page() {
       : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
       : `🔴 REC: ${name} - Lapse`;
   }, [name, setupModalOpen, isFrozen]);
+
+  useEffect(() => {
+    async function enumerateCameras() {
+      try {
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        let cameras = devices.filter(device => device.kind === "videoinput");
+        
+        if (cameras.length > 0 && (!cameras[0].label || cameras[0].label === "")) {
+          try {
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+
+            tempStream.getTracks().forEach(track => track.stop());
+            
+            devices = await navigator.mediaDevices.enumerateDevices();
+            cameras = devices.filter(device => device.kind === "videoinput");
+          }
+          catch (permErr) {
+            console.log("(create.tsx) Could not get camera permissions:", permErr);
+          }
+        }
+        
+        setAvailableCameras(cameras);
+        
+        if (cameras.length > 0 && !selectedCameraId) {
+          setSelectedCameraId(cameras[0].deviceId);
+        }
+      }
+      catch (err) {
+        console.log("(create.tsx) Could not enumerate cameras:", err);
+      }
+    }
+    
+    enumerateCameras();
+    
+    navigator.mediaDevices.addEventListener("devicechange", enumerateCameras);
+    return () => {
+      navigator.mediaDevices.removeEventListener("devicechange", enumerateCameras);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (setupPreviewRef.current && currentStream) {
+      setupPreviewRef.current.srcObject = currentStream;
+    }
+  }, [currentStream]);
 
   useOnce(async () => {
     const activeTimelapse = await deviceStorage.getActiveTimelapse();
@@ -288,12 +335,14 @@ export default function Page() {
 
     console.log("(create.tsx) video source changed to", ev.target.value);
 
-    if (ev.target.value == "CAMERA") {
+    if (ev.target.value.startsWith("CAMERA:")) {
+
+      const cameraId = ev.target.value.substring(7);
       let stream: MediaStream;
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
+          video: { deviceId: { exact: cameraId } },
           audio: false
         });
       }
@@ -313,6 +362,7 @@ export default function Page() {
       disposeStreams();
       setCameraStream(stream);
       setVideoSourceKind("CAMERA");
+      setSelectedCameraId(cameraId);
       setCameraLabel(`Camera (${cameraLabel})`);
     }
     else if (ev.target.value == "SCREEN") {
@@ -566,12 +616,20 @@ export default function Page() {
           <SelectInput
             label="Video source"
             description="Record your screen, camera, or any other video source."
-            value={videoSourceKind}
+            value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
             onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
             disabled={changingSource}
           >
             <option disabled value="NONE">(none)</option>
-            <option value="CAMERA">{cameraLabel}</option>
+            {availableCameras.length > 0 && (
+              <optgroup label="Cameras">
+                {availableCameras.map((camera) => (
+                  <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
+                    {camera.label || `Camera ${availableCameras.indexOf(camera) + 1}`}
+                  </option>
+                ))}
+              </optgroup>
+            )}
             <option value="SCREEN">{screenLabel}</option>
           </SelectInput>
 
