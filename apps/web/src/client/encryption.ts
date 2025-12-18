@@ -232,13 +232,17 @@ export async function decryptData(
         ["decrypt"]
     );
 
-    const decryptedBuffer = await crypto.subtle.decrypt(
-        { name: "AES-CBC", iv: iv },
-        cryptoKey,
-        inputBuffer
-    );
-
-    return decryptedBuffer;
+    try {
+        return await crypto.subtle.decrypt(
+            { name: "AES-CBC", iv: iv },
+            cryptoKey,
+            inputBuffer
+        );
+    }
+    catch (err) {
+        console.warn(`(encryption.ts) decryption failed! passkey=${passkey}, id=${timelapseId}`, err, encryptedData);
+        throw err;
+    }
 }
 
 export async function decryptVideo(
