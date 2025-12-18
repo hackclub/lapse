@@ -3,11 +3,12 @@ import { ReactNode, useState } from "react";
 import { Button } from "./Button";
 import { WindowedModal } from "./WindowedModal";
 
-export function PasskeyModal({ isOpen, setIsOpen, description, onPasskeySubmit, children }: {
+export function PasskeyModal({ isOpen, setIsOpen, description, onPasskeySubmit, onDelete, children }: {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   description: string;
   onPasskeySubmit: (passkey: string) => void;
+  onDelete?: () => void;
   children?: ReactNode;
 }) {
   const [passkeyInput, setPasskeyInput] = useState("");
@@ -55,6 +56,18 @@ export function PasskeyModal({ isOpen, setIsOpen, description, onPasskeySubmit, 
         >
           Add Passkey
         </Button>
+
+        {onDelete && (
+          <div className="flex flex-col gap-4 pt-4 border-t border-slate text-center">
+            <p className="text-muted text-sm">Forgot your PIN? You can delete this unpublished timelapse instead.</p>
+            <Button
+              onClick={onDelete}
+              kind="destructive"
+            >
+              Delete Timelapse
+            </Button>
+          </div>
+        )}
       </div>
     </WindowedModal>
   );
