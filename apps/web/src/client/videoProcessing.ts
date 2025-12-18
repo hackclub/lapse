@@ -123,7 +123,7 @@ export async function videoConcat(streams: Blob[]) {
         codec: videoCodec,
         bitrate: mediabunny.QUALITY_HIGH,
         sizeChangeBehavior: "contain",
-        latencyMode: "realtime" 
+        latencyMode: "realtime"
     });
 
     out.addVideoTrack(source, { frameRate: TIMELAPSE_FPS });
