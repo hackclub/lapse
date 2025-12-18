@@ -67,26 +67,31 @@ export default async function handler(
     if (!user)
         return res.status(401).json(apiErr("NO_PERMISSION", "This endpoint requires authentication."));
 
-    // TODO: This would probably be better with a cronjob instead...
-    const staleTokens = await database.uploadToken.findMany({
-        where: { expires: { lt: new Date() } },
-        include: { owner: true }
-    });
-
-    for (const token of staleTokens) {
-        logInfo("upload", `removing stale upload token ${token.id} owned by @${token.owner.handle}`, { token });
-
-        if (token.uploaded) {
-            s3.send(new DeleteObjectCommand({
-                Bucket: token.bucket,
-                Key: token.key
-            }));
-        }
-
-        await database.uploadToken.delete({
-            where: { id: token.id }
+    // We only wipe stale tokens on production. We can tolerate those on development, and we DON'T want a scenario where someone
+    // is developing on production S3 buckets.
+    if (process.env.NODE_ENV === "production") {
+        // TODO: This would probably be better with a cronjob instead...
+        const staleTokens = await database.uploadToken.findMany({
+            where: { expires: { lt: new Date() } },
+            include: { owner: true }
         });
+
+        for (const token of staleTokens) {
+            logInfo("upload", `removing stale upload token ${token.id} owned by @${token.owner.handle}`, { token });
+
+            if (token.uploaded) {
+                s3.send(new DeleteObjectCommand({
+                    Bucket: token.bucket,
+                    Key: token.key
+                }));
+            }
+
+            await database.uploadToken.delete({
+                where: { id: token.id }
+            });
+        }
     }
+    
 
     try {
         const form = formidable({
