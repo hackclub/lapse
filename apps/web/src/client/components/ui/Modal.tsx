@@ -59,7 +59,7 @@ export function ModalHeader({
       <div className="flex gap-4 flex-1">
         {
           icon && (
-            <div className="p-2 border border-black rounded-md w-12 h-12 justify-center hidden sm:flex">
+            <div className="p-2 border border-black rounded-md w-12 h-12 justify-center flex">
               <Icon glyph={icon} size={32} />
             </div>
           )
