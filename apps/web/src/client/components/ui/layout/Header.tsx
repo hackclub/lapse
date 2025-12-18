@@ -36,7 +36,7 @@ export function Header() {
   return (
     <>
       <header className={clsx(
-        "fixed bottom-0 bg-dark border-t border-black shadow", // mobile
+        "fixed bottom-0 z-10 bg-dark border-t border-black shadow", // mobile
         "sm:static sm:bg-transparent sm:border-none sm:shadow-none", // desktop
         "w-full"
       )}>
