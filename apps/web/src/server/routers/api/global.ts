@@ -123,15 +123,12 @@ export default router({
             count: z.number().nonnegative()
         }))
         .query(async () => {
-            console.log("activeUsers START");
             const res = await database.user.aggregate({
                 _count: { lastHeartbeat: true },
                 where: {
                     lastHeartbeat: { gt: new Date(new Date().getTime() - ACTIVE_USERS_EXPIRY_MS) }
                 }
             });
-
-            console.log("activeUsers END");
 
             return apiOk({ count: res._count.lastHeartbeat });
         })
