@@ -1,10 +1,13 @@
 import type { AppType } from "next/app";
 
 import "@/client/styles/globals.css";
+import { AuthProvider } from "@/client/context/AuthContext";
 
 const App: AppType = ({ Component, pageProps }) => {
   return (
-    <Component {...pageProps} />
+    <AuthProvider>
+      <Component {...pageProps} />
+    </AuthProvider>
   );
 };
 
