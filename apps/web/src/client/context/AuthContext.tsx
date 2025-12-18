@@ -47,10 +47,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const signOut = useCallback(async () => {
         console.log("(AuthContext) signing out...");
         await trpc.user.signOut.mutate({});
+        setUserCache(null);
         setCurrentUser(null);
         router.push("/");
         router.reload();
-    }, [router]);
+    }, [router, setUserCache]);
 
     const value: AuthContextValue = {
         currentUser: isLoading ? userCache : currentUser,
@@ -67,8 +68,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 export function useAuthContext(): AuthContextValue {
     const context = useContext(AuthContext);
-    if (context === null)
+    if (context === null) {
         throw new Error("useAuthContext must be used within an AuthProvider");
-
+    }
     return context;
 }
