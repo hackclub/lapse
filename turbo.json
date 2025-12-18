@@ -11,12 +11,13 @@
       "dependsOn": ["^check-types"]
     },
     "dev": {
+      "with": ["dev", "db:dev"],
       "persistent": true,
       "cache": false
     },
     "db:dev": {
       "persistent": true,
-      "cache": true,
+      "cache": false,
       "interactive": true
     },
     "db:push": {

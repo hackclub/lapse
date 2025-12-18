@@ -52,7 +52,7 @@ export const config = {
     },
 };
 
-const database = new db.PrismaClient();
+import { database } from "@/server/db";
 
 export default async function handler(
     req: NextApiRequest,

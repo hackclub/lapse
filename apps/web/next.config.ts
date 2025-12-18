@@ -27,9 +27,7 @@ let config: NextConfig = {
         buffer: false,
       };
     }
-
-    config.devtool = "source-map";
-
+    
     return config;
   },
 

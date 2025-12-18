@@ -1,6 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
+import clsx from "clsx";
 
 import { assert, matchOrDefault } from "@/shared/common";
 
@@ -62,8 +63,12 @@ export default function Auth() {
 
   return (
     <RootLayout showHeader={true}>
-      <div className="flex w-full h-full py-8 items-center justify-center">
-        <div className="max-w-lg w-full bg-darkless p-16 rounded-lg">
+      <div className="flex w-full h-full sm:py-8 items-center justify-center">
+        <div className={clsx(
+          "p-12 -mt-32", // mobile
+          "sm:h-auto sm:border sm:p-16 sm:mt-0", // desktop
+          "max-w-lg w-full flex items-center sm:border-black rounded-lg", // all
+        )}>
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-4">
               <h1 className="text-3xl flex gap-2 font-bold text-smoke leading-tight">

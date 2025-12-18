@@ -1,11 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
-import { PrismaClient } from "@/generated/prisma";
-
 import { generateJWT } from "@/server/auth";
 import { env } from "@/server/env";
 import { logError, logNextRequest } from "@/server/serverCommon";
+import { database } from "@/server/db";
 
 // GET /api/authSlack
 //    Meant to be used as a callback URL - the user will be redirected to this API endpoint when
@@ -14,8 +13,6 @@ import { logError, logNextRequest } from "@/server/serverCommon";
 //    Parameters:
 //      - code: the OAuth code, given by Slack
 //      - error: redirects user to /auth?error=oauth-<error> when present
-
-const database = new PrismaClient();
 
 const SlackUserIdentitySchema = z.object({
     id: z.string(),
@@ -67,7 +64,11 @@ export default async function handler(
     const clientSecret = env.SLACK_CLIENT_SECRET;
 
     try {
-        const defaultUriBase = process.env.NODE_ENV == "development" ? "http://localhost:3000" : "https://lapse.hackclub.com";
+        console.log(req);
+        const defaultUriBase = process.env.NODE_ENV == "development"
+            ? (req.headers.host ? `http://${req.headers.host}` : "http://localhost:3000")
+            : "https://lapse.hackclub.com";
+
         const redirectUri = `${req.headers.origin || process.env.NEXTAUTH_URL || defaultUriBase}/api/authSlack`;
         
         const tokenResponse = await fetch("https://slack.com/api/oauth.v2.access", {

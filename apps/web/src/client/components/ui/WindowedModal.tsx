@@ -7,6 +7,7 @@ export function WindowedModal({
   children,
   title,
   description,
+  shortDescription,
   icon,
   isOpen,
   setIsOpen
@@ -16,13 +17,17 @@ export function WindowedModal({
   icon: IconGlyph;
   title: string;
   description: string;
+  shortDescription?: string;
 }>) {
+  shortDescription ??= description;
+
   return (
     <Modal isOpen={isOpen}>
       <ModalHeader
         icon={icon}
         title={title}
         description={description}
+        shortDescription={shortDescription}
         showCloseButton={true}
         onClose={() => setIsOpen(false)}
       />

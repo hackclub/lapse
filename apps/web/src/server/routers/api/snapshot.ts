@@ -7,10 +7,9 @@ import { apiResult, apiErr, apiOk, oneOf } from "@/shared/common";
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { logRequest } from "@/server/serverCommon";
+import { database } from "@/server/db";
 
 import * as db from "@/generated/prisma";
-
-const database = new db.PrismaClient();
 
 /**
  * Converts a database representation of a snapshot to a runtime (API) one.
