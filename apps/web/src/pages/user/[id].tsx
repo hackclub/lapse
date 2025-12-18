@@ -152,9 +152,9 @@ export default function Page() {
 
   return (
     <RootLayout showHeader={true} title={user ? `${user.displayName} (@${user.handle}) - Lapse` : "Lapse"}>
-      <div className="px-16">
-        <div className="flex justify-between items-center px-16">
-          <div className="flex gap-8">
+      <div className="px-8 py-8 sm:py-0 sm:px-16">
+        <div className="flex flex-col gap-6 sm:gap-0 sm:flex-row justify-between items-center sm:px-16">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 w-full sm:w-auto">
             <ProfilePicture
               user={user}
               size="lg"
@@ -214,7 +214,7 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
             { user && user.slackId && (
               <Button icon="slack-fill" onClick={() => window.open(`https://hackclub.slack.com/team/${user.slackId}`, "_blank")}>
                 Open in Slack
