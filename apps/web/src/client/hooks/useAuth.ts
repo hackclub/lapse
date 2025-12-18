@@ -1,53 +1,20 @@
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect } from "react";
 
-import type { User } from "@/client/api";
-import { trpc } from "@/client/trpc";
-import { useOnce } from "@/client/hooks/useOnce";
-import { useCache } from "@/client/hooks/useCache";
+import { useAuthContext } from "@/client/context/AuthContext";
 
 export function useAuth(required: boolean) {
     const router = useRouter();
-    
-    const [userCache, setUserCache] = useCache<User>("user");
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const { currentUser, isLoading, signOut } = useAuthContext();
 
-    useOnce(async () => {
-        console.log("(useAuth.ts) authenticating...");
-        const req = await trpc.user.myself.query({});
-
-        console.log("(useAuth.ts) response:", req);
-
-        if (!req.ok || req.data.user === null) {
-            console.log("(useAuth.ts) user is not authenticated");
-            setUserCache(null);
-
-            if (required) {
-                router.push("/auth");
-            }
-
-            setIsLoading(false);
-            return;
+    useEffect(() => {
+        if (!isLoading && required && currentUser === null) {
+            router.push("/auth");
         }
-
-        console.log("(useAuth.ts) user is authenticated");
-        setUserCache(req.data.user);
-
-        setCurrentUser(req.data.user);
-        setIsLoading(false);
-    });
-
-    async function signOut() {
-        console.log("(useAuth.ts) signing out...");
-        await trpc.user.signOut.mutate({});
-        setCurrentUser(null);
-        router.push("/");
-        router.reload();
-    };
+    }, [isLoading, required, currentUser, router]);
 
     return {
-        currentUser: isLoading ? userCache : currentUser,
+        currentUser,
         isLoading,
         signOut
     };
