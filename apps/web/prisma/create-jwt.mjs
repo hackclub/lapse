@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { parseArgs } from "node:util";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../src/generated/prisma/index.js";
+import { PrismaClient } from "../src/generated/prisma/client.js";
 
 /**
  * @param {string} userId
