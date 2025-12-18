@@ -50,7 +50,6 @@ export default function Page() {
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(null);
-  const [frameCount, setFrameCount] = useState(0);
   const [currentTimelapseId, setCurrentTimelapseId] = useState<number | null>(null);
   const [needsVideoSource, setNeedsVideoSource] = useState(false);
   const [currentSession] = useState<number>(Date.now());
@@ -63,7 +62,6 @@ export default function Page() {
 
   const [isFrozen, setIsFrozen] = useState(false);
   const isFrozenRef = useRef(false);
-  const frameCountRef = useRef(0);
 
   const setupPreviewRef = useRef<HTMLVideoElement>(null);
   const mainPreviewRef = useRef<HTMLVideoElement>(null);
@@ -125,9 +123,6 @@ export default function Page() {
       console.log("(create.tsx) total elapsed time:", totalElapsedTime);
     }
 
-    const lastFrameCount = snapshots.length;
-    setFrameCount(lastFrameCount);
-    frameCountRef.current = lastFrameCount;
     setCurrentTimelapseId(activeTimelapse.id);
     setStartedAt(adjustedStartTime);
     setIsCreated(true);
@@ -168,16 +163,11 @@ export default function Page() {
     const activeTimelapseId = timelapseId ?? currentTimelapseId;
     if (activeTimelapseId == null)
       throw new Error("captureFrame() was called, but currentTimelapseId is null");
-
-    const newFrameCount = frameCountRef.current;
-    frameCountRef.current += 1;
     
     deviceStorage.saveSnapshot({
       createdAt: Date.now(),
       session: currentSession
     });
-
-    setFrameCount(newFrameCount);
   }, [recorder, currentTimelapseId, currentSession]);
 
   async function onCreate() {
@@ -194,8 +184,6 @@ export default function Page() {
 
       const now = new Date();
       setStartedAt(now);
-      setFrameCount(0);
-      frameCountRef.current = 0;
       setIsCreated(true);
 
       const timelapseId = await deviceStorage.saveTimelapse({
