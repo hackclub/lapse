@@ -11,7 +11,7 @@ import { ApiDate, PublicId } from "@/server/routers/common";
 import { getTimelapseById } from "@/server/routers/api/timelapse";
 import { database } from "@/server/db";
 
-import * as db from "@/generated/prisma";
+import * as db from "@/generated/prisma/client";
 
 export type Comment = z.infer<typeof CommentSchema>;
 export const CommentSchema = z.object({

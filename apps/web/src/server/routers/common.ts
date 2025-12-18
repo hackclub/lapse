@@ -1,6 +1,6 @@
 import z from "zod";
 
-import type * as db from "@/generated/prisma";
+import type * as db from "@/generated/prisma/client";
 
 /**
  * A 12-character Nano ID, used to represent all public entities.

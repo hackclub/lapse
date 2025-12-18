@@ -18,7 +18,7 @@ import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } fr
 import { CommentSchema, DbComment, dtoComment } from "@/server/routers/api/comment";
 import { database } from "@/server/db";
 
-import * as db from "@/generated/prisma";
+import * as db from "@/generated/prisma/client";
 const s3 = new S3Client({
     region: "auto",
     endpoint: `https://${env.S3_ENDPOINT}`,

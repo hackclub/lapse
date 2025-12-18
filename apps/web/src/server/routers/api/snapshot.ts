@@ -9,7 +9,7 @@ import { ApiDate, PublicId } from "@/server/routers/common";
 import { logRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
 
-import * as db from "@/generated/prisma";
+import * as db from "@/generated/prisma/client";
 
 /**
  * Converts a database representation of a snapshot to a runtime (API) one.

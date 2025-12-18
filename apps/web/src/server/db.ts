@@ -1,8 +1,7 @@
 import "@/server/allow-only-server";
 
-import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma";
+import { PrismaClient } from "@/generated/prisma/client";
 
 if (!process.env.DATABASE_URL)
     throw new Error("DATABASE_URL environment variable is not set");
@@ -11,12 +10,12 @@ const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
 };
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 
 export const database =
     globalForPrisma.prisma ??
     new PrismaClient({ adapter });
 
-if (process.env.NODE_ENV !== "production")
+if (process.env.NODE_ENV !== "production") {
     globalForPrisma.prisma = database;
+}

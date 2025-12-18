@@ -19,6 +19,12 @@ pnpm install
 cp ./apps/web/.env.example ./apps/web/.env
 ```
 
+You also need a PostgreSQL database running. The simplest way to get one up and running is via Docker:
+```bash
+# In this case, your DATABASE_URL environment variable would be "postgresql://postgres:postgres@localhost:5432/lapse?schema=public".
+docker run -d --name lapse-db -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
+```
+
 You'll have to change some environment variables in `./apps/web/.env`. Don't worry - everything is explained in the comments in the `.env` file! After you're done, run these two commands in parallel to get started:
 
 ```bash

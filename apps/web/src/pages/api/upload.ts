@@ -9,7 +9,7 @@ import { logError, logInfo, logNextRequest } from "@/server/serverCommon";
 import { ApiResult, apiErr, Empty, apiOk } from "@/shared/common";
 import { getAuthenticatedUser } from "@/server/auth";
 
-import * as db from "@/generated/prisma";
+import * as db from "@/generated/prisma/client";
 
 // POST /api/upload
 //    Consumes an upload token, and starts uploading a file to the S3 bucket associated with the

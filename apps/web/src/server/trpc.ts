@@ -5,7 +5,7 @@ import { NextApiRequest, NextApiResponse } from "next";
 
 import { getAuthenticatedUser } from "@/server/auth";
 
-import type { User } from "@/generated/prisma";
+import type { User } from "@/generated/prisma/client";
 
 export interface Context {
   req: NextApiRequest;

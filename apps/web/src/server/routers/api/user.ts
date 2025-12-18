@@ -11,7 +11,7 @@ import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { database } from "@/server/db";
 
-import * as db from "@/generated/prisma";
+import * as db from "@/generated/prisma/client";
 
 /**
  * Represents the permissions of a user.

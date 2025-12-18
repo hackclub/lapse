@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { NextApiRequest } from "next";
 import { inspect } from "node:util";
 
-import * as db from "@/generated/prisma";
+import * as db from "@/generated/prisma/client";
 
 function inlineStringify(x: unknown) {
     return inspect(x, {
