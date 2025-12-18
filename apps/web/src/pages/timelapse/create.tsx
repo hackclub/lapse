@@ -83,28 +83,10 @@ export default function Page() {
   useEffect(() => {
     async function enumerateCameras() {
       try {
-        let devices = await navigator.mediaDevices.enumerateDevices();
-        let cameras = devices.filter(device => device.kind === "videoinput");
-        
-        if (cameras.length > 0 && (!cameras[0].label || cameras[0].label === "")) {
-          try {
-            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-
-            tempStream.getTracks().forEach(track => track.stop());
-            
-            devices = await navigator.mediaDevices.enumerateDevices();
-            cameras = devices.filter(device => device.kind === "videoinput");
-          }
-          catch (permErr) {
-            console.log("(create.tsx) Could not get camera permissions:", permErr);
-          }
-        }
-        
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(device => device.kind === "videoinput");
+        console.log("(create.tsx) Enumerated cameras:", cameras);
         setAvailableCameras(cameras);
-        
-        if (cameras.length > 0 && !selectedCameraId) {
-          setSelectedCameraId(cameras[0].deviceId);
-        }
       }
       catch (err) {
         console.log("(create.tsx) Could not enumerate cameras:", err);
@@ -341,10 +323,35 @@ export default function Page() {
       let stream: MediaStream;
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: cameraId } },
-          audio: false
-        });
+        if (cameraId && cameraId.trim().length > 0) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: cameraId } },
+            audio: false
+          });
+        }
+        else {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+          
+          stream.getTracks().forEach(track => track.stop());
+          
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cameras = devices.filter(device => device.kind === "videoinput" && device.deviceId);
+          setAvailableCameras(cameras);
+ 
+          if (cameras.length > 0) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: { exact: cameras[0].deviceId } },
+              audio: false
+            });
+            setSelectedCameraId(cameras[0].deviceId);
+          }
+          else {
+            throw new Error("No cameras available");
+          }
+        }
       }
       catch (apiErr) {
         console.error("(create.tsx) could not request permissions for camera stream.", apiErr);
@@ -353,6 +360,15 @@ export default function Page() {
       }
 
       console.log("(create.tsx) stream retrieved!", stream);
+
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(device => device.kind === "videoinput");
+        setAvailableCameras(cameras);
+      }
+      catch (err) {
+        console.log("(create.tsx) Could not re-enumerate cameras:", err);
+      }
 
       const cameraLabel = stream
         .getVideoTracks()[0]
@@ -621,14 +637,23 @@ export default function Page() {
             disabled={changingSource}
           >
             <option disabled value="NONE">(none)</option>
-            {availableCameras.length > 0 && (
+            {availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0 ? (
               <optgroup label="Cameras">
-                {availableCameras.map((camera) => (
-                  <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
-                    {camera.label || `Camera ${availableCameras.indexOf(camera) + 1}`}
-                  </option>
-                ))}
+                {availableCameras
+                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                  .map((camera, index) => {
+                    const displayLabel = camera.label && camera.label.trim().length > 0 
+                      ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
+                      : `Camera ${index + 1}`;
+                    return (
+                      <option key={camera.deviceId || index} value={`CAMERA:${camera.deviceId}`}>
+                        {displayLabel}
+                      </option>
+                    );
+                  })}
               </optgroup>
+            ) : (
+              <option value="CAMERA:">Camera</option>
             )}
             <option value="SCREEN">{screenLabel}</option>
           </SelectInput>
