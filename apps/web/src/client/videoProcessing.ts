@@ -1,6 +1,5 @@
 import * as mediabunny from "mediabunny";
 
-import { trpc } from "@/client/trpc";
 import { LocalTimelapse } from "@/client/deviceStorage";
 import { ascending, assert } from "@/shared/common";
 import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
@@ -70,46 +69,24 @@ export async function videoConcat(streams: Blob[]) {
     const bufTarget = new mediabunny.BufferTarget();
     const out = new mediabunny.Output({
         target: bufTarget,
-        format: new mediabunny.WebMOutputFormat()
+        format: new mediabunny.MkvOutputFormat()
     });
 
     console.log("(videoProcessing.ts) - output:", out);
 
-    const firstVideoTracks = await inputs[0].getVideoTracks();
-    assert(firstVideoTracks.length > 0, "The first media file passed in had no video tracks.");
-    console.log("(videoProcessing.ts) - tracks of inputs[0]:", firstVideoTracks);
+    const inputPrimaryTracks = await Promise.all(inputs.map(x => x.getPrimaryVideoTrack()));
+    assert(inputPrimaryTracks.every(x => x != null), "One of the inputs has a null primary track.");
+
+    const firstTrack = inputPrimaryTracks[0];
 
     const supportedCodecs = out.format.getSupportedVideoCodecs();
     const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
         supportedCodecs,
         {
-            width: firstVideoTracks[0].codedWidth,
-            height: firstVideoTracks[0].codedHeight
+            width: firstTrack.codedWidth,
+            height: firstTrack.codedHeight
         }
     );
-
-    trpc.tracing.traceEncodeStart.query({
-        supportedCodecs,
-        usedCodec: videoCodec,
-        inputs: await Promise.all(
-            inputs.map(async (x) => {
-                const video = await x.getPrimaryVideoTrack();
-                if (video == null)
-                    return null;
-
-                return {
-                    codec: video.codec,
-                    codedWidth: video.codedWidth,
-                    codedHeight: video.codedHeight,
-                    displayWidth: video.displayWidth,
-                    displayHeight: video.displayHeight,
-                    duration: await video.computeDuration()
-                };
-            })
-        )
-    }).then(res => {
-        console.log("(videoProcessing.ts) tracing.traceEncodeStart sent.", res);
-    });
 
     if (!videoCodec) {
         alert("Your browser doesn't seem to support video encoding.");
@@ -118,13 +95,29 @@ export async function videoConcat(streams: Blob[]) {
 
     console.log(`(videoProcessing.ts) using ${videoCodec} to encode the video`);
 
-    assert(firstVideoTracks[0].codec != null, "First video track has no codec (or an unsupported one)");
-    const source = new mediabunny.VideoSampleSource({
-        codec: videoCodec,
-        bitrate: mediabunny.QUALITY_HIGH,
-        sizeChangeBehavior: "contain",
-        latencyMode: "realtime"
-    });
+    // If all tracks have the same metadata, and have the same codec, we can remux instead of re-encode - which takes a LOT less time.
+    // We also get better quality with remuxing. The filesizes might be a bit larger, though.
+    // We prefer remuxing over re-encoding.
+    const canRemux = inputPrimaryTracks.every(
+        x => (
+            firstTrack.codec == x.codec &&
+            firstTrack.codedWidth == x.codedWidth &&
+            firstTrack.codedHeight == x.codedHeight &&
+            firstTrack.displayWidth == x.displayWidth &&
+            firstTrack.displayHeight == x.displayHeight
+        )
+    );
+        
+    const source = canRemux
+        ? new mediabunny.EncodedVideoPacketSource(inputPrimaryTracks[0].codec!)
+        : (
+            new mediabunny.VideoSampleSource({
+                codec: videoCodec,
+                bitrate: mediabunny.QUALITY_HIGH,
+                sizeChangeBehavior: "contain",
+                latencyMode: "realtime"
+            })
+        );
 
     out.addVideoTrack(source, { frameRate: TIMELAPSE_FPS });
 
@@ -143,35 +136,74 @@ export async function videoConcat(streams: Blob[]) {
             throw new Error("A video input has no primary video track.");
         }
 
-        const sink = new mediabunny.VideoSampleSink(video);
+        const decoderConfig = await video.getDecoderConfig();
+        assert(decoderConfig != null, "Could not get the decoder config from the input");
 
         let localFirstTimestamp: number | null = null;
         let localLastTimestamp = 0;
 
-        for await (const sample of sink.samples()) {
-            if (sample.duration == 0) {
-                console.warn("(videoProcessing.ts) uh oh... one of the samples has a duration of 0! skipping!", sample);
-                continue;
+        if (canRemux) {
+            // Best-case scenario - all inputs have compatible parameters (codec, resolution, framerate), so we can simply concatenate the already encoded packets!
+            assert(source instanceof mediabunny.EncodedVideoPacketSource, "source was not a EncodedVideoPacketSource");
+            const sink = new mediabunny.EncodedPacketSink(video);
+
+            for await (const packet of sink.packets()) {
+                if (packet.duration == 0) {
+                    console.warn("(videoProcessing.ts) uh oh... one of the packets has a duration of 0! skipping!", packet);
+                    continue;
+                }
+
+                const origTimestamp = packet.timestamp;
+                if (localFirstTimestamp === null) {
+                    localFirstTimestamp = origTimestamp;
+                }
+
+                const relTimestamp = origTimestamp - localFirstTimestamp;
+
+                await source.add(
+                    packet.clone({
+                        timestamp: ((relTimestamp * timeScale) + globalTimeOffset),
+                        duration: packet.duration * timeScale
+                    }),
+                    { decoderConfig }
+                );
+
+                localLastTimestamp = origTimestamp;
             }
 
-            const origTimestamp = sample.timestamp;
-
-            if (localFirstTimestamp === null) {
-                localFirstTimestamp = origTimestamp;
+            if (localFirstTimestamp != null) {
+                globalTimeOffset += (localLastTimestamp - localFirstTimestamp) * timeScale;
             }
-
-            const relTimestamp = origTimestamp - localFirstTimestamp;
-
-            sample.setTimestamp((relTimestamp * timeScale) + globalTimeOffset);
-            sample.setDuration(sample.duration * timeScale);
-
-            await source.add(sample);
-
-            localLastTimestamp = origTimestamp;
         }
+        else {
+            // This is the worst-case scenario - we have to re-encode on the client. This might take a while.
+            assert(source instanceof mediabunny.VideoSampleSource, "source was not a VideoSampleSource");
+            const sink = new mediabunny.VideoSampleSink(video);
 
-        if (localFirstTimestamp != null) {
-            globalTimeOffset += (localLastTimestamp - localFirstTimestamp) * timeScale;
+            for await (const sample of sink.samples()) {
+                if (sample.duration == 0) {
+                    console.warn("(videoProcessing.ts) uh oh... one of the samples has a duration of 0! skipping!", sample);
+                    continue;
+                }
+
+                const origTimestamp = sample.timestamp;
+                if (localFirstTimestamp === null) {
+                    localFirstTimestamp = origTimestamp;
+                }
+
+                const relTimestamp = origTimestamp - localFirstTimestamp;
+
+                sample.setTimestamp((relTimestamp * timeScale) + globalTimeOffset);
+                sample.setDuration(sample.duration * timeScale);
+
+                await source.add(sample);
+
+                localLastTimestamp = origTimestamp;
+            }
+
+            if (localFirstTimestamp != null) {
+                globalTimeOffset += (localLastTimestamp - localFirstTimestamp) * timeScale;
+            }
         }
     }
     

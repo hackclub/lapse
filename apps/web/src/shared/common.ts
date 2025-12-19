@@ -412,3 +412,10 @@ export function validateUrl(url: string) {
 export function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Checks if all elements of an array are equal.
+ */
+export function allEqual<T>(array: T[]) {
+    return array.every(x => x == array[0]);
+}
