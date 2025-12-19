@@ -5,8 +5,7 @@ import { z } from "zod";
 import { apiResult, assert, descending, apiErr, when, apiOk } from "@/shared/common";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { HackatimeUserApi } from "@/server/hackatime";
-import { logError, logWarning, logRequest } from "@/server/serverCommon";
+import { logError, logRequest } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { database } from "@/server/db";
@@ -43,7 +42,6 @@ export const UserHandle = z.string().min(3).max(16);
 export const UserDisplayName = z.string().min(1).max(24);
 export const UserBio = z.string().max(160).default("");
 export const UserUrlList = z.array(z.url().max(64).min(1)).max(4); 
-export const UserHackatimeApiKey = z.uuid().optional();
 
 /**
  * Data associated with a user model that should be exposed only to the represented user or
@@ -52,8 +50,7 @@ export const UserHackatimeApiKey = z.uuid().optional();
 export type PrivateUserData = z.infer<typeof PrivateUserDataSchema>;
 export const PrivateUserDataSchema = z.object({
     permissionLevel: PermissionLevelSchema,
-    devices: z.array(KnownDeviceSchema),
-    hackatimeApiKey: UserHackatimeApiKey
+    devices: z.array(KnownDeviceSchema)
 });
 
 /**
@@ -153,8 +150,7 @@ export function dtoUser(entity: DbCompositeUser): User {
         ...dtoPublicUser(entity),
         private: {
             permissionLevel: entity.permissionLevel,
-            devices: entity.devices.map(dtoKnownDevice),
-            hackatimeApiKey: entity.hackatimeApiKey ?? undefined,
+            devices: entity.devices.map(dtoKnownDevice)
         }
     };
 }
@@ -260,8 +256,7 @@ export default router({
                     handle: UserHandle.optional(),
                     displayName: UserDisplayName.optional(),
                     bio: UserBio.optional(),
-                    urls: UserUrlList.optional(),
-                    hackatimeApiKey: UserHackatimeApiKey.optional()
+                    urls: UserUrlList.optional()
                 })
             })
         )
@@ -285,21 +280,8 @@ export default router({
                 ...when(changes.displayName !== undefined, { displayName: changes.displayName }),
                 ...when(changes.bio !== undefined, { bio: changes.bio }),
                 ...when(changes.handle !== undefined, { handle: changes.handle }),
-                ...when(changes.urls !== undefined, { urls: changes.urls }),
-                ...when(changes.hackatimeApiKey !== undefined, { hackatimeApiKey: changes.hackatimeApiKey })
+                ...when(changes.urls !== undefined, { urls: changes.urls })
             };
-
-            if (changes.hackatimeApiKey) {
-                const hackatime = new HackatimeUserApi(changes.hackatimeApiKey);
-
-                try {
-                    await hackatime.currentUserStats();
-                }
-                catch (error) {
-                    logWarning("user.update", "Error caught when verifying a Hackatime API key!", { error });
-                    return apiErr("HACKATIME_ERROR", "You provided an invalid Hackatime API key!");
-                }
-            }
 
             const updatedUser = await database.user.update({
                 where: { id: req.input.id },

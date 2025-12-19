@@ -10,7 +10,7 @@ import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { decryptVideo } from "@/server/encryption";
 import { env } from "@/server/env";
-import { HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
+import { HackatimeAdminApi, HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
 import { logError, logInfo, logRequest } from "@/server/serverCommon";
 import { generateThumbnail } from "@/server/videoProcessing";
 import { Actor, ApiDate, PublicId } from "@/server/routers/common";
@@ -767,10 +767,23 @@ export default router({
             if (timelapse.hackatimeProject)
                 return apiErr("HACKATIME_ERROR", "Timelapse already has an associated Hackatime project");
 
-            if (!timelapse.owner.hackatimeApiKey)
-                return apiErr("ERROR", "You don't have a Hackatime API key assigned to your profile!");
+            if (!timelapse.owner.slackId)
+                return apiErr("ERROR", "You must have a linked Slack account to sync with Hackatime!");
 
-            const hackatime = new HackatimeUserApi(timelapse.owner.hackatimeApiKey);
+            let userApiKey: string | null;
+
+            if (process.env.NODE_ENV !== "production" && env.DEV_HACKATIME_FALLBACK_KEY) {
+                userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
+            }
+            else {
+                const adminApi = new HackatimeAdminApi(env.HACKATIME_ADMIN_KEY);
+                userApiKey = await adminApi.tokenForUser(timelapse.owner.slackId);
+            }
+
+            if (!userApiKey)
+                return apiErr("ERROR", "You don't have a Hackatime account! Create one at https://hackatime.hackclub.com.");
+
+            const hackatime = new HackatimeUserApi(userApiKey);
             
             const snapshots = await database.snapshot.findMany({
                 where: { timelapseId: timelapse.id }

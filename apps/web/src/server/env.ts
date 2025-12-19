@@ -86,12 +86,27 @@ export const env = {
     /**
      * The name of the Sentry project.
      */
-    get SENTRY_PROJECT() { return required("SENTRY_PROJECT") }
+    get SENTRY_PROJECT() { return required("SENTRY_PROJECT") },
+
+    /**
+     * The Hackatime admin API key used to fetch user tokens.
+     */
+    get HACKATIME_ADMIN_KEY() { return required("HACKATIME_ADMIN_KEY") },
+
+    /**
+     * A fallback Hackatime API key used in development when an admin key is unavailable.
+     * Only considered when `NODE_ENV` is not `"production"`.
+     */
+    get DEV_HACKATIME_FALLBACK_KEY() { return optional("DEV_HACKATIME_FALLBACK_KEY") }
 };
 
 function required(name: string) {
     if (process.env[name] === undefined)
         throw new Error(`Environment variable ${name} not defined.`);
 
+    return process.env[name];
+}
+
+function optional(name: string) {
     return process.env[name];
 }

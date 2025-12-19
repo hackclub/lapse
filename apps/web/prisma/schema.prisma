@@ -46,7 +46,6 @@ model User {
   profilePictureUrl         String
   bio                       String            @default("")
   urls                      String[]          @default([])
-  hackatimeApiKey           String?
   slackId                   String?
   lastHeartbeat             DateTime          @default(now())
 

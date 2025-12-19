@@ -32,8 +32,7 @@ async function main() {
             bio: "",
             urls: [],
             permissionLevel: "USER",
-            createdAt: new Date(),
-            hackatimeApiKey: null,
+            createdAt: new Date()
         },
     });
 

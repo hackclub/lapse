@@ -53,10 +53,6 @@ export default function Page() {
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [hackatimeProject, setHackatimeProject] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
-  
-  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
-  const [hackatimeApiKey, setHackatimeApiKey] = useState("");
-  const [isSettingApiKey, setIsSettingApiKey] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -276,12 +272,6 @@ export default function Page() {
     if (!timelapse || !currentUser)
       return;
 
-    if (!currentUser.private?.hackatimeApiKey) {
-      setHackatimeApiKey("");
-      setApiKeyModalOpen(true);
-      return;
-    }
-
     setHackatimeProject("");
     setSyncModalOpen(true);
   };
@@ -317,43 +307,6 @@ export default function Page() {
   };
 
   const isSyncDisabled = !hackatimeProject.trim() || isSyncing;
-
-  async function handleSetApiKey() {
-    if (!hackatimeApiKey.trim() || !currentUser) 
-      return;
-
-    try {
-      setIsSettingApiKey(true);
-
-      const result = await trpc.user.update.mutate({
-        id: currentUser!.id,
-        changes: {
-          hackatimeApiKey: hackatimeApiKey.trim()
-        }
-      });
-
-      if (result.ok) {
-        setApiKeyModalOpen(false);
-        setHackatimeApiKey("");
-
-        // Now that API key is set, open sync modal
-        setHackatimeProject("");
-        setSyncModalOpen(true);
-      } 
-      else {
-        setRegularError(`Failed to set API key: ${result.error}`);
-      }
-    } 
-    catch (error) {
-      console.error("([id].tsx) error setting Hackatime API key:", error);
-      setRegularError(error instanceof Error ? error.message : "An error occurred while setting the API key.");
-    }
-    finally {
-      setIsSettingApiKey(false);
-    }
-  };
-
-  const isApiKeyDisabled = !hackatimeApiKey.trim() || isSettingApiKey;
 
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;
@@ -581,38 +534,6 @@ export default function Page() {
 
           <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
             {isSyncing ? "Syncing..." : "Sync with Hackatime"}
-          </Button>
-        </div>
-      </WindowedModal>
-
-      <WindowedModal
-        icon="private"
-        title="Set Hackatime API Key"
-        description="Enter your Hackatime API key to sync timelapses with your Hackatime account."
-        isOpen={apiKeyModalOpen}
-        setIsOpen={setApiKeyModalOpen}
-      >
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3 p-4 rounded-lg bg-blue/10 border border-blue/20">
-            <Icon glyph="info" size={24} className="text-blue flex-shrink-0" />
-            <div>
-              <p className="font-bold text-blue">Hackatime API Key</p>
-              <p className="text-smoke">You can find your API key in your Hackatime account settings.</p>
-            </div>
-          </div>
-
-          <TextInput
-            field={{
-              label: "API Key",
-              description: "Your Hackatime API key for syncing timelapses."
-            }}
-            value={hackatimeApiKey}
-            onChange={setHackatimeApiKey}
-            type="secret"
-          />
-
-          <Button onClick={handleSetApiKey} disabled={isApiKeyDisabled} kind="primary">
-            {isSettingApiKey ? "Setting..." : "Set API Key"}
           </Button>
         </div>
       </WindowedModal>

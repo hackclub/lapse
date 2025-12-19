@@ -150,8 +150,7 @@ export default async function handler(
                     bio: "",
                     urls: [],
                     permissionLevel: "USER",
-                    createdAt: new Date(),
-                    hackatimeApiKey: null,
+                    createdAt: new Date()
                 },
             });
         }

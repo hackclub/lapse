@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
 
 import type { KnownDevice } from "@/server/routers/api/user";
@@ -9,7 +9,6 @@ import { deviceStorage, LocalDevice } from "@/client/deviceStorage";
 import { useAuth } from "@/client/hooks/useAuth";
 
 import { WindowedModal } from "../WindowedModal";
-import { TextInput } from "../TextInput";
 import { Button } from "../Button";
 import { PasskeyModal } from "../PasskeyModal";
 import { ErrorModal } from "../ErrorModal";
@@ -20,10 +19,8 @@ export function SettingsView({ isOpen, setIsOpen }: {
 }) {
   const auth = useAuth(false);
 
-  const [hackatimeApiKey, setHackatimeApiKey] = useState("");
   const [passkeyVisible, setPasskeyVisible] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
-  const [originalHackatimeApiKey, setOriginalHackatimeApiKey] = useState("");
 
   const [currentDeviceForPin, setCurrentDeviceForPin] = useState<string | null>(null);
   const [deviceToRemove, setDeviceToRemove] = useState<string | null>(null);
@@ -34,56 +31,6 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
   const [devices, setDevices] = useState<KnownDevice[]>([]);
   const [localDevices, setLocalDevices] = useState<LocalDevice[]>([]);
-
-  useEffect(() => {
-    if (!auth.currentUser?.private.hackatimeApiKey)
-      return;
-
-    setHackatimeApiKey(auth.currentUser.private.hackatimeApiKey);
-    setOriginalHackatimeApiKey(auth.currentUser.private.hackatimeApiKey);
-  }, [auth]);
-
-  const saveApiKey = useCallback(async (apiKey: string) => {
-    if (!auth.currentUser)
-      return;
-
-    const res = await trpc.user.update.mutate({
-      id: auth.currentUser.id,
-      changes: { hackatimeApiKey: apiKey || undefined }
-    });
-
-    if (!res.ok) {
-      console.error("(SettingsView.tsx) couldn't update Hackatime API key!", res);
-      setError(res.message);
-      return;
-    }
-
-    console.log("(SettingsView.tsx) Hackatime API key updated!", res);
-  }, [auth]);
-
-  const isValidUUID = (value: string): boolean => {
-    if (!value)
-      return true;
-    
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(value);
-  };
-
-  function handleSaveSettings() {
-    if (!isValidUUID(hackatimeApiKey)) {
-      setError("That isn't a valid Hackatime API key!");
-      return;
-    }
-
-    saveApiKey(hackatimeApiKey);
-    setOriginalHackatimeApiKey(hackatimeApiKey);
-    setIsOpen(false);
-  }
-
-  function handleCancelSettings() {
-    setHackatimeApiKey(originalHackatimeApiKey);
-    setIsOpen(false);
-  }
 
   useEffect(() => {
     if (!isOpen)
@@ -166,10 +113,6 @@ export function SettingsView({ isOpen, setIsOpen }: {
       setLocalDevices(await deviceStorage.getAllDevices());
     }
   }
-  
-  const handleHackatimeApiKeyChange = useCallback((value: string) => {
-    setHackatimeApiKey(value);
-  }, []);
 
   function getCurrentDevicePasskey(): string | null {
     return localDevices.find(d => d.thisDevice)?.passkey || null;
@@ -192,16 +135,6 @@ export function SettingsView({ isOpen, setIsOpen }: {
       setIsOpen={setIsOpen}
     >
       <div className="flex flex-col gap-6">
-        <TextInput
-          field={{
-            label: "Hackatime API Key",
-            description: "Your API key for importing timelapses to Hackatime"
-          }}
-          value={hackatimeApiKey}
-          onChange={handleHackatimeApiKeyChange}
-          type="secret"
-        />
-
         <div className="flex flex-col gap-2">
           <div className="flex flex-col">
             <h3 className="font-bold">Device Passkey</h3>
@@ -284,17 +217,10 @@ export function SettingsView({ isOpen, setIsOpen }: {
         <div className="flex gap-4 pt-4">
           <Button
             kind="primary"
-            onClick={handleSaveSettings}
+            onClick={() => setIsOpen(false)}
             className="flex-1"
           >
-            Save
-          </Button>
-          <Button
-            kind="regular"
-            onClick={handleCancelSettings}
-            className="flex-1"
-          >
-            Cancel
+            Close
           </Button>
         </div>
       </div>

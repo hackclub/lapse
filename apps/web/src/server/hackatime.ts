@@ -276,7 +276,7 @@ export class HackatimeAdminApi extends HackatimeBase {
             throw new Error(`Could not get token for user ${slackId}.`);
         }
 
-        if (!isNonEmptyArray(res.rows) || !isNonEmptyArray(res.rows[0]))
+        if (!isNonEmptyArray(res.rows) || !isNonEmptyArray(res.rows[0].token))
             return null;
 
         return res.rows[0].token[1];
