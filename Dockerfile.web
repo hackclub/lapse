@@ -57,6 +57,9 @@ RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     NODE_ENV=production pnpm turbo run build
 
+# Apply database migrations
+RUN pnpm prisma migrate deploy --schema=apps/web/prisma/schema.prisma
+
 ############################  runner  ############################
 FROM base AS runner
 WORKDIR /app
@@ -86,4 +89,4 @@ ENV PATH="$PNPM_HOME:$PATH"
 EXPOSE 3000
 
 # Start NextJS (standalone ships server.js)
-CMD ["sh","-c","npx prisma migrate deploy --schema=apps/web/prisma/schema.prisma && HOSTNAME=0.0.0.0 node apps/web/server.js"]
+CMD ["sh","-c","HOSTNAME=0.0.0.0 node apps/web/server.js"]
