@@ -47,6 +47,8 @@ export default function Page() {
   const [cameraLabel, setCameraLabel] = useState("Camera");
   const [screenLabel, setScreenLabel] = useState("Screen");
   const [changingSource, setChangingSource] = useState(false);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]); // this should help make this better
+  const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(null);
@@ -77,6 +79,27 @@ export default function Page() {
       : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
       : `🔴 REC: ${name} - Lapse`;
   }, [name, setupModalOpen, isFrozen]);
+
+  useEffect(() => {
+    async function enumerateCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(device => device.kind === "videoinput");
+        console.log("(create.tsx) Enumerated cameras:", cameras);
+        setAvailableCameras(cameras);
+      }
+      catch (err) {
+        console.log("(create.tsx) Could not enumerate cameras:", err);
+      }
+    }
+    
+    enumerateCameras();
+    
+    navigator.mediaDevices.addEventListener("devicechange", enumerateCameras);
+    return () => {
+      navigator.mediaDevices.removeEventListener("devicechange", enumerateCameras);
+    };
+  }, []);
 
   useOnce(async () => {
     const activeTimelapse = await deviceStorage.getActiveTimelapse();
@@ -288,14 +311,41 @@ export default function Page() {
 
     console.log("(create.tsx) video source changed to", ev.target.value);
 
-    if (ev.target.value == "CAMERA") {
+    if (ev.target.value.startsWith("CAMERA:")) {
+
+      const cameraId = ev.target.value.substring(7);
       let stream: MediaStream;
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        });
+        if (cameraId && cameraId.trim().length > 0) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: cameraId } },
+            audio: false
+          });
+        }
+        else {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+          
+          stream.getTracks().forEach(track => track.stop());
+          
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cameras = devices.filter(device => device.kind === "videoinput" && device.deviceId);
+          setAvailableCameras(cameras);
+ 
+          if (cameras.length > 0) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: { exact: cameras[0].deviceId } },
+              audio: false
+            });
+            setSelectedCameraId(cameras[0].deviceId);
+          }
+          else {
+            throw new Error("No cameras available");
+          }
+        }
       }
       catch (apiErr) {
         console.error("(create.tsx) could not request permissions for camera stream.", apiErr);
@@ -313,6 +363,7 @@ export default function Page() {
       disposeStreams();
       setCameraStream(stream);
       setVideoSourceKind("CAMERA");
+      setSelectedCameraId(cameraId);
       setCameraLabel(`Camera (${cameraLabel})`);
     }
     else if (ev.target.value == "SCREEN") {
@@ -571,12 +622,29 @@ export default function Page() {
           <SelectInput
             label="Video source"
             description="Record your screen, camera, or any other video source."
-            value={videoSourceKind}
+            value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
             onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
             disabled={changingSource}
           >
             <option disabled value="NONE">(none)</option>
-            <option value="CAMERA">{cameraLabel}</option>
+            {availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0 ? (
+              <optgroup label="Cameras">
+                {availableCameras
+                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                  .map((camera, index) => {
+                    const displayLabel = camera.label && camera.label.trim().length > 0 
+                      ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
+                      : `Camera ${index + 1}`;
+                    return (
+                      <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
+                        {displayLabel}
+                      </option>
+                    );
+                  })}
+              </optgroup>
+            ) : (
+              <option value="CAMERA:">Camera</option>
+            )}
             <option value="SCREEN">{screenLabel}</option>
           </SelectInput>
 
