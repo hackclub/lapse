@@ -13,7 +13,7 @@ export async function generateThumbnail(videoBuffer: Buffer): Promise<Buffer> {
     const inputPath = join(tempDir, `input-${randomUUID()}.mp4`);
     const outputPath = join(tempDir, `thumbnail-${randomUUID()}.jpg`);
     
-    const WIDTH = 480, HEIGHT = 360, QUALITY = 3;
+    const WIDTH = 1280, HEIGHT = 720, QUALITY = 5;
 
     try {
         await fs.writeFile(inputPath, videoBuffer);
@@ -22,7 +22,7 @@ export async function generateThumbnail(videoBuffer: Buffer): Promise<Buffer> {
             ffmpeg(inputPath)
                 .outputOptions([
                     "-frames:v 1",
-                    `-vf thumbnail,scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease,pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2`,
+                    `-vf thumbnail,scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT}`,
                     `-q:v ${QUALITY}`
                 ])
                 .output(outputPath)
