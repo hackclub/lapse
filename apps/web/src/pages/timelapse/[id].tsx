@@ -457,7 +457,7 @@ export default function Page() {
             </p>
           </div>
           
-          { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
+          { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && isOwned && (
             <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
               <Icon glyph="private-fill" size={32} className="text-yellow flex-shrink-0" />
               <p className="text-yellow">
