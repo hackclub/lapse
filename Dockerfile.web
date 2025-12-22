@@ -2,7 +2,7 @@
 
 ############################  base  ##############################
 FROM --platform=$TARGETPLATFORM node:25-alpine AS base
-RUN apk update && apk add --no-cache libc6-compat curl bash ffmpeg
+RUN apk update && apk add --no-cache libc6-compat curl bash ffmpeg jq
 
 # Install pnpm
 RUN npm install -g pnpm@latest
@@ -46,9 +46,9 @@ RUN printenv | grep -E '^(DATABASE_URL|JWT_SECRET|NEXT_PUBLIC_|PRIVATE_KEY_|S3_|
 
 # Fetch commit timestamp from GitHub API and set as build date
 RUN if [ -n "$SOURCE_COMMIT" ]; then \
-      COMMIT_DATE=$(curl -sf "https://api.github.com/repos/hackclub/lapse/commits/$SOURCE_COMMIT" | grep -m1 '"date"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/'); \
-      if [ -n "$COMMIT_DATE" ]; then \
-        TIMESTAMP_MS=$(($(date -d "$COMMIT_DATE" +%s) * 1000)); \
+      TIMESTAMP_MS=$(curl -sf "https://api.github.com/repos/hackclub/lapse/commits/$SOURCE_COMMIT" \
+        | jq -r '.commit.author.date | fromdateiso8601 * 1000'); \
+      if [ -n "$TIMESTAMP_MS" ] && [ "$TIMESTAMP_MS" != "null" ]; then \
         echo "NEXT_PUBLIC_BUILD_DATE=$TIMESTAMP_MS" >> ./apps/web/.env; \
       fi; \
     fi
