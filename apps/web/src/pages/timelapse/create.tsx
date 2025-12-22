@@ -20,6 +20,7 @@ import { useAuth } from "@/client/hooks/useAuth";
 import RootLayout from "@/client/components/RootLayout";
 import { TimeSince } from "@/client/components/TimeSince";
 import { Button } from "@/client/components/ui/Button";
+import { Modal, ModalHeader, ModalContent } from "@/client/components/ui/Modal";
 import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { LoadingModal } from "@/client/components/ui/LoadingModal";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
@@ -57,6 +58,7 @@ export default function Page() {
   const [needsVideoSource, setNeedsVideoSource] = useState(false);
   const [currentSession] = useState<number>(Date.now());
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
+  const [isDiscarding, setIsDiscarding] = useState(false);
   
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
@@ -67,7 +69,7 @@ export default function Page() {
   const isFrozenRef = useRef(false);
   const frameCountRef = useRef(0);
 
-  const setupPreviewRef = useRef<HTMLVideoElement>(null);
+
   const mainPreviewRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -159,12 +161,7 @@ export default function Page() {
     setSetupModalOpen(true);
   });
 
-  useEffect(() => {
-    if (!setupPreviewRef.current)
-      return;
 
-    setupPreviewRef.current.srcObject = currentStream;
-  }, [currentStream]);
 
   const captureFrame = useCallback(async (timelapseId?: number) => {
     if (isFrozenRef.current)
@@ -212,7 +209,16 @@ export default function Page() {
 
     let activeTimelapseId = currentTimelapseId;
 
-    if (!currentTimelapseId) {
+    if (isDiscarding && currentTimelapseId) {
+      console.log("(create.tsx) discarding previous timelapse:", currentTimelapseId);
+      await deviceStorage.deleteAllSnapshots();
+      await deviceStorage.deleteTimelapse(currentTimelapseId);
+      setCurrentTimelapseId(null);
+      activeTimelapseId = null;
+      setIsDiscarding(false);
+    }
+
+    if (!activeTimelapseId) {
       // Creating a new timelapse
 
       const now = new Date();
@@ -598,77 +604,127 @@ export default function Page() {
 
   return (
     <RootLayout showHeader={false}>
-      <WindowedModal
-        icon="clock-fill"
-        title={
-          needsVideoSource ? "Resume timelapse"
-          : isCreated ? "Update timelapse"
-          : "Create timelapse"
-        }
-        description={
-          needsVideoSource ? "Select your video source to resume recording your timelapse."
-          : isCreated ? "Update your timelapse settings."
-          : "After you click Create, your timelapse will start recording!"
-        }
-        shortDescription={
-          needsVideoSource ? "Select a video source to resume."
-          : isCreated ? "Update your timelapse settings."
-          : "Select a video source"
-        }
-        isOpen={setupModalOpen}
-        setIsOpen={onSubmitModalClose}
-      >
-        <div className="flex flex-col gap-6">
-          <SelectInput
-            label="Video source"
-            description="Record your screen, camera, or any other video source."
-            value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
-            onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
-            disabled={changingSource}
-          >
-            <option disabled value="NONE">(none)</option>
-            {availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0 ? (
-              <optgroup label="Cameras">
-                {availableCameras
-                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
-                  .map((camera, index) => {
-                    const displayLabel = camera.label && camera.label.trim().length > 0 
-                      ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
-                      : `Camera ${index + 1}`;
-                    return (
-                      <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
-                        {displayLabel}
-                      </option>
-                    );
-                  })}
-              </optgroup>
-            ) : (
-              <option value="CAMERA:">Camera</option>
-            )}
-            <option value="SCREEN">{screenLabel}</option>
-          </SelectInput>
+      <Modal isOpen={setupModalOpen}>
+        <ModalHeader
+          icon={isDiscarding ? "plus-fill" : "clock-fill"}
+          title={
+            isDiscarding ? "Create timelapse"
+            : needsVideoSource ? "Resume timelapse"
+            : isCreated ? "Update timelapse"
+            : "Create timelapse"
+          }
+          description={
+            isDiscarding ? "After you click Create, your timelapse will start recording!"
+            : needsVideoSource ? "Select your video source to resume recording your timelapse."
+            : isCreated ? "Update your timelapse settings."
+            : "After you click Create, your timelapse will start recording!"
+          }
+          shortDescription={
+            isDiscarding ? "Select a video source"
+            : needsVideoSource ? "Select a video source to resume."
+            : isCreated ? "Update your timelapse settings."
+            : "Select a video source"
+          }
+          showCloseButton={true}
+          onClose={onSubmitModalClose}
+        />
+        <ModalContent className="overflow-hidden">
+          <div className="overflow-hidden p-px -m-px">
+            <div
+              className={clsx(
+                "flex transition-transform duration-200 ease-out",
+                isDiscarding && "-translate-x-1/2"
+              )}
+              style={{ width: "200%" }}
+            >
+              {[false, true].map((panelIsDiscarding) => {
+                const videoSourceDescription = panelIsDiscarding
+                  ? <span className="text-red">This will permanently discard your previous timelapse.</span>
+                  : "Record your screen, camera, or any other video source.";
 
-          {(cameraStream || screenStream) && (
-            <div className="flex flex-col gap-2">
-              <video
-                ref={setupPreviewRef}
-                autoPlay
-                muted
-                className="h-auto rounded-md"
-                style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
-              />
+                return (
+                  <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 flex-shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
+                    <div className="flex flex-col gap-6">
+                      <SelectInput
+                        label="Video source"
+                        description={videoSourceDescription}
+                        value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
+                        onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
+                        disabled={changingSource}
+                      >
+                        <option disabled value="NONE">(none)</option>
+                        {availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0 ? (
+                          <optgroup label="Cameras">
+                            {availableCameras
+                              .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                              .map((camera, index) => {
+                                const displayLabel = camera.label && camera.label.trim().length > 0 
+                                  ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
+                                  : `Camera ${index + 1}`;
+                                return (
+                                  <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
+                                    {displayLabel}
+                                  </option>
+                                );
+                              })}
+                          </optgroup>
+                        ) : (
+                          <option value="CAMERA:">Camera</option>
+                        )}
+                        <option value="SCREEN">{screenLabel}</option>
+                      </SelectInput>
+
+                      {(cameraStream || screenStream) && (
+                        <div className="flex flex-col gap-2">
+                          <video
+                            autoPlay
+                            muted
+                            className="h-auto rounded-md"
+                            style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
+                            ref={(el) => {
+                              if (el && isDiscarding === panelIsDiscarding) {
+                                el.srcObject = currentStream;
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex gap-4 w-full">
+                        {panelIsDiscarding ? (
+                          <>
+                            <Button onClick={() => setIsDiscarding(false)} kind="regular" icon="view-back">
+                              Back
+                            </Button>
+                            <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary" className="flex-1">
+                              Create
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary" className="flex-1">
+                              {
+                                needsVideoSource ? "Resume"
+                                : isCreated ? "Update"
+                                : "Create"
+                              }
+                            </Button>
+                            {needsVideoSource && (
+                              <Button onClick={() => setIsDiscarding(true)} kind="destructive" icon="delete">
+                                Discard
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-
-          <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary">
-            {
-              needsVideoSource ? "Resume"
-              : isCreated ? "Update"
-              : "Create"
-            }
-          </Button>
-        </div>
-      </WindowedModal>
+          </div>
+        </ModalContent>
+      </Modal>
 
       <WindowedModal
         icon="send-fill"
