@@ -58,7 +58,10 @@ export default function RootLayout({
       )}>          
         { showHeader && <Header /> }
         
-        <main className="w-full h-full">
+        <main className={clsx(
+          "w-full h-full",
+          showHeader && "pb-24 sm:pb-0"
+        )}>
           {children}
         </main>
       </div>

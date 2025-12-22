@@ -94,10 +94,10 @@ export function TimelapseCard({ timelapse }: {
   return (
     <article
       onClick={() => router.push(`/timelapse/${timelapse.id}`)}
-      className="flex flex-col gap-5 cursor-pointer"
+      className="flex flex-col gap-4 sm:gap-5 cursor-pointer sm:max-w-80"
       role="button"
     >
-      <div role="img" className="w-80 h-45 aspect-video rounded-2xl overflow-hidden">
+      <div role="img" className="w-full aspect-video rounded-lg sm:rounded-2xl overflow-hidden">
         {
           isLoading
             ? <div className="bg-slate w-full h-full" />
@@ -105,15 +105,15 @@ export function TimelapseCard({ timelapse }: {
         }
       </div>
       
-      <div className="flex gap-3 w-80 justify-center">
-        <ProfilePicture user={timelapse.owner} size="sm" />
+      <div className="flex gap-2 sm:gap-3 w-full justify-center items-center sm:items-start">
+        <ProfilePicture user={timelapse.owner} size="sm" className="" />
 
         <div className="flex flex-col w-full">
-          <h1 className="font-bold text-xl">{timelapse.name}</h1>
-          <h2 className="text-xl text-secondary flex gap-2">
-            <span>@{timelapse.owner.displayName}</span>
+          <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl line-clamp-1">{timelapse.name}</h1>
+          <h2 className="text-md sm:text-xl text-secondary flex gap-1 sm:gap-2">
+            <span className="truncate">@{timelapse.owner.displayName}</span>
             <Bullet />
-            <TimeAgo date={timelapse.createdAt} />
+            <TimeAgo date={timelapse.createdAt} className="shrink-0" />
           </h2>
         </div>
       </div>

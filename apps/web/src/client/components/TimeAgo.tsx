@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 
 import { formatTimeElapsed } from "@/shared/common";
 
-export function TimeAgo({ date }: {
-  date: Date | number
+export function TimeAgo({ date, className }: {
+  date: Date | number;
+  className?: string;
 }) {
   if (typeof date === "number") {
     date = new Date(date);
@@ -29,5 +30,5 @@ export function TimeAgo({ date }: {
     return () => clearInterval(timer);
   }, [date]);
 
-  return <time dateTime={date.toISOString()}>{display}</time>
+  return <time dateTime={date.toISOString()} className={className}>{display}</time>
 }
