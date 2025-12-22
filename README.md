@@ -22,30 +22,32 @@ cp ./apps/web/.env.example ./apps/web/.env
 You also need a PostgreSQL database running. The simplest way to get one up and running is via Docker:
 ```bash
 # In this case, your DATABASE_URL environment variable would be "postgresql://postgres:postgres@localhost:5432/lapse?schema=public".
+# You only need to run this command once - this creates the container!
 docker run -d --name lapse-db -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
 ```
 
-You'll have to change some environment variables in `./apps/web/.env`. Don't worry - everything is explained in the comments in the `.env` file! After you're done, run these two commands in parallel to get started:
+...if you already created the PostgreSQL container but it's not running, use the following to get it back up:
+```bash
+docker start lapse-db
+```
+
+You'll have to change some environment variables in `./apps/web/.env`. Don't worry - everything is explained in the comments in the `.env` file! After you're done, run this command to get started:
 
 ```bash
-# In terminal 1...
 pnpm turbo run dev
-
-# In terminal 2...
-pnpm turbo run db:dev
 ```
 
 If you're running `db:dev` for the very first time, you'll have to create the schema:
 
 ```bash
-# While `pnpm turbo run db:dev` is running...
+# Make sure that your PostgreSQL server is running! See above on how to set it up.
 pnpm turbo run db:push
 ```
 
 You also have a couple of development scripts at hand:
 ```bash
 # You'll need this to use any of the scripts in ./apps/web/prisma!
-export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lapse?schema=public"
 
 # Generate a JWT cookie to log in without having to auth through Slack
 node ./apps/web/prisma/create-jwt.mjs --email ascpixi@hackclub.com
@@ -68,6 +70,6 @@ You'll need at least one root user in order to promote other users to admins. Yo
 
 ```sh
 # You'd probably want to use your production database URL here.
-export DATABASE_URL="prisma+postgres://localhost:51213/?api_key=something-goes-here"
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lapse?schema=public"
 node ./prisma/promote.mjs --email ascpixi@hackclub.com
 ```
