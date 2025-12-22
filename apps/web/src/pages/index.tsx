@@ -9,6 +9,7 @@ import { TimeAgo } from "@/client/components/TimeAgo";
 import { Button } from "@/client/components/ui/Button";
 import { Link } from "@/client/components/ui/Link";
 import { TimelapseCard } from "@/client/components/TimelapseCard";
+import { TimelapseGrid } from "@/client/components/TimelapseGrid";
 
 import { trpc } from "@/client/trpc";
 import { useAuth } from "@/client/hooks/useAuth";
@@ -227,9 +228,9 @@ export default function Home() {
               description="See what other Hack Clubbers are up to"
             />
 
-            <div className="flex flex-wrap justify-between w-full gap-y-12">
+            <TimelapseGrid>
               { reqRecent?.timelapses.map(x => <TimelapseCard timelapse={x} key={x.id} />) }
-            </div>
+            </TimelapseGrid>
           </section>
         ) }
 

@@ -94,10 +94,10 @@ export function TimelapseCard({ timelapse }: {
   return (
     <article
       onClick={() => router.push(`/timelapse/${timelapse.id}`)}
-      className="flex flex-col gap-5 cursor-pointer"
+      className="flex flex-col gap-5 cursor-pointer max-w-80"
       role="button"
     >
-      <div role="img" className="w-80 h-45 aspect-video rounded-2xl overflow-hidden">
+      <div role="img" className="w-full aspect-video rounded-2xl overflow-hidden">
         {
           isLoading
             ? <div className="bg-slate w-full h-full" />
@@ -105,7 +105,7 @@ export function TimelapseCard({ timelapse }: {
         }
       </div>
       
-      <div className="flex gap-3 w-80 justify-center">
+      <div className="flex gap-3 w-full justify-center">
         <ProfilePicture user={timelapse.owner} size="sm" />
 
         <div className="flex flex-col w-full">
