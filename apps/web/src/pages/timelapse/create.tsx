@@ -682,7 +682,7 @@ export default function Page() {
                             className="h-auto rounded-md"
                             style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
                             ref={(el) => {
-                              if (el && isDiscarding === panelIsDiscarding) {
+                              if (el && isDiscarding === panelIsDiscarding && el.srcObject !== currentStream) {
                                 el.srcObject = currentStream;
                               }
                             }}
