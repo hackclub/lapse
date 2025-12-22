@@ -22,12 +22,13 @@ import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
-import { SelectInput } from "@/client/components/ui/SelectInput";
+import { VisibilityPicker } from "@/client/components/ui/VisibilityPicker";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
 import { Bullet } from "@/client/components/ui/Bullet";
 import { TimeAgo } from "@/client/components/TimeAgo";
 import { CommentSection } from "@/client/components/CommentSection";
+import { PublishModal } from "@/client/components/ui/layout/PublishModal";
 
 export default function Page() {
   const router = useRouter();
@@ -55,6 +56,8 @@ export default function Page() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
 
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
   const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
@@ -182,8 +185,10 @@ export default function Page() {
     };
   }, [videoObjUrl]);
 
-  async function handlePublish() {
+  async function handlePublish(visibility: TimelapseVisibility) {
     if (!timelapse || !currentUser) return;
+
+    setPublishModalOpen(false);
 
     try {
       setIsPublishing(true);
@@ -201,7 +206,8 @@ export default function Page() {
 
       const result = await trpc.timelapse.publish.mutate({
         id: timelapse.id,
-        passkey: originDevice.passkey
+        passkey: originDevice.passkey,
+        visibility
       });
 
       if (result.ok) {
@@ -222,7 +228,7 @@ export default function Page() {
     finally {
       setIsPublishing(false);
     }
-  };
+  }
 
   function handleEdit() {
     if (!timelapse)
@@ -385,7 +391,7 @@ export default function Page() {
                   </Button>
 
                   { !timelapse.isPublished && (
-                    <Button kind="primary" className="gap-2 w-full" onClick={handlePublish} disabled={isPublishing}>
+                    <Button kind="primary" className="gap-2 w-full" onClick={() => setPublishModalOpen(true)} disabled={isPublishing}>
                       <Icon glyph="send-fill" size={24} />
                       {isPublishing ? "Publishing..." : "Publish"}
                     </Button>
@@ -451,6 +457,16 @@ export default function Page() {
             </p>
           </div>
           
+          { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && isOwned && (
+            <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
+              <Icon glyph="private-fill" size={32} className="text-yellow flex-shrink-0" />
+              <p className="text-yellow">
+                This timelapse is unlisted and can only be viewed via the link or by staff. Click on
+                "Edit details" to change this.
+              </p>
+            </div>
+          )}
+
           { timelapse && timelapse.isPublished && <CommentSection timelapseId={timelapse.id} comments={localComments} setComments={setLocalComments} /> }
         </div>
       </div>
@@ -481,15 +497,10 @@ export default function Page() {
             maxLength={280}
           />
 
-          <SelectInput
-            label="Visibility"
-            description="Controls who can see your timelapse when published."
+          <VisibilityPicker
             value={editVisibility}
-            onChange={(value) => setEditVisibility(value as TimelapseVisibility)}
-          >
-            <option value="PUBLIC">Public - visible to everyone</option>
-            <option value="UNLISTED">Unlisted - only visible with direct link</option>
-          </SelectInput>
+            onChange={setEditVisibility}
+          />
 
           <Button onClick={handleUpdate} disabled={isUpdateDisabled} kind="primary">
             {isUpdating ? "Updating..." : "Update"}
@@ -574,6 +585,12 @@ export default function Page() {
           </div>
         )}
       </PasskeyModal>
+
+      <PublishModal
+        isOpen={publishModalOpen}
+        setIsOpen={setPublishModalOpen}
+        onSelect={handlePublish}
+      />
     </RootLayout>
   );
 }

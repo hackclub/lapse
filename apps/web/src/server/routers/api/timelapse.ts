@@ -594,7 +594,12 @@ export default router({
                 /**
                  * The device passkey used to decrypt the timelapse.
                  */
-                passkey: z.string().length(6)
+                passkey: z.string().length(6),
+
+                /**
+                 * The visibility setting for the published timelapse.
+                 */
+                visibility: TimelapseVisibilitySchema
             })
         )
         .output(
@@ -684,7 +689,8 @@ export default router({
                     data: { 
                         isPublished: true, 
                         deviceId: null,
-                        thumbnailS3Key: thumbnailS3Key
+                        thumbnailS3Key: thumbnailS3Key,
+                        visibility: req.input.visibility
                     },
                     include: TIMELAPSE_INCLUDES
                 });
