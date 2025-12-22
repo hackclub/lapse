@@ -16,14 +16,14 @@ function VisibilityOption({
     title: string;
     description: string;
     onClick: () => void;
-    position: "left" | "right";
+    position: "first" | "second";
 }) {
     return (
         <button
             onClick={onClick}
             className={clsx(
-                "flex items-center gap-4 p-4 w-1/2 cursor-pointer transition-colors hover:bg-darkless",
-                position === "left" && "border-r border-slate"
+                "flex items-center gap-4 p-4 w-full sm:w-1/2 cursor-pointer transition-colors hover:bg-darkless",
+                position === "first" && "border-b sm:border-b-0 sm:border-r border-slate"
             )}
         >
             <Icon glyph={icon} size={48} className="flex-shrink-0" />
@@ -55,20 +55,20 @@ export function PublishModal({
             />
             <ModalContent>
                 <p className="text-muted mb-4">This will decrypt your timelapse - making it undeletable. You can change the visibility later, though!</p>
-                <div className="flex w-full border border-slate rounded-lg overflow-hidden">
+                <div className="flex flex-col sm:flex-row w-full border border-slate rounded-lg overflow-hidden">
                     <VisibilityOption
                         icon="explore"
                         title="Public"
                         description="Make your timelapse visible to the world! Recommended!"
                         onClick={() => onSelect("PUBLIC")}
-                        position="left"
+                        position="first"
                     />
                     <VisibilityOption
                         icon="private-fill"
                         title="Unlisted"
                         description="Only staff and people with the link will be able to access your timelapse."
                         onClick={() => onSelect("UNLISTED")}
-                        position="right"
+                        position="second"
                     />
                 </div>
             </ModalContent>
