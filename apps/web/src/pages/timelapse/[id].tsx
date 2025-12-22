@@ -22,12 +22,13 @@ import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
-import { SelectInput } from "@/client/components/ui/SelectInput";
+import { Checkbox } from "@/client/components/ui/Checkbox";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
 import { Bullet } from "@/client/components/ui/Bullet";
 import { TimeAgo } from "@/client/components/TimeAgo";
 import { CommentSection } from "@/client/components/CommentSection";
+import { PublishModal } from "@/client/components/ui/layout/PublishModal";
 
 export default function Page() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function Page() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editVisibility, setEditVisibility] = useState<TimelapseVisibility>("PUBLIC");
+  const [editIsPublic, setEditIsPublic] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   
   const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
@@ -55,6 +56,8 @@ export default function Page() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
 
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
   const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
@@ -182,8 +185,10 @@ export default function Page() {
     };
   }, [videoObjUrl]);
 
-  async function handlePublish() {
+  async function handlePublish(visibility: TimelapseVisibility) {
     if (!timelapse || !currentUser) return;
+
+    setPublishModalOpen(false);
 
     try {
       setIsPublishing(true);
@@ -201,7 +206,8 @@ export default function Page() {
 
       const result = await trpc.timelapse.publish.mutate({
         id: timelapse.id,
-        passkey: originDevice.passkey
+        passkey: originDevice.passkey,
+        visibility
       });
 
       if (result.ok) {
@@ -222,7 +228,7 @@ export default function Page() {
     finally {
       setIsPublishing(false);
     }
-  };
+  }
 
   function handleEdit() {
     if (!timelapse)
@@ -230,7 +236,7 @@ export default function Page() {
 
     setEditName(timelapse.name);
     setEditDescription(timelapse.description);
-    setEditVisibility(timelapse.visibility);
+    setEditIsPublic(timelapse.visibility === "PUBLIC");
     setEditModalOpen(true);
   };
 
@@ -245,7 +251,7 @@ export default function Page() {
         changes: {
           name: editName.trim(),
           description: editDescription.trim(),
-          visibility: editVisibility
+          visibility: editIsPublic ? "PUBLIC" : "UNLISTED"
         }
       });
 
@@ -385,7 +391,7 @@ export default function Page() {
                   </Button>
 
                   { !timelapse.isPublished && (
-                    <Button kind="primary" className="gap-2 w-full" onClick={handlePublish} disabled={isPublishing}>
+                    <Button kind="primary" className="gap-2 w-full" onClick={() => setPublishModalOpen(true)} disabled={isPublishing}>
                       <Icon glyph="send-fill" size={24} />
                       {isPublishing ? "Publishing..." : "Publish"}
                     </Button>
@@ -481,15 +487,12 @@ export default function Page() {
             maxLength={280}
           />
 
-          <SelectInput
-            label="Visibility"
-            description="Controls who can see your timelapse when published."
-            value={editVisibility}
-            onChange={(value) => setEditVisibility(value as TimelapseVisibility)}
-          >
-            <option value="PUBLIC">Public - visible to everyone</option>
-            <option value="UNLISTED">Unlisted - only visible with direct link</option>
-          </SelectInput>
+          <Checkbox
+            label="Public"
+            description="Show off your timelapse to the world. Highly recommended~!"
+            checked={editIsPublic}
+            onChange={setEditIsPublic}
+          />
 
           <Button onClick={handleUpdate} disabled={isUpdateDisabled} kind="primary">
             {isUpdating ? "Updating..." : "Update"}
@@ -574,6 +577,12 @@ export default function Page() {
           </div>
         )}
       </PasskeyModal>
+
+      <PublishModal
+        isOpen={publishModalOpen}
+        setIsOpen={setPublishModalOpen}
+        onSelect={handlePublish}
+      />
     </RootLayout>
   );
 }
