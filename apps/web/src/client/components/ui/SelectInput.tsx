@@ -1,4 +1,4 @@
-import { ChangeEvent, PropsWithChildren } from "react";
+import { ChangeEvent, PropsWithChildren, ReactNode } from "react";
 
 import { InputField } from "./InputField";
 
@@ -11,7 +11,7 @@ export function SelectInput({
   children
 }: PropsWithChildren<{
   label: string,
-  description: string,
+  description: ReactNode,
   value: string,
   onChange: (value: string) => void,
   disabled?: boolean
@@ -26,7 +26,7 @@ export function SelectInput({
       description={description}
     >
       <select
-        className="p-2 rounded-md disabled:bg-dark border border-transparent outline outline-slate border-l-4 border-r-12 transition-colors"
+        className="p-2 rounded-md bg-dark text-smoke border border-transparent outline outline-slate border-l-4 border-r-12 transition-colors"
         value={value}
         onChange={handleChange}
         disabled={disabled}
