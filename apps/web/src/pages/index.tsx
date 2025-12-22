@@ -8,7 +8,6 @@ import { descending, formatDuration } from "@/shared/common";
 import { TimeAgo } from "@/client/components/TimeAgo";
 import { Button } from "@/client/components/ui/Button";
 import { Link } from "@/client/components/ui/Link";
-import { TimelapseCard } from "@/client/components/TimelapseCard";
 import { TimelapseGrid } from "@/client/components/TimelapseGrid";
 
 import { trpc } from "@/client/trpc";
@@ -228,9 +227,7 @@ export default function Home() {
               description="See what other Hack Clubbers are up to"
             />
 
-            <TimelapseGrid>
-              { reqRecent?.timelapses.map(x => <TimelapseCard timelapse={x} key={x.id} />) }
-            </TimelapseGrid>
+            <TimelapseGrid timelapses={reqRecent?.timelapses ?? []} />
           </section>
         ) }
 

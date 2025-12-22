@@ -19,7 +19,6 @@ import { Button } from "@/client/components/ui/Button";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
-import { TimelapseCard } from "@/client/components/TimelapseCard";
 import { TimelapseGrid } from "@/client/components/TimelapseGrid";
 import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
@@ -230,9 +229,7 @@ export default function Page() {
           </div>
         </div>
 
-        <TimelapseGrid className="gap-y-16 py-16 px-0 sm:px-16">
-          { timelapses?.map(t => <TimelapseCard timelapse={t} key={t.id} /> ) }
-        </TimelapseGrid>
+        <TimelapseGrid timelapses={timelapses ?? []} className="gap-y-16 py-16 px-0 sm:px-16" />
       </div>
 
       <WindowedModal
