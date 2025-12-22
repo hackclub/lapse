@@ -216,6 +216,7 @@ export default function Page() {
       setCurrentTimelapseId(null);
       activeTimelapseId = null;
       setIsDiscarding(false);
+      setInitialElapsedSeconds(0);
     }
 
     if (!activeTimelapseId) {
