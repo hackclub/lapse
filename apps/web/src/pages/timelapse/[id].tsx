@@ -351,7 +351,7 @@ export default function Page() {
       const result = await trpc.timelapse.delete.mutate({ id: timelapse.id });
 
       if (result.ok) {
-        router.push("/");
+        router.reload();
       }
       else {
         setRegularError(`Failed to delete: ${result.error}`);
