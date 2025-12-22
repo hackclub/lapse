@@ -1,8 +1,8 @@
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, ReactNode } from "react";
 
 export function InputField({ label, description, children }: PropsWithChildren<{
   label: string,
-  description: string,
+  description: ReactNode,
 }>) {
   return (
     <div className="flex flex-col w-full">

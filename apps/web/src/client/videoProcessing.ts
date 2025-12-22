@@ -74,8 +74,16 @@ export async function videoConcat(streams: Blob[]) {
 
     console.log("(videoProcessing.ts) - output:", out);
 
-    const inputPrimaryTracks = await Promise.all(inputs.map(x => x.getPrimaryVideoTrack()));
-    assert(inputPrimaryTracks.every(x => x != null), "One of the inputs has a null primary track.");
+    const inputPrimaryTracks = (await Promise.all(inputs.map(x => x.getPrimaryVideoTrack())))
+        .filter(x => {
+            if (x == null) {
+                console.warn("(videoProcessing.ts) input has a null primary video track - ignoring!", x);
+            }
+
+            return x != null;
+        });
+
+    assert(inputPrimaryTracks.length != 0, "No inputs had any primary video tracks!");
 
     const firstTrack = inputPrimaryTracks[0];
 
@@ -127,14 +135,8 @@ export async function videoConcat(streams: Blob[]) {
     await out.start();
 
     let globalTimeOffset = 0;
-    for (const input of inputs) {
-        console.log("(videoProcessing.ts) processing input", input);
-
-        const video = await input.getPrimaryVideoTrack();
-        if (!video) {
-            console.error("(videoProcessing.ts) input", input, "has no primary video track!");
-            throw new Error("A video input has no primary video track.");
-        }
+    for (const video of inputPrimaryTracks) {
+        console.log("(videoProcessing.ts) processing input", video);
 
         const decoderConfig = await video.getDecoderConfig();
         assert(decoderConfig != null, "Could not get the decoder config from the input");
