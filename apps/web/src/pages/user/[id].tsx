@@ -230,7 +230,7 @@ export default function Page() {
           </div>
         </div>
 
-        <TimelapseGrid className="gap-y-16 p-16">
+        <TimelapseGrid className="gap-y-16 py-16 px-0 sm:px-16">
           { timelapses?.map(t => <TimelapseCard timelapse={t} key={t.id} /> ) }
         </TimelapseGrid>
       </div>

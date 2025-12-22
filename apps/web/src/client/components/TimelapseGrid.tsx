@@ -6,7 +6,7 @@ export function TimelapseGrid({ children, className }: {
     className?: string;
 }) {
     return (
-        <div className={clsx("grid grid-cols-[repeat(auto-fill,22rem)] justify-between w-full gap-y-12", className)}>
+        <div className={clsx("grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,22rem)] justify-between w-full gap-4 sm:gap-y-12", className)}>
             {children}
         </div>
     );
