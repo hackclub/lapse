@@ -22,7 +22,7 @@ import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
-import { Checkbox } from "@/client/components/ui/Checkbox";
+import { VisibilityPicker } from "@/client/components/ui/VisibilityPicker";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
 import { Bullet } from "@/client/components/ui/Bullet";
@@ -44,7 +44,7 @@ export default function Page() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editIsPublic, setEditIsPublic] = useState(true);
+  const [editVisibility, setEditVisibility] = useState<TimelapseVisibility>("PUBLIC");
   const [isUpdating, setIsUpdating] = useState(false);
   
   const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
@@ -236,7 +236,7 @@ export default function Page() {
 
     setEditName(timelapse.name);
     setEditDescription(timelapse.description);
-    setEditIsPublic(timelapse.visibility === "PUBLIC");
+    setEditVisibility(timelapse.visibility);
     setEditModalOpen(true);
   };
 
@@ -251,7 +251,7 @@ export default function Page() {
         changes: {
           name: editName.trim(),
           description: editDescription.trim(),
-          visibility: editIsPublic ? "PUBLIC" : "UNLISTED"
+          visibility: editVisibility
         }
       });
 
@@ -487,11 +487,9 @@ export default function Page() {
             maxLength={280}
           />
 
-          <Checkbox
-            label="Public"
-            description="Show off your timelapse to the world. Highly recommended~!"
-            checked={editIsPublic}
-            onChange={setEditIsPublic}
+          <VisibilityPicker
+            value={editVisibility}
+            onChange={setEditVisibility}
           />
 
           <Button onClick={handleUpdate} disabled={isUpdateDisabled} kind="primary">
