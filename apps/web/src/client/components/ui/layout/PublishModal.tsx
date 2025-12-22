@@ -23,7 +23,7 @@ export function PublishModal({
             <ModalContent>
                 <p className="text-muted mb-4">This will decrypt your timelapse - making it undeletable. You can change the visibility later, though!</p>
                 <VisibilityPicker
-                    value="PUBLIC"
+                    value={null}
                     onChange={onSelect}
                 />
             </ModalContent>

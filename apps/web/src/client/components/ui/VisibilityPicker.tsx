@@ -41,7 +41,7 @@ export function VisibilityPicker({
     value,
     onChange
 }: {
-    value: TimelapseVisibility;
+    value: TimelapseVisibility | null;
     onChange: (visibility: TimelapseVisibility) => void;
 }) {
     return (
