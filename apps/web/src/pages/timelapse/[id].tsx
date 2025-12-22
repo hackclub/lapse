@@ -459,8 +459,8 @@ export default function Page() {
           
           { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
             <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
-              <Icon glyph="important" size={24} className="text-yellow flex-shrink-0" />
-              <p className="text-smoke">
+              <Icon glyph="private-fill" size={32} className="text-yellow flex-shrink-0" />
+              <p className="text-yellow">
                 This timelapse is unlisted and can only be viewed via the link or by staff. Click on
                 "Edit details" to change this.
               </p>
