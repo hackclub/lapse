@@ -77,7 +77,7 @@ export async function videoConcat(streams: Blob[]) {
     const inputPrimaryTracks = (await Promise.all(inputs.map(x => x.getPrimaryVideoTrack())))
         .filter(x => {
             if (x == null) {
-                console.warn("(videoProcess.ts) input has a null primary video track - ignoring!", x);
+                console.warn("(videoProcessing.ts) input has a null primary video track - ignoring!", x);
             }
 
             return x != null;
