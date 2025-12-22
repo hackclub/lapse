@@ -16,6 +16,7 @@ import { trpc } from "@/client/trpc";
 
 import { useOnce } from "@/client/hooks/useOnce";
 import { useAuth } from "@/client/hooks/useAuth";
+import { useInterval } from "@/client/hooks/useInterval";
 
 import RootLayout from "@/client/components/RootLayout";
 import { TimeSince } from "@/client/components/TimeSince";
@@ -75,6 +76,12 @@ export default function Page() {
 
   const currentStream = cameraStream || screenStream;
   const isRecording = !isFrozen && !setupModalOpen;
+
+  useInterval(async () => {
+    if (isRecording) {
+      await trpc.user.emitHeartbeat.mutate({});
+    }
+  }, 30 * 1000);
 
   useEffect(() => {
     document.title = setupModalOpen ? "Lapse"

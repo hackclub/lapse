@@ -5,9 +5,6 @@ import { PropsWithChildren } from "react";
 import clsx from "clsx";
 
 import { Header } from "@/client/components/ui/layout/Header";
-import { useInterval } from "@/client/hooks/useInterval";
-import { trpc } from "@/client/trpc";
-import { useAuth } from "@/client/hooks/useAuth";
 
 const phantomSans = localFont({
   variable: "--font-phantom-sans",
@@ -45,14 +42,6 @@ export default function RootLayout({
   description?: string;
   showHeader?: boolean;
 }>) {
-  const auth = useAuth(false);
-
-  useInterval(async () => {
-    if (auth.currentUser) {
-      await trpc.user.emitHeartbeat.mutate({});
-    }
-  }, 30 * 1000);
-
   return (
     <>
       <Head>
