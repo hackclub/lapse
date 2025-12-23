@@ -189,13 +189,13 @@ export default function Home() {
               "flex w-full justify-between py-12 gap-y-12", // all
             )}>
               {
-                reqLeaderboard.leaderboard.slice(0, 7).map((x, i) => (
+                reqLeaderboard.leaderboard.slice(0, 6).map((x, i) => (
                   <div
                     key={x.id}
                     className={clsx(
                       "flex flex-col sm:gap-1 justify-center items-center",
                       i >= 3 && "hidden sm:flex",
-                      i >= 5 && "sm:hidden md:flex",
+                      i >= 4 && "sm:hidden md:flex",
                     )}
                   >
                     <NextLink href={`/user/@${x.handle}`}>
