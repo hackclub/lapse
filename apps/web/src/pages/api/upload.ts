@@ -131,7 +131,7 @@ export default async function handler(
         if (file.mimetype && file.mimetype !== token.mimeType)
             return res.status(400).json(apiErr("ERROR", `Invalid content type; expected ${token.mimeType}, got ${file.mimetype}.`));
 
-        logInfo("upload", `uploading ${token.mimeType} of size ${prettyBytes(file.size)} to ${token.bucket}/${token.key}`, { token, file });
+        logInfo("upload", `uploading ${token.mimeType} of size ${prettyBytes(file.size)} to ${token.bucket}/${token.key}`, { token });
 
         await s3.send(new PutObjectCommand({
             Bucket: token.bucket,
