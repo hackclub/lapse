@@ -64,7 +64,6 @@ export default async function handler(
     const clientSecret = env.SLACK_CLIENT_SECRET;
 
     try {
-        console.log(req);
         const defaultUriBase = process.env.NODE_ENV == "development"
             ? (req.headers.host ? `http://${req.headers.host}` : "http://localhost:3000")
             : "https://lapse.hackclub.com";
