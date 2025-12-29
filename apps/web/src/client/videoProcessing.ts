@@ -118,7 +118,7 @@ export async function videoConcat(streams: Blob[]) {
         )
     );
 
-    console.log(`(videoProcessing.ts) remuxing ${canRemux ? "will be used, yay!" : "cannot not be used."}`)
+    console.log(`(videoProcessing.ts) remuxing ${canRemux ? "will be used, yay!" : "cannot be used."}`)
         
     const source = canRemux
         ? new mediabunny.EncodedVideoPacketSource(inputPrimaryTracks[0].codec!)
