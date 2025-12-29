@@ -136,7 +136,8 @@ export default function Page() {
         const vidRes = await fetch(timelapse.playbackUrl, { method: "GET" });
         if (!vidRes.ok) {
           console.error("([id].tsx) could not fetch timelapse playback URL!", vidRes);
-          setCriticalError("Failed to load timelapse video. Please try again later.");
+          console.error(`([id].tsx) playback URL was: ${timelapse.playbackUrl}`);
+          setCriticalError(`Failed to load timelapse video, HTTP ${vidRes.status}!`);
           return;
         }
         

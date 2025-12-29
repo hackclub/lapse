@@ -4,6 +4,8 @@ import { createFormData } from "@/client/common";
 export async function apiUpload(token: string, data: Blob): Promise<ApiResult<Empty>> {
     let res: ApiResult<Empty> = apiErr("ERROR", "Upload hasn't been attempted even once...?");
 
+    console.log(`(upload.ts) apiUpload("${token}", <${data.type} of ${data.size} bytes>)`);
+
     for (let i = 0; i < 3; i++) {
         const rawRes = await fetch("/api/upload", {
             method: "POST",
@@ -26,10 +28,10 @@ export async function apiUpload(token: string, data: Blob): Promise<ApiResult<Em
             res = { ok: false, error: "ERROR", message: await rawRes.text() };
         }
 
-        console.warn(`(upload.ts) Upload attempt #${i} failed. Trying again in 2000ms.`, res);
+        console.warn(`(upload.ts) upload attempt #${i} failed. trying again in 2000ms.`, res);
         await sleep(2000);
     }
 
-    console.error("(upload.ts) All upload attempts failed.", res);
+    console.error("(upload.ts) all upload attempts failed!", res);
     return res;
 }

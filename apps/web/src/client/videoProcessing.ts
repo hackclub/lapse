@@ -96,6 +96,8 @@ export async function videoConcat(streams: Blob[]) {
         }
     );
 
+    console.log(`(videoProcessing.ts) supported codecs: ${supportedCodecs.join()}; picked ${videoCodec}`)
+
     if (!videoCodec) {
         alert("Your browser doesn't seem to support video encoding.");
         throw new Error("This browser does not support video encoding.");
@@ -115,6 +117,8 @@ export async function videoConcat(streams: Blob[]) {
             firstTrack.displayHeight == x.displayHeight
         )
     );
+
+    console.log(`(videoProcessing.ts) remuxing ${canRemux ? "will be used, yay!" : "cannot not be used."}`)
         
     const source = canRemux
         ? new mediabunny.EncodedVideoPacketSource(inputPrimaryTracks[0].codec!)
@@ -137,6 +141,7 @@ export async function videoConcat(streams: Blob[]) {
     let globalTimeOffset = 0;
     for (const video of inputPrimaryTracks) {
         console.log("(videoProcessing.ts) processing input", video);
+        console.log(`(videoProcessing.ts) global time offset = ${globalTimeOffset}`);
 
         const decoderConfig = await video.getDecoderConfig();
         assert(decoderConfig != null, "Could not get the decoder config from the input");
@@ -145,7 +150,7 @@ export async function videoConcat(streams: Blob[]) {
         let localLastTimestamp = 0;
 
         if (canRemux) {
-            // Best-case scenario - all inputs have compatible parameters (codec, resolution, framerate), so we can simply concatenate the already encoded packets!
+            // Best-case scenario - all inputs have compatible parameters (codec, resolution, framerate), so we can simply concatenate the already encoded packets!            
             assert(source instanceof mediabunny.EncodedVideoPacketSource, "source was not a EncodedVideoPacketSource");
             const sink = new mediabunny.EncodedPacketSink(video);
 
@@ -224,7 +229,7 @@ export async function videoConcat(streams: Blob[]) {
  * Generates a thumbnail image from a video blob.
  */
 export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
-    console.log("(encode.thumbnail) generating thumbnail for", videoBlob);
+    console.log("(videoProcessing.ts) generating thumbnail for", videoBlob);
 
     const input = new mediabunny.Input({
         source: new mediabunny.BlobSource(videoBlob),
@@ -233,13 +238,13 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
 
     const video = await input.getPrimaryVideoTrack();
     if (video == null) {
-        console.error("(encode.thumbnail) no primary video track for", input);
+        console.error("(videoProcessing.ts) no primary video track for", input);
         throw new Error("Attempted to generate a thumbnail for a video without a video track.");
     }
 
     if (video.codec == null || !(await video.canDecode())) {
-        console.error("(encode.thumbnail) video can't be decoded on this browser!", video);
-        console.error("(encode.thumbnail) try a different one, maybe...? ^^'>");
+        console.error("(videoProcessing.ts) video can't be decoded on this browser!", video);
+        console.error("(videoProcessing.ts) try a different one, maybe...? ^^'>");
         throw new Error("Unsupported codec. Try using a different browser.");
     }
 
@@ -266,7 +271,7 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
         thumbCanvas = canvases[0];
     }
     else {
-        console.warn("(encode.thumbnail) no canvases were returned for the timestamp in the middle. We'll use the first one.");
+        console.warn("(videoProcessing.ts) no canvases were returned for the timestamp in the middle. We'll use the first one.");
         
         canvases = await Array.fromAsync(sink.canvasesAtTimestamps([begin]));
         assert(canvases.length > 0 && canvases[0] != null, "sink.canvasesAtTimestamps for first timestamp returned nothing or null");
@@ -279,7 +284,7 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
         if (canvas instanceof HTMLCanvasElement) {
             const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg"));
             if (!blob) {
-                console.error("(encode.thumbnail) canvas.toBlob() returned null!", canvas);
+                console.error("(videoProcessing.ts) canvas.toBlob() returned null!", canvas);
                 throw new Error("Couldn't generate thumbnail - canvas.toBlob() returned null.");
             }
 
@@ -287,7 +292,7 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
         }
         else {
             if (!(canvas instanceof OffscreenCanvas)) {
-                console.warn("(encode.thumbnail) canvas isn't an OffscreenCanvas OR a HTMLCanvasElement... quite suspicious...", canvas);
+                console.warn("(videoProcessing.ts) canvas isn't an OffscreenCanvas OR a HTMLCanvasElement... quite suspicious...", canvas);
             }
 
             return await canvas.convertToBlob({ type: "image/jpeg" });
@@ -316,16 +321,16 @@ export async function mergeVideoSessions(timelapse: LocalTimelapse) {
             chunks: x[1]!.toSorted(ascending(x => x.timestamp))
         }));
 
-    console.log("mergeVideoSessions():", segmented);
+    console.log("(videoProcessing.ts) mergeVideoSessions:", segmented);
 
     if (segmented.length == 0)
         throw new Error("Timelapse chunk segmentation resulted in an empty array");
 
     const streams = segmented.map(x => new Blob(x.chunks.map(x => x.data), { type: "video/webm" }));
-    console.log("mergeVideoSessions(): blobified streams:", streams);
+    console.log("(videoProcessing.ts) mergeVideoSessions(): blobified streams:", streams);
 
     const streamBytes = await Promise.all(streams.map(x => new Response(x).blob()));
-    console.log(`mergeVideoSessions(): bytes retrieved from ${streamBytes.length} streams:`, streamBytes);
+    console.log(`(videoProcessing.ts) mergeVideoSessions(): bytes retrieved from ${streamBytes.length} streams:`, streamBytes);
     
     const concatenated = await videoConcat(streamBytes);
     return new Blob([concatenated]);

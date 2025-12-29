@@ -26,26 +26,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [isLoading, setIsLoading] = useState(true);
 
     useOnce(async () => {
-        console.log("(AuthContext) authenticating...");
+        console.log("(AuthContext.tsx) authenticating...");
         const req = await trpc.user.myself.query({});
 
-        console.log("(AuthContext) response:", req);
+        console.log("(AuthContext.tsx) response:", req);
 
         if (!req.ok || req.data.user === null) {
-            console.log("(AuthContext) user is not authenticated");
+            console.log("(AuthContext.tsx) user is not authenticated");
             setUserCache(null);
             setIsLoading(false);
             return;
         }
 
-        console.log("(AuthContext) user is authenticated");
+        console.log("(AuthContext.tsx) user is authenticated");
         setUserCache(req.data.user);
         setCurrentUser(req.data.user);
         setIsLoading(false);
     });
 
     const signOut = useCallback(async () => {
-        console.log("(AuthContext) signing out...");
+        console.log("(AuthContext.tsx) signing out...");
         await trpc.user.signOut.mutate({});
         setUserCache(null);
         setCurrentUser(null);
