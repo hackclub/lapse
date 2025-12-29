@@ -636,8 +636,8 @@ export default function Page() {
           showCloseButton={true}
           onClose={onSubmitModalClose}
         />
-        <ModalContent className="overflow-hidden">
-          <div className="overflow-hidden p-px -m-px">
+        <ModalContent>
+          <div className="overflow-x-hidden overflow-y-visible p-px -m-px">
             <div
               className={clsx(
                 "flex transition-transform duration-200 ease-out",
