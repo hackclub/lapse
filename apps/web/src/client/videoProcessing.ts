@@ -150,7 +150,7 @@ export async function videoConcat(streams: Blob[]) {
         let localLastTimestamp = 0;
 
         if (canRemux) {
-            // Best-case scenario - all inputs have compatible parameters (codec, resolution, framerate), so we can simply concatenate the already encoded packets!            
+            // Best-case scenario - all inputs have compatible parameters (codec, resolution, framerate), so we can simply concatenate the already encoded packets!
             assert(source instanceof mediabunny.EncodedVideoPacketSource, "source was not a EncodedVideoPacketSource");
             const sink = new mediabunny.EncodedPacketSink(video);
 
