@@ -96,7 +96,7 @@ export async function videoConcat(streams: Blob[]) {
         }
     );
 
-    console.log(`(videoProcessing.ts) supported codecs: ${supportedCodecs.join()}; picked ${videoCodec}`)
+    console.log(`(videoProcessing.ts) supported codecs: ${supportedCodecs.join()}; picked ${videoCodec}`);
 
     if (!videoCodec) {
         alert("Your browser doesn't seem to support video encoding.");
