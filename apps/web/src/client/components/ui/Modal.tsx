@@ -12,7 +12,7 @@ export function Modal({
   isOpen: boolean;
   setIsOpen?: (x: boolean) => void;
   className?: string;
-  size?: "SMALL" | "REGULAR"
+  size?: "SMALL" | "REGULAR" | "FULL"
 }>) {
   size ??= "REGULAR";
 
@@ -23,11 +23,14 @@ export function Modal({
       className
     )}>
       <section className={clsx(
-        "flex flex-col bg-dark text-smoke max-h-full rounded-lg overflow-hidden transition-transform",
+        "flex flex-col bg-dark text-smoke max-h-full rounded-lg transition-transform",
+        size !== "FULL" && "overflow-hidden",
+        size === "FULL" && "overflow-y-auto",
         isOpen && "scale-100",
         !isOpen && "scale-0",
         size == "SMALL"   && "sm:w-1/3 sm:min-w-25",
-        size == "REGULAR" && "sm:w-1/2 sm:min-w-150"
+        size == "REGULAR" && "sm:w-1/2 sm:min-w-150",
+        size == "FULL"    && "w-full"
       )}>
         {children}
       </section>

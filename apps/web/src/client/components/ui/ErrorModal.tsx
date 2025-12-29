@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
 import { IconGlyph } from "./util";
+import { LogViewer } from "./LogViewer";
 
 export interface ErrorModalButton {
   label: string;
@@ -44,39 +45,40 @@ export function ErrorModal({
         {
           label: retryLabel,
           onClick: onRetry,
-          kind: "primary" as const
+          kind: "regular" as const
         }
       ] : []
     ),
     {
       label: "Close",
       onClick: onClose,
-      kind: "primary" as const
+      kind: "regular" as const
     }
   ];
 
   const finalButtons = buttons || defaultButtons;
 
   return (
-    <Modal isOpen={isOpen} size="SMALL" className={clsx("min-w-[200px]", className)}>
-      <div className="flex flex-col items-center p-8 text-center gap-4">
-        <div className="flex items-center justify-center w-30 h-30 rounded-full bg-red/10">
-          <Icon glyph={icon} size={64} />
+    <Modal isOpen={isOpen} size="FULL" className={clsx("!p-4 sm:!p-12 lg:!p-24", className)}>
+      <div className="flex flex-col p-6 gap-4 overflow-visible">
+        <div className="flex flex-row items-center gap-3">
+          <Icon glyph={icon} size={32} className="text-red shrink-0" />
+          <div className="flex flex-col">
+            <h1 className="font-bold text-base">{title}</h1>
+            <p className="text-sm text-muted leading-relaxed">{message}</p>
+          </div>
         </div>
 
-        <div className="flex flex-col">
-          <h1 className="font-bold text-2xl">{title}</h1>
-          <p className="max-w-md leading-relaxed">{message}</p>
-        </div>
+        <LogViewer className="w-full" />
 
-        <div className="flex flex-col gap-3 w-full">
+        <div className="flex flex-row gap-3">
           {
             finalButtons.map((button, index) => (
               <Button
                 key={index}
                 onClick={button.onClick}
                 kind={button.kind || "regular"}
-                className="w-full"
+                className="flex-1"
               >
                 {button.label}
               </Button>
