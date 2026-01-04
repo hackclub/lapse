@@ -154,7 +154,7 @@ export default async function handler(
             return res.redirect("/?error=no-email");
         }
 
-        let profilePictureUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(primaryEmail.split("@")[0])}`;
+        let profilePictureUrl: string | null = null;
         if (hackatimeUser.slack_id) {
             try {
                 const slackUserResponse = await fetch(`${env.SLACK_API_URL}/users.info`, {
@@ -168,16 +168,19 @@ export default async function handler(
 
                 const slackUserData = await slackUserResponse.json();
                 if (slackUserData.ok && slackUserData.user) {
-                    const slackProfilePicture = slackUserData.user.profile?.image_512 
-                        || slackUserData.user.profile?.image_192;
-                    if (slackProfilePicture) {
-                        profilePictureUrl = slackProfilePicture;
-                    }
+                    profilePictureUrl = slackUserData.user.profile?.image_512 
+                        || slackUserData.user.profile?.image_192
+                        || null;
                 }
             }
             catch (error) {
                 logError("auth-hackatime", "Failed to fetch Slack profile picture", { error, slack_id: hackatimeUser.slack_id });
             }
+        }
+
+        if (!profilePictureUrl) {
+            logError("auth-hackatime", "Could not obtain profile picture for user", { hackatimeUser });
+            return res.redirect("/?error=no-profile-picture");
         }
 
         const hackatimeId = hackatimeUser.id.toString();
@@ -246,7 +249,7 @@ export default async function handler(
                 }
             }
             
-            if (profilePictureUrl && !profilePictureUrl.includes("dicebear.com")) {
+            if (profilePictureUrl) {
                 updateData.profilePictureUrl = profilePictureUrl;
             }
             
