@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { matchOrDefault } from "@/shared/common";
 
@@ -10,14 +10,21 @@ export default function Auth() {
   const router = useRouter();
   const { currentUser, isLoading } = useAuthContext();
   const [status, setStatus] = useState<"loading" | "error">("loading");
+  const oauthInitiated = useRef(false);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading)
+      return;
 
     if (currentUser && !currentUser.private.needsReauth) {
       router.push("/");
       return;
     }
+
+    if (oauthInitiated.current)
+      return;
+    
+    oauthInitiated.current = true;
 
     async function initOAuth() {
       try {
