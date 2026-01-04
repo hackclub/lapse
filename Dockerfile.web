@@ -2,7 +2,7 @@
 
 ############################  base  ##############################
 FROM --platform=$TARGETPLATFORM node:25-alpine AS base
-RUN apk update && apk add --no-cache libc6-compat curl bash ffmpeg jq
+RUN apk update && apk add --no-cache libc6-compat curl bash ffmpeg jq git
 
 # Install pnpm
 RUN npm install -g pnpm@latest
@@ -26,6 +26,10 @@ RUN turbo prune @lapse/web --docker
 FROM base AS installer
 WORKDIR /app
 
+# We'll be passing this on to `generate-build-info.ts`.
+ARG SOURCE_COMMIT
+ENV SOURCE_COMMIT=${SOURCE_COMMIT}
+
 # First install dependencies (they change less often)
 COPY --from=builder /app/out/json/ .
 COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
@@ -41,17 +45,11 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
 # Build the project and apps
 COPY --from=builder /app/out/full/ .
 
+# Copy .git for build-time contributor extraction (will not be in final image)
+COPY --from=builder /app/.git ./.git
+
 # Write env vars to .env file for Next.js to read at build time
 RUN printenv | grep -E '^(DATABASE_URL|JWT_SECRET|NEXT_PUBLIC_|PRIVATE_KEY_|S3_|SENTRY_|SLACK_|UPLOAD_TOKEN_)' > ./apps/web/.env || true
-
-# Fetch commit timestamp from GitHub API and set as build date
-RUN if [ -n "$SOURCE_COMMIT" ]; then \
-      TIMESTAMP_MS=$(curl -sf "https://api.github.com/repos/hackclub/lapse/commits/$SOURCE_COMMIT" \
-        | jq -r '.commit.author.date | fromdateiso8601 * 1000'); \
-      if [ -n "$TIMESTAMP_MS" ] && [ "$TIMESTAMP_MS" != "null" ]; then \
-        echo "NEXT_PUBLIC_BUILD_DATE=$TIMESTAMP_MS" >> ./apps/web/.env; \
-      fi; \
-    fi
 
 RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
     --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
@@ -82,7 +80,6 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PRISMA_HIDE_UPDATE_MESSAGE=1
-ENV NEXT_PUBLIC_BUILD_ID=$SOURCE_COMMIT
 ENV PNPM_HOME="/home/nextjs/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
