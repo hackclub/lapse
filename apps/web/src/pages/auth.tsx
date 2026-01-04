@@ -4,12 +4,21 @@ import { useEffect, useState } from "react";
 import { matchOrDefault } from "@/shared/common";
 
 import RootLayout from "@/client/components/RootLayout";
+import { useAuthContext } from "@/client/context/AuthContext";
 
 export default function Auth() {
   const router = useRouter();
+  const { currentUser, isLoading } = useAuthContext();
   const [status, setStatus] = useState<"loading" | "error">("loading");
 
   useEffect(() => {
+    if (isLoading) return;
+
+    if (currentUser) {
+      router.push("/");
+      return;
+    }
+
     async function initOAuth() {
       try {
         const response = await fetch("/api/auth-hackatime-init", {
@@ -33,7 +42,7 @@ export default function Auth() {
     }
 
     initOAuth();
-  }, [router]);
+  }, [router, isLoading, currentUser]);
 
   const error = router.query.error;
   const errorMessage = error
