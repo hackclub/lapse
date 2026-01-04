@@ -10,7 +10,7 @@ import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { decryptVideo } from "@/server/encryption";
 import { env } from "@/server/env";
-import { HackatimeAdminApi, HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
+import { HackatimeOAuthApi, HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
 import { logError, logInfo, logRequest } from "@/server/serverCommon";
 import { generateThumbnail } from "@/server/videoProcessing";
 import { Actor, ApiDate, PublicId } from "@/server/routers/common";
@@ -773,8 +773,8 @@ export default router({
             if (timelapse.hackatimeProject)
                 return apiErr("HACKATIME_ERROR", "Timelapse already has an associated Hackatime project");
 
-            if (!timelapse.owner.slackId)
-                return apiErr("ERROR", "You must have a linked Slack account to sync with Hackatime!");
+            if (!timelapse.owner.hackatimeId || !timelapse.owner.hackatimeAccessToken)
+                return apiErr("ERROR", "You must have a linked Hackatime account to sync with Hackatime!");
 
             let userApiKey: string | null;
 
@@ -782,8 +782,8 @@ export default router({
                 userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
             }
             else {
-                const adminApi = new HackatimeAdminApi(env.HACKATIME_ADMIN_KEY);
-                userApiKey = await adminApi.tokenForUser(timelapse.owner.slackId);
+                const oauthApi = new HackatimeOAuthApi(timelapse.owner.hackatimeAccessToken);
+                userApiKey = await oauthApi.apiKey();
             }
 
             if (!userApiKey)

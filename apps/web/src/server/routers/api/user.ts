@@ -94,6 +94,11 @@ export const PublicUserSchema = z.object({
     urls: UserUrlList,
 
     /**
+     * The ID of the user in Hackatime.
+     */
+    hackatimeId: z.string().nullable(),
+
+    /**
      * The ID of the user in the Hack Club Slack.
      */
     slackId: z.string().regex(/^U[A-Z0-9]+$/).nullable()
@@ -138,6 +143,7 @@ export function dtoPublicUser(entity: db.User): PublicUser {
         bio: entity.bio,
         handle: entity.handle,
         urls: entity.urls,
+        hackatimeId: entity.hackatimeId,
         slackId: entity.slackId
     };
 }
