@@ -1,15 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import formidable from "formidable";
 import * as fs from "fs";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import prettyBytes from "pretty-bytes";
 
 import { env } from "@/server/env";
 import { logError, logInfo, logNextRequest } from "@/server/serverCommon";
-import { ApiResult, apiErr, Empty, apiOk } from "@/shared/common";
+import { ApiResult, apiErr, Empty, apiOk, Err } from "@/shared/common";
 import { getAuthenticatedUser } from "@/server/auth";
-
-import * as db from "@/generated/prisma/client";
+import { getUploadTokenForUpload, markUploadTokenUploaded, wipeUploadToken } from "@/server/services/uploadTokens";
 
 // POST /api/upload
 //    Consumes an upload token, and starts uploading a file to the S3 bucket associated with the
@@ -57,7 +56,7 @@ import { database } from "@/server/db";
 export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse<ApiResult<Empty>>
-) {
+): Promise<void> {
     logNextRequest("upload", req);
 
     if (req.method !== "POST")
@@ -79,20 +78,15 @@ export default async function handler(
         for (const token of staleTokens) {
             logInfo("upload", `removing stale upload token ${token.id} owned by @${token.owner.handle}`, { token });
 
-            if (token.uploaded) {
-                s3.send(new DeleteObjectCommand({
-                    Bucket: token.bucket,
-                    Key: token.key
-                }));
+            try {
+                await wipeUploadToken(database, token);
             }
-
-            await database.uploadToken.delete({
-                where: { id: token.id }
-            });
+            catch (error) {
+                logError("upload", `failed to remove stale upload token ${token.id}`, { error, token });
+            }
         }
     }
     
-
     try {
         const form = formidable({
             maxFileSize: 200 * 1024 * 1024, // 200MB max (higher than our limits to let token validation handle it)
@@ -112,9 +106,7 @@ export default async function handler(
         if (!file)
             return res.status(400).json(apiErr("MISSING_PARAMS", "File hasn't been provided. Make sure to include at least one file in your form data."));
 
-        const token = await database.uploadToken.findFirst({
-            where: { id: tokenId, ownerId: user.id }
-        });
+        const token = await getUploadTokenForUpload(database, { tokenId, ownerId: user.id });
 
         if (!token)
             return res.status(400).json(apiErr("ERROR", "Upload token is invalid."));
@@ -142,10 +134,9 @@ export default async function handler(
 
         logInfo("upload", `file ${token.bucket}/${token.key} uploaded!`, { token });
 
-        await database.uploadToken.update({
-            where: { id: token.id },
-            data: { uploaded: true }
-        });
+        const result = await markUploadTokenUploaded(database, { tokenId: token.id, ownerId: user.id });
+        if (result instanceof Err)
+            return res.status(400).json(apiErr(result.error, `Couldn't confirm your upload. ${result.message}`));
 
         return res.status(200).json(apiOk({}));
     }

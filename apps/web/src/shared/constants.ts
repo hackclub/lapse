@@ -8,5 +8,5 @@ export const THUMBNAIL_SIZE = 640;
 
 export const MAX_VIDEO_UPLOAD_SIZE = 384 * 1024 * 1024; // 384 MiB
 export const MAX_THUMBNAIL_UPLOAD_SIZE = 6 * 1024 * 1024; // 6 MiB
-export const UPLOAD_TOKEN_LIFETIME_MS = 5 * 60 * 1000;
+export const UPLOAD_TOKEN_LIFETIME_MS = 20 * 60 * 1000;
 
