@@ -53,8 +53,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         router.reload();
     }, [router, setUserCache]);
 
+    const effectiveUser = isLoading ? userCache : currentUser;
+
     const value: AuthContextValue = {
-        currentUser: isLoading ? userCache : currentUser,
+        currentUser: effectiveUser,
         isLoading,
         signOut
     };

@@ -8,8 +8,12 @@ export function useAuth(required: boolean) {
     const { currentUser, isLoading, signOut } = useAuthContext();
 
     useEffect(() => {
-        if (!isLoading && required && currentUser === null) {
+        if (isLoading)
+            return;
+
+        if (currentUser?.private.needsReauth || (required && currentUser === null)) {
             router.push("/auth");
+            return;
         }
     }, [isLoading, required, currentUser, router]);
 
