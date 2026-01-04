@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import { descending, formatDuration } from "@/shared/common";
 
 import { TimeAgo } from "@/client/components/TimeAgo";
+import { Footer } from "@/client/components/Footer";
 import { Button } from "@/client/components/ui/Button";
-import { Link } from "@/client/components/ui/Link";
 import { TimelapseGrid } from "@/client/components/TimelapseGrid";
 
 import { trpc } from "@/client/trpc";
@@ -233,10 +233,7 @@ export default function Home() {
           </section>
         ) }
 
-        <footer className="py-16 text-placeholder text-center">
-          A Hack Club production. Build {process.env.NEXT_PUBLIC_BUILD_ID ?? ""} from <TimeAgo date={parseInt(process.env.NEXT_PUBLIC_BUILD_DATE ?? "0")} />.
-          Report issues at <Link newTab href="https://github.com/hackclub/lapse" />. 
-        </footer>
+        <Footer />
       </div>
     </RootLayout>
   );
