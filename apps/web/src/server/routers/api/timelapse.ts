@@ -5,7 +5,8 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import { apiResult, ascending, match, when, apiOk, apiErr, oneOf, closest, chunked, assert, Result, Err } from "@/shared/common";
-import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS, UPLOAD_TOKEN_LIFETIME_MS } from "@/shared/constants";
+import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE, MAX_THUMBNAIL_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
+import { createUploadToken, consumeUploadTokens } from "@/server/services/uploadTokens";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { decryptVideo } from "@/server/encryption";
@@ -353,26 +354,20 @@ export default router({
             logRequest("timelapse/createDraft", req);
             const baseId = crypto.randomUUID();
 
-            const video = await database.uploadToken.create({
-                data: {
-                    ownerId: req.ctx.user.id,
-                    bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    key: `timelapses/${req.ctx.user.id}/${baseId}.${containerTypeToExtension(req.input.containerType)}`,
-                    mimeType: containerTypeToMimeType(req.input.containerType),
-                    expires: new Date(new Date().getTime() + UPLOAD_TOKEN_LIFETIME_MS),
-                    maxSize: MAX_VIDEO_UPLOAD_SIZE
-                }
+            const video = await createUploadToken(database, {
+                ownerId: req.ctx.user.id,
+                bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                key: `timelapses/${req.ctx.user.id}/${baseId}.${containerTypeToExtension(req.input.containerType)}`,
+                mimeType: containerTypeToMimeType(req.input.containerType),
+                maxSize: MAX_VIDEO_UPLOAD_SIZE,
             });
 
-            const thumbnail = await database.uploadToken.create({
-                data: {
-                    ownerId: req.ctx.user.id,
-                    bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    key: `timelapses/${req.ctx.user.id}/${baseId}-thumbnail.jpg`,
-                    mimeType: "image/jpeg",
-                    expires: new Date(new Date().getTime() + UPLOAD_TOKEN_LIFETIME_MS),
-                    maxSize: MAX_THUMBNAIL_UPLOAD_SIZE
-                }
+            const thumbnail = await createUploadToken(database, {
+                ownerId: req.ctx.user.id,
+                bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                key: `timelapses/${req.ctx.user.id}/${baseId}-thumbnail.jpg`,
+                mimeType: "image/jpeg",
+                maxSize: MAX_THUMBNAIL_UPLOAD_SIZE,
             });
 
             const draft = await database.draftTimelapse.create({
@@ -480,9 +475,9 @@ export default router({
                 });
             }
 
-            // This will cascade and remove the upload tokens as well.
-            await database.draftTimelapse.delete({
-                where: { id: draft.id }
+            await database.$transaction(async (tx) => {
+                await tx.draftTimelapse.delete({ where: { id: draft.id } });
+                await consumeUploadTokens(tx, [draft.videoTokenId, draft.thumbnailTokenId]);
             });
 
             return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
