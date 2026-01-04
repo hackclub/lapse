@@ -82,8 +82,8 @@ export default async function handler(
         }
         oauthData = result.data;
     }
-    catch {
-        logError("auth-hackatime", "Failed to parse OAuth cookie");
+    catch (error) {
+        logError("auth-hackatime", "Failed to parse OAuth cookie", { error });
         return res.redirect("/?error=oauth-state-mismatch");
     }
 
