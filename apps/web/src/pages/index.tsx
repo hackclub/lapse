@@ -147,14 +147,15 @@ export default function Home() {
         </div>
 
         <div className={clsx(
-          "sm:w-1/3",
-          "flex flex-col gap-4 content-around justify-end text-right"
+          "w-full", // mobile
+          "md:w-1/3", // desktop
+          "flex flex-col gap-4 content-around justify-end text-right" // all
         )}>
           {
             auth.currentUser ? (
               topUserProjects.map(x => (
                 <div id={x.name} className="flex gap-2.5">
-                  <span className="tracking-tight">{x.name}</span>
+                  <span className="tracking-tight text-nowrap">{x.name}</span>
                   <div className="w-full bg-darkless relative rounded-2xl overflow-hidden">
                     <div
                       style={{ width: `${x.percentage * 100}%` }}
@@ -184,9 +185,9 @@ export default function Home() {
             />
 
             <div className={clsx(
-              "flex-wrap", // mobile
-              "sm:flex-nowrap", // desktop
-              "flex w-full justify-between py-12 gap-y-12", // all
+              "flex-wrap py-12", // mobile
+              "sm:flex-nowrap md:py-20", // desktop
+              "flex w-full justify-between gap-y-12", // all
             )}>
               {
                 reqLeaderboard.leaderboard.slice(0, 6).map((x, i) => (
@@ -194,8 +195,9 @@ export default function Home() {
                     key={x.id}
                     className={clsx(
                       "flex flex-col sm:gap-1 justify-center items-center",
-                      i >= 3 && "hidden sm:flex",
-                      i >= 4 && "sm:hidden md:flex",
+                      i === 3 && "min-[583px]:max-[1000px]:hidden",
+                      i === 4 && "min-[583px]:max-[1400px]:hidden",
+                      i === 5 && "max-[1500px]:hidden",
                     )}
                   >
                     <NextLink href={`/user/@${x.handle}`}>
