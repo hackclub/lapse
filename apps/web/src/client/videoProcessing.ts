@@ -225,12 +225,85 @@ export async function videoConcat(streams: Blob[]) {
     return bufTarget.buffer;
 }
 
-/**
- * Generates a thumbnail image from a video blob.
- */
-export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
-    console.log("(videoProcessing.ts) generating thumbnail for", videoBlob);
+async function makeFallbackThumbnail(videoBlob: Blob): Promise<Blob> {
+    console.log("(videoProcessing.ts) generating thumbnail via fallback for", videoBlob);
 
+    const canvas = document.createElement("canvas");
+    const video = document.createElement("video");
+    const objectUrl = URL.createObjectURL(videoBlob);
+
+    try {
+        video.autoplay = true;
+        video.muted = true;
+        video.src = objectUrl;
+
+        await new Promise<void>((resolve, reject) => {
+            video.onloadeddata = () => resolve();
+            video.onerror = () => reject(new Error("Failed to load video for thumbnail generation"));
+        });
+
+        const dimension = (d1: number, d2: number) => d1 > d2
+            ? THUMBNAIL_SIZE
+            : Math.floor(THUMBNAIL_SIZE * d1 / d2);
+
+        const width = dimension(video.videoWidth, video.videoHeight);
+        const height = dimension(video.videoHeight, video.videoWidth);
+
+        canvas.width = Math.floor(width * window.devicePixelRatio);
+        canvas.height = Math.floor(height * window.devicePixelRatio);
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+            throw new Error("Could not get 2D context from canvas");
+        }
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        video.pause();
+
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg"));
+        if (!blob) {
+            throw new Error("canvas.toBlob() returned null in fallback");
+        }
+
+        return blob;
+    }
+    finally {
+        URL.revokeObjectURL(objectUrl);
+        video.remove();
+        canvas.remove();
+    }
+}
+
+/**
+ * Generates a fully black thumbnail image as a last resort fallback.
+ */
+async function getBlackImage(): Promise<Blob> {
+    console.warn("(videoProcessing.ts) generating black thumbnail as last resort fallback");
+
+    const canvas = document.createElement("canvas");
+    canvas.width = THUMBNAIL_SIZE;
+    canvas.height = THUMBNAIL_SIZE;
+
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg"));
+    canvas.remove();
+
+    if (!blob) {
+        return new Blob([new Uint8Array(0)], { type: "image/jpeg" });
+    }
+
+    return blob;
+}
+
+/**
+ * Generates a thumbnail image from a video blob using MediaBunny.
+ */
+async function makeThumbnail(videoBlob: Blob): Promise<Blob> {
     const input = new mediabunny.Input({
         source: new mediabunny.BlobSource(videoBlob),
         formats: mediabunny.ALL_FORMATS
@@ -301,6 +374,29 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
     finally {
         input.dispose();
     }
+}
+
+/**
+ * Generates a thumbnail image from a video blob.
+ */
+export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
+    console.log("(videoProcessing.ts) generating thumbnail for", videoBlob);
+
+    try {
+        return await makeThumbnail(videoBlob);
+    }
+    catch (error) {
+        console.warn("(videoProcessing.ts) regular thumbnail generation failed! using fallback!", error);
+    }
+
+    try {
+        return await makeFallbackThumbnail(videoBlob);
+    }
+    catch (error) {
+        console.warn("(videoProcessing.ts) fallback thumbnail generation failed as well?! using black image!", error);
+    }
+
+    return await getBlackImage();
 }
 
 /**
