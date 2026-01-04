@@ -50,7 +50,13 @@ export const UserUrlList = z.array(z.url().max(64).min(1)).max(4);
 export type PrivateUserData = z.infer<typeof PrivateUserDataSchema>;
 export const PrivateUserDataSchema = z.object({
     permissionLevel: PermissionLevelSchema,
-    devices: z.array(KnownDeviceSchema)
+    devices: z.array(KnownDeviceSchema),
+
+    /**
+     * Whether the user needs to re-authenticate. This is `true` when, for example, the user has authenticated
+     * with Slack before, but has not yet logged in with Hackatime.
+     */
+    needsReauth: z.boolean()
 });
 
 /**
@@ -156,7 +162,8 @@ export function dtoUser(entity: DbCompositeUser): User {
         ...dtoPublicUser(entity),
         private: {
             permissionLevel: entity.permissionLevel,
-            devices: entity.devices.map(dtoKnownDevice)
+            devices: entity.devices.map(dtoKnownDevice),
+            needsReauth: entity.slackId !== null && entity.hackatimeId === null
         }
     };
 }

@@ -14,7 +14,7 @@ export default function Auth() {
   useEffect(() => {
     if (isLoading) return;
 
-    if (currentUser) {
+    if (currentUser && !currentUser.private.needsReauth) {
       router.push("/");
       return;
     }
