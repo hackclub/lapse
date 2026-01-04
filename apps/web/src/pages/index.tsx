@@ -195,8 +195,9 @@ export default function Home() {
                     key={x.id}
                     className={clsx(
                       "flex flex-col sm:gap-1 justify-center items-center",
-                      i >= 3 && "hidden sm:flex",
-                      i >= 4 && "sm:hidden md:flex",
+                      i === 3 && "min-[583px]:max-[1000px]:hidden",
+                      i === 4 && "min-[583px]:max-[1400px]:hidden",
+                      i === 5 && "max-[1500px]:hidden",
                     )}
                   >
                     <NextLink href={`/user/@${x.handle}`}>
