@@ -18,9 +18,10 @@ function LogEntryRow({ entry }: { entry: LogEntry }) {
 
 export function LogViewer({ className }: { className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [logs, setLogs] = useState<LogEntry[]>(getLogs);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   useEffect(() => {
+    setLogs(getLogs());
     return subscribeToLogs(() => {
       setLogs(getLogs());
     });
