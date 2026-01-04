@@ -4,7 +4,7 @@ import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import { env } from "@/server/env";
 import { database } from "@/server/db";
-import { logInfo, logError, logWarning } from "@/server/serverCommon";
+import { logWarning } from "@/server/serverCommon";
 import { UPLOAD_TOKEN_LIFETIME_MS } from "@/shared/constants";
 
 import type { Prisma, UploadToken } from "@/generated/prisma/client";
@@ -96,6 +96,7 @@ export async function consumeUploadTokens(prisma: PrismaClientOrTx, tokenIds: st
         where: { id: { in: tokenIds } },
     });
 }
+
 /**
  * Retrieves an upload token for validation purposes (e.g., in /api/upload).
  * Does not modify the token.
