@@ -147,14 +147,15 @@ export default function Home() {
         </div>
 
         <div className={clsx(
-          "sm:w-1/3",
-          "flex flex-col gap-4 content-around justify-end text-right"
+          "w-full", // mobile
+          "md:w-1/3", // desktop
+          "flex flex-col gap-4 content-around justify-end text-right" // all
         )}>
           {
             auth.currentUser ? (
               topUserProjects.map(x => (
                 <div id={x.name} className="flex gap-2.5">
-                  <span className="tracking-tight">{x.name}</span>
+                  <span className="tracking-tight text-nowrap">{x.name}</span>
                   <div className="w-full bg-darkless relative rounded-2xl overflow-hidden">
                     <div
                       style={{ width: `${x.percentage * 100}%` }}
