@@ -25,7 +25,8 @@ export default function Auth() {
         const data = await response.json();
         window.location.href = data.authorizeUrl;
       }
-      catch {
+      catch (err) {
+        console.error("(auth.tsx) error when authenticating!", err);
         setStatus("error");
         router.push("/?error=init-failed");
       }
