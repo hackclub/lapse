@@ -11,6 +11,9 @@ export function useAuth(required: boolean) {
         if (isLoading)
             return;
 
+        if (router.pathname === "/auth")
+            return;
+
         if (currentUser?.private.needsReauth || (required && currentUser === null)) {
             router.push("/auth");
             return;
