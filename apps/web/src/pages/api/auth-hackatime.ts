@@ -248,11 +248,8 @@ export default async function handler(
                     });
                 }
             }
-            
-            if (profilePictureUrl) {
-                updateData.profilePictureUrl = profilePictureUrl;
-            }
-            
+
+            updateData.profilePictureUrl = profilePictureUrl;
             dbUser = await database.user.update({
                 where: { id: dbUser.id },
                 data: updateData,
