@@ -201,7 +201,7 @@ export default router({
         )
         .output(
             apiResult({
-                user: z.union([PublicUserSchema, UserSchema]).nullable()
+                user: z.union([UserSchema, PublicUserSchema]).nullable()
             })
         )
         .query(async (req) => {
