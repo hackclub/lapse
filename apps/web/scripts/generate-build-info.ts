@@ -17,6 +17,7 @@ interface Contributor {
 }
 
 interface GitHubCommit {
+    sha: string;
     commit: {
         author: { name: string; email: string; date: string };
     };
@@ -190,12 +191,17 @@ async function main() {
         buildDate = commitDateStr ? new Date(commitDateStr).getTime() : Date.now();
     }
     else {
-        if (!commitId && commits.length > 0) {
+        if (commits.length > 0) {
             const latestCommit = commits[0];
-            commitId = "unknown";
+            if (!commitId) {
+                commitId = latestCommit.sha;
+            }
             buildDate = new Date(latestCommit.commit.author.date).getTime();
         }
         else {
+            if (!commitId) {
+                commitId = "unknown";
+            }
             buildDate = Date.now();
         }
     }
