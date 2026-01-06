@@ -45,9 +45,6 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
 # Build the project and apps
 COPY --from=builder /app/out/full/ .
 
-# Copy .git for build-time contributor extraction (will not be in final image)
-COPY --from=builder /app/.git ./.git
-
 # Write env vars to .env file for Next.js to read at build time
 RUN printenv | grep -E '^(DATABASE_URL|JWT_SECRET|NEXT_PUBLIC_|PRIVATE_KEY_|S3_|SENTRY_|SLACK_|UPLOAD_TOKEN_)' > ./apps/web/.env || true
 

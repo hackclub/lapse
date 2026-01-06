@@ -1,6 +1,15 @@
 import { TimeAgo } from "./TimeAgo";
 import { Link } from "./ui/Link";
-import buildInfo from "@/generated/build-info.json";
+import buildInfoJson from "@/generated/build-info.json";
+
+interface BuildInfo {
+  commitId: string;
+  commitShort: string;
+  buildDate: number;
+  contributors: Array<{ name: string; github?: string }>;
+}
+
+const buildInfo = buildInfoJson as BuildInfo;
 
 function ContributorLink({ name, github }: { name: string; github?: string }) {
   if (github) {
@@ -47,7 +56,7 @@ export function Footer() {
           {contributors.map((c, i) => (
             <span key={c.name}>
               {i > 0 && (i === contributors.length - 1 ? ", and " : ", ")}
-              <ContributorLink name={c.name} github={"github" in c ? c.github : undefined} />
+              <ContributorLink name={c.name} github={c.github} />
             </span>
           ))}
           .
