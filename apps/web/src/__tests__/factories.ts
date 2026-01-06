@@ -14,12 +14,7 @@ import { PermissionLevel, TimelapseVisibility, VideoContainerKind } from "@/gene
  * Generates a Nano ID-like string (12 characters).
  */
 function nanoid(length: number = 12): string {
-    const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    let result = "";
-    for (let i = 0; i < length; i++) {
-        result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-    }
-    return result;
+    return faker.string.alphanumeric({ length });
 }
 
 /**
