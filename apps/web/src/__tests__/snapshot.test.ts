@@ -1,7 +1,7 @@
 import { setupDatabaseMock, mockDatabase, resetMockDatabase } from "@/__tests__/mocks/database";
 import { createMockContext } from "@/__tests__/mocks/trpc";
 import { testFactory } from "@/__tests__/factories";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import snapshot from "@/server/routers/api/snapshot";
 
 setupDatabaseMock();
