@@ -46,14 +46,19 @@ export const env = {
     get PRIVATE_KEY_UPLOAD_KEY() { return required("PRIVATE_KEY_UPLOAD_KEY") },
 
     /**
-     * The Slack OAuth client ID for authentication.
+     * The Hackatime OAuth client ID for authentication.
      */
-    get SLACK_CLIENT_ID() { return required("NEXT_PUBLIC_SLACK_CLIENT_ID") },
+    get HACKATIME_CLIENT_ID() { return required("NEXT_PUBLIC_HACKATIME_CLIENT_ID") },
 
     /**
-     * The Slack OAuth client secret for authentication.
+     * The Hackatime server URL for OAuth.
      */
-    get SLACK_CLIENT_SECRET() { return required("SLACK_CLIENT_SECRET") },
+    get HACKATIME_URL() { return required("NEXT_PUBLIC_HACKATIME_URL") },
+
+    /**
+     * The OAuth redirect URI for Hackatime authentication.
+     */
+    get HACKATIME_REDIRECT_URI() { return required("HACKATIME_REDIRECT_URI") },
 
     /**
      * The secret key used for JWT token generation and verification.
@@ -89,15 +94,20 @@ export const env = {
     get SENTRY_PROJECT() { return required("SENTRY_PROJECT") },
 
     /**
-     * The Hackatime admin API key used to fetch user tokens.
-     */
-    get HACKATIME_ADMIN_KEY() { return required("HACKATIME_ADMIN_KEY") },
-
-    /**
-     * A fallback Hackatime API key used in development when an admin key is unavailable.
+     * A fallback Hackatime API key used in development when OAuth is unavailable.
      * Only considered when `NODE_ENV` is not `"production"`.
      */
-    get DEV_HACKATIME_FALLBACK_KEY() { return optional("DEV_HACKATIME_FALLBACK_KEY") }
+    get DEV_HACKATIME_FALLBACK_KEY() { return optional("DEV_HACKATIME_FALLBACK_KEY") },
+
+    /**
+     * The Slack bot token used to fetch user profile information.
+     */
+    get SLACK_BOT_TOKEN() { return required("SLACK_BOT_TOKEN") },
+
+    /**
+     * The Slack API URL.
+     */
+    get SLACK_API_URL() { return optional("SLACK_API_URL") || "https://slack.com/api" }
 };
 
 function required(name: string) {

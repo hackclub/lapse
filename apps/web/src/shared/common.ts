@@ -49,7 +49,8 @@ export const KnownErrorSchema = z.enum([
     "NO_PERMISSION",
     "HACKATIME_ERROR",
     "ALREADY_PUBLISHED",
-    "NO_FILE"
+    "NO_FILE",
+    "EXPIRED"
 ]);
 
 export function createResultSchema<T extends z.ZodType>(dataSchema: T) {

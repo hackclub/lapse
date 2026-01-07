@@ -5,12 +5,13 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import { apiResult, ascending, match, when, apiOk, apiErr, oneOf, closest, chunked, assert, Result, Err } from "@/shared/common";
-import { MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS, UPLOAD_TOKEN_LIFETIME_MS } from "@/shared/constants";
+import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE, MAX_THUMBNAIL_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
+import { createUploadToken, consumeUploadTokens } from "@/server/services/uploadTokens";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { decryptVideo } from "@/server/encryption";
 import { env } from "@/server/env";
-import { HackatimeAdminApi, HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
+import { HackatimeOAuthApi, HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
 import { logError, logInfo, logRequest } from "@/server/serverCommon";
 import { generateThumbnail } from "@/server/videoProcessing";
 import { Actor, ApiDate, PublicId } from "@/server/routers/common";
@@ -353,26 +354,20 @@ export default router({
             logRequest("timelapse/createDraft", req);
             const baseId = crypto.randomUUID();
 
-            const video = await database.uploadToken.create({
-                data: {
-                    ownerId: req.ctx.user.id,
-                    bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    key: `timelapses/${req.ctx.user.id}/${baseId}.${containerTypeToExtension(req.input.containerType)}`,
-                    mimeType: containerTypeToMimeType(req.input.containerType),
-                    expires: new Date(new Date().getTime() + UPLOAD_TOKEN_LIFETIME_MS),
-                    maxSize: MAX_VIDEO_UPLOAD_SIZE
-                }
+            const video = await createUploadToken(database, {
+                ownerId: req.ctx.user.id,
+                bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                key: `timelapses/${req.ctx.user.id}/${baseId}.${containerTypeToExtension(req.input.containerType)}`,
+                mimeType: containerTypeToMimeType(req.input.containerType),
+                maxSize: MAX_VIDEO_UPLOAD_SIZE,
             });
 
-            const thumbnail = await database.uploadToken.create({
-                data: {
-                    ownerId: req.ctx.user.id,
-                    bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    key: `timelapses/${req.ctx.user.id}/${baseId}-thumbnail.jpg`,
-                    mimeType: "image/jpeg",
-                    expires: new Date(new Date().getTime() + UPLOAD_TOKEN_LIFETIME_MS),
-                    maxSize: MAX_THUMBNAIL_UPLOAD_SIZE
-                }
+            const thumbnail = await createUploadToken(database, {
+                ownerId: req.ctx.user.id,
+                bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                key: `timelapses/${req.ctx.user.id}/${baseId}-thumbnail.jpg`,
+                mimeType: "image/jpeg",
+                maxSize: MAX_THUMBNAIL_UPLOAD_SIZE,
             });
 
             const draft = await database.draftTimelapse.create({
@@ -480,9 +475,9 @@ export default router({
                 });
             }
 
-            // This will cascade and remove the upload tokens as well.
-            await database.draftTimelapse.delete({
-                where: { id: draft.id }
+            await database.$transaction(async (tx) => {
+                await tx.draftTimelapse.delete({ where: { id: draft.id } });
+                await consumeUploadTokens(tx, [draft.videoTokenId, draft.thumbnailTokenId]);
             });
 
             return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
@@ -773,8 +768,8 @@ export default router({
             if (timelapse.hackatimeProject)
                 return apiErr("HACKATIME_ERROR", "Timelapse already has an associated Hackatime project");
 
-            if (!timelapse.owner.slackId)
-                return apiErr("ERROR", "You must have a linked Slack account to sync with Hackatime!");
+            if (!timelapse.owner.hackatimeId || !timelapse.owner.hackatimeAccessToken)
+                return apiErr("ERROR", "You must have a linked Hackatime account to sync with Hackatime!");
 
             let userApiKey: string | null;
 
@@ -782,8 +777,8 @@ export default router({
                 userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
             }
             else {
-                const adminApi = new HackatimeAdminApi(env.HACKATIME_ADMIN_KEY);
-                userApiKey = await adminApi.tokenForUser(timelapse.owner.slackId);
+                const oauthApi = new HackatimeOAuthApi(timelapse.owner.hackatimeAccessToken);
+                userApiKey = await oauthApi.apiKey();
             }
 
             if (!userApiKey)

@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
-    "build": "prisma generate && next build --webpack",
+    "dev": "tsx scripts/generate-build-info.ts && next dev --webpack",
+    "build": "prisma generate && tsx scripts/generate-build-info.ts && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",

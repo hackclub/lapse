@@ -50,7 +50,13 @@ export const UserUrlList = z.array(z.url().max(64).min(1)).max(4);
 export type PrivateUserData = z.infer<typeof PrivateUserDataSchema>;
 export const PrivateUserDataSchema = z.object({
     permissionLevel: PermissionLevelSchema,
-    devices: z.array(KnownDeviceSchema)
+    devices: z.array(KnownDeviceSchema),
+
+    /**
+     * Whether the user needs to re-authenticate. This is `true` when, for example, the user has authenticated
+     * with Slack before, but has not yet logged in with Hackatime.
+     */
+    needsReauth: z.boolean()
 });
 
 /**
@@ -92,6 +98,11 @@ export const PublicUserSchema = z.object({
      * Featured URLs that should be displayed on the user's page. This array has a maximum of 4 members.
      */
     urls: UserUrlList,
+
+    /**
+     * The ID of the user in Hackatime.
+     */
+    hackatimeId: z.string().nullable(),
 
     /**
      * The ID of the user in the Hack Club Slack.
@@ -138,6 +149,7 @@ export function dtoPublicUser(entity: db.User): PublicUser {
         bio: entity.bio,
         handle: entity.handle,
         urls: entity.urls,
+        hackatimeId: entity.hackatimeId,
         slackId: entity.slackId
     };
 }
@@ -150,7 +162,8 @@ export function dtoUser(entity: DbCompositeUser): User {
         ...dtoPublicUser(entity),
         private: {
             permissionLevel: entity.permissionLevel,
-            devices: entity.devices.map(dtoKnownDevice)
+            devices: entity.devices.map(dtoKnownDevice),
+            needsReauth: entity.slackId !== null && entity.hackatimeId === null
         }
     };
 }
