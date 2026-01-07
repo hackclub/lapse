@@ -35,7 +35,10 @@ export const testFactory = {
         bio: faker.lorem.sentence().slice(0, 160),
         urls: [],
         slackId: null,
+        hackatimeId:overrides?.hackatimeId ?? null,
+        hackatimeAccessToken: overrides.hackatimeAccessToken ?? null,
         lastHeartbeat: faker.date.recent(),
+        hackatimeRefreshToken: overrides?.hackatimeRefreshToken ?? null,
         ...overrides,
     }),
 

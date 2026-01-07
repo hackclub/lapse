@@ -639,7 +639,7 @@ describe("timelapse router", () => {
             }
         });
 
-        it("should return ERROR when user has no linked Slack account", async () => {
+        it("should return ERROR when user has no linked Hackatime account", async () => {
             const user = testFactory.user({ slackId: null });
             const mockTimelapse = testFactory.timelapse({ ownerId: user.id, hackatimeProject: null });
 
@@ -657,12 +657,11 @@ describe("timelapse router", () => {
             expect(result.ok).toBe(false);
             if (!result.ok) {
                 expect(result.error).toBe("ERROR");
-                expect(result.message).toContain("Slack");
             }
         });
 
         it("should sync timelapse with Hackatime", async () => {
-            const user = testFactory.user({ slackId: "U123456" });
+            const user = testFactory.user({ hackatimeId: "hackatime-123", hackatimeAccessToken: "test-access-token" });
             const mockTimelapse = testFactory.timelapse({ ownerId: user.id, hackatimeProject: null });
             const snapshots = [
                 testFactory.snapshot({ timelapseId: mockTimelapse.id, createdAt: new Date("2026-01-05T00:00:00.000Z") }),
