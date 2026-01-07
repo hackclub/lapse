@@ -204,6 +204,7 @@ export async function videoConcat(streams: Blob[]) {
                 sample.setDuration(sample.duration * timeScale);
 
                 await source.add(sample);
+                sample.close();
 
                 localLastTimestamp = origTimestamp;
             }
