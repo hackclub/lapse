@@ -2,6 +2,7 @@ import "@/server/allow-only-server";
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import { NextApiRequest, NextApiResponse } from "next";
+import { z, ZodError } from "zod";
 
 import { getAuthenticatedUser } from "@/server/auth";
 
@@ -23,7 +24,17 @@ export async function createContext(opts: { req: NextApiRequest; res: NextApiRes
   };
 }
 
-const t = initTRPC.context<Context>().create();
+const t = initTRPC.context<Context>().create({
+    errorFormatter({ shape, error }) {
+        return {
+            ...shape,
+            data: {
+                ...shape.data,
+                zodError: error.cause instanceof ZodError ? z.treeifyError(error.cause) : null,
+            },
+        };
+    },
+});
 
 export const router = t.router;
 export const procedure = t.procedure;
