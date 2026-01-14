@@ -5,7 +5,7 @@ import { generateJWT } from "@/server/auth";
 import { env } from "@/server/env";
 import { logError, logNextRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
-import { MAX_HANDLE_LENGTH } from "@/server/routers/api/user";
+import { MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH } from "@/server/routers/api/user";
 
 // GET /api/auth-hackatime
 //    Meant to be used as a callback URL - the user will be redirected to this API endpoint when
@@ -208,6 +208,10 @@ export default async function handler(
 
             if (baseHandle.length > MAX_HANDLE_LENGTH) {
                 baseHandle = baseHandle.slice(0, MAX_HANDLE_LENGTH);
+            }
+
+            if (baseHandle.length < MIN_HANDLE_LENGTH) {
+                baseHandle = baseHandle.padEnd(MIN_HANDLE_LENGTH, "0");
             }
 
             let handle = baseHandle;
