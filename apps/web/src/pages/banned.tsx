@@ -25,7 +25,7 @@ export default function BannedPage() {
           <p className="text-muted mb-6">
             If you believe this is a mistake, please contact an administrator.
           </p>
-          <Button kind="regular" onClick={signOut}>
+          <Button kind="regular" onClick={signOut} className="w-full">
             Sign Out
           </Button>
         </div>

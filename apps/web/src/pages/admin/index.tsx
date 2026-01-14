@@ -14,10 +14,12 @@ import { ProfilePicture } from "@/client/components/ProfilePicture";
 
 import { Button } from "@/client/components/ui/Button";
 import { Skeleton } from "@/client/components/ui/Skeleton";
+import { Switch } from "@/client/components/ui/Switch";
 import { TextInput } from "@/client/components/ui/TextInput";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
 import { WindowedModal } from "@/client/components/ui/WindowedModal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
+import { SelectInput } from "@/client/components/ui/SelectInput";
 
 export default function AdminPage() {
   const { currentUser, isLoading: authLoading } = useAuth(true);
@@ -47,7 +49,13 @@ export default function AdminPage() {
   const [banHistory, setBanHistory] = useState<BanRecord[] | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
+  const [promoteModalOpen, setPromoteModalOpen] = useState(false);
+  const [promoteTargetUser, setPromoteTargetUser] = useState<User | null>(null);
+  const [selectedPermission, setSelectedPermission] = useState<"USER" | "ADMIN">("USER");
+  const [isPromoting, setIsPromoting] = useState(false);
+
   const isAdmin = currentUser && (currentUser.private.permissionLevel === "ADMIN" || currentUser.private.permissionLevel === "ROOT");
+  const isRoot = currentUser?.private.permissionLevel === "ROOT";
 
   async function loadUsers(cursor?: string, onlyBanned?: boolean) {
     try {
@@ -238,6 +246,44 @@ export default function AdminPage() {
     }
   }
 
+  function openPromoteModal(user: User) {
+    setPromoteTargetUser(user);
+    setSelectedPermission(user.private.permissionLevel === "ADMIN" ? "USER" : "ADMIN");
+    setPromoteModalOpen(true);
+  }
+
+  async function handlePromote() {
+    if (!promoteTargetUser)
+      return;
+
+    setIsPromoting(true);
+
+    try {
+      const res = await trpc.user.setPermissionLevel.mutate({
+        id: promoteTargetUser.id,
+        permissionLevel: selectedPermission
+      });
+
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+
+      setUsers(prev => prev?.map(u => u.id === promoteTargetUser.id ? res.data.user : u) ?? null);
+      if (searchResult?.id === promoteTargetUser.id)
+        setSearchResult(res.data.user);
+
+      setPromoteModalOpen(false);
+    }
+    catch (err) {
+      console.error("(admin/index.tsx) Error updating permission:", err);
+      setError("Failed to update permission level");
+    }
+    finally {
+      setIsPromoting(false);
+    }
+  }
+
   if (authLoading) {
     return (
       <RootLayout title="Admin Dashboard - Lapse" showHeader>
@@ -263,20 +309,18 @@ export default function AdminPage() {
 
   function UserRow({ user }: { user: User }) {
     const isBanned = user.private.isBanned;
-    const isRoot = user.private.permissionLevel === "ROOT";
-    const canModerate = currentUser?.private.permissionLevel === "ROOT" || user.private.permissionLevel === "USER";
+    const userIsRoot = user.private.permissionLevel === "ROOT";
+    const canModerate = isRoot || user.private.permissionLevel === "USER";
 
     return (
-      <div className="flex items-center gap-4 p-4 bg-dark rounded-xl border border-slate">
+      <NextLink
+        href={`/user/${user.id}`}
+        className="flex items-center gap-4 p-4 bg-dark rounded-xl border border-slate hover:border-muted transition-colors"
+      >
         <ProfilePicture user={user} size="lg" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <NextLink
-              href={`/user/${user.id}`}
-              className="font-bold text-white hover:text-red transition-colors truncate"
-            >
-              {user.displayName}
-            </NextLink>
+            <span className="font-bold text-white truncate">{user.displayName}</span>
             <span className="text-muted text-sm">@{user.handle}</span>
             {user.private.permissionLevel !== "USER" && (
               <span className="px-2 py-0.5 text-xs font-bold rounded bg-red text-white">
@@ -289,30 +333,24 @@ export default function AdminPage() {
               </span>
             )}
           </div>
-          <div className="text-muted text-sm truncate">
-            {user.id}
-          </div>
+          <div className="text-muted text-sm truncate">{user.id}</div>
           {isBanned && (user.private.bannedReason || user.private.bannedReasonInternal) && (
             <div className="text-orange text-sm mt-1">
-              {user.private.bannedReason && (
-                <div>Public: {user.private.bannedReason}</div>
-              )}
-              {user.private.bannedReasonInternal && (
-                <div>Internal: {user.private.bannedReasonInternal}</div>
-              )}
+              {user.private.bannedReason && <div>Public: {user.private.bannedReason}</div>}
+              {user.private.bannedReasonInternal && <div>Internal: {user.private.bannedReasonInternal}</div>}
             </div>
           )}
         </div>
-        <div className="flex gap-2">
-          <NextLink href={`/user/${user.id}`}>
-            <Button kind="regular" onClick={() => {}}>
-              <Icon glyph="view" width={16} height={16} />
-            </Button>
-          </NextLink>
+        <div className="flex gap-2" onClick={e => e.preventDefault()}>
           <Button kind="regular" onClick={() => openHistoryModal(user)}>
-            <Icon glyph="history" width={16} height={16} />
+            <Icon glyph="history" width={20} height={20} />
           </Button>
-          {canModerate && !isRoot && (
+          {isRoot && !userIsRoot && (
+            <Button kind="regular" onClick={() => openPromoteModal(user)}>
+              <Icon glyph="admin" width={20} height={20} />
+            </Button>
+          )}
+          {canModerate && !userIsRoot && (
             <>
               <Button
                 kind={isBanned ? "primary" : "destructive"}
@@ -320,25 +358,31 @@ export default function AdminPage() {
               >
                 {isBanned ? "Unban" : "Ban"}
               </Button>
-              {currentUser?.private.permissionLevel === "ROOT" && (
+              {isRoot && (
                 <Button kind="destructive" onClick={() => openDeleteModal(user)}>
-                  <Icon glyph="delete" width={16} height={16} />
+                  <Icon glyph="delete" width={20} height={20} />
                 </Button>
               )}
             </>
           )}
         </div>
-      </div>
+      </NextLink>
     );
   }
 
   return (
     <RootLayout title="Admin Dashboard - Lapse" showHeader>
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+        <div className="flex items-center gap-3 mb-6">
+          <Icon glyph="admin" width={32} height={32} className="text-red" />
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        </div>
 
-        <div className="mb-6 p-4 bg-darker rounded-xl border border-slate">
-          <h2 className="text-xl font-bold mb-4">Search User</h2>
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon glyph="search" width={20} height={20} className="text-muted" />
+            <h2 className="text-xl font-bold">Search User</h2>
+          </div>
           <div className="flex gap-2">
             <TextInput
               value={searchQuery}
@@ -349,7 +393,6 @@ export default function AdminPage() {
               {isSearching ? "Searching..." : "Search"}
             </Button>
           </div>
-
           {searchResult && (
             <div className="mt-4">
               <UserRow user={searchResult} />
@@ -360,15 +403,11 @@ export default function AdminPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">All Users</h2>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showBannedOnly}
-                onChange={e => setShowBannedOnly(e.target.checked)}
-                className="w-4 h-4"
-              />
-              <span className="text-sm">Show banned only</span>
-            </label>
+            <Switch
+              checked={showBannedOnly}
+              onChange={setShowBannedOnly}
+              label="Show banned only"
+            />
           </div>
 
           {!users ? (
@@ -526,6 +565,34 @@ export default function AdminPage() {
           <Button kind="regular" onClick={() => setHistoryModalOpen(false)}>
             Close
           </Button>
+        </div>
+      </WindowedModal>
+
+      <WindowedModal
+        title="Change Role"
+        description={`Set permission level for ${promoteTargetUser?.displayName}`}
+        icon="admin"
+        isOpen={promoteModalOpen}
+        setIsOpen={setPromoteModalOpen}
+      >
+        <div className="space-y-4">
+          <SelectInput
+            label="Permission Level"
+            description="Select the user's role"
+            value={selectedPermission}
+            onChange={v => setSelectedPermission(v as "USER" | "ADMIN")}
+          >
+            <option value="USER">User</option>
+            <option value="ADMIN">Admin</option>
+          </SelectInput>
+          <div className="flex gap-2 justify-end">
+            <Button kind="regular" onClick={() => setPromoteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button kind="primary" onClick={handlePromote} disabled={isPromoting}>
+              {isPromoting ? "Saving..." : "Save"}
+            </Button>
+          </div>
         </div>
       </WindowedModal>
 

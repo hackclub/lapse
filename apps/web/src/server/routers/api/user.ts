@@ -700,6 +700,45 @@ export default router({
         }),
 
     /**
+     * Sets the permission level of a user. Only ROOT can use this endpoint.
+     */
+    setPermissionLevel: protectedProcedure()
+        .input(z.object({
+            id: PublicId,
+            permissionLevel: PermissionLevelSchema
+        }))
+        .output(apiResult({ user: UserSchema }))
+        .mutation(async (req) => {
+            logRequest("user/setPermissionLevel", req);
+
+            const actor = req.ctx.user;
+            if (actor.permissionLevel !== "ROOT")
+                return apiErr("NO_PERMISSION", "Only ROOT can change permission levels.");
+
+            if (req.input.id === actor.id)
+                return apiErr("NO_PERMISSION", "You cannot change your own permission level.");
+
+            const target = await database.user.findFirst({
+                where: { id: req.input.id },
+                include: { devices: true }
+            });
+
+            if (!target)
+                return apiErr("NOT_FOUND", "User not found.");
+
+            if (target.permissionLevel === "ROOT")
+                return apiErr("NO_PERMISSION", "Cannot change permission level of ROOT users.");
+
+            const updated = await database.user.update({
+                where: { id: target.id },
+                data: { permissionLevel: req.input.permissionLevel },
+                include: { devices: true }
+            });
+
+            return apiOk({ user: dtoUser(updated) });
+        }),
+
+    /**
      * Lists all users. Only administrators can use this endpoint.
      */
     list: protectedProcedure()
