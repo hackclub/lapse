@@ -53,7 +53,8 @@ export default function Auth() {
 
     if (!error) {
       initOAuth();
-    } else if (error === "no-profile-picture") {
+    }
+    else if (error === "no-profile-picture") {
       setRequireSlackLogin(true);
     }
 
