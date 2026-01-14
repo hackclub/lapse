@@ -29,7 +29,7 @@ export function Duration({ seconds, className }: {
 
   return (
     <div className={`inline-flex items-center gap-1 ${className || ""}`}>
-      <Icon glyph="clock" size={16} />
+      {/* <Icon glyph="clock" size={16} /> */}
       <time>{display}</time>
     </div>
   );
