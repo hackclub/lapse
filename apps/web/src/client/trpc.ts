@@ -1,10 +1,26 @@
-import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
+import { createTRPCProxyClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import { CreateReactUtils } from "@trpc/react-query/shared";
 import { NextPageContext } from "next";
 
 import type { AppRouter } from "@/server/routers/_app";
 
 export type Api = CreateReactUtils<AppRouter, NextPageContext>;
+
+let banRedirectTriggered = false;
+
+export function handleBanError(error: unknown): boolean {
+    if (
+        error instanceof TRPCClientError &&
+        error.message === "Your account has been banned."
+    ) {
+        if (!banRedirectTriggered && typeof window !== "undefined") {
+            banRedirectTriggered = true;
+            window.location.href = "/banned";
+        }
+        return true;
+    }
+    return false;
+}
 
 function getBaseUrl() {
     if (typeof window !== "undefined") 

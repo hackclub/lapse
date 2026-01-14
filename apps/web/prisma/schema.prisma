@@ -52,11 +52,46 @@ model User {
   slackId                   String?
   lastHeartbeat             DateTime          @default(now())
 
+  isBanned                  Boolean           @default(false)
+  bannedAt                  DateTime?
+  bannedReason              String            @default("")
+  bannedReasonInternal      String            @default("")
+
   timelapses            Timelapse[]
   devices               KnownDevice[]
   postedComments        Comment[]
   uploadTokens          UploadToken[]
   draftTimelapses       DraftTimelapse[]
+  banRecords            BanRecord[]         @relation("BanRecordTarget")
+  performedBanRecords   BanRecord[]         @relation("BanRecordPerformer")
+}
+
+enum BanAction {
+  BAN
+  UNBAN
+}
+
+/// Represents a single ban or unban action performed on a user.
+model BanRecord {
+  id                    String      @id @default(nanoid(12))
+  createdAt             DateTime    @default(now())
+
+  /// The action that was performed.
+  action                BanAction
+
+  /// The public reason for the action (shown to user).
+  reason                String      @default("")
+
+  /// The internal reason for the action (only visible to admins).
+  reasonInternal        String      @default("")
+
+  /// The user that was banned or unbanned.
+  targetId              String
+  target                User        @relation("BanRecordTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  /// The admin who performed the action.
+  performedById         String
+  performedBy           User        @relation("BanRecordPerformer", fields: [performedById], references: [id], onDelete: Cascade)
 }
 
 /// Represents a timelapse that has not yet been uploaded to the server.

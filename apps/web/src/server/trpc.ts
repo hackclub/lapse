@@ -53,6 +53,13 @@ export function protectedProcedure() {
         message: "Authentication required",
       });
     }
+
+    if (ctx.user.isBanned) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Your account has been banned.",
+      });
+    }
     
     return opts.next({
       ctx: {...ctx, user: ctx.user },

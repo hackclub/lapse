@@ -2,7 +2,7 @@ import "@/server/allow-only-server";
 
 import { z } from "zod";
 
-import { apiResult, apiErr, apiOk, Err } from "@/shared/common";
+import { apiResult, apiErr, apiOk, Err, oneOf } from "@/shared/common";
 
 import { router, protectedProcedure } from "@/server/trpc";
 import { dtoPublicUser, PublicUserSchema } from "@/server/routers/api/user";
@@ -115,14 +115,19 @@ export default router({
             logRequest("comment/delete", req);
 
             const comment = await database.comment.findUnique({
-                where: { id: req.input.commentId }
+                where: { id: req.input.commentId },
+                include: { timelapse: true }
             });
 
             if (!comment)
                 return apiErr("NOT_FOUND", "Comment not found.");
 
-            if (comment.authorId !== req.ctx.user.id)
-                return apiErr("NO_PERMISSION", "You can only delete your own comments.");
+            const isAuthor = comment.authorId === req.ctx.user.id;
+            const isAdmin = req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
+            const isTimelapseOwner = comment.timelapse.ownerId === req.ctx.user.id;
+
+            if (!isAuthor && !isAdmin && !isTimelapseOwner)
+                return apiErr("NO_PERMISSION", "You don't have permission to delete this comment.");
 
             await database.comment.delete({
                 where: { id: req.input.commentId }

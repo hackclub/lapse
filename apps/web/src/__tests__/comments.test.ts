@@ -182,12 +182,17 @@ describe("comment router", () => {
         it("returns NO_PERMISSION when deleting another user's comment", async () => {
             const user = testFactory.user({ id: "user-1" });
             const other = testFactory.user({ id: "user-2" });
+            const timelapse = testFactory.timelapse({ id: "timelapse-1", ownerId: "owner-1" });
             const commentEntity = testFactory.comment({
                 id: "comment-1",
                 authorId: other.id,
+                timelapseId: timelapse.id,
             });
 
-            mockDatabase.comment.findUnique.mockResolvedValueOnce(commentEntity);
+            mockDatabase.comment.findUnique.mockResolvedValueOnce({
+                ...commentEntity,
+                timelapse,
+            });
 
             const caller = createCaller(createMockContext(user));
             const result = await caller.delete({ commentId: commentEntity.id });
@@ -199,14 +204,69 @@ describe("comment router", () => {
             expect(mockDatabase.comment.delete).not.toHaveBeenCalled();
         });
 
+        it("allows admin to delete any comment", async () => {
+            const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+            const other = testFactory.user({ id: "user-2" });
+            const timelapse = testFactory.timelapse({ id: "timelapse-1", ownerId: "owner-1" });
+            const commentEntity = testFactory.comment({
+                id: "comment-1",
+                authorId: other.id,
+                timelapseId: timelapse.id,
+            });
+
+            mockDatabase.comment.findUnique.mockResolvedValueOnce({
+                ...commentEntity,
+                timelapse,
+            });
+            mockDatabase.comment.delete.mockResolvedValueOnce(commentEntity);
+
+            const caller = createCaller(createMockContext(admin));
+            const result = await caller.delete({ commentId: commentEntity.id });
+
+            expect(result.ok).toBe(true);
+            expect(mockDatabase.comment.delete).toHaveBeenCalledWith({
+                where: { id: commentEntity.id },
+            });
+        });
+
+        it("allows timelapse owner to delete comments on their timelapse", async () => {
+            const owner = testFactory.user({ id: "owner-1" });
+            const commenter = testFactory.user({ id: "user-2" });
+            const timelapse = testFactory.timelapse({ id: "timelapse-1", ownerId: owner.id });
+            const commentEntity = testFactory.comment({
+                id: "comment-1",
+                authorId: commenter.id,
+                timelapseId: timelapse.id,
+            });
+
+            mockDatabase.comment.findUnique.mockResolvedValueOnce({
+                ...commentEntity,
+                timelapse,
+            });
+            mockDatabase.comment.delete.mockResolvedValueOnce(commentEntity);
+
+            const caller = createCaller(createMockContext(owner));
+            const result = await caller.delete({ commentId: commentEntity.id });
+
+            expect(result.ok).toBe(true);
+            expect(mockDatabase.comment.delete).toHaveBeenCalledWith({
+                where: { id: commentEntity.id },
+            });
+        });
+
         it("deletes owned comment", async () => {
             const user = testFactory.user({ id: "user-1" });
+            const timelapse = testFactory.timelapse({ id: "timelapse-1", ownerId: "owner-1" });
             const commentEntity = testFactory.comment({
                 id: "comment-1",
                 authorId: user.id,
+                timelapseId: timelapse.id,
             });
 
-            mockDatabase.comment.findUnique.mockResolvedValueOnce(commentEntity);
+            mockDatabase.comment.findUnique.mockResolvedValueOnce({
+                ...commentEntity,
+                timelapse,
+            });
             mockDatabase.comment.delete.mockResolvedValueOnce(commentEntity);
 
             const caller = createCaller(createMockContext(user));

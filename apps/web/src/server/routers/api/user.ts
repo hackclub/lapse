@@ -2,7 +2,7 @@ import "@/server/allow-only-server";
 
 import { z } from "zod";
 
-import { apiResult, assert, descending, apiErr, when, apiOk } from "@/shared/common";
+import { apiResult, assert, descending, apiErr, when, apiOk, oneOf } from "@/shared/common";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { logError, logRequest } from "@/server/serverCommon";
@@ -38,7 +38,7 @@ export const KnownDeviceSchema = z.object({
     name: z.string()
 });
 
-export const UserHandle = z.string().min(3).max(16);
+export const UserHandle = z.string().min(3).max(32);
 export const UserDisplayName = z.string().min(1).max(24);
 export const UserBio = z.string().max(160).default("");
 export const UserUrlList = z.array(z.url().max(64).min(1)).max(4); 
@@ -56,7 +56,27 @@ export const PrivateUserDataSchema = z.object({
      * Whether the user needs to re-authenticate. This is `true` when, for example, the user has authenticated
      * with Slack before, but has not yet logged in with Hackatime.
      */
-    needsReauth: z.boolean()
+    needsReauth: z.boolean(),
+
+    /**
+     * Whether the user's account has been banned.
+     */
+    isBanned: z.boolean(),
+
+    /**
+     * The date when the user was banned, or `null` if not banned.
+     */
+    bannedAt: ApiDate.nullable(),
+
+    /**
+     * The public reason provided by an administrator for the ban (shown to user).
+     */
+    bannedReason: z.string(),
+
+    /**
+     * The internal reason for the ban (only visible to admins).
+     */
+    bannedReasonInternal: z.string()
 });
 
 /**
@@ -128,6 +148,52 @@ export const UserSchema = PublicUserSchema.safeExtend({
 export type DbCompositeUser = db.User & { devices: db.KnownDevice[] };
 
 /**
+ * Represents a ban action type.
+ */
+export type BanAction = z.infer<typeof BanActionSchema>;
+export const BanActionSchema = z.enum(["BAN", "UNBAN"]);
+
+/**
+ * Represents a record of a ban or unban action.
+ */
+export type BanRecord = z.infer<typeof BanRecordSchema>;
+export const BanRecordSchema = z.object({
+    id: PublicId,
+    createdAt: ApiDate,
+    action: BanActionSchema,
+    reason: z.string(),
+    reasonInternal: z.string(),
+    performedBy: z.object({
+        id: PublicId,
+        handle: UserHandle,
+        displayName: UserDisplayName
+    })
+});
+
+/**
+ * Represents a `db.BanRecord` with related tables included.
+ */
+export type DbBanRecord = db.BanRecord & { performedBy: db.User };
+
+/**
+ * Converts a database representation of a ban record to a runtime (API) one.
+ */
+export function dtoBanRecord(entity: DbBanRecord): BanRecord {
+    return {
+        id: entity.id,
+        createdAt: entity.createdAt.getTime(),
+        action: entity.action,
+        reason: entity.reason,
+        reasonInternal: entity.reasonInternal,
+        performedBy: {
+            id: entity.performedBy.id,
+            handle: entity.performedBy.handle,
+            displayName: entity.performedBy.displayName
+        }
+    };
+}
+
+/**
  * Converts a database representation of a known device to a runtime (API) one.
  */
 export function dtoKnownDevice(entity: db.KnownDevice): KnownDevice {
@@ -163,7 +229,11 @@ export function dtoUser(entity: DbCompositeUser): User {
         private: {
             permissionLevel: entity.permissionLevel,
             devices: entity.devices.map(dtoKnownDevice),
-            needsReauth: entity.slackId !== null && entity.hackatimeId === null
+            needsReauth: entity.slackId !== null && entity.hackatimeId === null,
+            isBanned: entity.isBanned,
+            bannedAt: entity.bannedAt ? entity.bannedAt.getTime() : null,
+            bannedReason: entity.bannedReason,
+            bannedReasonInternal: entity.bannedReasonInternal
         }
     };
 }
@@ -242,8 +312,10 @@ export default router({
             if (!dbUser)
                 return apiOk({ user: null });
             
-            // Watch out! Make sure we never return a `User` to an unauthorized user here.
-            const user: User | PublicUser = req.ctx.user?.id == dbUser.id
+            // Return full User data if the caller is the user themselves or an admin.
+            const isSelf = req.ctx.user?.id === dbUser.id;
+            const isAdmin = req.ctx.user && req.ctx.user.permissionLevel in oneOf("ADMIN", "ROOT");
+            const user: User | PublicUser = isSelf || isAdmin
                 ? dtoUser(dbUser)
                 : dtoPublicUser(dbUser);
             
@@ -512,6 +584,231 @@ export default router({
             await database.user.update({
                 data: { lastHeartbeat: new Date() },
                 where: { id: req.ctx.user.id }
+            });
+
+            return apiOk({});
+        }),
+
+    /**
+     * Sets the ban status of a user. Only administrators can use this endpoint.
+     */
+    setBanStatus: protectedProcedure()
+        .input(z.object({
+            /**
+             * The ID of the user to ban or unban.
+             */
+            id: PublicId,
+
+            /**
+             * Whether the user should be banned.
+             */
+            isBanned: z.boolean(),
+
+            /**
+             * The public reason for the ban (shown to the user). Only used when `isBanned` is `true`.
+             */
+            reason: z.string().max(512).optional(),
+
+            /**
+             * The internal reason for the ban (only visible to admins). Only used when `isBanned` is `true`.
+             */
+            reasonInternal: z.string().max(512).optional()
+        }))
+        .output(apiResult({
+            user: UserSchema
+        }))
+        .mutation(async (req) => {
+            logRequest("user/setBanStatus", req);
+
+            const actor = req.ctx.user;
+
+            if (!(actor.permissionLevel in oneOf("ADMIN", "ROOT")))
+                return apiErr("NO_PERMISSION", "Only administrators can change ban status.");
+
+            const target = await database.user.findFirst({
+                where: { id: req.input.id },
+                include: { devices: true }
+            });
+
+            if (!target)
+                return apiErr("NOT_FOUND", "User not found.");
+
+            if (target.permissionLevel !== "USER" && actor.permissionLevel !== "ROOT")
+                return apiErr("NO_PERMISSION", "Only ROOT can change ban status of other administrators.");
+
+            if (target.id === actor.id)
+                return apiErr("NO_PERMISSION", "You cannot change your own ban status.");
+
+            const now = new Date();
+            const reason = req.input.reason ?? "";
+            const reasonInternal = req.input.reasonInternal ?? "";
+
+            const updateData: Partial<db.User> = {
+                isBanned: req.input.isBanned,
+                bannedReason: req.input.isBanned ? reason : "",
+                bannedReasonInternal: req.input.isBanned ? reasonInternal : "",
+                bannedAt: req.input.isBanned ? now : null
+            };
+
+            const [updatedUser] = await database.$transaction([
+                database.user.update({
+                    where: { id: target.id },
+                    data: updateData,
+                    include: { devices: true }
+                }),
+                database.banRecord.create({
+                    data: {
+                        action: req.input.isBanned ? "BAN" : "UNBAN",
+                        reason: reason,
+                        reasonInternal: reasonInternal,
+                        targetId: target.id,
+                        performedById: actor.id
+                    }
+                })
+            ]);
+
+            return apiOk({ user: dtoUser(updatedUser) });
+        }),
+
+    /**
+     * Gets the ban history for a user. Only administrators can use this endpoint.
+     */
+    getBanHistory: protectedProcedure()
+        .input(z.object({
+            /**
+             * The ID of the user to get ban history for.
+             */
+            id: PublicId
+        }))
+        .output(apiResult({
+            records: z.array(BanRecordSchema)
+        }))
+        .query(async (req) => {
+            logRequest("user/getBanHistory", req);
+
+            const actor = req.ctx.user;
+            if (!(actor.permissionLevel in oneOf("ADMIN", "ROOT")))
+                return apiErr("NO_PERMISSION", "Only administrators can view ban history.");
+
+            const records = await database.banRecord.findMany({
+                where: { targetId: req.input.id },
+                include: { performedBy: true },
+                orderBy: { createdAt: "desc" }
+            });
+
+            return apiOk({ records: records.map(dtoBanRecord) });
+        }),
+
+    /**
+     * Lists all users. Only administrators can use this endpoint.
+     */
+    list: protectedProcedure()
+        .input(z.object({
+            /**
+             * Maximum number of users to return.
+             */
+            limit: z.number().int().min(1).max(100).default(50),
+
+            /**
+             * Cursor for pagination.
+             */
+            cursor: PublicId.optional(),
+
+            /**
+             * If `true`, only returns banned users.
+             */
+            onlyBanned: z.boolean().optional()
+        }))
+        .output(apiResult({
+            users: z.array(UserSchema),
+            nextCursor: PublicId.optional()
+        }))
+        .query(async (req) => {
+            logRequest("user/list", req);
+
+            const actor = req.ctx.user;
+            if (!(actor.permissionLevel in oneOf("ADMIN", "ROOT")))
+                return apiErr("NO_PERMISSION", "Only administrators can list users.");
+
+            const where: db.Prisma.UserWhereInput = {
+                ...(req.input.onlyBanned ? { isBanned: true } : {})
+            };
+
+            const users = await database.user.findMany({
+                where,
+                include: { devices: true },
+                take: req.input.limit + 1,
+                orderBy: { createdAt: "desc" },
+                ...(req.input.cursor ? { cursor: { id: req.input.cursor }, skip: 1 } : {})
+            });
+
+            const hasMore = users.length > req.input.limit;
+            const items = hasMore ? users.slice(0, -1) : users;
+
+            return apiOk({
+                users: items.map(dtoUser),
+                nextCursor: hasMore ? items[items.length - 1].id : undefined
+            });
+        }),
+
+    /**
+     * Deletes a user and all their associated data. Only ROOT can use this endpoint.
+     */
+    deleteUser: protectedProcedure()
+        .input(z.object({
+            /**
+             * The ID of the user to delete.
+             */
+            id: PublicId
+        }))
+        .output(apiResult({}))
+        .mutation(async (req) => {
+            logRequest("user/deleteUser", req);
+
+            const actor = req.ctx.user;
+
+            if (actor.permissionLevel !== "ROOT")
+                return apiErr("NO_PERMISSION", "Only ROOT can delete users.");
+
+            const target = await database.user.findFirst({
+                where: { id: req.input.id }
+            });
+
+            if (!target)
+                return apiErr("NOT_FOUND", "User not found.");
+
+            if (target.id === actor.id)
+                return apiErr("NO_PERMISSION", "You cannot delete your own account.");
+
+            if (target.permissionLevel === "ROOT")
+                return apiErr("NO_PERMISSION", "Cannot delete ROOT users.");
+
+            const timelapses = await database.timelapse.findMany({
+                where: { ownerId: target.id }
+            });
+
+            for (const timelapse of timelapses) {
+                await deleteTimelapse(timelapse.id, "SERVER");
+            }
+
+            await database.comment.deleteMany({
+                where: { authorId: target.id }
+            });
+
+            await database.knownDevice.deleteMany({
+                where: { ownerId: target.id }
+            });
+
+            await database.uploadToken.deleteMany({
+                where: { ownerId: target.id }
+            });
+
+            await database.draftTimelapse.deleteMany({
+                where: { ownerId: target.id }
+            });
+
+            await database.user.delete({
+                where: { id: target.id }
             });
 
             return apiOk({});
