@@ -8,6 +8,7 @@ import { decryptData, getCurrentDevice } from "@/client/encryption";
 import { ProfilePicture } from "@/client/components/ProfilePicture"
 import { Bullet } from "@/client/components/ui/Bullet";
 import { TimeAgo } from "@/client/components/TimeAgo";
+import { Duration } from "@/client/components/Duration";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -61,7 +62,6 @@ export function TimelapseCard({ timelapse }: {
   timelapse: Timelapse
 }) {
   const router = useRouter();
-
   const [thumb, setThumb] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -114,6 +114,8 @@ export function TimelapseCard({ timelapse }: {
             <span className="truncate">@{timelapse.owner.displayName}</span>
             <Bullet />
             <TimeAgo date={timelapse.createdAt} className="shrink-0" />
+            <Bullet />
+            <Duration seconds={timelapse.duration} className="shrink-0" />
           </h2>
         </div>
       </div>

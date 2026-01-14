@@ -51,7 +51,8 @@ export function dtoTimelapse(entity: DbTimelapse): Timelapse {
             ? `${entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED}/${entity.thumbnailS3Key}`
             : null,
         videoContainerKind: entity.containerKind,
-        isPublished: entity.isPublished
+        isPublished: entity.isPublished,
+        duration: entity.duration,
     };
 }
 
@@ -242,6 +243,7 @@ export const OwnedTimelapseSchema = z.object({
      */
     videoContainerKind: TimelapseVideoContainerSchema,
 
+    duration: z.number().min(0),
     /**
      * Data accessible only to the author or administrators.
      */
