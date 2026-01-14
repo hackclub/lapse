@@ -219,8 +219,7 @@ export default async function handler(
 
             while (await database.user.findFirst({ where: { handle } })) {
                 const suffix = counter.toString();
-                const maxBaseLength = MAX_HANDLE_LENGTH - suffix.length;
-                handle = `${baseHandle.slice(0, maxBaseLength)}${suffix}`;
+                handle = `${baseHandle.slice(0, MAX_HANDLE_LENGTH - suffix.length)}${suffix}`;
                 counter++;
             }
 
