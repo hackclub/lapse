@@ -5,6 +5,7 @@ import { generateJWT } from "@/server/auth";
 import { env } from "@/server/env";
 import { logError, logNextRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
+import { MAX_HANDLE_LENGTH } from "@/server/routers/api/user";
 
 // GET /api/auth-hackatime
 //    Meant to be used as a callback URL - the user will be redirected to this API endpoint when
@@ -203,12 +204,19 @@ export default async function handler(
         }
 
         if (!dbUser) {
-            const baseHandle = primaryEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+            let baseHandle = primaryEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+
+            if (baseHandle.length > MAX_HANDLE_LENGTH) {
+                baseHandle = baseHandle.slice(0, MAX_HANDLE_LENGTH);
+            }
+
             let handle = baseHandle;
             let counter = 1;
 
             while (await database.user.findFirst({ where: { handle } })) {
-                handle = `${baseHandle}${counter}`;
+                const suffix = counter.toString();
+                const maxBaseLength = MAX_HANDLE_LENGTH - suffix.length;
+                handle = `${baseHandle.slice(0, maxBaseLength)}${suffix}`;
                 counter++;
             }
 

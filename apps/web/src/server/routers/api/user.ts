@@ -38,7 +38,12 @@ export const KnownDeviceSchema = z.object({
     name: z.string()
 });
 
-export const UserHandle = z.string().min(3).max(16);
+/**
+ * The maximum length of a user handle.
+ */
+export const MAX_HANDLE_LENGTH = 16;
+
+export const UserHandle = z.string().min(3).max(MAX_HANDLE_LENGTH);
 export const UserDisplayName = z.string().min(1).max(24);
 export const UserBio = z.string().max(160).default("");
 export const UserUrlList = z.array(z.url().max(64).min(1)).max(4); 
