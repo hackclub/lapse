@@ -75,7 +75,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         currentUser: effectiveUser,
         isLoading,
         isBanned,
-        banReason: effectiveUser?.private.isBanned ? effectiveUser.private.bannedReason : null,
+        banReason: effectiveUser?.private.ban?.reason ?? null,
         signOut
     };
 
