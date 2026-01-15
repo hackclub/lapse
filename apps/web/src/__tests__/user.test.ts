@@ -51,10 +51,14 @@ function polyfillIteratorHelpers(): void {
 	}
 }
 
-const importRouter = async () => (await import("@/server/routers/api/user")).default;
+const importUserRouter = async () => (await import("@/server/routers/api/user")).default;
+const importAdminRouter = async () => (await import("@/server/routers/api/admin")).default;
 
 const createCaller = async (ctx: Context) =>
-	(await importRouter()).createCaller(ctx);
+	(await importUserRouter()).createCaller(ctx);
+
+const createAdminCaller = async (ctx: Context) =>
+	(await importAdminRouter()).createCaller(ctx);
 
 describe("user router", () => {
 	beforeAll(() => {
@@ -442,7 +446,7 @@ describe("user router", () => {
 			const user = testFactory.user({ id: "user-1", permissionLevel: "USER" });
 			const target = testFactory.user({ id: "user-2", permissionLevel: "USER" });
 
-			const caller = await createCaller(createMockContext(user));
+			const caller = await createAdminCaller(createMockContext(user));
 			const result = await caller.setBanStatus({
 				id: target.id,
 				isBanned: true,
@@ -461,15 +465,25 @@ describe("user router", () => {
 			const bannedTarget = {
 				...target,
 				isBanned: true,
-				bannedAt: new Date(),
-				bannedReason: "Test ban",
 				devices: [],
+			};
+			const banRecord = {
+				id: "ban-1",
+				createdAt: new Date(),
+				action: "BAN",
+				reason: "Test ban",
+				reasonInternal: "",
+				targetId: target.id,
+				performedById: admin.id,
+				performedBy: admin,
 			};
 
 			mockDatabase.user.findFirst.mockResolvedValue({ ...target, devices: [] });
 			mockDatabase.user.update.mockResolvedValue(bannedTarget);
+			mockDatabase.banRecord.create.mockResolvedValue(banRecord);
+			mockDatabase.$transaction.mockResolvedValue([bannedTarget, banRecord]);
 
-			const caller = await createCaller(createMockContext(admin));
+			const caller = await createAdminCaller(createMockContext(admin));
 			const result = await caller.setBanStatus({
 				id: target.id,
 				isBanned: true,
@@ -478,7 +492,7 @@ describe("user router", () => {
 
 			expect(result.ok).toBe(true);
 			if (result.ok) {
-				expect(result.data.user.private.isBanned).toBe(true);
+				expect(result.data.user.private.ban).not.toBeNull();
 			}
 		});
 
@@ -488,7 +502,7 @@ describe("user router", () => {
 
 			mockDatabase.user.findFirst.mockResolvedValue({ ...admin2, devices: [] });
 
-			const caller = await createCaller(createMockContext(admin1));
+			const caller = await createAdminCaller(createMockContext(admin1));
 			const result = await caller.setBanStatus({
 				id: admin2.id,
 				isBanned: true,
@@ -506,15 +520,25 @@ describe("user router", () => {
 			const bannedAdmin = {
 				...admin,
 				isBanned: true,
-				bannedAt: new Date(),
-				bannedReason: "Test ban",
 				devices: [],
+			};
+			const banRecord = {
+				id: "ban-1",
+				createdAt: new Date(),
+				action: "BAN",
+				reason: "Test ban",
+				reasonInternal: "",
+				targetId: admin.id,
+				performedById: root.id,
+				performedBy: root,
 			};
 
 			mockDatabase.user.findFirst.mockResolvedValue({ ...admin, devices: [] });
 			mockDatabase.user.update.mockResolvedValue(bannedAdmin);
+			mockDatabase.banRecord.create.mockResolvedValue(banRecord);
+			mockDatabase.$transaction.mockResolvedValue([bannedAdmin, banRecord]);
 
-			const caller = await createCaller(createMockContext(root));
+			const caller = await createAdminCaller(createMockContext(root));
 			const result = await caller.setBanStatus({
 				id: admin.id,
 				isBanned: true,
@@ -529,7 +553,7 @@ describe("user router", () => {
 
 			mockDatabase.user.findFirst.mockResolvedValue({ ...admin, devices: [] });
 
-			const caller = await createCaller(createMockContext(admin));
+			const caller = await createAdminCaller(createMockContext(admin));
 			const result = await caller.setBanStatus({
 				id: admin.id,
 				isBanned: true,
@@ -546,7 +570,7 @@ describe("user router", () => {
 		it("should deny normal users from listing users", async () => {
 			const user = testFactory.user({ id: "user-1", permissionLevel: "USER" });
 
-			const caller = await createCaller(createMockContext(user));
+			const caller = await createAdminCaller(createMockContext(user));
 			const result = await caller.list({ limit: 10 });
 
 			expect(result.ok).toBe(false);
@@ -564,7 +588,7 @@ describe("user router", () => {
 
 			mockDatabase.user.findMany.mockResolvedValue(users);
 
-			const caller = await createCaller(createMockContext(admin));
+			const caller = await createAdminCaller(createMockContext(admin));
 			const result = await caller.list({ limit: 10 });
 
 			expect(result.ok).toBe(true);
@@ -579,7 +603,7 @@ describe("user router", () => {
 
 			mockDatabase.user.findMany.mockResolvedValue([bannedUser]);
 
-			const caller = await createCaller(createMockContext(admin));
+			const caller = await createAdminCaller(createMockContext(admin));
 			const result = await caller.list({ limit: 10, onlyBanned: true });
 
 			expect(result.ok).toBe(true);
@@ -596,7 +620,7 @@ describe("user router", () => {
 			const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
 			const target = testFactory.user({ id: "user-1", permissionLevel: "USER" });
 
-			const caller = await createCaller(createMockContext(admin));
+			const caller = await createAdminCaller(createMockContext(admin));
 			const result = await caller.deleteUser({ id: target.id });
 
 			expect(result.ok).toBe(false);
@@ -617,7 +641,7 @@ describe("user router", () => {
 			mockDatabase.draftTimelapse.deleteMany.mockResolvedValue({ count: 0 });
 			mockDatabase.user.delete.mockResolvedValue(target);
 
-			const caller = await createCaller(createMockContext(root));
+			const caller = await createAdminCaller(createMockContext(root));
 			const result = await caller.deleteUser({ id: target.id });
 
 			expect(result.ok).toBe(true);
@@ -631,7 +655,7 @@ describe("user router", () => {
 
 			mockDatabase.user.findFirst.mockResolvedValue(root);
 
-			const caller = await createCaller(createMockContext(root));
+			const caller = await createAdminCaller(createMockContext(root));
 			const result = await caller.deleteUser({ id: root.id });
 
 			expect(result.ok).toBe(false);
@@ -646,7 +670,7 @@ describe("user router", () => {
 
 			mockDatabase.user.findFirst.mockResolvedValue(root2);
 
-			const caller = await createCaller(createMockContext(root1));
+			const caller = await createAdminCaller(createMockContext(root1));
 			const result = await caller.deleteUser({ id: root2.id });
 
 			expect(result.ok).toBe(false);
