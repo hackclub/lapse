@@ -59,7 +59,7 @@ export default function AdminPage() {
 
   async function loadUsers(cursor?: string, onlyBanned?: boolean) {
     try {
-      const res = await trpc.user.list.query({
+      const res = await trpc.admin.list.query({
         limit: 20,
         cursor,
         onlyBanned
@@ -150,7 +150,7 @@ export default function AdminPage() {
     setIsBanning(true);
 
     try {
-      const res = await trpc.user.setBanStatus.mutate({
+      const res = await trpc.admin.setBanStatus.mutate({
         id: banTargetUser.id,
         isBanned: ban,
         reason: ban ? banReason : undefined,
@@ -193,7 +193,7 @@ export default function AdminPage() {
     setIsLoadingHistory(true);
 
     try {
-      const res = await trpc.user.getBanHistory.query({ id: user.id });
+      const res = await trpc.admin.getBanHistory.query({ id: user.id });
 
       if (!res.ok) {
         setError(res.error);
@@ -220,7 +220,7 @@ export default function AdminPage() {
     setIsDeleting(true);
 
     try {
-      const res = await trpc.user.deleteUser.mutate({
+      const res = await trpc.admin.deleteUser.mutate({
         id: deleteTargetUser.id
       });
 
@@ -259,7 +259,7 @@ export default function AdminPage() {
     setIsPromoting(true);
 
     try {
-      const res = await trpc.user.setPermissionLevel.mutate({
+      const res = await trpc.admin.setPermissionLevel.mutate({
         id: promoteTargetUser.id,
         permissionLevel: selectedPermission
       });
@@ -308,7 +308,7 @@ export default function AdminPage() {
   }
 
   function UserRow({ user }: { user: User }) {
-    const isBanned = user.private.isBanned;
+    const isBanned = user.private.ban !== null;
     const userIsRoot = user.private.permissionLevel === "ROOT";
     const canModerate = isRoot || user.private.permissionLevel === "USER";
 
@@ -334,10 +334,10 @@ export default function AdminPage() {
             )}
           </div>
           <div className="text-muted text-sm truncate">{user.id}</div>
-          {isBanned && (user.private.bannedReason || user.private.bannedReasonInternal) && (
+          {user.private.ban && (user.private.ban.reason || user.private.ban.reasonInternal) && (
             <div className="text-orange text-sm mt-1">
-              {user.private.bannedReason && <div>Public: {user.private.bannedReason}</div>}
-              {user.private.bannedReasonInternal && <div>Internal: {user.private.bannedReasonInternal}</div>}
+              {user.private.ban.reason && <div>Public: {user.private.ban.reason}</div>}
+              {user.private.ban.reasonInternal && <div>Internal: {user.private.ban.reasonInternal}</div>}
             </div>
           )}
         </div>
@@ -439,9 +439,9 @@ export default function AdminPage() {
       </div>
 
       <WindowedModal
-        title={banTargetUser?.private.isBanned ? "Unban User" : "Ban User"}
+        title={banTargetUser?.private.ban ? "Unban User" : "Ban User"}
         description={
-          banTargetUser?.private.isBanned
+          banTargetUser?.private.ban
             ? `Unban ${banTargetUser?.displayName}`
             : `Ban ${banTargetUser?.displayName}`
         }
@@ -451,11 +451,11 @@ export default function AdminPage() {
       >
         <div className="space-y-4">
           <p>
-            {banTargetUser?.private.isBanned
+            {banTargetUser?.private.ban
               ? `Are you sure you want to unban ${banTargetUser?.displayName}?`
               : `Are you sure you want to ban ${banTargetUser?.displayName}?`}
           </p>
-          {!banTargetUser?.private.isBanned && (
+          {!banTargetUser?.private.ban && (
             <>
               <TextareaInput
                 label="Public ban reason"
@@ -476,13 +476,13 @@ export default function AdminPage() {
               Cancel
             </Button>
             <Button
-              kind={banTargetUser?.private.isBanned ? "primary" : "destructive"}
-              onClick={() => handleBanUser(!banTargetUser?.private.isBanned)}
+              kind={banTargetUser?.private.ban ? "primary" : "destructive"}
+              onClick={() => handleBanUser(!banTargetUser?.private.ban)}
               disabled={isBanning}
             >
               {isBanning
                 ? "Processing..."
-                : (banTargetUser?.private.isBanned ? "Unban" : "Ban")}
+                : (banTargetUser?.private.ban ? "Unban" : "Ban")}
             </Button>
           </div>
         </div>
