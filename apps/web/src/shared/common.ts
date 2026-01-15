@@ -207,6 +207,18 @@ export function oneOf<T extends PropertyKey>(...values: T[]): Record<T, true> {
 }
 
 /**
+ * Represents a permission level for a user.
+ */
+export type PermissionLevel = "USER" | "ADMIN" | "ROOT";
+
+/**
+ * Returns `true` if the user has admin or root permissions.
+ */
+export function isAdmin(user: { permissionLevel: PermissionLevel }): boolean {
+    return user.permissionLevel in oneOf("ADMIN", "ROOT");
+}
+
+/**
  * Returns `value` when `condition` is `true` - otherwise, returns an empty object (`{}`).
  * This function is usually used for conditional object construction via the spread operator.
  */
