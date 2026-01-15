@@ -1,11 +1,33 @@
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 
 import RootLayout from "@/client/components/RootLayout";
 import { Button } from "@/client/components/ui/Button";
+import { Skeleton } from "@/client/components/ui/Skeleton";
 import { useAuthContext } from "@/client/context/AuthContext";
 
 export default function BannedPage() {
-  const { signOut, banReason } = useAuthContext();
+  const router = useRouter();
+  const { signOut, isBanned, isLoading, banReason } = useAuthContext();
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !isBanned) {
+      setShouldRedirect(true);
+      router.replace("/");
+    }
+  }, [isLoading, isBanned, router]);
+
+  if (isLoading || shouldRedirect) {
+    return (
+      <RootLayout title="Loading - Lapse">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <Skeleton className="h-64 w-96" />
+        </div>
+      </RootLayout>
+    );
+  }
 
   return (
     <RootLayout title="Account Banned - Lapse">
