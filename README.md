@@ -46,14 +46,15 @@ pnpm turbo run db:push
 
 You also have a couple of development scripts at hand:
 ```bash
+# Run these from the root directory of the repo.
 # You'll need this to use any of the scripts in ./apps/web/prisma!
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lapse?schema=public"
 
 # Generate a JWT cookie to log in without having to auth through Slack
-node ./apps/web/prisma/create-jwt.mjs --email ascpixi@hackclub.com
+pnpm -F web exec tsx ./prisma/create-jwt.ts --email ascpixi@hackclub.com
 
 # Create a mock user without going through Slack
-node ./apps/web/prisma/create-user.mjs --email ascpixi@hackclub.com --sid U082DPCGPST --handle ascpixi --name ascpixi --pfp https://ca.slack-edge.com/T0266FRGM-U082DPCGPST-0c4754eb6211-512
+pnpm -F web exec tsx ./prisma/create-user.ts --email ascpixi@hackclub.com --sid U082DPCGPST --handle ascpixi --name ascpixi --pfp https://ca.slack-edge.com/T0266FRGM-U082DPCGPST-0c4754eb6211-512
 ```
 
 ## 🛠️ Deployment
@@ -66,10 +67,10 @@ For example - when deploying with Coolify, set these settings:
 
 You'll also need a PostgreSQL database running. The connection string to that database should be present in `DATABASE_URL`.
 
-You'll need at least one root user in order to promote other users to admins. You can do this via the [`./apps/web/prisma/promote.mjs`](./apps/web/prisma/promote.mjs) script:
+You'll need at least one root user in order to promote other users to admins. You can do this via the [`./apps/web/prisma/promote.ts`](./apps/web/prisma/promote.ts) script:
 
 ```sh
 # You'd probably want to use your production database URL here.
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lapse?schema=public"
-node ./prisma/promote.mjs --email ascpixi@hackclub.com
+pnpm -F web exec tsx ./prisma/promote.ts --email ascpixi@hackclub.com
 ```
