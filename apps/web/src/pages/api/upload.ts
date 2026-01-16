@@ -5,10 +5,13 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import prettyBytes from "pretty-bytes";
 
 import { env } from "@/server/env";
+import { database } from "@/server/db";
 import { logError, logInfo, logNextRequest } from "@/server/serverCommon";
-import { ApiResult, apiErr, Empty, apiOk, Err } from "@/shared/common";
 import { getAuthenticatedUser } from "@/server/auth";
 import { getUploadTokenForUpload, markUploadTokenUploaded, wipeUploadToken } from "@/server/services/uploadTokens";
+
+import { ApiResult, apiErr, Empty, apiOk, Err } from "@/shared/common";
+import { MAX_VIDEO_UPLOAD_SIZE } from "@/shared/constants";
 
 // POST /api/upload
 //    Consumes an upload token, and starts uploading a file to the S3 bucket associated with the
@@ -51,7 +54,6 @@ export const config = {
     },
 };
 
-import { database } from "@/server/db";
 
 export default async function handler(
     req: NextApiRequest,
@@ -89,7 +91,7 @@ export default async function handler(
     
     try {
         const form = formidable({
-            maxFileSize: 200 * 1024 * 1024, // 200MB max (higher than our limits to let token validation handle it)
+            maxFileSize: Math.floor(MAX_VIDEO_UPLOAD_SIZE * 1.25), // We add a 25% overhead for us to handle the file size limit from our API surface.
             keepExtensions: true,
             allowEmptyFiles: false,
             maxFiles: 1
