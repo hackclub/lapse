@@ -9,3 +9,6 @@ export const MAX_VIDEO_UPLOAD_SIZE = 384 * 1024 * 1024; // 384 MiB
 export const MAX_THUMBNAIL_UPLOAD_SIZE = 6 * 1024 * 1024; // 6 MiB
 export const UPLOAD_TOKEN_LIFETIME_MS = 20 * 60 * 1000;
 
+export const MIN_HANDLE_LENGTH = 3;
+export const MAX_HANDLE_LENGTH = 16;
+

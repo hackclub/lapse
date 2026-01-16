@@ -3,6 +3,7 @@ import "@/server/allow-only-server";
 import { z } from "zod";
 
 import { apiResult, assert, descending, apiErr, when, apiOk } from "@/shared/common";
+import { MIN_HANDLE_LENGTH, MAX_HANDLE_LENGTH } from "@/shared/constants";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
 import { logError, logRequest } from "@/server/serverCommon";
@@ -38,15 +39,7 @@ export const KnownDeviceSchema = z.object({
     name: z.string()
 });
 
-/**
- * The minimum length of a user handle.
- */
-export const MIN_HANDLE_LENGTH = 3;
-
-/**
- * The maximum length of a user handle.
- */
-export const MAX_HANDLE_LENGTH = 16;
+export { MIN_HANDLE_LENGTH, MAX_HANDLE_LENGTH };
 
 export const UserHandle = z.string().min(MIN_HANDLE_LENGTH).max(MAX_HANDLE_LENGTH);
 export const UserDisplayName = z.string().min(1).max(24);
