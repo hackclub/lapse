@@ -64,7 +64,6 @@ export function TimelapseCard({ timelapse }: {
   const router = useRouter();
   const [thumb, setThumb] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const duration = timelapse.duration;
 
   useEffect(() => {
     if (timelapse.isPublished || !timelapse.thumbnailUrl) {
@@ -104,9 +103,9 @@ export function TimelapseCard({ timelapse }: {
             ? <div className="bg-slate w-full h-full" />
             : <img src={thumb ?? "/images/no-thumbnail.png"} alt="" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
         }
-        {!isLoading && duration > 0 && (
+        {!isLoading && timelapse.duration > 0 && (
           <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 bg-black/80 text-white text-xs sm:text-sm px-1 sm:px-1.5 py-0.5 rounded font-medium">
-            <Duration seconds={duration} />
+            <Duration seconds={timelapse.duration} />
           </div>
         )}
       </div>

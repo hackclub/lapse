@@ -243,7 +243,11 @@ export const OwnedTimelapseSchema = z.object({
      */
     videoContainerKind: TimelapseVideoContainerSchema,
 
+    /**
+     * The duration of the timelapse, in seconds. Must be non-negative.
+     */
     duration: z.number().min(0),
+    
     /**
      * Data accessible only to the author or administrators.
      */
