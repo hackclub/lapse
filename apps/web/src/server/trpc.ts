@@ -57,7 +57,7 @@ export function protectedProcedure() {
     if (ctx.user.isBanned) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "Your account has been banned.",
+        message: "BANNED",
       });
     }
     

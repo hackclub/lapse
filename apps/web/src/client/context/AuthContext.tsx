@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import { useRouter } from "next/router";
 
 import type { User } from "@/client/api";
-import { trpc, handleBanError } from "@/client/trpc";
+import { trpc, isBannedError } from "@/client/trpc";
 import { useOnce } from "@/client/hooks/useOnce";
 import { useCache } from "@/client/hooks/useCache";
 
@@ -49,8 +49,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setIsLoading(false);
         }
         catch (err) {
-            if (handleBanError(err)) {
-                console.log("(AuthContext.tsx) user is banned");
+            if (isBannedError(err)) {
+                console.log("(AuthContext.tsx) user is banned (from error)");
                 setIsBanned(true);
                 setUserCache(null);
                 setIsLoading(false);

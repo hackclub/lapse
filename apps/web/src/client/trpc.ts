@@ -1,4 +1,5 @@
-import { createTRPCProxyClient, httpBatchLink, TRPCClientError } from "@trpc/client";
+import { createTRPCProxyClient, httpBatchLink, TRPCClientError, TRPCLink } from "@trpc/client";
+import { observable } from "@trpc/server/observable";
 import { CreateReactUtils } from "@trpc/react-query/shared";
 import { NextPageContext } from "next";
 
@@ -8,21 +9,38 @@ export type Api = CreateReactUtils<AppRouter, NextPageContext>;
 
 let banRedirectTriggered = false;
 
-export function handleBanError(error: unknown): boolean {
-    if (
-        error instanceof TRPCClientError &&
-        error.message === "Your account has been banned."
-    ) {
-        if (!banRedirectTriggered && typeof window !== "undefined") {
-            banRedirectTriggered = true;
-            window.location.href = "/banned";
-        }
-        
-        return true;
+function triggerBanRedirect() {
+    if (!banRedirectTriggered && typeof window !== "undefined") {
+        banRedirectTriggered = true;
+        window.location.href = "/banned";
     }
-
-    return false;
 }
+
+export function isBannedError(error: unknown): boolean {
+    return error instanceof TRPCClientError && error.message === "BANNED";
+}
+
+const banCheckLink: TRPCLink<AppRouter> = () => {
+    return ({ next, op }) => {
+        return observable((observer) => {
+            const unsubscribe = next(op).subscribe({
+                next(value) {
+                    observer.next(value);
+                },
+                error(err) {
+                    if (isBannedError(err)) {
+                        triggerBanRedirect();
+                    }
+                    observer.error(err);
+                },
+                complete() {
+                    observer.complete();
+                },
+            });
+            return unsubscribe;
+        });
+    };
+};
 
 function getBaseUrl() {
     if (typeof window !== "undefined") 
@@ -40,17 +58,11 @@ function getBaseUrl() {
 
 export const trpc = createTRPCProxyClient<AppRouter>({
     links: [
+        banCheckLink,
         httpBatchLink({
-            /**
-             * If you want to use SSR, you need to use the server"s full URL
-             * @see https://trpc.io/docs/v11/ssr
-             **/
             url: `${getBaseUrl()}/api/trpc`,
-            // You can pass any HTTP headers you wish here
             async headers() {
-                return {
-                    // authorization: getAuthCookie(),
-                };
+                return {};
             },
         }),
     ]

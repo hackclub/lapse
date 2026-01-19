@@ -5,39 +5,40 @@ import { useEffect } from "react";
 import "@/client/styles/globals.css";
 import { AuthProvider, useAuthContext } from "@/client/context/AuthContext";
 import { initLogBucket } from "@/client/logBucket";
-import { handleBanError } from "@/client/trpc";
+import { isBannedError } from "@/client/trpc";
 
 initLogBucket();
 
 if (typeof window !== "undefined") {
-  window.addEventListener("unhandledrejection", (event) => {
-    if (handleBanError(event.reason)) {
-      event.preventDefault();
-    }
-  });
+    window.addEventListener("unhandledrejection", (event) => {
+        if (isBannedError(event.reason)) {
+            event.preventDefault();
+            window.location.href = "/banned";
+        }
+    });
 }
 
 function BanRedirect({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const { isBanned, isLoading } = useAuthContext();
+    const router = useRouter();
+    const { isBanned, isLoading } = useAuthContext();
 
-  useEffect(() => {
-    if (!isLoading && isBanned && router.pathname !== "/banned") {
-      router.replace("/banned");
-    }
-  }, [isBanned, isLoading, router]);
+    useEffect(() => {
+        if (!isLoading && isBanned && router.pathname !== "/banned") {
+            router.replace("/banned");
+        }
+    }, [isBanned, isLoading, router]);
 
-  return <>{children}</>;
+    return <>{children}</>;
 }
 
 const App: AppType = ({ Component, pageProps }) => {
-  return (
-    <AuthProvider>
-      <BanRedirect>
-        <Component {...pageProps} />
-      </BanRedirect>
-    </AuthProvider>
-  );
+    return (
+        <AuthProvider>
+            <BanRedirect>
+                <Component {...pageProps} />
+            </BanRedirect>
+        </AuthProvider>
+    );
 };
 
 export default App;
