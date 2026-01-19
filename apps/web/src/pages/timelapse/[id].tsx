@@ -29,6 +29,7 @@ import { Bullet } from "@/client/components/ui/Bullet";
 import { TimeAgo } from "@/client/components/TimeAgo";
 import { CommentSection } from "@/client/components/CommentSection";
 import { PublishModal } from "@/client/components/ui/layout/PublishModal";
+import { Duration } from "@/client/components/Duration";
 
 export default function Page() {
   const router = useRouter();
@@ -447,8 +448,8 @@ export default function Page() {
 
                 <Bullet />
 
-                <span>
-                  { !timelapse ? <Skeleton /> : <TimeAgo date={timelapse.createdAt} /> }
+                <span className="flex gap-1 sm:gap-2">
+                  { !timelapse ? <Skeleton /> : <><TimeAgo date={timelapse.createdAt} /> <Bullet/><Duration seconds={timelapse.duration}/> </>}
                 </span>
               </div>
             </div>
