@@ -17,7 +17,10 @@ export function Switch({
 
   return (
     <label
-      className={`flex items-center gap-2 cursor-pointer select-none ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      className={clsx(
+        "flex items-center gap-2 cursor-pointer select-none",
+        disabled && "opacity-50 cursor-not-allowed"
+      )}
       onClick={handleClick}
     >
       <div
