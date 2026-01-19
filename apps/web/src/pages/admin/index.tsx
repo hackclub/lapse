@@ -342,24 +342,25 @@ export default function AdminPage() {
           )}
         </div>
         <div className="flex gap-2" onClick={e => e.preventDefault()}>
-          <Button kind="regular" onClick={() => openHistoryModal(user)}>
+          <Button kind="regular" isSquare onClick={() => openHistoryModal(user)}>
             <Icon glyph="history" width={20} height={20} />
           </Button>
           {isRoot && !userIsRoot && (
-            <Button kind="regular" onClick={() => openPromoteModal(user)}>
-              <Icon glyph="admin" width={20} height={20} />
+            <Button kind="regular" isSquare onClick={() => openPromoteModal(user)}>
+              <Icon glyph="admin" width={24} height={24} />
             </Button>
           )}
           {canModerate && !userIsRoot && (
             <>
               <Button
                 kind={isBanned ? "primary" : "destructive"}
+                isSquare
                 onClick={() => openBanModal(user)}
               >
-                {isBanned ? "Unban" : "Ban"}
+                <Icon glyph="private" width={20} height={20} />
               </Button>
               {isRoot && (
-                <Button kind="destructive" onClick={() => openDeleteModal(user)}>
+                <Button kind="destructive" isSquare onClick={() => openDeleteModal(user)}>
                   <Icon glyph="delete" width={20} height={20} />
                 </Button>
               )}
@@ -374,13 +375,13 @@ export default function AdminPage() {
     <RootLayout title="Admin Dashboard - Lapse" showHeader>
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-6">
-          <Icon glyph="admin" width={32} height={32} className="text-red" />
+          <Icon glyph="admin" width={40} height={40} className="text-red" />
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
         </div>
 
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-4">
-            <Icon glyph="search" width={20} height={20} className="text-muted" />
+            <Icon glyph="search" width={24} height={24} className="text-muted" />
             <h2 className="text-xl font-bold">Search User</h2>
           </div>
           <div className="flex gap-2">
