@@ -1,3 +1,5 @@
+import clsx from "clsx";
+
 export function Switch({
   checked,
   onChange,
