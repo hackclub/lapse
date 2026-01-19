@@ -19,6 +19,7 @@ export function handleBanError(error: unknown): boolean {
         }
         return true;
     }
+    
     return false;
 }
 
