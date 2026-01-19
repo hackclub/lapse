@@ -17,9 +17,10 @@ export function handleBanError(error: unknown): boolean {
             banRedirectTriggered = true;
             window.location.href = "/banned";
         }
+        
         return true;
     }
-    
+
     return false;
 }
 
