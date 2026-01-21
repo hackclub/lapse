@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack-container
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - PERSISTENCE=1
+      - S3_VIRTUAL_HOSTNAME=localhost 
+      - DATA_DIR=/var/lib/localstack
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh
+
+  lapse-db:
+    image: postgres:16
+    container_name: lapse-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=lapse
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  localstack-data:
+  postgres-data:

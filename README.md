@@ -15,46 +15,19 @@ In order to get started with developing Lapse, run these commands:
 # Install all packages
 pnpm install
 
-# Use example environment variables
-cp ./apps/web/.env.example ./apps/web/.env
-```
+cd apps/web   # apps\web for Windows
 
-You also need a PostgreSQL database running. The simplest way to get one up and running is via Docker:
-```bash
-# In this case, your DATABASE_URL environment variable would be "postgresql://postgres:postgres@localhost:5432/lapse?schema=public".
-# You only need to run this command once - this creates the container!
-docker run -d --name lapse-db -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
-```
+# Initialize the development environment (for the initial configuration)
+pnpm dev:init
 
-...if you already created the PostgreSQL container but it's not running, use the following to get it back up:
-```bash
-docker start lapse-db
-```
+# Start the development environment (if you've already ran dev:init skip this step)
+pnpm dev:start-env
 
-You'll have to change some environment variables in `./apps/web/.env`. Don't worry - everything is explained in the comments in the `.env` file! After you're done, run this command to get started:
-
-```bash
+# Start the development server
 pnpm turbo run dev
-```
 
-If you're running `db:dev` for the very first time, you'll have to create the schema:
-
-```bash
-# Make sure that your PostgreSQL server is running! See above on how to set it up.
-pnpm turbo run db:push
-```
-
-You also have a couple of development scripts at hand:
-```bash
-# Run these from the root directory of the repo.
-# You'll need this to use any of the scripts in ./apps/web/prisma!
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lapse?schema=public"
-
-# Generate a JWT cookie to log in without having to auth through Slack
-pnpm -F web exec tsx ./prisma/create-jwt.ts --email ascpixi@hackclub.com
-
-# Create a mock user without going through Slack
-pnpm -F web exec tsx ./prisma/create-user.ts --email ascpixi@hackclub.com --sid U082DPCGPST --handle ascpixi --name ascpixi --pfp https://ca.slack-edge.com/T0266FRGM-U082DPCGPST-0c4754eb6211-512
+# Stop the development environment (after you are done)
+pnpm dev:stop-env
 ```
 
 ## 🛠️ Deployment
