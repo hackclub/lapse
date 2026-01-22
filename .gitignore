@@ -56,3 +56,7 @@ next-env.d.ts
 # Test coverage
 coverage/
 *.lcov
+
+# Development environment
+localstack-data
+lapse.dev.yaml

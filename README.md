@@ -15,20 +15,16 @@ In order to get started with developing Lapse, run these commands:
 # Install all packages
 pnpm install
 
-cd apps/web   # apps\web for Windows
+# cd into the web app directory
+cd apps/web
 
-# Initialize the development environment (for the initial configuration)
+# Initialize the development environment
 pnpm dev:init
-
-# Start the development environment (if you've already ran dev:init skip this step)
-pnpm dev:start-env
 
 # Start the development server
 pnpm turbo run dev
-
-# Stop the development environment (after you are done)
-pnpm dev:stop-env
 ```
+To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively.
 
 ## 🛠️ Deployment
 Lapse is meant to be deployed via Docker. In order to deploy the main frontend/backend microservice, use `Dockerfile.web`, located in the root of this repo.
