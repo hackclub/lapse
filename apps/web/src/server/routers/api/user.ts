@@ -10,6 +10,8 @@ import { logError, logRequest } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { database } from "@/server/db";
+import { HackatimeOAuthApi, HackatimeUserApi } from "@/server/hackatime";
+import { env } from "@/server/env";
 
 import * as db from "@/generated/prisma/client";
 
@@ -475,6 +477,45 @@ export default router({
                     .toArray()
                     .toSorted(descending(x => x.time))
             });
+        }),
+
+    /**
+     * Gets all Hackatime projects from the user's Hackatime account.
+     */
+    getAllHackatimeProjects: protectedProcedure()
+        .input(z.object({}))
+        .output(apiResult({
+            projects: z.array(z.string())
+        }))
+        .query(async (req) => {
+            logRequest("user/getAllHackatimeProjects", req);
+            
+            const dbUser = await database.user.findFirst({
+                where: { id: req.ctx.user.id }
+            });
+
+            if (!dbUser)
+                return apiErr("NOT_FOUND", "User not found");
+
+            if (!dbUser.hackatimeId || !dbUser.hackatimeAccessToken)
+                return apiErr("ERROR", "You must have a linked Hackatime account!");
+
+            const oauthApi = new HackatimeOAuthApi(dbUser.hackatimeAccessToken);
+            
+            try {
+                const projects = await oauthApi.getProjects();
+                
+                const projectNames = projects
+                    .map((p) => p?.name)
+                    .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+                    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+                
+                return apiOk({ projects: projectNames });
+            }
+            catch (error) {
+                logError("user.getAllHackatimeProjects", "Failed to fetch Hackatime projects", { error, userId: req.ctx.user.id });
+                return apiOk({ projects: [] });
+            }
         }),
 
     /**

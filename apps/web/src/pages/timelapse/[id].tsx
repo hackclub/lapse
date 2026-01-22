@@ -24,6 +24,7 @@ import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
 import { VisibilityPicker } from "@/client/components/ui/VisibilityPicker";
+import { SelectInput } from "@/client/components/ui/SelectInput";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
 import { Bullet } from "@/client/components/ui/Bullet";
@@ -55,6 +56,10 @@ export default function Page() {
   
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [hackatimeProject, setHackatimeProject] = useState("");
+  const [hackatimeProjects, setHackatimeProjects] = useState<string[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
@@ -282,11 +287,34 @@ export default function Page() {
       return;
 
     setHackatimeProject("");
+    setNewProjectName("");
+    setIsCreatingNew(false);
     setSyncModalOpen(true);
+    setIsLoadingProjects(true);
+
+    try {
+      const res = await trpc.user.getAllHackatimeProjects.query({});
+      if (res.ok) {
+        setHackatimeProjects(res.data.projects);
+      }
+      else {
+        setHackatimeProjects([]);
+      }
+    }
+    catch (error) {
+      setHackatimeProjects([]);
+    }
+    finally {
+      setIsLoadingProjects(false);
+    }
   };
 
   async function handleConfirmSync() {
-    if (!timelapse || !hackatimeProject.trim())
+    if (!timelapse)
+      return;
+
+    const projectName = isCreatingNew ? newProjectName.trim() : hackatimeProject;
+    if (!projectName)
       return;
 
     try {
@@ -294,13 +322,15 @@ export default function Page() {
 
       const result = await trpc.timelapse.syncWithHackatime.mutate({
         id: timelapse.id,
-        hackatimeProject: hackatimeProject.trim()
+        hackatimeProject: projectName
       });
 
       if (result.ok) {
         setTimelapse(result.data.timelapse);
         setSyncModalOpen(false);
         setHackatimeProject("");
+        setNewProjectName("");
+        setIsCreatingNew(false);
       } 
       else {
         setRegularError(`Failed to sync with Hackatime: ${result.error}`);
@@ -315,7 +345,24 @@ export default function Page() {
     }
   };
 
-  const isSyncDisabled = !hackatimeProject.trim() || isSyncing;
+  function handleProjectSelect(value: string) {
+    if (value === "__create_new__") {
+      setIsCreatingNew(true);
+      setHackatimeProject("");
+    }
+    else if (value === "") {
+      setIsCreatingNew(false);
+      setHackatimeProject("");
+      setNewProjectName("");
+    }
+    else {
+      setIsCreatingNew(false);
+      setHackatimeProject(value);
+      setNewProjectName("");
+    }
+  }
+
+  const isSyncDisabled = (isCreatingNew ? !newProjectName.trim() : !hackatimeProject.trim()) || isSyncing;
 
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;
@@ -536,19 +583,46 @@ export default function Page() {
             </div>
           </div>
 
-          <TextInput
-            field={{
-              label: "Project Name",
-              description: "The name of the Hackatime project to sync with."
-            }}
-            value={hackatimeProject}
-            onChange={setHackatimeProject}
-            maxLength={128}
-          />
+          {isLoadingProjects ? (
+            <div className="text-smoke">Loading projects...</div>
+          ) : (
+            <>
+              <SelectInput
+                label="Project Name"
+                description={hackatimeProjects.length === 0 
+                  ? "No existing projects found. Create a new project below."
+                  : "Select an existing Hackatime project or create a new one."}
+                value={isCreatingNew ? "__create_new__" : (hackatimeProject || "")}
+                onChange={handleProjectSelect}
+              >
+                <option value="">Select a project...</option>
+                {hackatimeProjects.length > 0 ? (
+                  hackatimeProjects.map(project => (
+                    <option key={project} value={project}>{project}</option>
+                  ))
+                ) : (
+                  <option value="" disabled>No projects available</option>
+                )}
+                <option value="__create_new__">Create new project</option>
+              </SelectInput>
 
-          <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
-            {isSyncing ? "Syncing..." : "Sync with Hackatime"}
-          </Button>
+              {isCreatingNew && (
+                <TextInput
+                  field={{
+                    label: "New Project Name",
+                    description: "Enter the name for the new Hackatime project."
+                  }}
+                  value={newProjectName}
+                  onChange={setNewProjectName}
+                  maxLength={128}
+                />
+              )}
+
+              <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
+                {isSyncing ? "Syncing..." : "Sync with Hackatime"}
+              </Button>
+            </>
+          )}
         </div>
       </WindowedModal>
 
