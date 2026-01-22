@@ -1,3 +1,4 @@
+import NextLink from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import Icon from "@hackclub/icons";
@@ -443,7 +444,7 @@ export default function Page() {
 
               <div className="text-secondary text-xl flex gap-x-3 text-nowrap flex-wrap">
                 <span>
-                  by { !timelapse ? <Skeleton /> : <span className="font-bold">@{timelapse.owner.displayName}</span> }
+                  by { !timelapse ? <Skeleton /> : <NextLink href={`/user/@${timelapse.owner.handle}`}><span className="font-bold">@{timelapse.owner.displayName}</span></NextLink> }
                 </span>
 
                 <Bullet />
