@@ -118,7 +118,7 @@ export async function videoConcat(streams: Blob[]) {
          * Processes all video tracks and writes them to the output.
          * @param forceReencode If true, forces re-encoding even if re-muxing is possible.
         */
-        async function processVideoTracks(forceReencode: boolean): Promise<void> {
+        async function processVideoTracks(forceReencode: boolean): Promise<ArrayBuffer> {
             const useRemux = canRemux && !forceReencode;
 
             const bufTarget = new mediabunny.BufferTarget();
@@ -235,22 +235,19 @@ export async function videoConcat(streams: Blob[]) {
                 throw new Error("bufTarget.buffer was null after finalization.");
             }
 
-            // Store result for outer function to access
-            resultBuffer = bufTarget.buffer;
+            return bufTarget.buffer;
         }
 
-        let resultBuffer: ArrayBuffer | null = null;
 
         // Try re-muxing first if possible, fallback to re-encoding on failure
         if (canRemux) {
             try {
-                await processVideoTracks(false);
+                return processVideoTracks(false);
             }
             catch (remuxError) {
                 console.warn("(videoProcessing.ts) re-muxing failed, retrying with re-encoding:", remuxError);
-                resultBuffer = null;
                 try {
-                    await processVideoTracks(true);
+                    return processVideoTracks(true);
                 }
                 catch (reencodeError) {
                     console.error(
@@ -260,10 +257,10 @@ export async function videoConcat(streams: Blob[]) {
                         "Re-encode error:",
                         reencodeError,
                     );
-                    const remuxMessage =
-                        remuxError instanceof Error ? remuxError.message : String(remuxError);
-                    const reencodeMessage =
-                        reencodeError instanceof Error ? reencodeError.message : String(reencodeError);
+
+                    const remuxMessage = remuxError instanceof Error ? remuxError.message : String(remuxError);
+                    const reencodeMessage = reencodeError instanceof Error ? reencodeError.message : String(reencodeError);
+
                     throw new Error(
                         `Re-encoding after failed re-muxing also failed. ` +
                         `Remux error: ${remuxMessage}; Re-encode error: ${reencodeMessage}`,
@@ -272,15 +269,9 @@ export async function videoConcat(streams: Blob[]) {
             }
         }
         else {
-            await processVideoTracks(true);
+            return processVideoTracks(true);
         }
 
-        if (resultBuffer == null) {
-            console.error("(videoProcessing.ts) Result buffer was null after processing!");
-            throw new Error("resultBuffer was null.");
-        }
-
-        return resultBuffer;
     }
     finally {
         inputs.forEach(x => x.dispose());
