@@ -138,6 +138,24 @@ const stopDockerCompose = async (): Promise<void> => {
 	}).start();
 
 	try {
+		await execa("docker", ["compose", "-f", composeFile, "stop"], {
+			cwd: repoRoot,
+		});
+		spinner.succeed(chalk.green("Docker Compose services stopped"));
+	}
+	catch (error) {
+		spinner.fail(chalk.red("Failed to stop Docker Compose"));
+		throw error;
+	}
+};
+
+const downDockerCompose = async (): Promise<void> => {
+	const spinner = ora({
+		text: chalk.gray("Stopping Docker Compose services..."),
+		color: "cyan",
+	}).start();
+
+	try {
 		await execa("docker", ["compose", "-f", composeFile, "down"], {
 			cwd: repoRoot,
 		});
@@ -148,6 +166,7 @@ const stopDockerCompose = async (): Promise<void> => {
 		throw error;
 	}
 };
+
 
 const waitForDatabase = async (): Promise<void> => {
 	const spinner = ora({
@@ -392,7 +411,13 @@ const main = async () => {
 		.option("--init", "Initialize the development environment", false)
 		.option("--only-docker", "Only start Docker services", false)
 		.option("--stop-docker", "Stop Docker services", false)
+		.option("--down-docker", "Stop and remove Docker services", false)
 		.action(async (options) => {
+			if (options.downDocker) {
+				await checkDockerRunning();
+				await downDockerCompose();
+				return;
+			}
 			if (options.stopDocker) {
 				await stopDockerCompose();
 				return;

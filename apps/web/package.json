@@ -19,7 +19,8 @@
     "check-types": "tsc --noEmit",
     "dev:init": "tsx ./scripts/setup-dev-env.ts --init",
     "dev:start-env": "tsx scripts/setup-dev-env --only-docker",
-    "dev:stop-env": "tsx scripts/setup-dev-env --stop-docker"
+    "dev:stop-env": "tsx scripts/setup-dev-env --stop-docker",
+    "dev:remove-env": "tsx scripts/setup-dev-env --down-docker"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.954.0",
