@@ -58,6 +58,7 @@ export default function Page() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const [publishModalOpen, setPublishModalOpen] = useState(false);
 
@@ -338,23 +339,24 @@ export default function Page() {
     }
   }
 
+  function handleDeleteClick() {
+    if (!timelapse || !isOwned) return;
+    setDeleteModalOpen(true);
+  }
+
   async function handleDeleteTimelapse() {
     if (!timelapse || !isOwned) return;
 
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this timelapse? This action cannot be undone."
-    );
-
-    if (!confirmed) return;
-
     try {
       setIsDeleting(true);
+      setDeleteModalOpen(false);
       setPasskeyModalOpen(false);
+      setEditModalOpen(false);
 
       const result = await trpc.timelapse.delete.mutate({ id: timelapse.id });
 
       if (result.ok) {
-        router.reload();
+        router.push("/");
       }
       else {
         setRegularError(`Failed to delete: ${result.error}`);
@@ -509,14 +511,12 @@ export default function Page() {
             {isUpdating ? "Updating..." : "Update"}
           </Button>
 
-          { !timelapse?.isPublished && (
-            <div className="flex flex-col gap-2 pt-4 border-t border-slate">
-              <Button onClick={handleDeleteTimelapse} disabled={isDeleting} kind="destructive">
-                <Icon glyph="delete" size={24} />
-                {isDeleting ? "Deleting..." : "Delete Timelapse"}
-              </Button>
-            </div>
-          )}
+          <div className="flex flex-col gap-2 pt-4 border-t border-slate">
+            <Button onClick={handleDeleteClick} disabled={isDeleting} kind="destructive">
+              <Icon glyph="delete" size={24} />
+              Delete Timelapse
+            </Button>
+          </div>
         </div>
       </WindowedModal>
 
@@ -576,7 +576,7 @@ export default function Page() {
         setIsOpen={setPasskeyModalOpen}
         description={`Enter the 6-digit PIN for ${missingDeviceName} to decrypt the timelapse`}
         onPasskeySubmit={handlePasskeySubmit}
-        onDelete={isOwned && !timelapse?.isPublished ? handleDeleteTimelapse : undefined}
+        onDelete={isOwned && !timelapse?.isPublished ? handleDeleteClick : undefined}
       >
         {invalidPasskeyAttempt && (
           <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
@@ -594,6 +594,34 @@ export default function Page() {
         setIsOpen={setPublishModalOpen}
         onSelect={handlePublish}
       />
+
+      <WindowedModal
+        icon="delete"
+        title="Delete Timelapse"
+        description="This action cannot be undone. All snapshots and video files will be permanently deleted."
+        isOpen={deleteModalOpen}
+        setIsOpen={setDeleteModalOpen}
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-red/10 border border-red/20">
+            <Icon glyph="important" size={24} className="text-red flex-shrink-0" />
+            <div>
+              <p className="font-bold text-red">Warning</p>
+              <p className="text-smoke">Are you sure you want to delete "{timelapse?.name}"? This action cannot be undone.</p>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <Button onClick={handleDeleteTimelapse} disabled={isDeleting} kind="destructive" className="flex-1">
+              <Icon glyph="delete" size={24} />
+              {isDeleting ? "Deleting..." : "Delete Timelapse"}
+            </Button>
+            <Button onClick={() => setDeleteModalOpen(false)} disabled={isDeleting} kind="regular" className="flex-1">
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </WindowedModal>
     </RootLayout>
   );
 }

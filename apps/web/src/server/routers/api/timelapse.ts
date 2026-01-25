@@ -159,16 +159,26 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
 
     const bucket = timelapse.isPublished ? env.S3_PUBLIC_BUCKET_NAME : env.S3_ENCRYPTED_BUCKET_NAME; 
 
-    await s3.send(new DeleteObjectCommand({
-        Bucket: bucket,
-        Key: timelapse.s3Key
-    }));
-
-    if (timelapse.thumbnailS3Key) {
+    try {
         await s3.send(new DeleteObjectCommand({
             Bucket: bucket,
-            Key: timelapse.thumbnailS3Key
+            Key: timelapse.s3Key
         }));
+    }
+    catch (error) {
+        logError("timelapse.deleteTimelapse", "Failed to delete video from S3", { error, timelapseId, s3Key: timelapse.s3Key });
+    }
+
+    if (timelapse.thumbnailS3Key) {
+        try {
+            await s3.send(new DeleteObjectCommand({
+                Bucket: bucket,
+                Key: timelapse.thumbnailS3Key
+            }));
+        }
+        catch (error) {
+            logError("timelapse.deleteTimelapse", "Failed to delete thumbnail from S3", { error, timelapseId, thumbnailS3Key: timelapse.thumbnailS3Key });
+        }
     }
 
     await database.timelapse.delete({
@@ -176,6 +186,7 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
     });
 
     logInfo("timelapse", `Timelapse ${timelapseId} deleted.`);
+    return undefined;
 }
 
 export const TimelapseName = z.string().min(2).max(60);
