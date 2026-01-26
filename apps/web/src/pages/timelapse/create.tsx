@@ -60,6 +60,7 @@ export default function Page() {
   const [currentSession] = useState<number>(Date.now());
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
   const [isDiscarding, setIsDiscarding] = useState(false);
+  const [showEnableScreenCaptureButton, setShowEnableScreenCaptureButton] = useState(false);
   
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
@@ -297,6 +298,57 @@ export default function Page() {
     }
   }
 
+  function disposeStreams() {
+    setCameraLabel("Camera");
+    setScreenLabel("Screen");
+
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+
+    if (screenStream) {
+      screenStream.getTracks().forEach((track) => track.stop());
+      setScreenStream(null);
+    }
+  }
+
+  async function handleManualScreenCapture() {
+    if (changingSource)
+      return;
+
+    setChangingSource(true);
+    setShowEnableScreenCaptureButton(false);
+
+    let stream: MediaStream;
+
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+    }
+    catch (apiErr) {
+      console.error("(create.tsx) could not request permissions for screen capture.", apiErr);
+      setChangingSource(false);
+      setShowEnableScreenCaptureButton(true);
+      return;
+    }
+
+    console.log("(create.tsx) screen stream retrieved!", stream);
+
+    let label: string | null = stream.getVideoTracks()[0].label;
+    if (label.includes("://") || label.includes("window:")) {
+      label = null;
+    }
+
+    disposeStreams();
+    setScreenStream(stream);
+    setVideoSourceKind("SCREEN");
+    setScreenLabel(label ? `Screen (${label})` : "Screen");
+    setChangingSource(false);
+  }
+
   async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
     if (ev.target.value == videoSourceKind)
       return; // no change
@@ -307,21 +359,6 @@ export default function Page() {
     }
 
     setChangingSource(true);
-
-    function disposeStreams() {
-      setCameraLabel("Camera");
-      setScreenLabel("Screen");
-
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
-        setCameraStream(null);
-      }
-
-      if (screenStream) {
-        screenStream.getTracks().forEach((track) => track.stop());
-        setScreenStream(null);
-      }
-    }
 
     console.log("(create.tsx) video source changed to", ev.target.value);
 
@@ -392,20 +429,21 @@ export default function Page() {
       catch (apiErr) {
         console.error("(create.tsx) could not request permissions for screen capture.", apiErr);
         setChangingSource(false);
+        setShowEnableScreenCaptureButton(true);
         return;
       }
 
       console.log("(create.tsx) screen stream retrieved!", stream);
 
-      let screenLabel: string | null = stream.getVideoTracks()[0].label;
-      if (screenLabel.includes("://") || screenLabel.includes("window:")) {
-        screenLabel = null;
+      let label: string | null = stream.getVideoTracks()[0].label;
+      if (label.includes("://") || label.includes("window:")) {
+        label = null;
       }
 
       disposeStreams();
       setScreenStream(stream);
       setVideoSourceKind("SCREEN");
-      setScreenLabel(screenLabel ? `Screen (${screenLabel})` : "Screen");
+      setScreenLabel(label ? `Screen (${label})` : "Screen");
     }
     else {
       setVideoSourceKind("NONE");
@@ -681,7 +719,14 @@ export default function Page() {
                         )}
                         <option value="SCREEN">{screenLabel}</option>
                       </SelectInput>
-
+                      {showEnableScreenCaptureButton && (
+                        <Button
+                          onClick={handleManualScreenCapture}
+                          kind="primary"
+                        >
+                          Enable Screen Capture
+                        </Button>
+                      )}
                       {(cameraStream || screenStream) && (
                         <div className="flex flex-col gap-2">
                           <video
