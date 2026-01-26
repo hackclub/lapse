@@ -12,6 +12,7 @@ import { WindowedModal } from "../WindowedModal";
 import { Button } from "../Button";
 import { PasskeyModal } from "../PasskeyModal";
 import { ErrorModal } from "../ErrorModal";
+import { OAuthGrantsView } from "@/client/components/ui/layout/OAuthGrantsView";
 
 export function SettingsView({ isOpen, setIsOpen }: {
   isOpen: boolean,
@@ -26,6 +27,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
   const [deviceToRemove, setDeviceToRemove] = useState<string | null>(null);
   const [removeDeviceModalOpen, setRemoveDeviceModalOpen] = useState(false);
   const [timelapsesToRemove, setTimelapsesToRemove] = useState<Timelapse[]>([]);
+  const [connectedServicesOpen, setConnectedServicesOpen] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -123,7 +125,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
   }
 
   function hasPasskeyForDevice(id: string) {
-    return localDevices.some(x => x.id == id);
+    return localDevices.some(x => x.id === id);
   }
 
   return (<div>
@@ -142,14 +144,15 @@ export function SettingsView({ isOpen, setIsOpen }: {
           </div>
 
           <div className="w-full flex justify-center">
-            <div 
+            <button
+              type="button"
               className="border border-slate w-full flex justify-center rounded-md p-3 px-8 cursor-pointer hover:bg-darker transition-colors shadow"
               onClick={() => setPasskeyVisible(!passkeyVisible)}
             >
               <span className={`font-mono text-lg tracking-widest select-none transition-all ${passkeyVisible ? "" : "blur-xs"}`}>
                 { getCurrentDevicePasskey() || "000000" }
               </span>
-            </div>
+            </button>
           </div>
         </div>
         
@@ -216,6 +219,20 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
         <div className="flex gap-4 pt-4">
           <Button
+            kind="regular"
+            onClick={() => setConnectedServicesOpen(true)}
+            className="flex-1"
+          >
+            Connected Services
+          </Button>
+          <Button
+            kind="regular"
+            onClick={() => window.location.assign("/developer/apps")}
+            className="flex-1"
+          >
+            Developer Apps
+          </Button>
+          <Button
             kind="primary"
             onClick={() => setIsOpen(false)}
             className="flex-1"
@@ -237,6 +254,11 @@ export function SettingsView({ isOpen, setIsOpen }: {
       isOpen={!!error} 
       setIsOpen={(open) => !open && setError(null)}
       message={error!}
+    />
+
+    <OAuthGrantsView
+      isOpen={connectedServicesOpen}
+      setIsOpen={setConnectedServicesOpen}
     />
 
     <WindowedModal
