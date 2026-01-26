@@ -9,15 +9,23 @@ import { input, select } from "@inquirer/prompts";
 import fs from "node:fs/promises";
 import yaml from "js-yaml";
 
-
 const DOCKER_STARTUP_DELAY = 1500;
+
+const DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/lapse?schema=public";
+let S3_ENDPOINT = "s3.localhost.localstack.cloud:4566";
+let S3_PUBLIC_URL_PUBLIC = "http://lapse-public.s3.localhost.localstack.cloud:4566";
+let S3_PUBLIC_URL_ENCRYPTED = "http://lapse-encrypted.s3.localhost.localstack.cloud:4566";
+let S3_ACCESS_KEY_ID = "test";
+let S3_SECRET_ACCESS_KEY = "test";
+
 const repoRoot = resolve(__dirname, "..", "..", "..");
 const webDir = resolve(__dirname, "..");
 
 let composeFile: string;
 
-const resolveComposeFile = async (): Promise<string> => {
+async function resolveComposeFile() {
 	const lapseDevComposeFile = resolve(repoRoot, "lapse.dev.yaml");
+
 	try {
 		await fs.access(lapseDevComposeFile);
 		return lapseDevComposeFile;
@@ -25,70 +33,49 @@ const resolveComposeFile = async (): Promise<string> => {
 	catch {
 		return resolve(repoRoot, "docker-compose.dev.yaml");
 	}
-};
+}
 
-const DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/lapse?schema=public";
-let S3_ENDPOINT = "s3.localhost.localstack.cloud:4566";
-let S3_PUBLIC_URL_PUBLIC = "http://lapse-public.s3.localhost.localstack.cloud:4566";
-let S3_PUBLIC_URL_ENCRYPTED = "http://lapse-encrypted.s3.localhost.localstack.cloud:4566";
-let S3_ACCESS_KEY_ID: string = "test";
-let S3_SECRET_ACCESS_KEY: string = "test";
-
-const banner = `
-${chalk.cyan.bold("╔═══════════════════════════════════════════════════════════════╗")}
-${chalk.cyan.bold("║")}                                                               ${chalk.cyan.bold("║")}
-${chalk.cyan.bold("║")}   ${chalk.magenta.bold("⏱️  LAPSE")} ${chalk.gray("Development Environment Setup")}                      ${chalk.cyan.bold("║")}
-${chalk.cyan.bold("║")}                                                               ${chalk.cyan.bold("║")}
-${chalk.cyan.bold("╚═══════════════════════════════════════════════════════════════╝")}
-`;
-
-
-const logStep = (step: number, total: number, message: string) => {
+function logStep(step: number, total: number, message: string) {
 	console.log(chalk.blue.bold(`\n[${step}/${total}]`) + chalk.white(` ${message}`));
-};
+}
 
-const logError = (message: string) => {
+function logError(message: string) {
 	console.log(chalk.red.bold("  ✗ ") + chalk.red(message));
-};
+}
 
-const logInfo = (message: string) => {
+function logInfo(message: string) {
 	console.log(chalk.cyan("  🛈 ") + chalk.gray(message));
-};
+}
 
-const divider = () => {
+function divider() {
 	console.log(chalk.gray("\n" + "─".repeat(65)));
-};
+}
 
-const askForInput = async (message: string): Promise<string> => {
-	const answer = await input({
-		message,
-	});
-	return answer;
-};
+async function askForInput(message: string) {
+	return await input({ message });
+}
 
-const askLocalstackImage = async (): Promise<string> => {
-	const answer = await select({
+async function askLocalstackImage() {
+	return await select({
 		message: "Select a LocalStack image: ",
 		choices: [
 			{ name: "localstack/localstack:latest", value: "localstack/localstack:latest" },
 			{ name: "gresau/localstack-persist:latest (unofficial, but recommended)", value: "gresau/localstack-persist:latest" }
-		],
+		]
 	});
-	return answer;
 }
 
-const askLocalstackOrR2 = async (): Promise<string> => {
-	const answer = await select({
+async function askLocalstackOrR2() {
+	return await select({
 		message: "Select object storage solution: ",
 		choices: [
-			{ name: "LocalStack S3 (Easiest to set up)", value: "localstack" },
-			{ name: "Cloudflare R2", value: "r2" }
+			{ name: "LocalStack S3 (easy setup)", value: "localstack" },
+			{ name: "Cloudflare R2 (used in production)", value: "r2" }
 		],
 	});
-	return answer;
 }
 
-const checkDockerRunning = async (): Promise<void> => {
+async function checkDockerRunning() {
 	const spinner = ora({
 		text: chalk.gray("Checking Docker daemon status..."),
 		color: "cyan",
@@ -97,7 +84,6 @@ const checkDockerRunning = async (): Promise<void> => {
 	try {
 		await execa("docker", ["ps"], { cwd: repoRoot });
 		spinner.succeed(chalk.green("Docker is running"));
-
 	}
 	catch {
 		spinner.fail(chalk.red("Docker is not running"));
@@ -112,16 +98,17 @@ const checkDockerRunning = async (): Promise<void> => {
 	}
 };
 
-const startDockerCompose = async (): Promise<void> => {
+async function startDockerCompose() {
 	const spinner = ora({
 		text: chalk.gray("Starting Docker Compose services..."),
-		color: "cyan",
+		color: "cyan"
 	}).start();
 
 	try {
 		await execa("docker", ["compose", "-f", composeFile, "up", "-d"], {
 			cwd: repoRoot,
 		});
+
 		spinner.succeed(chalk.green("Docker Compose services started"));
 		logInfo(`Using compose file: ${chalk.italic(composeFile)}`);
 	}
@@ -131,16 +118,17 @@ const startDockerCompose = async (): Promise<void> => {
 	}
 };
 
-const stopDockerCompose = async (): Promise<void> => {
+async function stopDockerCompose() {
 	const spinner = ora({
 		text: chalk.gray("Stopping Docker Compose services..."),
-		color: "cyan",
+		color: "cyan"
 	}).start();
 
 	try {
 		await execa("docker", ["compose", "-f", composeFile, "stop"], {
 			cwd: repoRoot,
 		});
+
 		spinner.succeed(chalk.green("Docker Compose services stopped"));
 	}
 	catch (error) {
@@ -149,7 +137,7 @@ const stopDockerCompose = async (): Promise<void> => {
 	}
 };
 
-const downDockerCompose = async (): Promise<void> => {
+async function downDockerCompose() {
 	const spinner = ora({
 		text: chalk.gray("Stopping Docker Compose services..."),
 		color: "cyan",
@@ -167,8 +155,7 @@ const downDockerCompose = async (): Promise<void> => {
 	}
 };
 
-
-const waitForDatabase = async (): Promise<void> => {
+async function waitForDatabase() {
 	const spinner = ora({
 		text: chalk.gray(`Waiting for database to be ready (${DOCKER_STARTUP_DELAY / 1000}s)...`),
 		color: "yellow",
@@ -187,7 +174,7 @@ const waitForDatabase = async (): Promise<void> => {
 	spinner.succeed(chalk.green("Database should be ready"));
 };
 
-const pushPrismaSchema = async (): Promise<void> => {
+async function pushPrismaSchema() {
 	const spinner = ora({
 		text: chalk.gray("Pushing Prisma schema to database..."),
 		color: "magenta",
@@ -198,6 +185,7 @@ const pushPrismaSchema = async (): Promise<void> => {
 			cwd: webDir,
 			env: { ...process.env, DATABASE_URL },
 		});
+
 		spinner.succeed(chalk.green("Prisma schema pushed successfully"));
 	}
 	catch (error) {
@@ -206,8 +194,7 @@ const pushPrismaSchema = async (): Promise<void> => {
 	}
 };
 
-const guideR2Setup = async (): Promise<{ accessKeyId: string; secretAccessKey: string; s3_endpoint: string, public_url_public: string, public_url_encrypted: string }> => {
-	// Guide user through R2 setup
+async function guideR2Setup() {
 	console.log(chalk.white.bold("\nTo use Cloudflare R2 for object storage, you'll need to create two R2 buckets and obtain access credentials."));
 	console.log(chalk.white("Follow these steps:"));
 	console.log(chalk.gray("\n  1. Log in to your Cloudflare dashboard at ") + chalk.cyan("https://dash.cloudflare.com/"));
@@ -232,17 +219,19 @@ const guideR2Setup = async (): Promise<{ accessKeyId: string; secretAccessKey: s
 	return { accessKeyId, secretAccessKey, s3_endpoint, public_url_public, public_url_encrypted };
 }
 
-const updateEnvFile = async (envVars: Record<string, string>): Promise<void> => {
+async function updateEnvFile(envVars: Record<string, string>) {
 	const spinner = ora({
 		text: chalk.gray(`Updating .env file...`),
 		color: "cyan",
 	}).start();
+
 	let env = "";
 	try {
 		env = await fs.readFile(resolve(webDir, ".env.example"), "utf-8");
 		for (const [key, value] of Object.entries(envVars)) {
 			env = env.replace(`${key}=`, `${key}=${value}`);
 		}
+
 		await fs.writeFile(resolve(webDir, ".env"), env);
 		spinner.succeed(chalk.green("Environment variables updated successfully"));
 	}
@@ -252,17 +241,17 @@ const updateEnvFile = async (envVars: Record<string, string>): Promise<void> => 
 	}
 };
 
-const buildLocalstackDockerComposeSection = (composeFileContent: string, localstackImage: string): string => {
-	// Parse the existing docker-compose YAML file
+/**
+ * Adds a Localstack service to an existing Docker Compose file.
+ */
+function buildLocalstackDockerComposeSection(composeFileContent: string, localstackImage: string) {
 	const composeObject = yaml.load(composeFileContent) as any;
 
-	// Ensure services object exists
 	if (!composeObject.services) {
 		composeObject.services = {};
 	}
 
-	// Build the localstack service configuration
-	const localstackService = {
+	composeObject.services.localstack = {
 		image: localstackImage,
 		container_name: "localstack-container",
 		ports: ["4566:4566"],
@@ -280,10 +269,6 @@ const buildLocalstackDockerComposeSection = (composeFileContent: string, localst
 		],
 	};
 
-	// Add the localstack service to the compose object
-	composeObject.services.localstack = localstackService;
-
-	// Convert the complete object back to a YAML string
 	return yaml.dump(composeObject, {
 		indent: 2,
 		lineWidth: -1,
@@ -292,26 +277,25 @@ const buildLocalstackDockerComposeSection = (composeFileContent: string, localst
 };
 
 
-const updateDockerComposeFile = async (localstackImage: string | null): Promise<void> => {
+async function updateDockerComposeFile(localstackImage: string | null) {
 	const spinner = ora({
 		text: chalk.gray(`Updating docker-compose.dev.yaml...`),
 		color: "cyan",
 	}).start();
-	let composeContent = await fs.readFile(composeFile, "utf-8");
 
+	let composeContent = await fs.readFile(composeFile, "utf-8");
 	if (localstackImage) {
-		// Build the complete updated compose file with localstack service added
 		composeContent = buildLocalstackDockerComposeSection(composeContent, localstackImage);
 	}
-	// new name : lapse.dev.yaml
+
+	// new name: lapse.dev.yaml
 	composeFile = composeFile.replace("docker-compose.dev.yaml", "lapse.dev.yaml");
 	await fs.writeFile(composeFile, composeContent);
 	spinner.succeed(chalk.green("Docker Compose file updated successfully"));
 };
 
-const runSetup = async () => {
+async function runSetup() {
 	console.clear();
-	console.log(banner);
 
 	const TOTAL_STEPS = 7;
 	let currentStep = 0;
@@ -353,10 +337,12 @@ const runSetup = async () => {
 		await pushPrismaSchema();
 
 		logStep(++currentStep, TOTAL_STEPS, "Configuring Slack integration...");
-		console.log(chalk.white.bold("Enter Slack bot token below (you can create a bot using the guide):"));
-		console.log(chalk.cyan("https://scribehow.com/viewer/Create_a_Slack_App_and_Install_It__KF8a5b_5TeuzF_BWJJQg_g"));
-		// wait for user input
-		const SLACK_BOT_TOKEN = await askForInput("Enter Slack bot token: ");
+		console.log("You will need a Slack bot configured to access data like profile pictures.");
+		console.log("The token to this bot should have a 'xoxb-' prefix. Check the guide below for help!");
+		console.log(chalk.cyan("https://url.ascpixi.dev/lapse-slack-setup"));
+		console.log("");
+
+		const SLACK_BOT_TOKEN = await askForInput("Enter Slack bot token (xoxb-...): ");
 
 		logStep(++currentStep, TOTAL_STEPS, "Updating environment variables...");
 		await updateEnvFile({
@@ -368,8 +354,6 @@ const runSetup = async () => {
 			"S3_PUBLIC_URL_ENCRYPTED": S3_PUBLIC_URL_ENCRYPTED,
 		});
 
-
-		// Success Message
 		divider();
 		console.log();
 		console.log(chalk.bgGreen.black.bold(" SUCCESS ") + chalk.green.bold(" Development environment is ready! 🎉"));
@@ -384,22 +368,23 @@ const runSetup = async () => {
 		// Clean-up
 		await stopDockerCompose();
 
-
 		console.log("error:", error);
 		divider();
 		console.log();
 		console.log(chalk.bgRed.white.bold(" SETUP FAILED "));
 		console.log();
+
 		if (error instanceof Error) {
 			logError(error.message);
 		}
+
 		console.log(chalk.gray("\nPlease check the error above and try again."));
 		divider();
 		process.exit(1);
 	}
 };
 
-const main = async () => {
+async function main() {
 	composeFile = await resolveComposeFile();
 
 	const program = new Command();
@@ -418,15 +403,18 @@ const main = async () => {
 				await downDockerCompose();
 				return;
 			}
+
 			if (options.stopDocker) {
 				await stopDockerCompose();
 				return;
 			}
+
 			if (options.onlyDocker) {
 				await checkDockerRunning();
 				await startDockerCompose();
 				return;
 			}
+			
 			await runSetup();
 		});
 
