@@ -349,19 +349,16 @@ export default function DeveloperApps() {
                     >
                       Edit App
                     </Button>
-                    {buildAuthorizeTestUrl(app) ? (
-                      <Button
-                        kind="regular"
-                        href={buildAuthorizeTestUrl(app) ?? "#"}
-                        className="w-fit"
-                      >
-                        Test Auth
-                      </Button>
-                    ) : (
-                      <Button kind="regular" disabled className="w-fit">
-                        Test Auth
-                      </Button>
-                    )}
+
+                    <Button
+                      kind="regular"
+                      href={buildAuthorizeTestUrl(app) ?? "#"}
+                      disabled={buildAuthorizeTestUrl(app) !== null}
+                      className="w-fit"
+                    >
+                      Test Auth
+                    </Button>
+
                     <Button
                       kind="regular"
                       onClick={() => confirmRotateSecret(app.id)}
@@ -412,7 +409,7 @@ export default function DeveloperApps() {
                 setFormState({ ...formState, description: event.target.value })
               }
               placeholder="Description"
-              className="rounded-xl border border-slate bg-dark px-4 py-2 min-h-[90px]"
+              className="rounded-xl border border-slate bg-dark px-4 py-2 min-h-22.5"
             />
             <input
               value={formState.iconUrl}
@@ -428,7 +425,7 @@ export default function DeveloperApps() {
                 setFormState({ ...formState, redirectUris: event.target.value })
               }
               placeholder="Redirect URIs (one per line)"
-              className="rounded-xl border border-slate bg-dark px-4 py-2 min-h-[90px]"
+              className="rounded-xl border border-slate bg-dark px-4 py-2 min-h-22.5"
             />
 
             {appModalMode === "edit" && appModalId && (

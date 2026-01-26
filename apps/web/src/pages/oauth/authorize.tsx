@@ -39,7 +39,7 @@ export default function OAuthAuthorize() {
   const [trustLevel, setTrustLevel] = useState<"TRUSTED" | "UNTRUSTED" | null>(
     null,
   );
-  const extraScope = useState(
+  const [extraScope, setExtraScope] = useState(
     EXTRA_IMPORTANT_SCOPES[
       Math.floor(Math.random() * EXTRA_IMPORTANT_SCOPES.length)
     ],
