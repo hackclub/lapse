@@ -221,7 +221,6 @@ export default function Page() {
 
       const now = new Date();
       setStartedAt(now);
-      setFrameCount(0);
       setIsCreated(true);
 
       const timelapseId = await deviceStorage.saveTimelapse({
