@@ -389,6 +389,8 @@ export default function Page() {
       setScreenLabel(screenLabel ? `Screen (${screenLabel})` : "Screen");
     }
     else {
+      setNeedsVideoSource(true);
+      disposeStreams();
       setVideoSourceKind("NONE");
     }
 
@@ -582,6 +584,10 @@ export default function Page() {
   function onSubmitModalClose() {
     if (!isCreated || !currentStream) {
       router.back();
+    }
+    else if (needsVideoSource) {
+      setSetupModalOpen(true);
+      alert("You must select a video source first.");
     }
     else {
       setSetupModalOpen(false);
