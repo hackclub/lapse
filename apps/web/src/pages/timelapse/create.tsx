@@ -27,7 +27,7 @@ import { LoadingModal } from "@/client/components/ui/LoadingModal";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
-import { SelectInput } from "@/client/components/ui/SelectInput";
+import { DropdownInput } from "@/client/components/ui/DropdownInput";
 import { PillControlButton } from "@/client/components/ui/PillControlButton";
 
 import RecordIcon from "@/client/assets/icons/record.svg";
@@ -609,6 +609,7 @@ export default function Page() {
   }
 
   const isCreateDisabled = videoSourceKind === "NONE";
+  const anyCamerasLoaded = availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0;
 
   return (
     <RootLayout showHeader={false}>
@@ -653,34 +654,38 @@ export default function Page() {
                 return (
                   <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 flex-shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
                     <div className="flex flex-col gap-6">
-                      <SelectInput
+                      <DropdownInput
                         label="Video source"
                         description={videoSourceDescription}
                         value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
                         onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
                         disabled={changingSource}
-                      >
-                        <option disabled value="NONE">(none)</option>
-                        {availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0 ? (
-                          <optgroup label="Cameras">
-                            {availableCameras
-                              .filter(camera => camera.deviceId && camera.deviceId.length > 0)
-                              .map((camera, index) => {
-                                const displayLabel = camera.label && camera.label.trim().length > 0 
-                                  ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
-                                  : `Camera ${index + 1}`;
-                                return (
-                                  <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
-                                    {displayLabel}
-                                  </option>
-                                );
-                              })}
-                          </optgroup>
-                        ) : (
-                          <option value="CAMERA:">Camera</option>
-                        )}
-                        <option value="SCREEN">{screenLabel}</option>
-                      </SelectInput>
+                        options={[
+                          { value: "NONE", disabled: true, label: "(none)" },
+                          { value: "SCREEN", icon: "photo", label: screenLabel },
+                          ...(
+                            anyCamerasLoaded
+                            ? [
+                              // We got permission from the user to fetch their cameras - display them.
+                              {
+                                label: "Cameras", icon: "instagram" as const, group: availableCameras
+                                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                                  .map((camera, index) => (
+                                    {
+                                      value: `CAMERA:${camera.deviceId}`,
+                                      label: camera.label && camera.label.trim().length > 0 
+                                        ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
+                                        : `Camera ${index + 1}`
+                                    }
+                                  ))
+                              }
+                            ] : [
+                              // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
+                              // option, that when clicked, will prompt them for permission.
+                              { label: "Camera", value: "CAMERA:" }
+                            ])
+                        ]}
+                      />
 
                       {(cameraStream || screenStream) && (
                         <div className="flex flex-col gap-2">
