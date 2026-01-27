@@ -24,7 +24,7 @@ import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
 import { VisibilityPicker } from "@/client/components/ui/VisibilityPicker";
-import { SelectInput } from "@/client/components/ui/SelectInput";
+import { DropdownInput } from "@/client/components/ui/DropdownInput";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
 import { Bullet } from "@/client/components/ui/Bullet";
@@ -587,24 +587,21 @@ export default function Page() {
             <div className="text-smoke">Loading projects...</div>
           ) : (
             <>
-              <SelectInput
+              <DropdownInput
                 label="Project Name"
                 description={hackatimeProjects.length === 0 
                   ? "No existing projects found. Create a new project below."
                   : "Select an existing Hackatime project or create a new one."}
                 value={isCreatingNew ? "__create_new__" : (hackatimeProject || "")}
                 onChange={handleProjectSelect}
-              >
-                <option value="">Select a project...</option>
-                {hackatimeProjects.length > 0 ? (
-                  hackatimeProjects.map(project => (
-                    <option key={project} value={project}>{project}</option>
-                  ))
-                ) : (
-                  <option value="" disabled>No projects available</option>
-                )}
-                <option value="__create_new__">Create new project</option>
-              </SelectInput>
+                options={[
+                  { value: "", label: "Select a project...", disabled: true },
+                  ...(hackatimeProjects.length > 0
+                    ? hackatimeProjects.map(project => ({ value: project, label: project }))
+                    : []),
+                  { value: "__create_new__", label: "Create new project", icon: "plus" }
+                ]}
+              />
 
               {isCreatingNew && (
                 <TextInput

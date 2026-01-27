@@ -205,7 +205,7 @@ export function Dropdown<TKey extends string>({ value, onChange, options, disabl
                 role="listbox"
                 className={clsx(
                   phantomSans.className,
-                  "transition-[translate,opacity] flex flex-col absolute border border-slate bg-dark rounded-lg p-4 shadow-xl z-100",
+                  "transition-[translate,opacity] flex flex-col absolute border border-slate bg-dark rounded-lg p-4 shadow-xl z-100 max-h-64 overflow-y-auto overscroll-contain",
                   isEffectivelyOpen && "translate-y-12 opacity-100",
                   !isEffectivelyOpen && "translate-y-10 opacity-0 pointer-events-none"
                 )}
