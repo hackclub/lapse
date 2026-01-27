@@ -62,6 +62,7 @@ export default function Page() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isDiscardingRecording, setIsDiscardingRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [isFrozen, setIsFrozen] = useState(false);
@@ -574,6 +575,55 @@ export default function Page() {
     };
   }, [frameInterval]);
 
+  async function discardRecording() {
+    const confirmed = window.confirm(
+      "Are you sure you want to discard this timelapse? This action cannot be undone."
+    );
+
+    if (!confirmed)
+      return;
+
+    setIsDiscardingRecording(true);
+
+    try {
+      if (frameInterval) {
+        clearInterval(frameInterval);
+        setFrameInterval(null);
+      }
+
+      if (recorder) {
+        recorder.onstop = null;
+        recorder.stop();
+        setRecorder(null);
+      }
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        setCameraStream(null);
+      }
+
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => track.stop());
+        setScreenStream(null);
+      }
+
+      if (currentTimelapseId) {
+        await deviceStorage.deleteAllSnapshots();
+        await deviceStorage.deleteTimelapse(currentTimelapseId);
+        setCurrentTimelapseId(null);
+      }
+
+      router.push("/");
+    }
+    catch (err) {
+      console.error("(create.tsx) failed to discard timelapse:", err);
+      setError(err instanceof Error ? err.message : "Failed to discard timelapse");
+    }
+    finally {
+      setIsDiscardingRecording(false);
+    }
+  }
+
   function openSetupModal() {
     setSetupModalOpen(true);
     setFreeze(true);
@@ -749,6 +799,9 @@ export default function Page() {
           <div className="flex gap-4 w-full">
             <Button onClick={() => stopRecording()} disabled={!name || name.trim().length == 0} kind="primary">Submit</Button>
             <Button onClick={() => setSubmitModalOpen(false)} kind="regular">Cancel</Button>
+            <Button onClick={discardRecording} disabled={isDiscardingRecording} kind="destructive" icon="delete">
+              {isDiscardingRecording ? "Discarding..." : "Discard"}
+            </Button>
           </div>
         </div>
       </WindowedModal>
