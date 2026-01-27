@@ -33,6 +33,7 @@ import { PillControlButton } from "@/client/components/ui/PillControlButton";
 import RecordIcon from "@/client/assets/icons/record.svg";
 import PauseIcon from "@/client/assets/icons/pause.svg";
 import StopIcon from "@/client/assets/icons/stop.svg";
+import { set } from "zod";
 
 export default function Page() {
   const router = useRouter();
@@ -163,7 +164,6 @@ export default function Page() {
   });
 
 
-
   const captureFrame = useCallback(async (timelapseId?: number) => {
     if (isFrozenRef.current)
       return;
@@ -283,6 +283,8 @@ export default function Page() {
       
       setFrameInterval(newInterval);
     }
+
+    setFreeze(false);
   }
 
   async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
@@ -308,6 +310,24 @@ export default function Page() {
         screenStream.getTracks().forEach((track) => track.stop());
         setScreenStream(null);
       }
+    }
+
+    function setStreamStoppedAlert(stream: MediaStream) {
+        stream.getTracks().forEach(track => {
+        track.addEventListener("ended", () => {
+          console.log("(create.tsx) camera track ended externally:", track.label);
+          setCameraStream(null);
+          setVideoSourceKind("NONE");
+          setNeedsVideoSource(true);
+          setSetupModalOpen(true);
+          setFreeze(true);
+          setTimeout(() => {
+            if (window.location.href.includes("/timelapse/create")) {
+              alert("Your screen sharing has ended. Please select a new video source to continue your timelapse.");
+            }
+          }, 5000);
+        });
+      });
     }
 
     console.log("(create.tsx) video source changed to", ev.target.value);
@@ -356,6 +376,8 @@ export default function Page() {
 
       console.log("(create.tsx) stream retrieved!", stream);
 
+      setStreamStoppedAlert(stream);
+
       disposeStreams();
       setCameraStream(stream);
       setVideoSourceKind("CAMERA");
@@ -377,6 +399,8 @@ export default function Page() {
       }
 
       console.log("(create.tsx) screen stream retrieved!", stream);
+
+      setStreamStoppedAlert(stream);
 
       let screenLabel: string | null = stream.getVideoTracks()[0].label;
       if (screenLabel.includes("://") || screenLabel.includes("window:")) {
