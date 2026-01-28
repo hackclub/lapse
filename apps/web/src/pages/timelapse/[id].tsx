@@ -5,7 +5,7 @@ import Icon from "@hackclub/icons";
 
 import type { Timelapse, TimelapseVisibility, Comment } from "@/client/api";
 
-import { assert } from "@/shared/common";
+import { assert, formatDuration } from "@/shared/common";
 
 import { trpc } from "@/client/trpc";
 import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
@@ -56,10 +56,8 @@ export default function Page() {
   
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [hackatimeProject, setHackatimeProject] = useState("");
-  const [hackatimeProjects, setHackatimeProjects] = useState<string[]>([]);
+  const [hackatimeProjects, setHackatimeProjects] = useState<{ name: string; totalSeconds: number }[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
@@ -287,8 +285,6 @@ export default function Page() {
       return;
 
     setHackatimeProject("");
-    setNewProjectName("");
-    setIsCreatingNew(false);
     setSyncModalOpen(true);
     setIsLoadingProjects(true);
 
@@ -313,7 +309,7 @@ export default function Page() {
     if (!timelapse)
       return;
 
-    const projectName = isCreatingNew ? newProjectName.trim() : hackatimeProject;
+    const projectName = hackatimeProject.trim();
     if (!projectName)
       return;
 
@@ -329,8 +325,6 @@ export default function Page() {
         setTimelapse(result.data.timelapse);
         setSyncModalOpen(false);
         setHackatimeProject("");
-        setNewProjectName("");
-        setIsCreatingNew(false);
       } 
       else {
         setRegularError(`Failed to sync with Hackatime: ${result.error}`);
@@ -345,24 +339,7 @@ export default function Page() {
     }
   };
 
-  function handleProjectSelect(value: string) {
-    if (value === "__create_new__") {
-      setIsCreatingNew(true);
-      setHackatimeProject("");
-    }
-    else if (value === "") {
-      setIsCreatingNew(false);
-      setHackatimeProject("");
-      setNewProjectName("");
-    }
-    else {
-      setIsCreatingNew(false);
-      setHackatimeProject(value);
-      setNewProjectName("");
-    }
-  }
-
-  const isSyncDisabled = (isCreatingNew ? !newProjectName.trim() : !hackatimeProject.trim()) || isSyncing;
+  const isSyncDisabled = !hackatimeProject.trim() || isSyncing;
 
   async function handlePasskeySubmit(passkey: string) {
     if (!timelapse?.private?.device) return;
@@ -589,31 +566,21 @@ export default function Page() {
             <>
               <DropdownInput
                 label="Project Name"
-                description={hackatimeProjects.length === 0 
-                  ? "No existing projects found. Create a new project below."
-                  : "Select an existing Hackatime project or create a new one."}
-                value={isCreatingNew ? "__create_new__" : (hackatimeProject || "")}
-                onChange={handleProjectSelect}
-                options={[
-                  { value: "", label: "Select a project...", disabled: true },
-                  ...(hackatimeProjects.length > 0
-                    ? hackatimeProjects.map(project => ({ value: project, label: project }))
-                    : []),
-                  { value: "__create_new__", label: "Create new project", icon: "plus" }
-                ]}
+                description="Select an existing Hackatime project or type to create a new one."
+                value={hackatimeProject}
+                onChange={setHackatimeProject}
+                options={hackatimeProjects.map(project => ({
+                  value: project.name,
+                  searchLabel: project.name,
+                  label: (
+                    <div className="flex justify-between w-full">
+                      <span>{project.name}</span>
+                      <span className="text-secondary">{formatDuration(project.totalSeconds)}</span>
+                    </div>
+                  )
+                }))}
+                allowUserCustom
               />
-
-              {isCreatingNew && (
-                <TextInput
-                  field={{
-                    label: "New Project Name",
-                    description: "Enter the name for the new Hackatime project."
-                  }}
-                  value={newProjectName}
-                  onChange={setNewProjectName}
-                  maxLength={128}
-                />
-              )}
 
               <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
                 {isSyncing ? "Syncing..." : "Sync with Hackatime"}
