@@ -421,7 +421,7 @@ export default function Page() {
   }
 
   function setFreeze(shouldBeFrozen: boolean) {
-    if ((shouldBeFrozen && !isFrozen) || (!shouldBeFrozen && isFrozen)) {
+    if ( (shouldBeFrozen && !isFrozen) || (!shouldBeFrozen && isFrozen) ) {
       toggleFreeze();
     }
   }
