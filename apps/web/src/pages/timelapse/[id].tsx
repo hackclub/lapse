@@ -556,7 +556,7 @@ export default function Page() {
           </div>
 
           {isLoadingProjects ? (
-            <div className="text-smoke">Loading projects...</div>
+            <div className="text-secondary text-center">Loading projects...</div>
           ) : (
             <>
               <DropdownInput
