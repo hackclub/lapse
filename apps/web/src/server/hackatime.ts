@@ -251,4 +251,23 @@ export class HackatimeOAuthApi extends HackatimeBase {
         const res = await this.query<{ token: string }>("GET", "v1/authenticated/api_keys");
         return res.token;
     }
+
+    /**
+     * Gets all projects for the authenticated user.
+     */
+    async getProjects() {
+        const res = await this.query<{
+            projects: {
+                name: string;
+                total_seconds: number;
+                most_recent_heartbeat: string | null;
+                languages: string[];
+                archived: boolean;
+            }[]
+        }>(
+            "GET", "v1/authenticated/projects"
+        );
+
+        return res.projects;
+    }
 }

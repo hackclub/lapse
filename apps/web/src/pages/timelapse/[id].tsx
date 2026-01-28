@@ -3,9 +3,9 @@ import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import Icon from "@hackclub/icons";
 
-import type { Timelapse, TimelapseVisibility, Comment } from "@/client/api";
+import type { Timelapse, TimelapseVisibility, Comment, HackatimeProject } from "@/client/api";
 
-import { assert } from "@/shared/common";
+import { assert, formatDuration } from "@/shared/common";
 
 import { trpc } from "@/client/trpc";
 import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
@@ -24,6 +24,7 @@ import { TextInput } from "@/client/components/ui/TextInput";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
 import { VisibilityPicker } from "@/client/components/ui/VisibilityPicker";
+import { DropdownInput } from "@/client/components/ui/DropdownInput";
 import { Skeleton } from "@/client/components/ui/Skeleton";
 import { Badge } from "@/client/components/ui/Badge";
 import { Bullet } from "@/client/components/ui/Bullet";
@@ -55,6 +56,8 @@ export default function Page() {
   
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [hackatimeProject, setHackatimeProject] = useState("");
+  const [hackatimeProjects, setHackatimeProjects] = useState<HackatimeProject[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
@@ -283,10 +286,26 @@ export default function Page() {
 
     setHackatimeProject("");
     setSyncModalOpen(true);
+    setIsLoadingProjects(true);
+
+    try {
+      const res = await trpc.hackatime.allProjects.query({});
+      setHackatimeProjects(res.ok ? res.data.projects : []);
+    }
+    catch (error) {
+      setHackatimeProjects([]);
+    }
+    finally {
+      setIsLoadingProjects(false);
+    }
   };
 
   async function handleConfirmSync() {
-    if (!timelapse || !hackatimeProject.trim())
+    if (!timelapse)
+      return;
+
+    const projectName = hackatimeProject.trim();
+    if (!projectName)
       return;
 
     try {
@@ -294,7 +313,7 @@ export default function Page() {
 
       const result = await trpc.timelapse.syncWithHackatime.mutate({
         id: timelapse.id,
-        hackatimeProject: hackatimeProject.trim()
+        hackatimeProject: projectName
       });
 
       if (result.ok) {
@@ -536,19 +555,33 @@ export default function Page() {
             </div>
           </div>
 
-          <TextInput
-            field={{
-              label: "Project Name",
-              description: "The name of the Hackatime project to sync with."
-            }}
-            value={hackatimeProject}
-            onChange={setHackatimeProject}
-            maxLength={128}
-          />
+          {isLoadingProjects ? (
+            <div className="text-secondary text-center">Loading projects...</div>
+          ) : (
+            <>
+              <DropdownInput
+                label="Project Name"
+                description="Select an existing Hackatime project or type to create a new one."
+                value={hackatimeProject}
+                onChange={setHackatimeProject}
+                options={hackatimeProjects.map(project => ({
+                  value: project.name,
+                  searchLabel: project.name,
+                  label: (
+                    <div className="flex justify-between w-full">
+                      <span>{project.name}</span>
+                      <span className="text-secondary">{formatDuration(project.totalSeconds)}</span>
+                    </div>
+                  )
+                }))}
+                allowUserCustom
+              />
 
-          <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
-            {isSyncing ? "Syncing..." : "Sync with Hackatime"}
-          </Button>
+              <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
+                {isSyncing ? "Syncing..." : "Sync with Hackatime"}
+              </Button>
+            </>
+          )}
         </div>
       </WindowedModal>
 
