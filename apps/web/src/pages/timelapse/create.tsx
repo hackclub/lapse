@@ -576,11 +576,7 @@ export default function Page() {
   }, [frameInterval]);
 
   async function discardRecording() {
-    const confirmed = window.confirm(
-      "Are you sure you want to discard this timelapse? This action cannot be undone."
-    );
-
-    if (!confirmed)
+    if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
       return;
 
     setIsDiscardingRecording(true);
