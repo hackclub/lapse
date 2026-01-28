@@ -242,12 +242,12 @@ export async function videoConcat(streams: Blob[]) {
         // Try re-muxing first if possible, fallback to re-encoding on failure
         if (canRemux) {
             try {
-                return processVideoTracks(false);
+                return await processVideoTracks(false);
             }
             catch (remuxError) {
                 console.warn("(videoProcessing.ts) re-muxing failed, retrying with re-encoding:", remuxError);
                 try {
-                    return processVideoTracks(true);
+                    return await processVideoTracks(true);
                 }
                 catch (reencodeError) {
                     console.error(
@@ -269,7 +269,7 @@ export async function videoConcat(streams: Blob[]) {
             }
         }
         else {
-            return processVideoTracks(true);
+            return await processVideoTracks(true);
         }
 
     }
