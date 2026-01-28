@@ -1,71 +1,206 @@
 import "@/server/allow-only-server";
 
 import jwt from "jsonwebtoken";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { NextApiRequest } from "next";
 
+import * as db from "@/generated/prisma/client";
 import { env } from "@/server/env";
 import { database } from "@/server/db";
 
 export interface JWTPayload {
-    userId: string
-    email: string
-    iat: number
-    exp: number
+  userId: string;
+  email: string;
+  iat: number;
+  exp: number;
 }
 
+export interface OboJWTPayload {
+  userId: string;
+  email: string;
+  actorId: string;
+  scopes: string[];
+  iat: number;
+  exp: number;
+  aud: string;
+  iss: string;
+}
+
+export const OBO_AUDIENCE = "lapse-rest";
+export const OBO_ISSUER = "lapse";
+
 export function generateJWT(userId: string, email: string): string {
-    return jwt.sign(
-        { userId, email },
-        env.JWT_SECRET,
-        { expiresIn: "30d" }
-    );
+  return jwt.sign({ userId, email }, env.JWT_SECRET, { expiresIn: "30d" });
+}
+
+export function generateOboJWT(
+  userId: string,
+  email: string,
+  actorId: string,
+  scopes: string[],
+  ttlSeconds: number,
+): string {
+  return jwt.sign(
+    {
+      userId,
+      email,
+      actorId,
+      scopes,
+      aud: OBO_AUDIENCE,
+      iss: OBO_ISSUER,
+    },
+    env.JWT_SECRET,
+    { expiresIn: ttlSeconds },
+  );
 }
 
 export function verifyJWT(token: string): JWTPayload | null {
-    try {
-        const decoded = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload;
-        return decoded as JWTPayload;
-    }
-    catch {
-        return null;
-    }
+  try {
+    const decoded = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload;
+    return decoded as JWTPayload;
+  } catch {
+    return null;
+  }
 }
 
-export function extractJWTFromRequest(req: NextApiRequest): string | null {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith("Bearer "))
-        return authHeader.substring(7);
+export function verifyOboJWT(token: string): OboJWTPayload | null {
+  try {
+    const decoded = jwt.verify(token, env.JWT_SECRET, {
+      audience: OBO_AUDIENCE,
+      issuer: OBO_ISSUER,
+    }) as jwt.JwtPayload;
 
-    const cookies = req.headers.cookie;
-    if (cookies) {
-        const match = cookies.match(/lapse-auth=([^;]+)/);
-        if (match) {
-            return match[1];
-        }
-    }
+    const payload = decoded as OboJWTPayload;
+    if (!payload.actorId || !payload.userId || !payload.scopes) return null;
+    if (!Array.isArray(payload.scopes)) return null;
 
+    const scopes = payload.scopes
+      .filter((scope): scope is string => typeof scope === "string")
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+
+    if (scopes.length === 0) return null;
+    if (scopes.length !== new Set(scopes).size) return null;
+
+    return {
+      ...payload,
+      scopes,
+    };
+  } catch {
     return null;
+  }
+}
+
+function hasOboClaims(token: string) {
+  const decoded = jwt.decode(token);
+  if (!decoded || typeof decoded !== "object") return false;
+
+  const payload = decoded as Record<string, unknown>;
+  return (
+    payload.actorId !== undefined ||
+    payload.aud === OBO_AUDIENCE ||
+    payload.iss === OBO_ISSUER
+  );
+}
+
+export function hashServiceSecret(secret: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hashed = scryptSync(secret, salt, 64).toString("hex");
+  return `${salt}:${hashed}`;
+}
+
+export function verifyServiceSecret(secret: string, stored: string): boolean {
+  const [salt, hashed] = stored.split(":");
+  if (!salt || !hashed) return false;
+
+  const derived = scryptSync(secret, salt, 64);
+  const storedBuffer = Buffer.from(hashed, "hex");
+  if (derived.length !== storedBuffer.length) return false;
+
+  return timingSafeEqual(derived, storedBuffer);
 }
 
 export async function getAuthenticatedUser(req: NextApiRequest) {
-    const token = extractJWTFromRequest(req);
+  const token = extractJWTFromRequest(req);
 
-    if (!token)
-        return null;
+  if (!token) return null;
 
-    const payload = verifyJWT(token);
-    if (!payload)
-        return null;
+  const payload = verifyJWT(token);
+  if (!payload) return null;
 
+  try {
+    const user = await database.user.findFirst({
+      where: { id: payload.userId },
+    });
+
+    return user;
+  } catch (error) {
+    console.error("(auth.ts)", "Failed to fetch authenticated user:", error);
+    return null;
+  }
+}
+
+export type RestAuthContext = {
+  user: db.User | null;
+  actor: db.ServiceClient | null;
+  scopes: string[];
+};
+
+export async function getRestAuthContext(
+  req: NextApiRequest,
+): Promise<RestAuthContext> {
+  const token = extractJWTFromRequest(req);
+
+  if (!token) return { user: null, actor: null, scopes: [] };
+
+  const oboPayload = verifyOboJWT(token);
+  if (oboPayload) {
     try {
-        const user = await database.user.findFirst({
-            where: { id: payload.userId }
-        });
+      const [user, actor] = await Promise.all([
+        database.user.findFirst({ where: { id: oboPayload.userId } }),
+        database.serviceClient.findFirst({
+          where: { id: oboPayload.actorId, revokedAt: null },
+        }),
+      ]);
 
-        return user;
+      if (!user || !actor) return { user: null, actor: null, scopes: [] };
+
+      return { user, actor, scopes: oboPayload.scopes };
+    } catch (error) {
+      console.error("(auth.ts)", "Failed to fetch OBO auth context:", error);
+      return { user: null, actor: null, scopes: [] };
     }
-    catch (error) {
-        console.error("(auth.ts)", "Failed to fetch authenticated user:", error);
-        return null;
+  }
+
+  if (hasOboClaims(token)) return { user: null, actor: null, scopes: [] };
+
+  const payload = verifyJWT(token);
+  if (!payload) return { user: null, actor: null, scopes: [] };
+
+  try {
+    const user = await database.user.findFirst({
+      where: { id: payload.userId },
+    });
+
+    return { user, actor: null, scopes: [] };
+  } catch (error) {
+    console.error("(auth.ts)", "Failed to fetch authenticated user:", error);
+    return { user: null, actor: null, scopes: [] };
+  }
+}
+
+export function extractJWTFromRequest(req: NextApiRequest): string | null {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer "))
+    return authHeader.substring(7);
+
+  const cookies = req.headers.cookie;
+  if (cookies) {
+    const match = cookies.match(/lapse-auth=([^;]+)/);
+    if (match) {
+      return match[1];
     }
+  }
+
+  return null;
 }

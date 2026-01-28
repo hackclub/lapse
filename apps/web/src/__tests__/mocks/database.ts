@@ -85,7 +85,11 @@ export const mockDatabase = createMockDatabase();
  */
 export function resetMockDatabase(): void {
     const resetModel = (model: MockPrismaModel<unknown>) => {
-        Object.values(model).forEach((fn) => fn.mockReset());
+        Object.values(model).forEach((fn) => {
+            if (typeof fn === "function" && "mockReset" in fn) {
+                fn.mockReset();
+            }
+        });
     };
 
     resetModel(mockDatabase.user);
