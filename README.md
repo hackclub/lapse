@@ -15,47 +15,16 @@ In order to get started with developing Lapse, run these commands:
 # Install all packages
 pnpm install
 
-# Use example environment variables
-cp ./apps/web/.env.example ./apps/web/.env
-```
+# cd into the web app directory
+cd apps/web
 
-You also need a PostgreSQL database running. The simplest way to get one up and running is via Docker:
-```bash
-# In this case, your DATABASE_URL environment variable would be "postgresql://postgres:postgres@localhost:5432/lapse?schema=public".
-# You only need to run this command once - this creates the container!
-docker run -d --name lapse-db -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
-```
+# Initialize the development environment
+pnpm dev:init
 
-...if you already created the PostgreSQL container but it's not running, use the following to get it back up:
-```bash
-docker start lapse-db
-```
-
-You'll have to change some environment variables in `./apps/web/.env`. Don't worry - everything is explained in the comments in the `.env` file! After you're done, run this command to get started:
-
-```bash
+# Start the development server
 pnpm turbo run dev
 ```
-
-If you're running `db:dev` for the very first time, you'll have to create the schema:
-
-```bash
-# Make sure that your PostgreSQL server is running! See above on how to set it up.
-pnpm turbo run db:push
-```
-
-You also have a couple of development scripts at hand:
-```bash
-# Run these from the root directory of the repo.
-# You'll need this to use any of the scripts in ./apps/web/prisma!
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lapse?schema=public"
-
-# Generate a JWT cookie to log in without having to auth through Slack
-pnpm -F web exec tsx ./prisma/create-jwt.ts --email ascpixi@hackclub.com
-
-# Create a mock user without going through Slack
-pnpm -F web exec tsx ./prisma/create-user.ts --email ascpixi@hackclub.com --sid U082DPCGPST --handle ascpixi --name ascpixi --pfp https://ca.slack-edge.com/T0266FRGM-U082DPCGPST-0c4754eb6211-512
-```
+To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively. To completely tear down the development environment (including removing all Docker volumes), use `pnpm dev:down-env`.
 
 ## 🛠️ Deployment
 Lapse is meant to be deployed via Docker. In order to deploy the main frontend/backend microservice, use `Dockerfile.web`, located in the root of this repo.

@@ -4,3 +4,4 @@ export type * from "@/server/routers/api/timelapse";
 export type * from "@/server/routers/api/tracing";
 export type * from "@/server/routers/api/user";
 export type * from "@/server/routers/api/comment";
+export type * from "@/server/routers/api/hackatime";
