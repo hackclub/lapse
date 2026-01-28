@@ -10,8 +10,7 @@ import { logError, logRequest } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { database } from "@/server/db";
-import { HackatimeOAuthApi, HackatimeUserApi } from "@/server/hackatime";
-import { env } from "@/server/env";
+import { HackatimeOAuthApi } from "@/server/hackatime";
 
 import * as db from "@/generated/prisma/client";
 
@@ -477,55 +476,6 @@ export default router({
                     .toArray()
                     .toSorted(descending(x => x.time))
             });
-        }),
-
-    /**
-     * Gets all Hackatime projects from the user's Hackatime account.
-     */
-    getAllHackatimeProjects: protectedProcedure()
-        .input(z.object({}))
-        .output(apiResult({
-            projects: z.array(z.object({
-                name: z.string(),
-                totalSeconds: z.number()
-            }))
-        }))
-        .query(async (req) => {
-            logRequest("user/getAllHackatimeProjects", req);
-            
-            const dbUser = await database.user.findFirst({
-                where: { id: req.ctx.user.id }
-            });
-
-            if (!dbUser)
-                return apiErr("NOT_FOUND", "User not found");
-
-            if (!dbUser.hackatimeId || !dbUser.hackatimeAccessToken)
-                return apiErr("ERROR", "You must have a linked Hackatime account!");
-
-            const oauthApi = new HackatimeOAuthApi(dbUser.hackatimeAccessToken);
-            
-            try {
-                const projects = await oauthApi.getProjects();
-
-                const filteredProjects = projects
-                    .filter(p => typeof p.name === "string" && p.name.trim().length > 0)
-                    .sort((a, b) => {
-                        const aTime = a.most_recent_heartbeat ? new Date(a.most_recent_heartbeat).getTime() : 0;
-                        const bTime = b.most_recent_heartbeat ? new Date(b.most_recent_heartbeat).getTime() : 0;
-                        return bTime - aTime;
-                    })
-                    .map(p => ({
-                        name: p.name,
-                        totalSeconds: p.total_seconds
-                    }));
-
-                return apiOk({ projects: filteredProjects });
-            }
-            catch (error) {
-                logError("user.getAllHackatimeProjects", "Failed to fetch Hackatime projects", { error, userId: req.ctx.user.id });
-                return apiOk({ projects: [] });
-            }
         }),
 
     /**

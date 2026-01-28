@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import Icon from "@hackclub/icons";
 
-import type { Timelapse, TimelapseVisibility, Comment } from "@/client/api";
+import type { Timelapse, TimelapseVisibility, Comment, HackatimeProject } from "@/client/api";
 
 import { assert, formatDuration } from "@/shared/common";
 
@@ -56,7 +56,7 @@ export default function Page() {
   
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [hackatimeProject, setHackatimeProject] = useState("");
-  const [hackatimeProjects, setHackatimeProjects] = useState<{ name: string; totalSeconds: number }[]>([]);
+  const [hackatimeProjects, setHackatimeProjects] = useState<HackatimeProject[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -289,13 +289,8 @@ export default function Page() {
     setIsLoadingProjects(true);
 
     try {
-      const res = await trpc.user.getAllHackatimeProjects.query({});
-      if (res.ok) {
-        setHackatimeProjects(res.data.projects);
-      }
-      else {
-        setHackatimeProjects([]);
-      }
+      const res = await trpc.hackatime.allProjects.query({});
+      setHackatimeProjects(res.ok ? res.data.projects : []);
     }
     catch (error) {
       setHackatimeProjects([]);
