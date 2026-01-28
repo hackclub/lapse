@@ -58,7 +58,7 @@ export default function Page() {
   const [currentSession] = useState<number>(Date.now());
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
   const [isDiscarding, setIsDiscarding] = useState(false);
-  
+
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
@@ -83,7 +83,7 @@ export default function Page() {
   useEffect(() => {
     document.title = setupModalOpen ? "Lapse"
       : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
-      : `🔴 REC: ${name} - Lapse`;
+        : `🔴 REC: ${name} - Lapse`;
   }, [name, setupModalOpen, isFrozen]);
 
   useEffect(() => {
@@ -98,9 +98,9 @@ export default function Page() {
         console.log("(create.tsx) Could not enumerate cameras:", err);
       }
     }
-    
+
     enumerateCameras();
-    
+
     navigator.mediaDevices.addEventListener("devicechange", enumerateCameras);
     return () => {
       navigator.mediaDevices.removeEventListener("devicechange", enumerateCameras);
@@ -141,7 +141,7 @@ export default function Page() {
           const sessionEnd = sorted[sorted.length - 1].createdAt;
           const sessionDuration = sessionEnd - sessionStart;
           totalElapsedTime += sessionDuration;
-          
+
           console.log(`(create.tsx) Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
         }
       }
@@ -157,7 +157,7 @@ export default function Page() {
     setCurrentTimelapseId(activeTimelapse.id);
     setStartedAt(adjustedStartTime);
     setIsCreated(true);
-    
+
     setNeedsVideoSource(true);
     setSetupModalOpen(true);
   });
@@ -182,6 +182,46 @@ export default function Page() {
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
+    // --- Add Time Overlay ---
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, "0");
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+    const timestamp = `${hours}:${minutes}`;
+
+    ctx.font = "bold 28px 'SF Mono', 'Consolas', 'Monaco', monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+
+    const textMetrics = ctx.measureText(timestamp);
+    const textWidth = textMetrics.width;
+    const textHeight = 28;
+
+    const paddingX = 24;
+    const paddingY = 14;
+    const pillWidth = textWidth + paddingX * 2;
+    const pillHeight = textHeight + paddingY * 2;
+    const pillX = canvas.width - pillWidth - 24;
+    const pillY = 24;
+    const borderRadius = pillHeight / 2;
+
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4;
+
+    ctx.beginPath();
+    ctx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
+    ctx.fillStyle = "rgba(20, 20, 24, 0.9)";
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = "white";
+    ctx.fillText(timestamp, pillX + paddingX, pillY + pillHeight / 2);
+
     if (recorder && recorder.state === "recording") {
       recorder.requestData();
     }
@@ -189,7 +229,7 @@ export default function Page() {
     const activeTimelapseId = timelapseId ?? currentTimelapseId;
     if (activeTimelapseId == null)
       throw new Error("captureFrame() was called, but currentTimelapseId is null");
-    
+
     deviceStorage.saveSnapshot({
       createdAt: Date.now(),
       session: currentSession
@@ -198,18 +238,18 @@ export default function Page() {
   }, [recorder, currentTimelapseId, currentSession]);
 
   function disposeStreams() {
-      setScreenLabel("Screen");
+    setScreenLabel("Screen");
 
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
-        setCameraStream(null);
-      }
-
-      if (screenStream) {
-        screenStream.getTracks().forEach((track) => track.stop());
-        setScreenStream(null);
-      }
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
     }
+
+    if (screenStream) {
+      screenStream.getTracks().forEach((track) => track.stop());
+      setScreenStream(null);
+    }
+  }
 
   async function onCreate() {
     console.log("(create.tsx) creating a new timelapse!");
@@ -294,14 +334,14 @@ export default function Page() {
         () => captureFrame(activeTimelapseId!),
         TIMELAPSE_FRAME_LENGTH_MS
       );
-      
+
       setFrameInterval(newInterval);
     }
   }
 
   async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
-    if (ev.target.value == videoSourceKind){
-      if (ev.target.value == "SCREEN"){
+    if (ev.target.value == videoSourceKind) {
+      if (ev.target.value == "SCREEN") {
         console.log("(create.tsx) video source change requested to SCREEN, but it's already set to SCREEN. Refreshing screen capture.");
       }
       else {
@@ -336,13 +376,13 @@ export default function Page() {
             video: true,
             audio: false
           });
-          
+
           stream.getTracks().forEach(track => track.stop());
-          
+
           const devices = await navigator.mediaDevices.enumerateDevices();
           const cameras = devices.filter(device => device.kind === "videoinput" && device.deviceId);
           setAvailableCameras(cameras);
- 
+
           if (cameras.length > 0) {
             stream = await navigator.mediaDevices.getUserMedia({
               video: { deviceId: { exact: cameras[0].deviceId } },
@@ -403,7 +443,7 @@ export default function Page() {
   }
 
   function setFreeze(shouldBeFrozen: boolean) {
-    if ( (shouldBeFrozen && !isFrozen) || (!shouldBeFrozen && isFrozen) ) {
+    if ((shouldBeFrozen && !isFrozen) || (!shouldBeFrozen && isFrozen)) {
       toggleFreeze();
     }
   }
@@ -441,7 +481,7 @@ export default function Page() {
         setIsUploading(true);
         setUploadProgress(0);
         setUploadStage("Preparing upload...");
-        
+
         assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
 
         const timelapse = await deviceStorage.getTimelapse(currentTimelapseId);
@@ -449,12 +489,12 @@ export default function Page() {
           throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
 
         console.log("(upload) recording stopped!", timelapse);
-        
+
         setUploadStage("Processing video...");
         setUploadProgress(5);
 
         const merged = await mergeVideoSessions(timelapse);
-        
+
         console.log("(upload) - merged session data:", merged);
 
         setUploadStage("Generating thumbnail...");
@@ -490,7 +530,7 @@ export default function Page() {
           uploadRes.data.videoToken,
           new Blob([encrypted.data], { type: "video/webm" })
         );
-        
+
         if (!vidStatus.ok)
           throw new Error(vidStatus.message);
 
@@ -510,14 +550,14 @@ export default function Page() {
 
         setUploadStage("Uploading thumbnail...");
         setUploadProgress(80);
-        
+
         const thumbnailStatus = await apiUpload(
           uploadRes.data.thumbnailToken,
           new Blob([encryptedThumbnail.data], { type: "image/jpeg" })
         );
         if (!thumbnailStatus.ok)
           throw new Error(thumbnailStatus.message);
-        
+
         console.log("(upload) thumbnail uploaded successfully", thumbnailStatus);
 
         setUploadStage("Finalizing timelapse...");
@@ -559,7 +599,7 @@ export default function Page() {
 
         setUploadStage("Upload complete!");
         setUploadProgress(100);
-        
+
         router.push(`/timelapse/${createRes.data.timelapse.id}`);
       }
       catch (apiErr) {
@@ -607,21 +647,21 @@ export default function Page() {
           icon={isDiscarding ? "plus-fill" : "clock-fill"}
           title={
             isDiscarding ? "Create timelapse"
-            : needsVideoSource ? "Resume timelapse"
-            : isCreated ? "Update timelapse"
-            : "Create timelapse"
+              : needsVideoSource ? "Resume timelapse"
+                : isCreated ? "Update timelapse"
+                  : "Create timelapse"
           }
           description={
             isDiscarding ? "After you click Create, your timelapse will start recording!"
-            : needsVideoSource ? "Select your video source to resume recording your timelapse."
-            : isCreated ? "Update your timelapse settings."
-            : "After you click Create, your timelapse will start recording!"
+              : needsVideoSource ? "Select your video source to resume recording your timelapse."
+                : isCreated ? "Update your timelapse settings."
+                  : "After you click Create, your timelapse will start recording!"
           }
           shortDescription={
             isDiscarding ? "Select a video source"
-            : needsVideoSource ? "Select a video source to resume."
-            : isCreated ? "Update your timelapse settings."
-            : "Select a video source"
+              : needsVideoSource ? "Select a video source to resume."
+                : isCreated ? "Update your timelapse settings."
+                  : "Select a video source"
           }
           showCloseButton={true}
           onClose={onSubmitModalClose}
@@ -654,25 +694,25 @@ export default function Page() {
                           { value: "SCREEN", icon: "photo", label: screenLabel },
                           ...(
                             anyCamerasLoaded
-                            ? [
-                              // We got permission from the user to fetch their cameras - display them.
-                              {
-                                label: "Cameras", icon: "instagram" as const, group: availableCameras
-                                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
-                                  .map((camera, index) => (
-                                    {
-                                      value: `CAMERA:${camera.deviceId}`,
-                                      label: camera.label && camera.label.trim().length > 0 
-                                        ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
-                                        : `Camera ${index + 1}`
-                                    }
-                                  ))
-                              }
-                            ] : [
-                              // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
-                              // option, that when clicked, will prompt them for permission.
-                              { label: "Camera", value: "CAMERA:" }
-                            ])
+                              ? [
+                                // We got permission from the user to fetch their cameras - display them.
+                                {
+                                  label: "Cameras", icon: "instagram" as const, group: availableCameras
+                                    .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                                    .map((camera, index) => (
+                                      {
+                                        value: `CAMERA:${camera.deviceId}`,
+                                        label: camera.label && camera.label.trim().length > 0
+                                          ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
+                                          : `Camera ${index + 1}`
+                                      }
+                                    ))
+                                }
+                              ] : [
+                                // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
+                                // option, that when clicked, will prompt them for permission.
+                                { label: "Camera", value: "CAMERA:" }
+                              ])
                         ]}
                       />
 
@@ -707,8 +747,8 @@ export default function Page() {
                             <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary" className="flex-1">
                               {
                                 needsVideoSource ? "Resume"
-                                : isCreated ? "Update"
-                                : "Create"
+                                  : isCreated ? "Update"
+                                    : "Create"
                               }
                             </Button>
                             {needsVideoSource && (
@@ -777,7 +817,7 @@ export default function Page() {
         {/* controls (overlay) */}
         <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">
           <PillControlButton onClick={toggleFreeze}>
-            { isFrozen ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} /> }
+            {isFrozen ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} />}
           </PillControlButton>
 
           <PillControlButton onClick={() => setSubmitModalOpen(true)}>
