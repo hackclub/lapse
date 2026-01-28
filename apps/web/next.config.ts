@@ -1,6 +1,7 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
+import TerserPlugin from "terser-webpack-plugin";
 
 let config: NextConfig = {
   reactStrictMode: true,
@@ -9,6 +10,18 @@ let config: NextConfig = {
   poweredByHeader: false,
 
   webpack: (config: Configuration, { isServer, dev }) => {
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        minimizer: [
+          new TerserPlugin({
+            terserOptions: {
+              mangle: false,
+            },
+          }),
+        ],
+      };
+    }
     // Configure SVGR for SVG imports
     config.module!.rules!.push({
       test: /\.svg$/i,

@@ -1,36 +1,9 @@
 import Head from "next/head";
-import localFont from "next/font/local";
-import { JetBrains_Mono } from "next/font/google";
 import { PropsWithChildren } from "react";
 import clsx from "clsx";
 
 import { Header } from "@/client/components/ui/layout/Header";
-
-const phantomSans = localFont({
-  variable: "--font-phantom-sans",
-  src: [
-    {
-      path: "../../../public/fonts/PhantomSans-Regular.woff2",
-      weight: "400",
-      style: "normal"
-    },
-    {
-      path: "../../../public/fonts/PhantomSans-Italic.woff2",
-      weight: "400",
-      style: "italic"
-    },
-    {
-      path: "../../../public/fonts/PhantomSans-Bold.woff2",
-      weight: "700",
-      style: "normal"
-    }
-  ]
-});
-
-const jetBrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"]
-});
+import { jetBrainsMono, phantomSans } from "@/client/fonts";
 
 export default function RootLayout({
   children,

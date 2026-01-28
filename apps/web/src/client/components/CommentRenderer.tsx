@@ -1,3 +1,4 @@
+import NextLink from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { markdownToJsx } from "../markdown";
 import { ProfilePicture } from "./ProfilePicture";
@@ -63,7 +64,7 @@ export function CommentRenderer({ comment, onDelete }: {
         <ProfilePicture user={comment.author} size="xs" />
 
         <div className="flex gap-2 text-secondary items-center">
-          <h2>@{comment.author.displayName}</h2>
+          <NextLink href={`/user/@${comment.author.handle}`}><h2>@{comment.author.displayName}</h2></NextLink>
           <Bullet />
           <TimeAgo date={comment.createdAt} />
 

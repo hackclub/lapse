@@ -5,7 +5,7 @@ import { generateJWT } from "@/server/auth";
 import { env } from "@/server/env";
 import { logError, logNextRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
-import { MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH } from "@/server/routers/api/user";
+import { MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH } from "@/shared/constants";
 
 // GET /api/auth-hackatime
 //    Meant to be used as a callback URL - the user will be redirected to this API endpoint when

@@ -8,6 +8,7 @@ import { decryptData, getCurrentDevice } from "@/client/encryption";
 import { ProfilePicture } from "@/client/components/ProfilePicture"
 import { Bullet } from "@/client/components/ui/Bullet";
 import { TimeAgo } from "@/client/components/TimeAgo";
+import { Duration } from "@/client/components/Duration";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -61,7 +62,6 @@ export function TimelapseCard({ timelapse }: {
   timelapse: Timelapse
 }) {
   const router = useRouter();
-
   const [thumb, setThumb] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -97,12 +97,17 @@ export function TimelapseCard({ timelapse }: {
       className="flex flex-col gap-4 sm:gap-5 cursor-pointer sm:max-w-80"
       role="button"
     >
-      <div role="img" className="w-full aspect-video rounded-lg sm:rounded-2xl overflow-hidden">
+      <div role="img" className="relative w-full aspect-video rounded-lg sm:rounded-2xl overflow-hidden">
         {
           isLoading
             ? <div className="bg-slate w-full h-full" />
             : <img src={thumb ?? "/images/no-thumbnail.png"} alt="" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
         }
+        {!isLoading && timelapse.duration > 0 && (
+          <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 bg-black/80 text-white text-xs sm:text-sm px-1 sm:px-1.5 py-0.5 rounded font-medium">
+            <Duration seconds={timelapse.duration} />
+          </div>
+        )}
       </div>
       
       <div className="flex gap-2 sm:gap-3 w-full justify-center items-center sm:items-start">

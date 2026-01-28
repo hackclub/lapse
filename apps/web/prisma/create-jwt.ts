@@ -1,18 +1,11 @@
-// @ts-check
-"use strict";
-
 import "dotenv/config";
 import jwt from "jsonwebtoken";
 import { parseArgs } from "node:util";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../src/generated/prisma/client.js";
+import { PrismaClient } from "../src/generated/prisma/client";
 
-/**
- * @param {string} userId
- * @param {string} email
- */
-export function generateJWT(userId, email) {
+export function generateJWT(userId: string, email: string) {
     if (!process.env.JWT_SECRET)
         throw new Error("Environment variable JWT_SECRET hasn't been set.");
 
@@ -25,6 +18,7 @@ export function generateJWT(userId, email) {
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
+
 async function main() {
     const args = parseArgs({
         options: {
