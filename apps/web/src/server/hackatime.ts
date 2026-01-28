@@ -256,33 +256,18 @@ export class HackatimeOAuthApi extends HackatimeBase {
      * Gets all projects for the authenticated user.
      */
     async getProjects() {
-        type Project = {
-            id: number;
-            name: string;
-            repository?: string;
-            badge?: string;
-            color?: string;
-            has_public_url?: boolean;
-            is_private?: boolean;
-            is_monorepo?: boolean;
-        };
-        
-        const res = await this.query<unknown>("GET", "v1/authenticated/projects");
-        
-        if (Array.isArray(res)) {
-            return res as Project[];
-        }
-        
-        if (res && typeof res === "object" && res !== null) {
-            if ("data" in res && Array.isArray((res as { data?: unknown }).data)) {
-                return (res as { data: Project[] }).data;
+        const res = await this.query<{
+            projects: {
+                name: string;
+                total_seconds: number;
+                most_recent_heartbeat: string | null;
+                languages: string[];
+                archived: boolean;
             }
-            
-            if ("projects" in res && Array.isArray((res as { projects?: unknown }).projects)) {
-                return (res as { projects: Project[] }).projects;
-            }
-        }
-        
-        return [];
+        }>(
+            "GET", "v1/authenticated/projects"
+        );
+
+        return res.projects;
     }
 }

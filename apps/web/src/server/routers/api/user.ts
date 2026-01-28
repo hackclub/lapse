@@ -485,7 +485,10 @@ export default router({
     getAllHackatimeProjects: protectedProcedure()
         .input(z.object({}))
         .output(apiResult({
-            projects: z.array(z.string())
+            projects: z.array(z.object({
+                name: z.string(),
+                totalSeconds: z.number()
+            }))
         }))
         .query(async (req) => {
             logRequest("user/getAllHackatimeProjects", req);
@@ -504,13 +507,20 @@ export default router({
             
             try {
                 const projects = await oauthApi.getProjects();
-                
-                const projectNames = projects
-                    .map((p) => p?.name)
-                    .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
-                    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-                
-                return apiOk({ projects: projectNames });
+
+                const filteredProjects = projects
+                    .filter(p => typeof p.name === "string" && p.name.trim().length > 0)
+                    .sort((a, b) => {
+                        const aTime = a.most_recent_heartbeat ? new Date(a.most_recent_heartbeat).getTime() : 0;
+                        const bTime = b.most_recent_heartbeat ? new Date(b.most_recent_heartbeat).getTime() : 0;
+                        return bTime - aTime;
+                    })
+                    .map(p => ({
+                        name: p.name,
+                        totalSeconds: p.total_seconds
+                    }));
+
+                return apiOk({ projects: filteredProjects });
             }
             catch (error) {
                 logError("user.getAllHackatimeProjects", "Failed to fetch Hackatime projects", { error, userId: req.ctx.user.id });
