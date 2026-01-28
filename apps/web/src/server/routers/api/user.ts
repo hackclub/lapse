@@ -2,7 +2,7 @@ import "@/server/allow-only-server";
 
 import { z } from "zod";
 
-import { apiResult, assert, descending, apiErr, when, apiOk } from "@/shared/common";
+import { apiResult, assert, descending, apiErr, when, apiOk, isAdmin } from "@/shared/common";
 import { MIN_HANDLE_LENGTH, MAX_HANDLE_LENGTH } from "@/shared/constants";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
@@ -48,6 +48,27 @@ export const UserBio = z.string().max(160).default("");
 export const UserUrlList = z.array(z.url().max(64).min(1)).max(4); 
 
 /**
+ * Represents ban information fetched from the latest BanRecord.
+ */
+export type BanInfo = z.infer<typeof BanInfoSchema>;
+export const BanInfoSchema = z.object({
+    /**
+     * The date when the user was banned.
+     */
+    bannedAt: ApiDate,
+
+    /**
+     * The public reason provided by an administrator for the ban (shown to user).
+     */
+    reason: z.string(),
+
+    /**
+     * The internal reason for the ban (only visible to admins).
+     */
+    reasonInternal: z.string()
+});
+
+/**
  * Data associated with a user model that should be exposed only to the represented user or
  * administrators.
  */
@@ -60,7 +81,12 @@ export const PrivateUserDataSchema = z.object({
      * Whether the user needs to re-authenticate. This is `true` when, for example, the user has authenticated
      * with Slack before, but has not yet logged in with Hackatime.
      */
-    needsReauth: z.boolean()
+    needsReauth: z.boolean(),
+
+    /**
+     * Ban information if the user is banned, or `null` if not banned.
+     */
+    ban: BanInfoSchema.nullable()
 });
 
 /**
@@ -132,6 +158,52 @@ export const UserSchema = PublicUserSchema.safeExtend({
 export type DbCompositeUser = db.User & { devices: db.KnownDevice[] };
 
 /**
+ * Represents a ban action type.
+ */
+export type BanAction = z.infer<typeof BanActionSchema>;
+export const BanActionSchema = z.enum(["BAN", "UNBAN"]);
+
+/**
+ * Represents a record of a ban or unban action.
+ */
+export type BanRecord = z.infer<typeof BanRecordSchema>;
+export const BanRecordSchema = z.object({
+    id: PublicId,
+    createdAt: ApiDate,
+    action: BanActionSchema,
+    reason: z.string(),
+    reasonInternal: z.string(),
+    performedBy: z.object({
+        id: PublicId,
+        handle: UserHandle,
+        displayName: UserDisplayName
+    })
+});
+
+/**
+ * Represents a `db.BanRecord` with related tables included.
+ */
+export type DbBanRecord = db.BanRecord & { performedBy: db.User };
+
+/**
+ * Converts a database representation of a ban record to a runtime (API) one.
+ */
+export function dtoBanRecord(entity: DbBanRecord): BanRecord {
+    return {
+        id: entity.id,
+        createdAt: entity.createdAt.getTime(),
+        action: entity.action,
+        reason: entity.reason,
+        reasonInternal: entity.reasonInternal,
+        performedBy: {
+            id: entity.performedBy.id,
+            handle: entity.performedBy.handle,
+            displayName: entity.performedBy.displayName
+        }
+    };
+}
+
+/**
  * Converts a database representation of a known device to a runtime (API) one.
  */
 export function dtoKnownDevice(entity: db.KnownDevice): KnownDevice {
@@ -160,14 +232,40 @@ export function dtoPublicUser(entity: db.User): PublicUser {
 
 /**
  * Converts a database representation of a user to a runtime (API) one, including all private fields.
+ * If the user is banned, fetches the latest ban record to get ban details.
+ * 
+ * @param entity The user entity from the database.
+ * @param latestBanRecord Optional pre-fetched ban record to avoid extra database query.
  */
-export function dtoUser(entity: DbCompositeUser): User {
+export async function dtoUser(entity: DbCompositeUser, latestBanRecord?: DbBanRecord | null): Promise<User> {
+    let ban: BanInfo | null = null;
+
+    if (entity.isBanned) {
+        const banRecord = latestBanRecord ?? await database.banRecord.findFirst({
+            where: {
+                targetId: entity.id,
+                action: "BAN"
+            },
+            orderBy: { createdAt: "desc" },
+            include: { performedBy: true }
+        });
+
+        if (banRecord) {
+            ban = {
+                bannedAt: banRecord.createdAt.getTime(),
+                reason: banRecord.reason,
+                reasonInternal: banRecord.reasonInternal
+            };
+        }
+    }
+
     return {
         ...dtoPublicUser(entity),
         private: {
             permissionLevel: entity.permissionLevel,
             devices: entity.devices.map(dtoKnownDevice),
-            needsReauth: entity.slackId !== null && entity.hackatimeId === null
+            needsReauth: entity.slackId !== null && entity.hackatimeId === null,
+            ban
         }
     };
 }
@@ -196,7 +294,7 @@ export default router({
             if (!user)
                 return apiErr("NOT_FOUND", "Could not find your user account.");
 
-            return apiOk({ user: dtoUser(user) });
+            return apiOk({ user: await dtoUser(user) });
         }),
 
     /**
@@ -246,9 +344,11 @@ export default router({
             if (!dbUser)
                 return apiOk({ user: null });
             
-            // Watch out! Make sure we never return a `User` to an unauthorized user here.
-            const user: User | PublicUser = req.ctx.user?.id == dbUser.id
-                ? dtoUser(dbUser)
+            // Return full User data if the caller is the user themselves or an admin.
+            const isSelf = req.ctx.user?.id === dbUser.id;
+            const callerIsAdmin = req.ctx.user && isAdmin(req.ctx.user);
+            const user: User | PublicUser = isSelf || callerIsAdmin
+                ? await dtoUser(dbUser)
                 : dtoPublicUser(dbUser);
             
             return apiOk({ user });
@@ -306,7 +406,7 @@ export default router({
                 include: { devices: true }
             });
 
-            return apiOk({ user: dtoUser(updatedUser) });
+            return apiOk({ user: await dtoUser(updatedUser) });
         }),
 
     /**

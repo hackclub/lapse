@@ -7,8 +7,9 @@ import type {
     Comment,
     UploadToken,
     DraftTimelapse,
+    BanRecord,
 } from "@/generated/prisma/client";
-import { PermissionLevel, TimelapseVisibility, VideoContainerKind } from "@/generated/prisma/client";
+import { PermissionLevel, TimelapseVisibility, VideoContainerKind, BanAction } from "@/generated/prisma/client";
 
 /**
  * Generates a Nano ID-like string (12 characters).
@@ -39,6 +40,10 @@ export const testFactory = {
         hackatimeAccessToken: overrides.hackatimeAccessToken ?? null,
         lastHeartbeat: faker.date.recent(),
         hackatimeRefreshToken: overrides?.hackatimeRefreshToken ?? null,
+        isBanned: false,
+        bannedAt: null,
+        bannedReason: "",
+        bannedReasonInternal: "",
         ...overrides,
     }),
 
@@ -120,6 +125,20 @@ export const testFactory = {
         ownerId: nanoid(12),
         videoTokenId: faker.string.uuid(),
         thumbnailTokenId: faker.string.uuid(),
+        ...overrides,
+    }),
+
+    /**
+     * Creates a mock BanRecord object.
+     */
+    banRecord: (overrides: Partial<BanRecord> = {}): BanRecord => ({
+        id: nanoid(12),
+        createdAt: faker.date.recent(),
+        action: BanAction.BAN,
+        reason: faker.lorem.sentence(),
+        reasonInternal: faker.lorem.sentence(),
+        targetId: nanoid(12),
+        performedById: nanoid(12),
         ...overrides,
     }),
 };

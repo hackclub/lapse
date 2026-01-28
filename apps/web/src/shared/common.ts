@@ -50,7 +50,8 @@ export const KnownErrorSchema = z.enum([
     "HACKATIME_ERROR",
     "ALREADY_PUBLISHED",
     "NO_FILE",
-    "EXPIRED"
+    "EXPIRED",
+    "BANNED"
 ]);
 
 export function createResultSchema<T extends z.ZodType>(dataSchema: T) {
@@ -204,6 +205,18 @@ export function matchOrDefault<K extends string, T>(selector: K, cases: Record<K
  */
 export function oneOf<T extends PropertyKey>(...values: T[]): Record<T, true> {
     return Object.fromEntries(values.map(x => [x, true])) as Record<T, true>;
+}
+
+/**
+ * Represents a permission level for a user.
+ */
+export type PermissionLevel = "USER" | "ADMIN" | "ROOT";
+
+/**
+ * Returns `true` if the user has admin or root permissions.
+ */
+export function isAdmin(user: { permissionLevel: PermissionLevel }): boolean {
+    return user.permissionLevel in oneOf("ADMIN", "ROOT");
 }
 
 /**

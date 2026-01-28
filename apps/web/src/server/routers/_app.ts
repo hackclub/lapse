@@ -2,6 +2,7 @@ import "@/server/allow-only-server";
 
 import { router } from "@/server/trpc";
 
+import admin from "@/server/routers/api/admin";
 import timelapse from "@/server/routers/api/timelapse";
 import user from "@/server/routers/api/user";
 import snapshot from "@/server/routers/api/snapshot";
@@ -11,6 +12,7 @@ import comment from "@/server/routers/api/comment";
 import hackatime from "@/server/routers/api/hackatime";
 
 export const appRouter = router({
+    admin,
     timelapse,
     user,
     snapshot,

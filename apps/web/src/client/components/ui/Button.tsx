@@ -10,12 +10,13 @@ export type ButtonKind =
   "regular" |
   "destructive";
 
-export function Button({ children, kind, disabled, onClick, href, className, icon }: PropsWithChildren<
+export function Button({ children, kind, disabled, onClick, href, className, icon, isSquare }: PropsWithChildren<
   {
     kind?: ButtonKind,
     disabled?: boolean,
     className?: string,
-    icon?: IconGlyph
+    icon?: IconGlyph,
+    isSquare?: boolean
   } & (
     { href?: undefined, onClick: () => void } |
     { href: string, onClick?: undefined }
@@ -33,8 +34,9 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
     <button
       onClick={disabled ? undefined : onClick}
       className={clsx(
-        "flex items-center gap-2 justify-center rounded-2xl h-12 px-8 font-bold text-nowrap flex-nowrap",
+        "flex items-center gap-2 justify-center rounded-2xl h-12 font-bold text-nowrap flex-nowrap",
         "cursor-pointer transition-all",
+        isSquare ? "w-12 px-0" : "px-8",
         (kind == "primary") && "bg-red text-white",
         (kind == "regular") && "bg-dark border-slate border shadow text-white",
         (kind == "destructive") && "bg-dark border-red border shadow text-red",
