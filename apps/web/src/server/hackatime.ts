@@ -263,7 +263,7 @@ export class HackatimeOAuthApi extends HackatimeBase {
                 most_recent_heartbeat: string | null;
                 languages: string[];
                 archived: boolean;
-            }
+            }[]
         }>(
             "GET", "v1/authenticated/projects"
         );
