@@ -48,7 +48,7 @@ export default function Page() {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [screenLabel, setScreenLabel] = useState("Screen");
   const [changingSource, setChangingSource] = useState(false);
-  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]); // this should help make this better
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
@@ -83,7 +83,7 @@ export default function Page() {
   useEffect(() => {
     document.title = setupModalOpen ? "Lapse"
       : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
-        : `🔴 REC: ${name} - Lapse`;
+      : `🔴 REC: ${name} - Lapse`;
   }, [name, setupModalOpen, isFrozen]);
 
   useEffect(() => {
