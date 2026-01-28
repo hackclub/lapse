@@ -574,6 +574,46 @@ export default function Page() {
     };
   }, [frameInterval]);
 
+  async function discardRecording() {
+    if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
+      return;
+
+    try {
+      if (frameInterval) {
+        clearInterval(frameInterval);
+        setFrameInterval(null);
+      }
+
+      if (recorder) {
+        recorder.onstop = null;
+        recorder.stop();
+        setRecorder(null);
+      }
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        setCameraStream(null);
+      }
+
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => track.stop());
+        setScreenStream(null);
+      }
+
+      if (currentTimelapseId) {
+        await deviceStorage.deleteAllSnapshots();
+        await deviceStorage.deleteTimelapse(currentTimelapseId);
+        setCurrentTimelapseId(null);
+      }
+
+      router.push("/");
+    }
+    catch (err) {
+      console.error("(create.tsx) failed to discard timelapse:", err);
+      setError(err instanceof Error ? err.message : "Failed to discard timelapse");
+    }
+  }
+
   function openSetupModal() {
     setSetupModalOpen(true);
     setFreeze(true);
@@ -749,6 +789,7 @@ export default function Page() {
           <div className="flex gap-4 w-full">
             <Button onClick={() => stopRecording()} disabled={!name || name.trim().length == 0} kind="primary">Submit</Button>
             <Button onClick={() => setSubmitModalOpen(false)} kind="regular">Cancel</Button>
+            <Button onClick={discardRecording} kind="destructive" icon="delete">Discard</Button>
           </div>
         </div>
       </WindowedModal>
