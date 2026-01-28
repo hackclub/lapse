@@ -62,7 +62,6 @@ export default function Page() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
-  const [isDiscardingRecording, setIsDiscardingRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [isFrozen, setIsFrozen] = useState(false);
@@ -579,8 +578,6 @@ export default function Page() {
     if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
       return;
 
-    setIsDiscardingRecording(true);
-
     try {
       if (frameInterval) {
         clearInterval(frameInterval);
@@ -614,9 +611,6 @@ export default function Page() {
     catch (err) {
       console.error("(create.tsx) failed to discard timelapse:", err);
       setError(err instanceof Error ? err.message : "Failed to discard timelapse");
-    }
-    finally {
-      setIsDiscardingRecording(false);
     }
   }
 
@@ -795,9 +789,7 @@ export default function Page() {
           <div className="flex gap-4 w-full">
             <Button onClick={() => stopRecording()} disabled={!name || name.trim().length == 0} kind="primary">Submit</Button>
             <Button onClick={() => setSubmitModalOpen(false)} kind="regular">Cancel</Button>
-            <Button onClick={discardRecording} disabled={isDiscardingRecording} kind="destructive" icon="delete">
-              {isDiscardingRecording ? "Discarding..." : "Discard"}
-            </Button>
+            <Button onClick={discardRecording} kind="destructive" icon="delete">Discard</Button>
           </div>
         </div>
       </WindowedModal>
