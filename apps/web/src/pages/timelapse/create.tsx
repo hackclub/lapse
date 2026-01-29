@@ -628,21 +628,21 @@ export default function Page() {
           icon={isDiscarding ? "plus-fill" : "clock-fill"}
           title={
             isDiscarding ? "Create timelapse"
-              : needsVideoSource ? "Resume timelapse"
-                : isCreated ? "Update timelapse"
-                  : "Create timelapse"
+            : needsVideoSource ? "Resume timelapse"
+            : isCreated ? "Update timelapse"
+            : "Create timelapse"
           }
           description={
             isDiscarding ? "After you click Create, your timelapse will start recording!"
-              : needsVideoSource ? "Select your video source to resume recording your timelapse."
-                : isCreated ? "Update your timelapse settings."
-                  : "After you click Create, your timelapse will start recording!"
+            : needsVideoSource ? "Select your video source to resume recording your timelapse."
+            : isCreated ? "Update your timelapse settings."
+            : "After you click Create, your timelapse will start recording!"
           }
           shortDescription={
             isDiscarding ? "Select a video source"
-              : needsVideoSource ? "Select a video source to resume."
-                : isCreated ? "Update your timelapse settings."
-                  : "Select a video source"
+            : needsVideoSource ? "Select a video source to resume."
+            : isCreated ? "Update your timelapse settings."
+            : "Select a video source"
           }
           showCloseButton={true}
           onClose={onSubmitModalClose}
@@ -675,25 +675,25 @@ export default function Page() {
                           { value: "SCREEN", icon: "photo", label: screenLabel },
                           ...(
                             anyCamerasLoaded
-                              ? [
-                                // We got permission from the user to fetch their cameras - display them.
-                                {
-                                  label: "Cameras", icon: "instagram" as const, group: availableCameras
-                                    .filter(camera => camera.deviceId && camera.deviceId.length > 0)
-                                    .map((camera, index) => (
-                                      {
-                                        value: `CAMERA:${camera.deviceId}`,
-                                        label: camera.label && camera.label.trim().length > 0
-                                          ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
-                                          : `Camera ${index + 1}`
-                                      }
-                                    ))
-                                }
-                              ] : [
-                                // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
-                                // option, that when clicked, will prompt them for permission.
-                                { label: "Camera", value: "CAMERA:" }
-                              ])
+                            ? [
+                              // We got permission from the user to fetch their cameras - display them.
+                              {
+                                label: "Cameras", icon: "instagram" as const, group: availableCameras
+                                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                                  .map((camera, index) => (
+                                    {
+                                      value: `CAMERA:${camera.deviceId}`,
+                                      label: camera.label && camera.label.trim().length > 0
+                                        ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
+                                        : `Camera ${index + 1}`
+                                    }
+                                  ))
+                              }
+                            ] : [
+                              // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
+                              // option, that when clicked, will prompt them for permission.
+                              { label: "Camera", value: "CAMERA:" }
+                            ])
                         ]}
                       />
 
@@ -728,8 +728,8 @@ export default function Page() {
                             <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary" className="flex-1">
                               {
                                 needsVideoSource ? "Resume"
-                                  : isCreated ? "Update"
-                                    : "Create"
+                                : isCreated ? "Update"
+                                : "Create"
                               }
                             </Button>
                             {needsVideoSource && (
