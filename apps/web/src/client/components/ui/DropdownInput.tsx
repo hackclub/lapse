@@ -9,14 +9,16 @@ export function DropdownInput<TKey extends string>({
   description,
   onChange,
   disabled,
-  options
+  options,
+  allowUserCustom
 }: {
   value: TKey,
   options: DropdownTree<TKey>,
   onChange: (value: TKey) => void,
   label: string,
   description: ReactNode,
-  disabled?: boolean
+  disabled?: boolean,
+  allowUserCustom?: boolean
 }) {
   return (
     <InputField
@@ -28,6 +30,7 @@ export function DropdownInput<TKey extends string>({
         options={options}
         onChange={onChange}
         disabled={disabled}
+        allowUserCustom={allowUserCustom}
       />
     </InputField>
   );
