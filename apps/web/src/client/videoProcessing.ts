@@ -7,6 +7,39 @@ import { THUMBNAIL_SIZE, TIMELAPSE_FPS, TIMELAPSE_FRAME_LENGTH_MS } from "@/shar
 const BITS_PER_PIXEL = 48;
 
 /**
+ * Resizes a VideoSample to the target dimensions with letterboxing.
+ * The sample is scaled to fit within the target while preserving aspect ratio,
+ * and centered with black bars filling any gaps.
+ */
+function resizeVideoSample(
+    sample: mediabunny.VideoSample,
+    targetWidth: number,
+    targetHeight: number,
+    newTimestamp: number,
+    newDuration: number
+): mediabunny.VideoSample {
+    const canvas = new OffscreenCanvas(targetWidth, targetHeight);
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+        throw new Error("Could not get 2D context from OffscreenCanvas for sample resizing");
+    }
+
+    // Fill with black for letterboxing
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+    // Use the VideoSample's drawWithFit method for proper scaling with letterboxing
+    sample.drawWithFit(ctx, { fit: "contain" });
+
+    // Create a new VideoSample from the resized canvas
+    return new mediabunny.VideoSample(canvas, {
+        timestamp: newTimestamp,
+        duration: newDuration
+    });
+}
+
+/**
  * Creates a `MediaRecorder` object, the output of which will be able to be decoded client-side.
  */
 export function createMediaRecorder(stream: MediaStream) {
@@ -17,7 +50,7 @@ export function createMediaRecorder(stream: MediaStream) {
 
     // Sorted by preference. Note that VP8 has shown to cause decoding errors with WebCodecs.
     let mime = [
-        "video/mp4;codecs=avc1",
+        "video/mp4;codecs=avc3",
         "video/x-matroska;codecs=avc1",
         "video/x-matroska;codecs=av1",
         "video/webm;codecs=av1",
@@ -87,12 +120,18 @@ export async function videoConcat(streams: Blob[]) {
 
     const firstTrack = inputPrimaryTracks[0];
 
+    // Calculate the maximum dimensions across all inputs for the output
+    const maxWidth = Math.max(...inputPrimaryTracks.map(t => t.codedWidth));
+    const maxHeight = Math.max(...inputPrimaryTracks.map(t => t.codedHeight));
+
+    console.log(`(videoProcessing.ts) output dimensions: ${maxWidth}x${maxHeight}`);
+
     const supportedCodecs = out.format.getSupportedVideoCodecs();
     const videoCodec = await mediabunny.getFirstEncodableVideoCodec(
         supportedCodecs,
         {
-            width: firstTrack.codedWidth,
-            height: firstTrack.codedHeight
+            width: maxWidth,
+            height: maxHeight
         }
     );
 
@@ -199,12 +238,25 @@ export async function videoConcat(streams: Blob[]) {
                 }
 
                 const relTimestamp = origTimestamp - localFirstTimestamp;
+                const newTimestamp = (relTimestamp * timeScale) + globalTimeOffset;
+                const newDuration = sample.duration * timeScale;
 
-                sample.setTimestamp((relTimestamp * timeScale) + globalTimeOffset);
-                sample.setDuration(sample.duration * timeScale);
+                // Resize the frame if it doesn't match the output dimensions
+                const needsResize = sample.displayWidth !== maxWidth || sample.displayHeight !== maxHeight;
 
-                await source.add(sample);
-                sample.close();
+                if (needsResize) {
+                    const resizedSample = resizeVideoSample(sample, maxWidth, maxHeight, newTimestamp, newDuration);
+                    sample.close();
+
+                    await source.add(resizedSample);
+                    resizedSample.close();
+                } else {
+                    sample.setTimestamp(newTimestamp);
+                    sample.setDuration(newDuration);
+
+                    await source.add(sample);
+                    sample.close();
+                }
 
                 localLastTimestamp = origTimestamp;
             }
