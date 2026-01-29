@@ -47,6 +47,7 @@ export type MockDatabase = {
     comment: MockPrismaModel<unknown>;
     uploadToken: MockPrismaModel<unknown>;
     draftTimelapse: MockPrismaModel<unknown>;
+    banRecord: MockPrismaModel<unknown>;
     $transaction: Mock<(fn: (tx: MockDatabase) => Promise<unknown>) => Promise<unknown>>;
     $connect: Mock<() => Promise<void>>;
     $disconnect: Mock<() => Promise<void>>;
@@ -66,6 +67,7 @@ export function createMockDatabase(): MockDatabase {
         comment: createMockModel(),
         uploadToken: createMockModel(),
         draftTimelapse: createMockModel(),
+        banRecord: createMockModel(),
         $transaction: vi.fn((fn) => fn(mockDatabase)),
         $connect: vi.fn(),
         $disconnect: vi.fn(),
@@ -95,6 +97,7 @@ export function resetMockDatabase(): void {
     resetModel(mockDatabase.comment);
     resetModel(mockDatabase.uploadToken);
     resetModel(mockDatabase.draftTimelapse);
+    resetModel(mockDatabase.banRecord);
     mockDatabase.$transaction.mockReset();
     mockDatabase.$transaction.mockImplementation((fn) => fn(mockDatabase));
     mockDatabase.$connect.mockReset();

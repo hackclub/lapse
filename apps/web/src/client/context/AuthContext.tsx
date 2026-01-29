@@ -2,13 +2,15 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import { useRouter } from "next/router";
 
 import type { User } from "@/client/api";
-import { trpc } from "@/client/trpc";
+import { trpc, isBannedError } from "@/client/trpc";
 import { useOnce } from "@/client/hooks/useOnce";
 import { useCache } from "@/client/hooks/useCache";
 
 interface AuthContextValue {
     currentUser: User | null;
     isLoading: boolean;
+    isBanned: boolean;
+    banReason: string | null;
     signOut: () => Promise<void>;
 }
 
@@ -24,24 +26,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [userCache, setUserCache] = useCache<User>("user");
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isBanned, setIsBanned] = useState(false);
 
     useOnce(async () => {
         console.log("(AuthContext.tsx) authenticating...");
-        const req = await trpc.user.myself.query({});
 
-        console.log("(AuthContext.tsx) response:", req);
+        try {
+            const req = await trpc.user.myself.query({});
 
-        if (!req.ok || req.data.user === null) {
-            console.log("(AuthContext.tsx) user is not authenticated");
-            setUserCache(null);
+            console.log("(AuthContext.tsx) response:", req);
+
+            if (!req.ok || req.data.user === null) {
+                console.log("(AuthContext.tsx) user is not authenticated");
+                setUserCache(null);
+                setIsLoading(false);
+                return;
+            }
+
+            console.log("(AuthContext.tsx) user is authenticated");
+            setUserCache(req.data.user);
+            setCurrentUser(req.data.user);
             setIsLoading(false);
-            return;
         }
-
-        console.log("(AuthContext.tsx) user is authenticated");
-        setUserCache(req.data.user);
-        setCurrentUser(req.data.user);
-        setIsLoading(false);
+        catch (err) {
+            if (isBannedError(err)) {
+                console.log("(AuthContext.tsx) user is banned (from error)");
+                setIsBanned(true);
+                setUserCache(null);
+                setIsLoading(false);
+                return;
+            }
+            throw err;
+        }
     });
 
     const signOut = useCallback(async () => {
@@ -58,6 +74,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const value: AuthContextValue = {
         currentUser: effectiveUser,
         isLoading,
+        isBanned,
+        banReason: effectiveUser?.private.ban?.reason ?? null,
         signOut
     };
 

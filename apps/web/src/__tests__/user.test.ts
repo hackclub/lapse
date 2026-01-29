@@ -51,10 +51,14 @@ function polyfillIteratorHelpers(): void {
 	}
 }
 
-const importRouter = async () => (await import("@/server/routers/api/user")).default;
+const importUserRouter = async () => (await import("@/server/routers/api/user")).default;
+const importAdminRouter = async () => (await import("@/server/routers/api/admin")).default;
 
 const createCaller = async (ctx: Context) =>
-	(await importRouter()).createCaller(ctx);
+	(await importUserRouter()).createCaller(ctx);
+
+const createAdminCaller = async (ctx: Context) =>
+	(await importAdminRouter()).createCaller(ctx);
 
 describe("user router", () => {
 	beforeAll(() => {
@@ -434,6 +438,245 @@ describe("user router", () => {
 				data: { lastHeartbeat: new Date("2026-01-04T12:00:00.000Z") },
 				where: { id: user.id },
 			});
+		});
+	});
+
+	describe("setBanStatus", () => {
+		it("should deny normal users from banning", async () => {
+			const user = testFactory.user({ id: "user-1", permissionLevel: "USER" });
+			const target = testFactory.user({ id: "user-2", permissionLevel: "USER" });
+
+			const caller = await createAdminCaller(createMockContext(user));
+			const result = await caller.setBanStatus({
+				id: target.id,
+				isBanned: true,
+				reason: "Test ban",
+			});
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.error).toBe("NO_PERMISSION");
+			}
+		});
+
+		it("should allow admin to ban a user", async () => {
+			const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+			const target = testFactory.user({ id: "user-1", permissionLevel: "USER" });
+			const bannedTarget = {
+				...target,
+				isBanned: true,
+				devices: [],
+			};
+			const banRecord = {
+				id: "ban-1",
+				createdAt: new Date(),
+				action: "BAN",
+				reason: "Test ban",
+				reasonInternal: "",
+				targetId: target.id,
+				performedById: admin.id,
+				performedBy: admin,
+			};
+
+			mockDatabase.user.findFirst.mockResolvedValue({ ...target, devices: [] });
+			mockDatabase.user.update.mockResolvedValue(bannedTarget);
+			mockDatabase.banRecord.create.mockResolvedValue(banRecord);
+			mockDatabase.$transaction.mockResolvedValue([bannedTarget, banRecord]);
+
+			const caller = await createAdminCaller(createMockContext(admin));
+			const result = await caller.setBanStatus({
+				id: target.id,
+				isBanned: true,
+				reason: "Test ban",
+			});
+
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.data.user.private.ban).not.toBeNull();
+			}
+		});
+
+		it("should prevent admin from banning another admin", async () => {
+			const admin1 = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+			const admin2 = testFactory.user({ id: "admin-2", permissionLevel: "ADMIN" });
+
+			mockDatabase.user.findFirst.mockResolvedValue({ ...admin2, devices: [] });
+
+			const caller = await createAdminCaller(createMockContext(admin1));
+			const result = await caller.setBanStatus({
+				id: admin2.id,
+				isBanned: true,
+			});
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.error).toBe("NO_PERMISSION");
+			}
+		});
+
+		it("should allow ROOT to ban an admin", async () => {
+			const root = testFactory.user({ id: "root-1", permissionLevel: "ROOT" });
+			const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+			const bannedAdmin = {
+				...admin,
+				isBanned: true,
+				devices: [],
+			};
+			const banRecord = {
+				id: "ban-1",
+				createdAt: new Date(),
+				action: "BAN",
+				reason: "Test ban",
+				reasonInternal: "",
+				targetId: admin.id,
+				performedById: root.id,
+				performedBy: root,
+			};
+
+			mockDatabase.user.findFirst.mockResolvedValue({ ...admin, devices: [] });
+			mockDatabase.user.update.mockResolvedValue(bannedAdmin);
+			mockDatabase.banRecord.create.mockResolvedValue(banRecord);
+			mockDatabase.$transaction.mockResolvedValue([bannedAdmin, banRecord]);
+
+			const caller = await createAdminCaller(createMockContext(root));
+			const result = await caller.setBanStatus({
+				id: admin.id,
+				isBanned: true,
+				reason: "Test ban",
+			});
+
+			expect(result.ok).toBe(true);
+		});
+
+		it("should prevent user from banning themselves", async () => {
+			const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+
+			mockDatabase.user.findFirst.mockResolvedValue({ ...admin, devices: [] });
+
+			const caller = await createAdminCaller(createMockContext(admin));
+			const result = await caller.setBanStatus({
+				id: admin.id,
+				isBanned: true,
+			});
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.error).toBe("NO_PERMISSION");
+			}
+		});
+	});
+
+	describe("list", () => {
+		it("should deny normal users from listing users", async () => {
+			const user = testFactory.user({ id: "user-1", permissionLevel: "USER" });
+
+			const caller = await createAdminCaller(createMockContext(user));
+			const result = await caller.list({ limit: 10 });
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.error).toBe("NO_PERMISSION");
+			}
+		});
+
+		it("should allow admin to list users", async () => {
+			const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+			const users = [
+				{ ...testFactory.user({ id: "user-1" }), devices: [] },
+				{ ...testFactory.user({ id: "user-2" }), devices: [] },
+			];
+
+			mockDatabase.user.findMany.mockResolvedValue(users);
+
+			const caller = await createAdminCaller(createMockContext(admin));
+			const result = await caller.list({ limit: 10 });
+
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.data.users).toHaveLength(2);
+			}
+		});
+
+		it("should filter banned users when onlyBanned is true", async () => {
+			const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+			const bannedUser = { ...testFactory.user({ id: "user-1", isBanned: true }), devices: [] };
+
+			mockDatabase.user.findMany.mockResolvedValue([bannedUser]);
+
+			const caller = await createAdminCaller(createMockContext(admin));
+			const result = await caller.list({ limit: 10, onlyBanned: true });
+
+			expect(result.ok).toBe(true);
+			expect(mockDatabase.user.findMany).toHaveBeenCalledWith(
+				expect.objectContaining({
+					where: { isBanned: true },
+				})
+			);
+		});
+	});
+
+	describe("deleteUser", () => {
+		it("should deny admin from deleting users", async () => {
+			const admin = testFactory.user({ id: "admin-1", permissionLevel: "ADMIN" });
+			const target = testFactory.user({ id: "user-1", permissionLevel: "USER" });
+
+			const caller = await createAdminCaller(createMockContext(admin));
+			const result = await caller.deleteUser({ id: target.id });
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.error).toBe("NO_PERMISSION");
+			}
+		});
+
+		it("should allow ROOT to delete a user", async () => {
+			const root = testFactory.user({ id: "root-1", permissionLevel: "ROOT" });
+			const target = testFactory.user({ id: "user-1", permissionLevel: "USER" });
+
+			mockDatabase.user.findFirst.mockResolvedValue(target);
+			mockDatabase.timelapse.findMany.mockResolvedValue([]);
+			mockDatabase.comment.deleteMany.mockResolvedValue({ count: 0 });
+			mockDatabase.knownDevice.deleteMany.mockResolvedValue({ count: 0 });
+			mockDatabase.uploadToken.deleteMany.mockResolvedValue({ count: 0 });
+			mockDatabase.draftTimelapse.deleteMany.mockResolvedValue({ count: 0 });
+			mockDatabase.user.delete.mockResolvedValue(target);
+
+			const caller = await createAdminCaller(createMockContext(root));
+			const result = await caller.deleteUser({ id: target.id });
+
+			expect(result.ok).toBe(true);
+			expect(mockDatabase.user.delete).toHaveBeenCalledWith({
+				where: { id: target.id },
+			});
+		});
+
+		it("should prevent ROOT from deleting themselves", async () => {
+			const root = testFactory.user({ id: "root-1", permissionLevel: "ROOT" });
+
+			mockDatabase.user.findFirst.mockResolvedValue(root);
+
+			const caller = await createAdminCaller(createMockContext(root));
+			const result = await caller.deleteUser({ id: root.id });
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.error).toBe("NO_PERMISSION");
+			}
+		});
+
+		it("should prevent deleting ROOT users", async () => {
+			const root1 = testFactory.user({ id: "root-1", permissionLevel: "ROOT" });
+			const root2 = testFactory.user({ id: "root-2", permissionLevel: "ROOT" });
+
+			mockDatabase.user.findFirst.mockResolvedValue(root2);
+
+			const caller = await createAdminCaller(createMockContext(root1));
+			const result = await caller.deleteUser({ id: root2.id });
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.error).toBe("NO_PERMISSION");
+			}
 		});
 	});
 });

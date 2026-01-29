@@ -12,22 +12,30 @@ async function main() {
     const args = parseArgs({
         options: {
             email: { type: "string" }
-        }
+        },
+        allowPositionals: true
     });
 
     console.log("");
 
-    if (!args.values.email) {
-        console.error("(error) No e-mail specified. Aborting.");
+    const identifier = args.values.email || args.positionals[0];
+
+    if (!identifier) {
+        console.error("(error) No e-mail or handle specified. Usage: node promote.mjs <email-or-handle>");
         return;
     }
 
     const user = await prisma.user.findFirst({
-        where: { email: args.values.email }
+        where: {
+            OR: [
+                { email: identifier },
+                { handle: identifier }
+            ]
+        }
     });
 
     if (!user) {
-        console.error(`(error) No user with e-mail ${args.values.email} exists!`);
+        console.error(`(error) No user with e-mail or handle "${identifier}" exists!`);
         return;
     }
 
