@@ -48,7 +48,7 @@ export default function Page() {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [screenLabel, setScreenLabel] = useState("Screen");
   const [changingSource, setChangingSource] = useState(false);
-  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]); // this should help make this better
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
@@ -58,7 +58,7 @@ export default function Page() {
   const [currentSession] = useState<number>(Date.now());
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
   const [isDiscarding, setIsDiscarding] = useState(false);
-  
+
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
@@ -98,9 +98,9 @@ export default function Page() {
         console.log("(create.tsx) Could not enumerate cameras:", err);
       }
     }
-    
+
     enumerateCameras();
-    
+
     navigator.mediaDevices.addEventListener("devicechange", enumerateCameras);
     return () => {
       navigator.mediaDevices.removeEventListener("devicechange", enumerateCameras);
@@ -141,7 +141,7 @@ export default function Page() {
           const sessionEnd = sorted[sorted.length - 1].createdAt;
           const sessionDuration = sessionEnd - sessionStart;
           totalElapsedTime += sessionDuration;
-          
+
           console.log(`(create.tsx) Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
         }
       }
@@ -157,11 +157,10 @@ export default function Page() {
     setCurrentTimelapseId(activeTimelapse.id);
     setStartedAt(adjustedStartTime);
     setIsCreated(true);
-    
+
     setNeedsVideoSource(true);
     setSetupModalOpen(true);
   });
-
 
 
   const captureFrame = useCallback(async (timelapseId?: number) => {
@@ -189,7 +188,7 @@ export default function Page() {
     const activeTimelapseId = timelapseId ?? currentTimelapseId;
     if (activeTimelapseId == null)
       throw new Error("captureFrame() was called, but currentTimelapseId is null");
-    
+
     deviceStorage.saveSnapshot({
       createdAt: Date.now(),
       session: currentSession
@@ -280,9 +279,11 @@ export default function Page() {
         () => captureFrame(activeTimelapseId!),
         TIMELAPSE_FRAME_LENGTH_MS
       );
-      
+
       setFrameInterval(newInterval);
     }
+
+    setFreeze(false);
   }
 
   async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
@@ -310,6 +311,24 @@ export default function Page() {
       }
     }
 
+    function addStreamStoppedAlertListener(stream: MediaStream) {
+      stream.getTracks().forEach(track => {
+        track.addEventListener("ended", () => {
+          console.log("(create.tsx) camera track ended externally:", track.label);
+          setCameraStream(null);
+          setVideoSourceKind("NONE");
+          setNeedsVideoSource(true);
+          setSetupModalOpen(true);
+          setFreeze(true);
+          setTimeout(() => {
+            if (window.location.href.includes("/timelapse/create")) {
+              alert("Your screen sharing has ended. Please select a new video source to continue your timelapse.");
+            }
+          }, 5000);
+        });
+      });
+    }
+
     console.log("(create.tsx) video source changed to", ev.target.value);
 
     if (ev.target.value.startsWith("CAMERA:")) {
@@ -329,13 +348,13 @@ export default function Page() {
             video: true,
             audio: false
           });
-          
+
           stream.getTracks().forEach(track => track.stop());
-          
+
           const devices = await navigator.mediaDevices.enumerateDevices();
           const cameras = devices.filter(device => device.kind === "videoinput" && device.deviceId);
           setAvailableCameras(cameras);
- 
+
           if (cameras.length > 0) {
             stream = await navigator.mediaDevices.getUserMedia({
               video: { deviceId: { exact: cameras[0].deviceId } },
@@ -355,6 +374,8 @@ export default function Page() {
       }
 
       console.log("(create.tsx) stream retrieved!", stream);
+
+      addStreamStoppedAlertListener(stream);
 
       disposeStreams();
       setCameraStream(stream);
@@ -378,6 +399,8 @@ export default function Page() {
 
       console.log("(create.tsx) screen stream retrieved!", stream);
 
+      addStreamStoppedAlertListener(stream);
+
       let screenLabel: string | null = stream.getVideoTracks()[0].label;
       if (screenLabel.includes("://") || screenLabel.includes("window:")) {
         screenLabel = null;
@@ -389,6 +412,8 @@ export default function Page() {
       setScreenLabel(screenLabel ? `Screen (${screenLabel})` : "Screen");
     }
     else {
+      setNeedsVideoSource(true);
+      disposeStreams();
       setVideoSourceKind("NONE");
     }
 
@@ -434,7 +459,7 @@ export default function Page() {
         setIsUploading(true);
         setUploadProgress(0);
         setUploadStage("Preparing upload...");
-        
+
         assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
 
         const timelapse = await deviceStorage.getTimelapse(currentTimelapseId);
@@ -442,12 +467,12 @@ export default function Page() {
           throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
 
         console.log("(upload) recording stopped!", timelapse);
-        
+
         setUploadStage("Processing video...");
         setUploadProgress(5);
 
         const merged = await mergeVideoSessions(timelapse);
-        
+
         console.log("(upload) - merged session data:", merged);
 
         setUploadStage("Generating thumbnail...");
@@ -483,7 +508,7 @@ export default function Page() {
           uploadRes.data.videoToken,
           new Blob([encrypted.data], { type: "video/webm" })
         );
-        
+
         if (!vidStatus.ok)
           throw new Error(vidStatus.message);
 
@@ -503,14 +528,14 @@ export default function Page() {
 
         setUploadStage("Uploading thumbnail...");
         setUploadProgress(80);
-        
+
         const thumbnailStatus = await apiUpload(
           uploadRes.data.thumbnailToken,
           new Blob([encryptedThumbnail.data], { type: "image/jpeg" })
         );
         if (!thumbnailStatus.ok)
           throw new Error(thumbnailStatus.message);
-        
+
         console.log("(upload) thumbnail uploaded successfully", thumbnailStatus);
 
         setUploadStage("Finalizing timelapse...");
@@ -552,7 +577,7 @@ export default function Page() {
 
         setUploadStage("Upload complete!");
         setUploadProgress(100);
-        
+
         router.push(`/timelapse/${createRes.data.timelapse.id}`);
       }
       catch (apiErr) {
@@ -622,6 +647,10 @@ export default function Page() {
   function onSubmitModalClose() {
     if (!isCreated || !currentStream) {
       router.back();
+    }
+    else if (needsVideoSource) {
+      setSetupModalOpen(true);
+      alert("You must select a video source first.");
     }
     else {
       setSetupModalOpen(false);
@@ -694,7 +723,7 @@ export default function Page() {
                                   .map((camera, index) => (
                                     {
                                       value: `CAMERA:${camera.deviceId}`,
-                                      label: camera.label && camera.label.trim().length > 0 
+                                      label: camera.label && camera.label.trim().length > 0
                                         ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
                                         : `Camera ${index + 1}`
                                     }
@@ -810,7 +839,7 @@ export default function Page() {
         {/* controls (overlay) */}
         <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">
           <PillControlButton onClick={toggleFreeze}>
-            { isFrozen ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} /> }
+            {isFrozen ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} />}
           </PillControlButton>
 
           <PillControlButton onClick={() => setSubmitModalOpen(true)}>
