@@ -196,6 +196,20 @@ export default function Page() {
 
   }, [recorder, currentTimelapseId, currentSession]);
 
+  function disposeStreams() {
+      setScreenLabel("Screen");
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        setCameraStream(null);
+      }
+
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => track.stop());
+        setScreenStream(null);
+      }
+    }
+
   async function onCreate() {
     console.log("(create.tsx) creating a new timelapse!");
 
@@ -287,8 +301,15 @@ export default function Page() {
   }
 
   async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
-    if (ev.target.value == videoSourceKind)
-      return; // no change
+    if (ev.target.value == videoSourceKind){
+      if (ev.target.value == "SCREEN"){
+        console.log("(create.tsx) video source change requested to SCREEN, but it's already set to SCREEN. Refreshing screen capture.");
+      }
+      else {
+        console.log("(create.tsx) video source change requested to same source. Ignoring.");
+        return;
+      }
+    }
 
     if (changingSource) {
       console.warn("(create.tsx) attempted to change the video source while we're still processing a previous change. Ignoring.");
@@ -589,6 +610,7 @@ export default function Page() {
 
     recorder?.stop();
     setRecorder(null);
+    disposeStreams();
   }
 
   useEffect(() => {
