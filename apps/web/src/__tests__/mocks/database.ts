@@ -103,7 +103,8 @@ export function createConstrainedMockDatabase() {
             return null; // Handle already taken
         }
         // Return default user for other cases
-        return db.user.findFirst.getMockImplementation()(query);
+        const defaultImpl = db.user.findFirst.getMockImplementation();
+        return defaultImpl ? defaultImpl(query) : null;
     });
     
     db.serviceClient.findFirst.mockImplementation(async (query: any) => {
@@ -111,7 +112,8 @@ export function createConstrainedMockDatabase() {
         if (query.where?.clientId?.startsWith?.("revoked_")) {
             return null; // Client is revoked
         }
-        return db.serviceClient.findFirst.getMockImplementation()(query);
+        const defaultImpl = db.serviceClient.findFirst.getMockImplementation();
+        return defaultImpl ? defaultImpl(query) : null;
     });
     
     return db;

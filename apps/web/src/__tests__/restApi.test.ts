@@ -1,22 +1,12 @@
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { PrismaPg } from "@prisma/adapter-pg";
-import dotenv from "dotenv";
-import path from "path";
-import type { PrismaClient } from "@/generated/prisma/client";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { NextApiRequest, NextApiResponse } from "next";
+import { setupEnvMock } from "./mocks/env";
+import { setupDatabaseMock, mockDatabase, resetMockDatabase } from "./mocks/database";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+setupDatabaseMock();
+setupEnvMock();
 
-process.env.JWT_SECRET ??= "test-secret";
-
-const DATABASE_URL = process.env.DATABASE_URL ?? "";
-
-let prisma: PrismaClient;
 let restHandler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
-let oauthAuthorize: (
-  req: NextApiRequest,
-  res: NextApiResponse,
-) => Promise<void>;
 let generateJWT: (userId: string, email: string) => string;
 let generateOboJWT: (
   userId: string,
@@ -64,32 +54,9 @@ function createReq(options: {
   };
 }
 
-beforeAll(async () => {
-  if (!DATABASE_URL) throw new Error("DATABASE_URL is required for tests");
-
-  const { PrismaClient } = await import("@/generated/prisma/client");
-  const adapter = new PrismaPg({ connectionString: DATABASE_URL });
-  prisma = new PrismaClient({ adapter });
-
-  const dbModule = await import("@/server/db");
-  Object.defineProperty(dbModule.database, "serviceClient", {
-    value: prisma.serviceClient,
-  });
-  Object.defineProperty(dbModule.database, "serviceGrant", {
-    value: prisma.serviceGrant,
-  });
-  Object.defineProperty(dbModule.database, "user", { value: prisma.user });
-  Object.defineProperty(dbModule.database, "timelapse", {
-    value: prisma.timelapse,
-  });
-  Object.defineProperty(dbModule.database, "knownDevice", {
-    value: prisma.knownDevice,
-  });
-
+beforeEach(async () => {
+  resetMockDatabase();
   restHandler = await import("@/pages/api/rest/[router]/[procedure]").then(
-    (mod) => mod.default,
-  );
-  oauthAuthorize = await import("@/pages/api/oauth/authorize").then(
     (mod) => mod.default,
   );
 
@@ -99,34 +66,135 @@ beforeAll(async () => {
   hashServiceSecret = authModule.hashServiceSecret;
 });
 
-afterAll(async () => {
-  if (!prisma) return;
-
-  await prisma.serviceGrant.deleteMany({
-    where: {
-      serviceClient: {
-        clientId: { startsWith: "svc_rest_test" },
-      },
-    },
-  });
-
-  await prisma.serviceClient.deleteMany({
-    where: {
-      clientId: { startsWith: "svc_rest_test" },
-    },
-  });
-
-  await prisma.user.deleteMany({
-    where: {
-      email: { in: ["rest-test@example.com"] },
-    },
-  });
-
-  await prisma.$disconnect();
+afterEach(() => {
+  vi.clearAllMocks();
+  resetMockDatabase();
 });
 
 describe("rest api", () => {
+  it("handles malformed query parameters", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { router: ["not-a-string"], procedure: "123" } as Record<string, string | string[]>, // Invalid parameter types
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects requests with missing router parameter", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { procedure: "activeUsers" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects requests with invalid router name", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { router: "invalid", procedure: "test" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({
+      error: "not_found",
+      error_description: "Unknown REST procedure.",
+    });
+  });
+
+  it("rejects requests with invalid procedure name", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { router: "global", procedure: "invalid" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({
+      error: "not_found",
+      error_description: "Unknown REST procedure.",
+    });
+  });
+
+  it("rejects wrong HTTP method for GET endpoints", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "POST",
+      query: { router: "global", procedure: "activeUsers" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(405);
+    expect(res.body).toEqual({
+      error: "invalid_request",
+      error_description: "Method not allowed.",
+    });
+  });
+
+  it("rejects wrong HTTP method for POST endpoints", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { router: "user", procedure: "registerDevice" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(405);
+    expect(res.body).toEqual({
+      error: "invalid_request",
+      error_description: "Method not allowed.",
+    });
+  });
+
+  it("rejects unsupported HTTP method", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "PATCH",
+      query: { router: "global", procedure: "activeUsers" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(405);
+    expect(res.body).toEqual({
+      error: "invalid_request",
+      error_description: "Method not allowed.",
+    });
+  });
+
   it("allows access to public endpoints without auth", async () => {
+    mockDatabase.user.aggregate.mockResolvedValue({
+      _count: { lastHeartbeat: 7 },
+    } as never);
+
     const res = createRes();
     const req = createReq({
       method: "GET",
@@ -138,6 +206,10 @@ describe("rest api", () => {
       res as unknown as NextApiResponse,
     );
     expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      ok: true,
+      data: { count: 7 },
+    });
   });
 
   it("enforces authentication for protected endpoints", async () => {
@@ -152,41 +224,45 @@ describe("rest api", () => {
       res as unknown as NextApiResponse,
     );
     expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({
+      error: "unauthorized",
+      error_description: "Authentication required.",
+    });
   });
 
-  it("supports OBO authentication with scopes", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "rest-test@example.com",
-        handle: `restuser-${Date.now()}`,
-        displayName: "REST Test User",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
+  it("handles malformed JWT tokens", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { router: "user", procedure: "getDevices" },
+      headers: { authorization: "Bearer not.a.valid.jwt.token" },
     });
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "REST Test App",
-        clientId: `svc_rest_test_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["user:read"],
-        redirectUris: ["https://example.com/callback"],
-        createdByUserId: user.id,
-      },
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({
+      error: "unauthorized",
+      error_description: "Authentication required.",
     });
+  });
 
-    // 3. Create a grant
-    await prisma.serviceGrant.create({
-      data: {
-        serviceClientId: client.id,
-        userId: user.id,
-        scopes: ["user:read"],
-      },
-    });
+  it("supports OBO authentication with correct scopes", async () => {
+    const user = {
+      id: "rest-user-1",
+      email: "rest-test@example.com",
+    };
+    const client = {
+      id: "rest-client-1",
+      clientId: "svc_rest_test_1",
+    };
 
-    // 4. Generate OBO token
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.knownDevice.findMany.mockResolvedValue([]);
+
     const oboToken = generateOboJWT(
       user.id,
       user.email,
@@ -195,32 +271,102 @@ describe("rest api", () => {
       900,
     );
 
-    // 5. Test access with correct scope
-    const successRes = createRes();
-    const successReq = createReq({
+    const res = createRes();
+    const req = createReq({
       method: "GET",
       query: { router: "user", procedure: "getDevices" },
       headers: { authorization: `Bearer ${oboToken}` },
     });
 
     await restHandler(
-      successReq as unknown as NextApiRequest,
-      successRes as unknown as NextApiResponse,
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
     );
-    expect(successRes.statusCode).toBe(200);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      ok: true,
+      data: { devices: [] },
+    });
+  });
 
-    // 6. Test access with missing scope
-    const forbiddenRes = createRes();
-    const forbiddenReq = createReq({
+  it("rejects OBO authentication with insufficient scopes", async () => {
+    const user = {
+      id: "rest-user-1",
+      email: "rest-test@example.com",
+    };
+    const client = {
+      id: "rest-client-1",
+      clientId: "svc_rest_test_1",
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+
+    const oboToken = generateOboJWT(
+      user.id,
+      user.email,
+      client.id,
+      ["user:read"], // This token doesn't have timelapse:write scope
+      900,
+    );
+
+    const res = createRes();
+    const req = createReq({
       method: "POST",
       query: { router: "timelapse", procedure: "createDraft" },
       headers: { authorization: `Bearer ${oboToken}` },
     });
 
     await restHandler(
-      forbiddenReq as unknown as NextApiRequest,
-      forbiddenRes as unknown as NextApiResponse,
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
     );
-    expect(forbiddenRes.statusCode).toBe(403);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({
+      error: "forbidden",
+      error_description: "Missing required scope.",
+    });
+  });
+
+  it("returns consistent success response format", async () => {
+    mockDatabase.user.aggregate.mockResolvedValue({
+      _count: { lastHeartbeat: 42 },
+    } as never);
+
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { router: "global", procedure: "activeUsers" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(200);
+    const body = res.body as any;
+    expect(body.ok).toBe(true);
+    expect(body).toHaveProperty("data");
+    expect(body.data).toHaveProperty("count", 42);
+    expect(body).not.toHaveProperty("error");
+  });
+
+  it("returns consistent error response format", async () => {
+    const res = createRes();
+    const req = createReq({
+      method: "GET",
+      query: { router: "user", procedure: "getDevices" },
+    });
+
+    await restHandler(
+      req as unknown as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.statusCode).toBe(401);
+    const body = res.body as any;
+    expect(body).toHaveProperty("error", "unauthorized");
+    expect(body).toHaveProperty("error_description", "Authentication required.");
+    expect(body).not.toHaveProperty("ok");
+    expect(body).not.toHaveProperty("data");
   });
 });
