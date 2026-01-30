@@ -22,6 +22,16 @@ export const mockEnv = {
 
     // Legacy/unused in current server code; kept for compatibility.
     HACKATIME_API_KEY: "test-hackatime-api-key",
+
+    NEXT_PUBLIC_HACKATIME_CLIENT_ID: "test-hackatime-client-id",
+    NEXT_PUBLIC_HACKATIME_URL: "https://hackatime.example.com",
+    HACKATIME_REDIRECT_URI: "https://hackatime.example.com/callback",
+    UPLOAD_TOKEN_PRIVATE_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    UPLOAD_TOKEN_IV: "0123456789abcdef0123456789abcdef",
+    NEXT_PUBLIC_SENTRY_DSN: "test-sentry-dsn",
+    SENTRY_ORG: "test-sentry-org",
+    SENTRY_PROJECT: "test-sentry-project",
+    SLACK_BOT_TOKEN: "test-slack-bot-token",
 };
 
 export function setupEnvMock(): void {

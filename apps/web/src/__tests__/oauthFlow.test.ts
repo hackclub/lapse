@@ -1,35 +1,15 @@
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { PrismaPg } from "@prisma/adapter-pg";
-import dotenv from "dotenv";
-import path from "path";
-import type { PrismaClient } from "@/generated/prisma/client";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import type { NextApiRequest, NextApiResponse } from "next";
+import { setupEnvMock } from "./mocks/env";
+import {
+  setupDatabaseMock,
+  mockDatabase,
+  resetMockDatabase,
+} from "./mocks/database";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+setupDatabaseMock();
+setupEnvMock();
 
-process.env.JWT_SECRET ??= "test-secret";
-process.env.S3_ENCRYPTED_BUCKET_NAME ??= "test";
-process.env.S3_PUBLIC_BUCKET_NAME ??= "test";
-process.env.S3_ENDPOINT ??= "test";
-process.env.S3_ACCESS_KEY_ID ??= "test";
-process.env.S3_SECRET_ACCESS_KEY ??= "test";
-process.env.S3_PUBLIC_URL_ENCRYPTED ??= "https://example.com/encrypted";
-process.env.S3_PUBLIC_URL_PUBLIC ??= "https://example.com/public";
-process.env.PRIVATE_KEY_UPLOAD_KEY ??= "0123456789abcdef0123456789abcdef";
-process.env.NEXT_PUBLIC_HACKATIME_CLIENT_ID ??= "test";
-process.env.NEXT_PUBLIC_HACKATIME_URL ??= "https://example.com";
-process.env.HACKATIME_REDIRECT_URI ??= "https://example.com/callback";
-process.env.UPLOAD_TOKEN_PRIVATE_KEY ??=
-  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-process.env.UPLOAD_TOKEN_IV ??= "0123456789abcdef0123456789abcdef";
-process.env.NEXT_PUBLIC_SENTRY_DSN ??= "test";
-process.env.SENTRY_ORG ??= "test";
-process.env.SENTRY_PROJECT ??= "test";
-process.env.SLACK_BOT_TOKEN ??= "test";
-
-const DATABASE_URL = process.env.DATABASE_URL ?? "";
-
-let prisma: PrismaClient;
 let oauthAuthorize: (
   req: NextApiRequest,
   res: NextApiResponse,
@@ -70,30 +50,8 @@ function createReq(options: {
   };
 }
 
-beforeAll(async () => {
-  if (!DATABASE_URL) throw new Error("DATABASE_URL is required for tests");
-
-  const { PrismaClient } = await import("@/generated/prisma/client");
-  const adapter = new PrismaPg({ connectionString: DATABASE_URL });
-  prisma = new PrismaClient({ adapter });
-
-  const dbModule = await import("@/server/db");
-  Object.defineProperty(dbModule.database, "serviceClient", {
-    value: prisma.serviceClient,
-  });
-  Object.defineProperty(dbModule.database, "serviceGrant", {
-    value: prisma.serviceGrant,
-  });
-  Object.defineProperty(dbModule.database, "serviceTokenAudit", {
-    value: prisma.serviceTokenAudit,
-  });
-  Object.defineProperty(dbModule.database, "serviceClientReview", {
-    value: prisma.serviceClientReview,
-  });
-  Object.defineProperty(dbModule.database, "user", {
-    value: prisma.user,
-  });
-
+beforeEach(async () => {
+  resetMockDatabase();
   oauthAuthorize = await import("@/pages/api/oauth/authorize").then(
     (mod) => mod.default,
   );
@@ -106,98 +64,29 @@ beforeAll(async () => {
   hashServiceSecret = authModule.hashServiceSecret;
 });
 
-afterAll(async () => {
-  if (!prisma) {
-    return;
-  }
-
-  await prisma.serviceTokenAudit.deleteMany({
-    where: {
-      serviceClient: {
-        clientId: {
-          startsWith: "svc_test",
-        },
-      },
-    },
-  });
-
-  await prisma.serviceGrant.deleteMany({
-    where: {
-      serviceClient: {
-        clientId: {
-          startsWith: "svc_test",
-        },
-      },
-    },
-  });
-
-  await prisma.serviceClientReview.deleteMany({
-    where: {
-      serviceClient: {
-        clientId: {
-          startsWith: "svc_test",
-        },
-      },
-    },
-  });
-
-  await prisma.serviceClient.deleteMany({
-    where: {
-      clientId: {
-        startsWith: "svc_test",
-      },
-    },
-  });
-
-  await prisma.user.deleteMany({
-    where: {
-      email: {
-        in: [
-          "test@example.com",
-          "test2@example.com",
-          "test3@example.com",
-          "test4@example.com",
-          "test5@example.com",
-          "test6@example.com",
-          "test7@example.com",
-          "test8@example.com",
-          "test9@example.com",
-          "test10@example.com",
-        ],
-      },
-    },
-  });
-
-  await prisma.$disconnect();
+afterEach(() => {
+  resetMockDatabase();
 });
 
 describe("oauth flow", () => {
   it("rejects invalid redirect URI", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test@example.com",
-        handle: `testuser-${Date.now()}`,
-        displayName: "Test User",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-1",
+      email: "test@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "Sample App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-1",
+      clientId: "svc_test_1",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+      redirectUris: ["https://example.com/callback"],
+      trustLevel: "UNTRUSTED",
+      name: "Sample App",
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
 
     const token = generateJWT(user.id, user.email);
 
@@ -223,31 +112,21 @@ describe("oauth flow", () => {
   });
 
   it("requires grant for token exchange", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test2@example.com",
-        handle: `testuser2-${Date.now()}`,
-        displayName: "Test User 2",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-2",
+      email: "test2@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "Verified App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test2_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-2",
+      clientId: "svc_test2",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+    };
+
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceGrant.findFirst.mockResolvedValue(null as never);
 
     const userToken = generateJWT(user.id, user.email);
 
@@ -273,39 +152,24 @@ describe("oauth flow", () => {
   });
 
   it("rejects OBO tokens with empty scopes", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test3@example.com",
-        handle: `testuser3-${Date.now()}`,
-        displayName: "Test User 3",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-3",
+      email: "test3@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "Empty Scope App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test3_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-3",
+      clientId: "svc_test3",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+      redirectUris: ["https://example.com/callback"],
+    };
 
-    await prisma.serviceGrant.create({
-      data: {
-        serviceClientId: client.id,
-        userId: user.id,
-        scopes: [""],
-      },
-    });
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.serviceGrant.findFirst.mockResolvedValue({
+      scopes: [""],
+    } as never);
 
     const authModule = await import("@/server/auth");
     const emptyScopeToken = authModule.generateOboJWT(
@@ -339,31 +203,21 @@ describe("oauth flow", () => {
   });
 
   it("rejects duplicate scopes on consent", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test4@example.com",
-        handle: `testuser4-${Date.now()}`,
-        displayName: "Test User 4",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-4",
+      email: "test4@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "Dup Scope App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test4_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read", "snapshot:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-4",
+      clientId: "svc_test4",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read", "snapshot:read"],
+      redirectUris: ["https://example.com/callback"],
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
 
     const userToken = generateJWT(user.id, user.email);
 
@@ -391,39 +245,26 @@ describe("oauth flow", () => {
   });
 
   it("rejects duplicate scopes on token exchange", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test5@example.com",
-        handle: `testuser5-${Date.now()}`,
-        displayName: "Test User 5",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-5",
+      email: "test5@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "Dup Exchange App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test5_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-5",
+      clientId: "svc_test5",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+    };
 
-    await prisma.serviceGrant.create({
-      data: {
-        serviceClientId: client.id,
-        userId: user.id,
-        scopes: ["timelapse:read", "timelapse:read"],
-      },
-    });
+    const grant = {
+      id: "grant-5",
+      scopes: ["timelapse:read", "timelapse:read"],
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.serviceGrant.findFirst.mockResolvedValue(grant as never);
 
     const userToken = generateJWT(user.id, user.email);
 
@@ -451,39 +292,26 @@ describe("oauth flow", () => {
   });
 
   it("rejects OBO tokens for token exchange", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test6@example.com",
-        handle: `testuser6-${Date.now()}`,
-        displayName: "Test User 6",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-6",
+      email: "test6@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "OBO Token App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test6_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-6",
+      clientId: "svc_test6",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+    };
 
-    await prisma.serviceGrant.create({
-      data: {
-        serviceClientId: client.id,
-        userId: user.id,
-        scopes: ["timelapse:read"],
-      },
-    });
+    const grant = {
+      id: "grant-6",
+      scopes: ["timelapse:read"],
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.serviceGrant.findFirst.mockResolvedValue(grant as never);
 
     const authModule = await import("@/server/auth");
     const oboToken = authModule.generateOboJWT(
@@ -517,39 +345,27 @@ describe("oauth flow", () => {
   });
 
   it("rejects OBO tokens with duplicate scopes", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test8@example.com",
-        handle: `testuser8-${Date.now()}`,
-        displayName: "Test User 8",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-8",
+      email: "test8@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "OBO Dup Scope App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test8_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-8",
+      clientId: "svc_test8",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+      redirectUris: ["https://example.com/callback"],
+    };
 
-    await prisma.serviceGrant.create({
-      data: {
-        serviceClientId: client.id,
-        userId: user.id,
-        scopes: ["timelapse:read"],
-      },
-    });
+    const grant = {
+      id: "grant-8",
+      scopes: ["timelapse:read"],
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.serviceGrant.findFirst.mockResolvedValue(grant as never);
 
     const authModule = await import("@/server/auth");
     const oboToken = authModule.generateOboJWT(
@@ -582,39 +398,27 @@ describe("oauth flow", () => {
   });
 
   it("does not accept OBO tokens as user auth", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test7@example.com",
-        handle: `testuser7-${Date.now()}`,
-        displayName: "Test User 7",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-7",
+      email: "test7@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "OBO Auth App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test7_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-7",
+      clientId: "svc_test7",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+      redirectUris: ["https://example.com/callback"],
+    };
 
-    await prisma.serviceGrant.create({
-      data: {
-        serviceClientId: client.id,
-        userId: user.id,
-        scopes: ["timelapse:read"],
-      },
-    });
+    const grant = {
+      id: "grant-7",
+      scopes: ["timelapse:read"],
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.serviceGrant.findFirst.mockResolvedValue(grant as never);
 
     const authModule = await import("@/server/auth");
     const oboToken = authModule.generateOboJWT(
@@ -648,31 +452,21 @@ describe("oauth flow", () => {
   });
 
   it("rejects overly long state values", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test9@example.com",
-        handle: `testuser9-${Date.now()}`,
-        displayName: "Test User 9",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-9",
+      email: "test9@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "State Size App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test9_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-9",
+      clientId: "svc_test9",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+      redirectUris: ["https://example.com/callback"],
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
 
     const userToken = generateJWT(user.id, user.email);
 
@@ -699,39 +493,26 @@ describe("oauth flow", () => {
   });
 
   it("rejects overly long scope strings on token exchange", async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: "test10@example.com",
-        handle: `testuser10-${Date.now()}`,
-        displayName: "Test User 10",
-        profilePictureUrl: "https://example.com/avatar.png",
-        bio: "",
-        urls: [],
-      },
-    });
+    const user = {
+      id: "oauth-user-10",
+      email: "test10@example.com",
+    };
 
-    const client = await prisma.serviceClient.create({
-      data: {
-        name: "Scope Length App",
-        description: "",
-        homepageUrl: "https://example.com",
-        iconUrl: "",
-        clientId: `svc_test10_${Date.now()}`,
-        clientSecretHash: hashServiceSecret("secret"),
-        scopes: ["timelapse:read"],
-        redirectUris: ["https://example.com/callback"],
-        trustLevel: "UNTRUSTED",
-        createdByUserId: user.id,
-      },
-    });
+    const client = {
+      id: "oauth-client-10",
+      clientId: "svc_test10",
+      clientSecretHash: hashServiceSecret("secret"),
+      scopes: ["timelapse:read"],
+    };
 
-    await prisma.serviceGrant.create({
-      data: {
-        serviceClientId: client.id,
-        userId: user.id,
-        scopes: ["timelapse:read"],
-      },
-    });
+    const grant = {
+      id: "grant-10",
+      scopes: ["timelapse:read"],
+    };
+
+    mockDatabase.user.findFirst.mockResolvedValue(user as never);
+    mockDatabase.serviceClient.findFirst.mockResolvedValue(client as never);
+    mockDatabase.serviceGrant.findFirst.mockResolvedValue(grant as never);
 
     const userToken = generateJWT(user.id, user.email);
 

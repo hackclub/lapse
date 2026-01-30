@@ -17,14 +17,14 @@ type ServiceInfo = {
 };
 
 const EXTRA_IMPORTANT_SCOPES = [
-  "order a thousand pizzas",
-  "summon evil ascpixi",
-  "post in #meta",
-  "headpat heidi",
-  "fly to hq",
-  "adopt every single cat EVER",
-  "push to prod",
-  'upaospsasopsaos "orpheus" opasopaosossdsospsdaspspasxp',
+  "Order a thousand pizzas",
+  "Summon evil ascpixi",
+  "Post in #meta",
+  "Headpat heidi",
+  "Fly to hq",
+  "Adopt every single cat EVER",
+  "Push to prod",
+  'upaospsasopsaos "Orpheus" opasopaosossdsospsdaspspasxp',
 ];
 
 export default function OAuthAuthorize() {
