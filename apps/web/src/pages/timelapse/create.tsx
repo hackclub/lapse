@@ -27,7 +27,7 @@ import { LoadingModal } from "@/client/components/ui/LoadingModal";
 import { ErrorModal } from "@/client/components/ui/ErrorModal";
 import { TextareaInput } from "@/client/components/ui/TextareaInput";
 import { TextInput } from "@/client/components/ui/TextInput";
-import { SelectInput } from "@/client/components/ui/SelectInput";
+import { DropdownInput } from "@/client/components/ui/DropdownInput";
 import { PillControlButton } from "@/client/components/ui/PillControlButton";
 
 import RecordIcon from "@/client/assets/icons/record.svg";
@@ -46,7 +46,6 @@ export default function Page() {
   const [videoSourceKind, setVideoSourceKind] = useState("NONE");
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [cameraLabel, setCameraLabel] = useState("Camera");
   const [screenLabel, setScreenLabel] = useState("Screen");
   const [changingSource, setChangingSource] = useState(false);
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]); // this should help make this better
@@ -54,7 +53,6 @@ export default function Page() {
   const [startedAt, setStartedAt] = useState(new Date());
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(null);
-  const [frameCount, setFrameCount] = useState(0);
   const [currentTimelapseId, setCurrentTimelapseId] = useState<number | null>(null);
   const [needsVideoSource, setNeedsVideoSource] = useState(false);
   const [currentSession] = useState<number>(Date.now());
@@ -68,7 +66,6 @@ export default function Page() {
 
   const [isFrozen, setIsFrozen] = useState(false);
   const isFrozenRef = useRef(false);
-  const frameCountRef = useRef(0);
 
 
   const mainPreviewRef = useRef<HTMLVideoElement>(null);
@@ -157,9 +154,6 @@ export default function Page() {
       console.log("(create.tsx) total elapsed time:", totalElapsedTime);
     }
 
-    const lastFrameCount = snapshots.length;
-    setFrameCount(lastFrameCount);
-    frameCountRef.current = lastFrameCount;
     setCurrentTimelapseId(activeTimelapse.id);
     setStartedAt(adjustedStartTime);
     setIsCreated(true);
@@ -195,16 +189,12 @@ export default function Page() {
     const activeTimelapseId = timelapseId ?? currentTimelapseId;
     if (activeTimelapseId == null)
       throw new Error("captureFrame() was called, but currentTimelapseId is null");
-
-    const newFrameCount = frameCountRef.current;
-    frameCountRef.current += 1;
     
     deviceStorage.saveSnapshot({
       createdAt: Date.now(),
       session: currentSession
     });
 
-    setFrameCount(newFrameCount);
   }, [recorder, currentTimelapseId, currentSession]);
 
   async function onCreate() {
@@ -231,8 +221,6 @@ export default function Page() {
 
       const now = new Date();
       setStartedAt(now);
-      setFrameCount(0);
-      frameCountRef.current = 0;
       setIsCreated(true);
 
       const timelapseId = await deviceStorage.saveTimelapse({
@@ -309,7 +297,6 @@ export default function Page() {
     setChangingSource(true);
 
     function disposeStreams() {
-      setCameraLabel("Camera");
       setScreenLabel("Screen");
 
       if (cameraStream) {
@@ -369,16 +356,10 @@ export default function Page() {
 
       console.log("(create.tsx) stream retrieved!", stream);
 
-      const cameraLabel = stream
-        .getVideoTracks()[0]
-        .label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "")
-        .trim();
-
       disposeStreams();
       setCameraStream(stream);
       setVideoSourceKind("CAMERA");
       setSelectedCameraId(cameraId);
-      setCameraLabel(`Camera (${cameraLabel})`);
     }
     else if (ev.target.value == "SCREEN") {
       let stream: MediaStream;
@@ -593,6 +574,46 @@ export default function Page() {
     };
   }, [frameInterval]);
 
+  async function discardRecording() {
+    if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
+      return;
+
+    try {
+      if (frameInterval) {
+        clearInterval(frameInterval);
+        setFrameInterval(null);
+      }
+
+      if (recorder) {
+        recorder.onstop = null;
+        recorder.stop();
+        setRecorder(null);
+      }
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        setCameraStream(null);
+      }
+
+      if (screenStream) {
+        screenStream.getTracks().forEach((track) => track.stop());
+        setScreenStream(null);
+      }
+
+      if (currentTimelapseId) {
+        await deviceStorage.deleteAllSnapshots();
+        await deviceStorage.deleteTimelapse(currentTimelapseId);
+        setCurrentTimelapseId(null);
+      }
+
+      router.push("/");
+    }
+    catch (err) {
+      console.error("(create.tsx) failed to discard timelapse:", err);
+      setError(err instanceof Error ? err.message : "Failed to discard timelapse");
+    }
+  }
+
   function openSetupModal() {
     setSetupModalOpen(true);
     setFreeze(true);
@@ -609,6 +630,7 @@ export default function Page() {
   }
 
   const isCreateDisabled = videoSourceKind === "NONE";
+  const anyCamerasLoaded = availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0;
 
   return (
     <RootLayout showHeader={false}>
@@ -653,34 +675,38 @@ export default function Page() {
                 return (
                   <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 flex-shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
                     <div className="flex flex-col gap-6">
-                      <SelectInput
+                      <DropdownInput
                         label="Video source"
                         description={videoSourceDescription}
                         value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
                         onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
                         disabled={changingSource}
-                      >
-                        <option disabled value="NONE">(none)</option>
-                        {availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0 ? (
-                          <optgroup label="Cameras">
-                            {availableCameras
-                              .filter(camera => camera.deviceId && camera.deviceId.length > 0)
-                              .map((camera, index) => {
-                                const displayLabel = camera.label && camera.label.trim().length > 0 
-                                  ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
-                                  : `Camera ${index + 1}`;
-                                return (
-                                  <option key={camera.deviceId} value={`CAMERA:${camera.deviceId}`}>
-                                    {displayLabel}
-                                  </option>
-                                );
-                              })}
-                          </optgroup>
-                        ) : (
-                          <option value="CAMERA:">Camera</option>
-                        )}
-                        <option value="SCREEN">{screenLabel}</option>
-                      </SelectInput>
+                        options={[
+                          { value: "NONE", disabled: true, label: "(none)" },
+                          { value: "SCREEN", icon: "photo", label: screenLabel },
+                          ...(
+                            anyCamerasLoaded
+                            ? [
+                              // We got permission from the user to fetch their cameras - display them.
+                              {
+                                label: "Cameras", icon: "instagram" as const, group: availableCameras
+                                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                                  .map((camera, index) => (
+                                    {
+                                      value: `CAMERA:${camera.deviceId}`,
+                                      label: camera.label && camera.label.trim().length > 0 
+                                        ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
+                                        : `Camera ${index + 1}`
+                                    }
+                                  ))
+                              }
+                            ] : [
+                              // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
+                              // option, that when clicked, will prompt them for permission.
+                              { label: "Camera", value: "CAMERA:" }
+                            ])
+                        ]}
+                      />
 
                       {(cameraStream || screenStream) && (
                         <div className="flex flex-col gap-2">
@@ -763,6 +789,7 @@ export default function Page() {
           <div className="flex gap-4 w-full">
             <Button onClick={() => stopRecording()} disabled={!name || name.trim().length == 0} kind="primary">Submit</Button>
             <Button onClick={() => setSubmitModalOpen(false)} kind="regular">Cancel</Button>
+            <Button onClick={discardRecording} kind="destructive" icon="delete">Discard</Button>
           </div>
         </div>
       </WindowedModal>

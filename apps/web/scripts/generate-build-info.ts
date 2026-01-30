@@ -165,6 +165,13 @@ async function getContributorsFromGit(commits: GitHubCommit[]): Promise<{ contri
         if (isBot(name) || isBot(email)) continue;
 
         const github = emailToGitHub.get(email) || null;
+
+        var duplicate = contributors.find(c => c.github === github)
+        if (duplicate) {
+            duplicate.commits += commits;
+            continue;
+        }
+        
         contributors.push({ name, github: github!, commits });
     }
 
