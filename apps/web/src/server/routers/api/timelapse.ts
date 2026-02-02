@@ -9,7 +9,7 @@ import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE, MAX_THUMBNAIL_UPLOAD_SIZE
 import { createUploadToken, consumeUploadTokens } from "@/server/services/uploadTokens";
 
 import { procedure, router, protectedProcedure } from "@/server/trpc";
-import { decryptVideo } from "@/server/encryption";
+import { decryptVideo, decryptToken } from "@/server/encryption";
 import { env } from "@/server/env";
 import { HackatimeOAuthApi, HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
 import { logError, logInfo, logRequest } from "@/server/serverCommon";
@@ -777,13 +777,17 @@ export default router({
             if (!timelapse.owner.hackatimeId || !timelapse.owner.hackatimeAccessToken)
                 return apiErr("ERROR", "You must have a linked Hackatime account to sync with Hackatime!");
 
+            const accessToken = decryptToken(timelapse.owner.hackatimeAccessToken);
+            if (!accessToken)
+                return apiErr("ERROR", "You must have a linked Hackatime account to sync with Hackatime!");
+
             let userApiKey: string | null;
 
             if (process.env.NODE_ENV !== "production" && env.DEV_HACKATIME_FALLBACK_KEY) {
                 userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
             }
             else {
-                const oauthApi = new HackatimeOAuthApi(timelapse.owner.hackatimeAccessToken);
+                const oauthApi = new HackatimeOAuthApi(accessToken);
                 userApiKey = await oauthApi.apiKey();
             }
 

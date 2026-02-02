@@ -8,6 +8,7 @@ import { router, protectedProcedure } from "@/server/trpc";
 import { logError, logRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
 import { HackatimeOAuthApi } from "@/server/hackatime";
+import { decryptToken } from "@/server/encryption";
 
 /**
  * Represents a Hackatime project of a given user.
@@ -40,7 +41,11 @@ export default router({
             if (!dbUser.hackatimeId || !dbUser.hackatimeAccessToken)
                 return apiErr("ERROR", "You must have a linked Hackatime account!");
 
-            const oauthApi = new HackatimeOAuthApi(dbUser.hackatimeAccessToken);
+            const accessToken = decryptToken(dbUser.hackatimeAccessToken);
+            if (!accessToken)
+                return apiErr("ERROR", "You must have a linked Hackatime account!");
+
+            const oauthApi = new HackatimeOAuthApi(accessToken);
             
             try {
                 const projects = await oauthApi.getProjects();
