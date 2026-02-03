@@ -54,6 +54,26 @@ function generatePasskey() {
     }
 }
 
+export async function registerCurrentDevice(): Promise<LocalDevice> {
+    const res = await trpc.user.registerDevice.mutate({
+        name: platform.description ?? navigator.platform
+    });
+
+    if (!res.ok)
+        throw new Error(res.error);
+
+    const assignedDevice = res.data.device;
+    const device: LocalDevice = {
+        id: assignedDevice.id,
+        passkey: generatePasskey(),
+        thisDevice: true
+    };
+    
+    await deviceStorage.saveDevice(device);
+    await deviceStorage.sync();
+    return device;
+}
+
 export async function getCurrentDevice(): Promise<LocalDevice> {
     const existing = (await deviceStorage.getAllDevices()).find(x => x.thisDevice);
     if (existing) {
@@ -73,22 +93,7 @@ export async function getCurrentDevice(): Promise<LocalDevice> {
     }
 
     // We haven't registered this device with the server yet! Assign it an ID.
-    const res = await trpc.user.registerDevice.mutate({
-        name: platform.description ?? navigator.platform
-    });
-
-    if (!res.ok)
-        throw new Error(res.error);
-
-    const assignedDevice = res.data.device;
-    const device: LocalDevice = {
-        id: assignedDevice.id,
-        passkey: generatePasskey(),
-        thisDevice: true
-    };
-    
-    deviceStorage.saveDevice(device);
-    return device;
+    return await registerCurrentDevice();
 }
 
 export interface KeyIvPair {

@@ -12,6 +12,7 @@ import { WindowedModal } from "../WindowedModal";
 import { Button } from "../Button";
 import { PasskeyModal } from "../PasskeyModal";
 import { ErrorModal } from "../ErrorModal";
+import { registerCurrentDevice } from "@/client/encryption";
 
 export function SettingsView({ isOpen, setIsOpen }: {
   isOpen: boolean,
@@ -37,7 +38,17 @@ export function SettingsView({ isOpen, setIsOpen }: {
       return;
 
     (async () => {
-      setLocalDevices(await deviceStorage.getAllDevices());
+      let allDevices = await deviceStorage.getAllDevices();
+      
+      if (!allDevices.some(d => d.thisDevice)) {
+        try {
+          await registerCurrentDevice();
+          allDevices = await deviceStorage.getAllDevices();
+        }
+        catch {}
+      }
+      
+      setLocalDevices(allDevices);
 
       const res = await trpc.user.getDevices.query({});
       console.log("(SettingsView.tsx) user.getDevices =", res);
