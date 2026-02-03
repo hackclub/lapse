@@ -107,7 +107,10 @@ export const env = {
     /**
      * The Slack API URL.
      */
-    get SLACK_API_URL() { return optional("SLACK_API_URL") || "https://slack.com/api" }
+    get SLACK_API_URL() { return optional("SLACK_API_URL") || "https://slack.com/api" },
+
+    // encryption key for hackatime tokens (generate with: openssl rand -hex 32)
+    get HACKATIME_TOKEN_ENCRYPTION_KEY() { return required("HACKATIME_TOKEN_ENCRYPTION_KEY") }
 };
 
 function required(name: string) {

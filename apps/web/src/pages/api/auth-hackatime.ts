@@ -6,6 +6,7 @@ import { env } from "@/server/env";
 import { logError, logNextRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
 import { MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH } from "@/shared/constants";
+import { encryptToken } from "@/server/encryption";
 
 // GET /api/auth-hackatime
 //    Meant to be used as a callback URL - the user will be redirected to this API endpoint when
@@ -227,8 +228,8 @@ export default async function handler(
                 data: {
                     email: primaryEmail,
                     hackatimeId: hackatimeUser.id.toString(),
-                    hackatimeAccessToken: tokenData.access_token,
-                    hackatimeRefreshToken: tokenData.refresh_token || null,
+                    hackatimeAccessToken: encryptToken(tokenData.access_token),
+                    hackatimeRefreshToken: tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null,
                     slackId: hackatimeUser.slack_id || null,
                     handle: handle,
                     displayName: primaryEmail.split("@")[0],
@@ -243,8 +244,8 @@ export default async function handler(
         else {
             const updateData: Parameters<typeof database.user.update>[0]["data"] = {
                 hackatimeId,
-                hackatimeAccessToken: tokenData.access_token,
-                hackatimeRefreshToken: tokenData.refresh_token || null,
+                hackatimeAccessToken: encryptToken(tokenData.access_token),
+                hackatimeRefreshToken: tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null,
             };
 
             if (hackatimeUser.slack_id) {

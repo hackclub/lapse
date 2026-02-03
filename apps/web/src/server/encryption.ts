@@ -1,6 +1,7 @@
 import "@/server/allow-only-server";
 
 import crypto from "crypto";
+import { env } from "./env";
 
 function deriveSalts(timelapseId: string): { keySalt: Buffer; ivSalt: Buffer } {
     const keySalt = crypto.createHmac('sha256', 'timelapse-key-salt').update(timelapseId).digest();
@@ -67,6 +68,55 @@ export function decryptData(encryptedData: Buffer | Uint8Array, key: string, iv:
         decipher.update(inputBuffer),
         decipher.final()
     ]);
-    
+
     return decryptedBuffer;
+}
+
+// encrypt hackatime tokens using aes-256-gcm
+// returns base64 encoded string (iv:authTag:encrypted)
+export function encryptToken(plaintext: string): string {
+    const key = Buffer.from(env.HACKATIME_TOKEN_ENCRYPTION_KEY, "hex");
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+    const encrypted = Buffer.concat([
+        cipher.update(plaintext, "utf8"),
+        cipher.final()
+    ]);
+    const authTag = cipher.getAuthTag();
+
+    // format: iv:authTag:encrypted (all base64)
+    return `${iv.toString("base64")}:${authTag.toString("base64")}:${encrypted.toString("base64")}`;
+}
+
+// decrypt hackatime tokens
+export function decryptToken(encrypted: string | null): string | null {
+    if (!encrypted) return null;
+
+    // check if already plaintext (old tokens not yet migrated)
+    if (!encrypted.includes(":")) {
+        return encrypted;
+    }
+
+    const key = Buffer.from(env.HACKATIME_TOKEN_ENCRYPTION_KEY, "hex");
+
+    try {
+        const [ivB64, authTagB64, encryptedB64] = encrypted.split(":");
+        const iv = Buffer.from(ivB64, "base64");
+        const authTag = Buffer.from(authTagB64, "base64");
+        const ciphertext = Buffer.from(encryptedB64, "base64");
+
+        const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+        decipher.setAuthTag(authTag);
+
+        const decrypted = Buffer.concat([
+            decipher.update(ciphertext),
+            decipher.final()
+        ]);
+
+        return decrypted.toString("utf8");
+    } catch {
+        // if decryption fails, assume it's plaintext
+        return encrypted;
+    }
 }
