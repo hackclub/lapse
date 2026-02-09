@@ -4,9 +4,9 @@ import z from "zod";
 
 import { apiResult, daysAgo, descending, apiOk } from "@/shared/common";
 
-import { procedure, router } from "@/server/trpc";
+import { publicProcedure, router } from "@/server/trpc";
 import { logError } from "@/server/serverCommon";
-import { dtoTimelapse, TimelapseSchema } from "@/server/routers/api/timelapse";
+import { dtoPublicTimelapse, TimelapseSchema } from "@/server/routers/api/timelapse";
 import { UserDisplayName, UserHandle } from "@/server/routers/api/user";
 import { PublicId } from "@/server/routers/common";
 import { database } from "@/server/db";
@@ -26,10 +26,8 @@ let leaderboardCache: LeaderboardUserEntry[] = [];
 const ACTIVE_USERS_EXPIRY_MS = 60 * 1000;
 
 export default router({
-    /**
-     * Returns the users that have the most usage time in the past 7 days.
-     */
-    weeklyLeaderboard: procedure
+    weeklyLeaderboard: publicProcedure("GET", "/global/weeklyLeaderboard")
+        .summary("Returns the users that have the most Lapse time logged in the past 7 days.")
         .input(z.object({}))
         .output(apiResult({
             leaderboard: z.array(LeaderboardUserEntrySchema)
@@ -90,10 +88,8 @@ export default router({
             return apiOk({ leaderboard });
         }),
 
-    /**
-     * Returns the most recent public timelapses at the time of the API call.
-     */
-    recentTimelapses: procedure
+    recentTimelapses: publicProcedure("GET", "/global/recentTimelapses")
+        .summary("Returns the most recent public timelapses at the time of the API call.")
         .input(z.object({}))
         .output(apiResult({
             timelapses: z.array(TimelapseSchema)
@@ -110,14 +106,12 @@ export default router({
             });
 
             return apiOk({
-                timelapses: timelapses.map(dtoTimelapse)
+                timelapses: timelapses.map(dtoPublicTimelapse)
             });
         }),
 
-    /**
-     * Returns the number of active users that have sent a heartbeat in the last 60s.
-     */
-    activeUsers: procedure
+    activeUsers: publicProcedure("GET", "/global/activeUsers")
+        .summary("Returns the number of active users that have sent a heartbeat in the last 60s.")
         .input(z.object({}))
         .output(apiResult({
             count: z.number().nonnegative()

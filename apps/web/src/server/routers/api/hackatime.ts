@@ -4,10 +4,11 @@ import { z } from "zod";
 
 import { apiResult, apiErr, apiOk } from "@/shared/common";
 
-import { router, protectedProcedure } from "@/server/trpc";
+import { router, protectedProcedure, publicProcedure } from "@/server/trpc";
 import { logError, logRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
 import { HackatimeOAuthApi } from "@/server/hackatime";
+import { dtoTimelapse, TIMELAPSE_INCLUDES, TimelapseSchema } from "@/server/routers/api/timelapse";
 
 /**
  * Represents a Hackatime project of a given user.
@@ -19,10 +20,8 @@ export const HackatimeProjectSchema = z.object({
 });
 
 export default router({
-    /**
-     * Gets all Hackatime projects from the user's Hackatime account.
-     */
-    allProjects: protectedProcedure()
+    allProjects: protectedProcedure(["user:read"])
+        .summary("Gets all Hackatime projects from the user's Hackatime account.")
         .input(z.object({}))
         .output(apiResult({
             projects: z.array(HackatimeProjectSchema)
@@ -63,5 +62,48 @@ export default router({
                 logError("user.getAllHackatimeProjects", "Failed to fetch Hackatime projects", { error, userId: req.ctx.user.id });
                 return apiOk({ projects: [] });
             }
+        }),
+
+    timelapsesForProject: publicProcedure("GET", "/hackatime/timelapsesForProject")
+        .summary("Gets the timelapses of a given Hackatime user associated with the given Hackatime project key.")
+        .input(z.object({
+            hackatimeUserId: z.number().min(1)
+                .describe("The Hackatime user ID of the Lapse user that should be the subject of this API call."),
+
+            projectKey: z.string().min(1).max(256)
+                .describe("The exact, case-sensitive Hackatime project key to query.")
+        }))
+        .output(apiResult({
+            count: z.number()
+                .describe(`
+                    The number of timelapses made by the user associated with the project key. This number may be greater than \`timelapses\`
+                    if the API request was unauthenticated and the user has unlisted timelapses associated with the key.
+                `),
+
+            timelapses: z.array(TimelapseSchema)
+                .describe("The timelapses made by the user associated with the project key.")
+        }))
+        .query(async (req) => {
+            const subject = await database.user.findFirst({
+                where: {
+                    hackatimeId: req.input.hackatimeUserId.toString()
+                }
+            });
+
+            if (!subject)
+                return apiOk({ count: 0, timelapses: [] });
+
+            const timelapses = await database.timelapse.findMany({
+                include: TIMELAPSE_INCLUDES,
+                where: {
+                    ownerId: subject.id,
+                    hackatimeProject: req.input.projectKey
+                }
+            });
+
+            return apiOk({
+                count: timelapses.length,
+                timelapses: timelapses.map(x => dtoTimelapse(x, req.ctx.user))
+            });
         })
 });

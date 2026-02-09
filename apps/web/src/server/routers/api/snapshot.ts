@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { apiResult, apiErr, apiOk, oneOf } from "@/shared/common";
 
-import { procedure, router, protectedProcedure } from "@/server/trpc";
+import { router, protectedProcedure, publicProcedure } from "@/server/trpc";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { logRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
@@ -50,16 +50,12 @@ export const SnapshotSchema = z.object({
 });
 
 export default router({
-    /**
-     * Deletes a snapshot.
-     */
-    delete: protectedProcedure()
+    delete: protectedProcedure(["snapshot:write"], "DELETE", "/snapshot/delete")
+        .summary("Deletes a snapshot.")
         .input(
             z.object({
-                /**
-                 * The UUID of the snapshot to delete. The snapshot has to be owned by the calling user.
-                 */
-                id: z.uuid(),
+                id: z.uuid()
+                    .describe("The UUID of the snapshot to delete. The snapshot has to be owned by the calling user."),
             })
         )
         .output(apiResult({}))
@@ -91,24 +87,18 @@ export default router({
             return apiOk({});
         }),
 
-    /**
-     * Finds all snapshots for a given timelapse.
-     */
-    findByTimelapse: procedure
+    findByTimelapse: publicProcedure("GET", "/snapshot/findByTimelapse")
+        .summary("Finds all snapshots for a given timelapse.")
         .input(
             z.object({
-                /**
-                 * The ID of the timelapse to find snapshots for.
-                 */
-                timelapseId: PublicId,
+                timelapseId: PublicId
+                    .describe("The ID of the timelapse to find snapshots for.")
             })
         )
         .output(
             apiResult({
-                /**
-                 * All snapshots for the timelapse.
-                 */
-                snapshots: z.array(SnapshotSchema),
+                snapshots: z.array(SnapshotSchema)
+                    .describe("All snapshots for the timelapse."),
             })
         )
         .query(async (req) => {
