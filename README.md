@@ -24,7 +24,7 @@ pnpm dev:init
 # Start the development server
 pnpm turbo run dev
 ```
-To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively. To completely tear down the development environment (including removing all Docker volumes), use `pnpm dev:down-env`.
+To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively.
 
 ## 🛠️ Deployment
 Lapse is meant to be deployed via Docker. In order to deploy the main frontend/backend microservice, use `Dockerfile.web`, located in the root of this repo.

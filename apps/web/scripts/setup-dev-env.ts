@@ -11,7 +11,16 @@ import yaml from "js-yaml";
 
 const DOCKER_STARTUP_DELAY = 1500;
 
-const DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/lapse?schema=public";
+const DEFAULT_DATABASE_PORT = 5432;
+const DEFAULT_WEBSERVER_PORT = 3000;
+
+let databasePort = DEFAULT_DATABASE_PORT;
+let webserverPort = DEFAULT_WEBSERVER_PORT;
+
+function getDatabaseUrl() {
+    return `postgresql://postgres:postgres@localhost:${databasePort}/lapse?schema=public`;
+}
+
 let S3_ENDPOINT = "s3.localhost.localstack.cloud:4566";
 let S3_PUBLIC_URL_PUBLIC = "http://lapse-public.s3.localhost.localstack.cloud:4566";
 let S3_PUBLIC_URL_ENCRYPTED = "http://lapse-encrypted.s3.localhost.localstack.cloud:4566";
@@ -73,6 +82,19 @@ async function askLocalstackOrR2() {
 			{ name: "Cloudflare R2 (used in production)", value: "r2" }
 		],
 	});
+}
+
+async function askForPort(name: string, defaultPort: number): Promise<number> {
+	const portStr = await input({
+		message: `Enter ${name} port (default: ${defaultPort}): `,
+		default: String(defaultPort),
+	});
+
+	const port = parseInt(portStr);
+	if (isNaN(port) || port < 1 || port > 65535)
+		throw new Error(`Invalid port number: ${portStr}`);
+
+	return port;
 }
 
 async function checkDockerRunning() {
@@ -183,7 +205,7 @@ async function pushPrismaSchema() {
 	try {
 		await execa("pnpm", ["db:push"], {
 			cwd: webDir,
-			env: { ...process.env, DATABASE_URL },
+			env: { ...process.env, DATABASE_URL: getDatabaseUrl() },
 		});
 
 		spinner.succeed(chalk.green("Prisma schema pushed successfully"));
@@ -229,7 +251,7 @@ async function updateEnvFile(envVars: Record<string, string>) {
 	try {
 		env = await fs.readFile(resolve(webDir, ".env.example"), "utf-8");
 		for (const [key, value] of Object.entries(envVars)) {
-			env = env.replace(`${key}=`, `${key}=${value}`);
+			env = env.replace(new RegExp(`^${key}=.*$`, "m"), `${key}=${value}`);
 		}
 
 		await fs.writeFile(resolve(webDir, ".env"), env);
@@ -284,8 +306,28 @@ async function updateDockerComposeFile(localstackImage: string | null) {
 	}).start();
 
 	let composeContent = await fs.readFile(composeFile, "utf-8");
+	const composeObject = yaml.load(composeContent) as Record<string, unknown>;
+
+	// Update database port if non-default
+	if (databasePort !== DEFAULT_DATABASE_PORT && composeObject.services) {
+		const services = composeObject.services as Record<string, { ports?: string[] }>;
+		if (services["lapse-db"]?.ports) {
+			services["lapse-db"].ports = [`${databasePort}:5432`];
+		}
+	}
+
+	composeContent = yaml.dump(composeObject, {
+		indent: 2,
+		lineWidth: -1,
+		noRefs: true,
+	});
+
 	if (localstackImage) {
 		composeContent = buildLocalstackDockerComposeSection(composeContent, localstackImage);
+
+		// Ensure the init-s3.sh script is executable (required for LocalStack init hooks)
+		const initS3Path = resolve(repoRoot, "init-s3.sh");
+		await fs.chmod(initS3Path, 0o755);
 	}
 
 	// new name: lapse.dev.yaml
@@ -297,7 +339,7 @@ async function updateDockerComposeFile(localstackImage: string | null) {
 async function runSetup() {
 	console.clear();
 
-	const TOTAL_STEPS = 7;
+	const TOTAL_STEPS = 8;
 	let currentStep = 0;
 
 	try {
@@ -307,6 +349,10 @@ async function runSetup() {
 
 		// always use the original docker compose file for init
 		composeFile = resolve(repoRoot, "docker-compose.dev.yaml");
+
+		logStep(++currentStep, TOTAL_STEPS, "Configuring ports...");
+		databasePort = await askForPort("database", DEFAULT_DATABASE_PORT);
+		webserverPort = await askForPort("web server", DEFAULT_WEBSERVER_PORT);
 
 		logStep(++currentStep, TOTAL_STEPS, "Configuring storage backend...");
 		localstackORr2 = await askLocalstackOrR2();
@@ -346,6 +392,9 @@ async function runSetup() {
 
 		logStep(++currentStep, TOTAL_STEPS, "Updating environment variables...");
 		await updateEnvFile({
+			"DATABASE_URL": getDatabaseUrl(),
+			"PORT": webserverPort.toString(),
+			"HACKATIME_REDIRECT_URI": `http://localhost:${webserverPort}/api/auth-hackatime`,
 			"SLACK_BOT_TOKEN": SLACK_BOT_TOKEN,
 			"S3_ENDPOINT": S3_ENDPOINT,
 			"S3_ACCESS_KEY_ID": S3_ACCESS_KEY_ID,
@@ -360,7 +409,7 @@ async function runSetup() {
 		console.log();
 		console.log(chalk.white("  Next steps:"));
 		console.log(chalk.gray("  1. Run ") + chalk.cyan("pnpm turbo run dev") + chalk.gray(" to start the development server"));
-		console.log(chalk.gray("  2. Open ") + chalk.cyan("http://localhost:3000") + chalk.gray(" in your browser"));
+		console.log(chalk.gray("  2. Open ") + chalk.cyan(`http://localhost:${webserverPort}`) + chalk.gray(" in your browser"));
 		divider();
 
 	}

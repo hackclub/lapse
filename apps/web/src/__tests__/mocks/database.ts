@@ -48,6 +48,10 @@ export type MockDatabase = {
     uploadToken: MockPrismaModel<unknown>;
     draftTimelapse: MockPrismaModel<unknown>;
     banRecord: MockPrismaModel<unknown>;
+    serviceClient: MockPrismaModel<unknown>;
+    serviceGrant: MockPrismaModel<unknown>;
+    serviceTokenAudit: MockPrismaModel<unknown>;
+    serviceClientReview: MockPrismaModel<unknown>;
     $transaction: Mock<(fn: (tx: MockDatabase) => Promise<unknown>) => Promise<unknown>>;
     $connect: Mock<() => Promise<void>>;
     $disconnect: Mock<() => Promise<void>>;
@@ -68,6 +72,10 @@ export function createMockDatabase(): MockDatabase {
         uploadToken: createMockModel(),
         draftTimelapse: createMockModel(),
         banRecord: createMockModel(),
+        serviceClient: createMockModel(),
+        serviceGrant: createMockModel(),
+        serviceTokenAudit: createMockModel(),
+        serviceClientReview: createMockModel(),
         $transaction: vi.fn((fn) => fn(mockDatabase)),
         $connect: vi.fn(),
         $disconnect: vi.fn(),
@@ -82,12 +90,48 @@ export function createMockDatabase(): MockDatabase {
 export const mockDatabase = createMockDatabase();
 
 /**
+ * Creates a mock database with realistic constraints simulation.
+ */
+export function createConstrainedMockDatabase() {
+    const db = createMockDatabase();
+    
+    // Simulate database constraints and realistic behavior
+    db.user.findFirst.mockImplementation(async (query: any) => {
+        if (query.where?.email === "taken@example.com" || query.where?.handle === "taken-handle") {
+            return null; // Email or handle already taken
+        }
+
+        // Return default user for other cases
+        const defaultImpl = db.user.findFirst.getMockImplementation();
+        return defaultImpl ? defaultImpl(query) : null;
+    });
+    
+    db.serviceClient.findFirst.mockImplementation(async (query: any) => {
+        if (query.where?.clientId?.startsWith?.("revoked_")) {
+            return null; // Client is revoked
+        }
+        const defaultImpl = db.serviceClient.findFirst.getMockImplementation();
+        return defaultImpl ? defaultImpl(query) : null;
+    });
+    
+    return db;
+}
+
+/**
  * Resets all mock functions in the database mock. Call this in `beforeEach` to ensure
- * tests are isolated.
+ * tests are isolated and prevents test interference.
  */
 export function resetMockDatabase(): void {
+    // Clear all mocks completely to prevent test interference
+    vi.clearAllMocks();
+    
+    // Reset individual model mocks while preserving their mock implementations
     const resetModel = (model: MockPrismaModel<unknown>) => {
-        Object.values(model).forEach((fn) => fn.mockReset());
+        Object.values(model).forEach((fn) => {
+            if (typeof fn === "function" && "mockReset" in fn) {
+                fn.mockReset();
+            }
+        });
     };
 
     resetModel(mockDatabase.user);
@@ -98,12 +142,14 @@ export function resetMockDatabase(): void {
     resetModel(mockDatabase.uploadToken);
     resetModel(mockDatabase.draftTimelapse);
     resetModel(mockDatabase.banRecord);
+    resetModel(mockDatabase.serviceClient);
+    resetModel(mockDatabase.serviceGrant);
+    resetModel(mockDatabase.serviceTokenAudit);
+    resetModel(mockDatabase.serviceClientReview);
     mockDatabase.$transaction.mockReset();
+    
+    // Reset transaction mock to use the current database state
     mockDatabase.$transaction.mockImplementation((fn) => fn(mockDatabase));
-    mockDatabase.$connect.mockReset();
-    mockDatabase.$disconnect.mockReset();
-    mockDatabase.$executeRaw.mockReset();
-    mockDatabase.$queryRaw.mockReset();
 }
 
 /**

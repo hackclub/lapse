@@ -54,21 +54,15 @@ export function dtoComment(comment: DbComment): Comment {
 }
 
 export default router({
-    /**
-     * Creates a new comment for the given timelapse.
-     */
-    create: protectedProcedure()
+    create: protectedProcedure(["comment:write"], "POST", "/comment/create")
+        .summary("Creates a new comment for the given timelapse.")
         .input(
             z.object({
-                /**
-                 * The ID of the timelapse this comment should be created for.
-                 */
-                id: PublicId,
+                id: PublicId
+                    .describe("The ID of the timelapse this comment should be created for."),
 
-                /**
-                 * The content of the comment. This can contain a limited subset of Markdown (bold, italic, strikethrough, code).
-                 */
                 content: z.string().min(1).max(280)
+                    .describe("The content of the comment. This can contain a limited subset of Markdown (bold, italic, strikethrough, code).")
             })
         )
         .output(
@@ -98,16 +92,12 @@ export default router({
             return apiOk({ comment: dtoComment(comment) });
         }),
 
-    /**
-     * Deletes a comment owned by the calling user.
-     */
-    delete: protectedProcedure()
+    delete: protectedProcedure(["comment:write"], "DELETE", "/comment/delete")
+        .summary("Deletes a comment owned by the calling user.")
         .input(
             z.object({
-                /**
-                 * The ID of the comment to delete.
-                 */
                 commentId: PublicId
+                    .describe("The ID of the comment to delete.")
             })
         )
         .output(apiResult({}))

@@ -5,12 +5,11 @@ import { z } from "zod";
 import { apiResult, assert, descending, apiErr, when, apiOk, isAdmin } from "@/shared/common";
 import { MIN_HANDLE_LENGTH, MAX_HANDLE_LENGTH } from "@/shared/constants";
 
-import { procedure, router, protectedProcedure } from "@/server/trpc";
+import { router, protectedProcedure, publicProcedure, procedure } from "@/server/trpc";
 import { logError, logRequest } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { ApiDate, PublicId } from "@/server/routers/common";
 import { database } from "@/server/db";
-import { HackatimeOAuthApi } from "@/server/hackatime";
 
 import * as db from "@/generated/prisma/client";
 
@@ -271,11 +270,8 @@ export async function dtoUser(entity: DbCompositeUser, latestBanRecord?: DbBanRe
 }
 
 export default router({
-    /**
-     * Gets the information about the calling user. If the caller is not authenticated,
-     * returns `null` as the `user`.
-     */
-    myself: procedure
+    myself: publicProcedure("GET", "/user/myself")
+        .summary("Gets the information about the calling user. If the caller is not authenticated, returns `null` as the `user`.")
         .input(z.object({}))
         .output(apiResult({
             user: UserSchema.nullable()
@@ -297,21 +293,18 @@ export default router({
             return apiOk({ user: await dtoUser(user) });
         }),
 
-    /**
-     * Finds a profile by its handle *or* ID.
-     */
-    query: procedure
+    query: publicProcedure("GET", "/user/query")
+        .summary("Finds a profile by its handle, ID, or Hackatime ID.")
         .input(
             z.object({
-                /**
-                 * The ID of the profile to query. Can be undefined if `handle` is specified.
-                 */
-                id: PublicId.optional(),
+                id: PublicId.optional()
+                    .describe("The ID of the profile to query. Can be undefined if another field is specified."),
 
-                /**
-                 * The handle of the profile to query. Can be undefined if `id` is specified.
-                 */
                 handle: z.string().optional()
+                    .describe("The handle of the profile to query. Can be undefined if another field is specified."),
+
+                hackatimeId: z.number().min(1).optional()
+                    .describe("The Hackatime ID of the profile to query. Can be undefined if another field is specified."),
             })
         )
         .output(
@@ -322,9 +315,6 @@ export default router({
         .query(async (req) => {
             logRequest("user/query", req);
             
-            if (!req.input.handle && !req.input.id)
-                return apiErr("MISSING_PARAMS", "No handle or user ID specified"); 
-
             let dbUser: DbCompositeUser | null;
 
             if (req.input.handle) {
@@ -333,12 +323,20 @@ export default router({
                     include: { devices: true }
                 });
             }
-            else {
-                assert(req.input.id != undefined, "Both req.input.handle and req.input.id were undefined");
+            else if (req.input.id) {
                 dbUser = await database.user.findFirst({
                     where: { id: req.input.id },
                     include: { devices: true }
                 });
+            }
+            else if (req.input.hackatimeId) {
+                dbUser = await database.user.findFirst({
+                    where: { hackatimeId: req.input.hackatimeId.toString() },
+                    include: { devices: true }
+                });
+            }
+            else {
+                return apiErr("MISSING_PARAMS", "No handle, user ID, or Hackatime ID specified"); 
             }
 
             if (!dbUser)
@@ -354,35 +352,26 @@ export default router({
             return apiOk({ user });
         }),
 
-    /**
-     * Updates user profile information.
-     */
-    update: protectedProcedure()
+    update: protectedProcedure(["user:write"], "PATCH", "/user/update")
+        .summary("Updates user profile information.")
         .input(
             z.object({
-                /**
-                 * The ID of the target user to edit. If the calling user has their permissionLevel set to "USER",
-                 * this field can only be set to their ID.
-                 */
-                id: PublicId,
-
-                /**
-                 * The changes to apply to the user profile.
-                 */
+                id: PublicId
+                    .describe("The ID of the target user to edit. If the calling user has their permissionLevel set to 'USER', this field can only be set to their ID."),
+                
                 changes: z.object({
                     handle: UserHandle.optional(),
                     displayName: UserDisplayName.optional(),
                     bio: UserBio.optional(),
                     urls: UserUrlList.optional()
                 })
+                    .describe("The changes to apply to the user profile.")
             })
         )
         .output(
             apiResult({
-                /**
-                 * The new state of the user, after applying the updates.
-                 */
                 user: UserSchema
+                    .describe("The new state of the user, after applying the updates.")
             })
         )
         .mutation(async (req) => {
@@ -409,10 +398,8 @@ export default router({
             return apiOk({ user: await dtoUser(updatedUser) });
         }),
 
-    /**
-     * Gets all devices registered by the currently authenticated user.
-     */
-    getDevices: protectedProcedure()
+    getDevices: protectedProcedure(["user:read"], "GET", "/user/getDevices")
+        .summary("Gets all devices registered by the currently authenticated user.")
         .input(z.object({}))
         .output(
             apiResult({
@@ -429,16 +416,12 @@ export default router({
             return apiOk({ devices: devices.map(dtoKnownDevice) });
         }),
 
-    /**
-     * Creates a new device owned by a user, allocating a new, unique ID.
-     */
-    registerDevice: protectedProcedure()
+    registerDevice: protectedProcedure(["user:write"], "POST", "/user/registerDevice")
+        .summary("Creates a new device owned by a user, allocating a new, unique ID.")
         .input(
             z.object({
-                /**
-                 * The initial string to use as the user-friendly device display name.
-                 */
-                name: z.string() 
+                name: z.string()
+                    .describe("The initial string to use as the user-friendly device display name.")
             })
         )
         .output(
@@ -459,16 +442,12 @@ export default router({
             return apiOk({ device: dtoKnownDevice(device) });
         }),
 
-    /**
-     * Removes a device owned by a user.
-     */
-    removeDevice: protectedProcedure()
+    removeDevice: protectedProcedure(["user:write"], "DELETE", "/user/removeDevice")
+        .summary("Removes a device owned by a user.")
         .input(
             z.object({
-                /**
-                 * The ID of the device to remove. The device must be owned by the calling user.
-                 */
                 id: PublicId
+                    .describe("The ID of the device to remove. The device must be owned by the calling user.")
             })
         )
         .output(apiResult({}))
@@ -504,10 +483,8 @@ export default router({
             return apiOk({});
         }),
 
-    /**
-     * Signs out the current user by clearing the authentication cookie.
-     */
-    signOut: procedure
+    signOut: publicProcedure("POST", "/user/signOut")
+        .summary("Signs out the current user by clearing the authentication cookie.")
         .input(z.object({}))
         .output(apiResult({}))
         .mutation(async (req) => {
@@ -521,28 +498,20 @@ export default router({
             return apiOk({});
         }),
 
-    /**
-     * Gets a list of Hackatime projects that have been associated with the user's timelapses, including the total hour counts.
-     */
-    hackatimeProjects: protectedProcedure()
+    hackatimeProjects: protectedProcedure(["user:read"], "GET", "/user/hackatimeProjects")
+        .summary("Gets a list of Hackatime projects that have been associated with the user's timelapses, including the total hour counts.")
         .input(z.object({}))
         .output(apiResult({
-            /**
-             * All of the Hackatime projects associated with timelapses.
-             */
             projects: z.array(
                 z.object({
-                    /**
-                     * The name of the project.
-                     */
-                    name: z.string().min(1),
+                    name: z.string().min(1)
+                        .describe("The name of the project."),
 
-                    /**
-                     * The amount of time spend timelapsing.
-                     */
                     time: z.number().nonnegative()
+                        .describe("The amount of time spent timelapsing.")
                 })
             )
+                .describe("All of the Hackatime projects associated with timelapses.")
         }))
         .query(async (req) => {
             const projects = new Map<string, number>();
@@ -578,21 +547,15 @@ export default router({
             });
         }),
 
-    /**
-     * Queries the aggregate duration of all timelapses of a given user.
-     */
-    getTotalTimelapseTime: procedure
+    getTotalTimelapseTime: publicProcedure("GET", "/user/getTotalTimelapseTime")
+        .summary("Queries the aggregate duration of all timelapses of a given user.")
         .input(z.object({
-            /**
-             * The ID of the user to query the total timelapse time of. If `null`, and the user is authenticated, the user's ID is used instead.
-             */
             id: PublicId.nullable()
+                .describe("The ID of the user to query the total timelapse time of. If `null`, and the user is authenticated, the user's ID is used instead.")
         }))
         .output(apiResult({
-            /**
-             * The aggregate duration of all timelapses of the queried user.
-             */
             time: z.number().nonnegative()
+                .describe("The aggregate duration of all timelapses of the queried user.")
         }))
         .query(async (req) => {
             if (!req.input.id && !req.ctx.user)
@@ -606,10 +569,8 @@ export default router({
             return apiOk({ time: aggregate._sum.duration ?? 0 });
         }),
 
-    /**
-     * Updates the last heartbeat time of the calling user to the current date. This is used to detect active users.
-     */
-    emitHeartbeat: protectedProcedure()
+    emitHeartbeat: protectedProcedure(["user:write"], "POST", "/user/emitHeartbeat")
+        .summary("Updates the last heartbeat time of the calling user to the current date. This is used to detect active users.")
         .input(z.object({}))
         .output(apiResult({}))
         .mutation(async (req) => {

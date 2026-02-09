@@ -8,13 +8,13 @@ import { apiResult, ascending, match, when, apiOk, apiErr, oneOf, closest, chunk
 import { MAX_VIDEO_FRAME_COUNT, MAX_VIDEO_UPLOAD_SIZE, MAX_THUMBNAIL_UPLOAD_SIZE, TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
 import { createUploadToken, consumeUploadTokens } from "@/server/services/uploadTokens";
 
-import { procedure, router, protectedProcedure } from "@/server/trpc";
+import { router, protectedProcedure, publicProcedure } from "@/server/trpc";
 import { decryptVideo } from "@/server/encryption";
 import { env } from "@/server/env";
 import { HackatimeOAuthApi, HackatimeUserApi, WakaTimeHeartbeat } from "@/server/hackatime";
 import { logError, logInfo, logRequest } from "@/server/serverCommon";
 import { generateThumbnail } from "@/server/videoProcessing";
-import { Actor, ApiDate, PublicId } from "@/server/routers/common";
+import { Actor, actorEntitledTo, actorIsServer, actorIsUser, ApiDate, PublicId } from "@/server/routers/common";
 import { dtoKnownDevice, dtoPublicUser, KnownDeviceSchema, PublicUserSchema } from "@/server/routers/api/user";
 import { CommentSchema, DbComment, dtoComment } from "@/server/routers/api/comment";
 import { database } from "@/server/db";
@@ -35,7 +35,7 @@ export type DbOwnedTimelapse = DbTimelapse & { owner: db.User, device: db.KnownD
 /**
  * Converts a database representation of a timelapse to a runtime (API) one. This excludes private fields.
  */
-export function dtoTimelapse(entity: DbTimelapse): Timelapse {
+export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
     // This lacks `isPublished` so that we have to mark it explicitly when creating a DTO
     // that might hold private data (e.g. device names).
     return {
@@ -61,12 +61,29 @@ export function dtoTimelapse(entity: DbTimelapse): Timelapse {
  */
 export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
     return {
-        ...dtoTimelapse(entity),
+        ...dtoPublicTimelapse(entity),
         private: {
             device: entity.device ? dtoKnownDevice(entity.device) : null,
             hackatimeProject: entity.hackatimeProject
         }
     };
+}
+
+/**
+ * Converts a database representation of a timelapse to a runtime (API) one, including all private fields if the
+ * `actor` is entitled to said fields.
+ */
+export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Actor): Timelapse | OwnedTimelapse {
+    if (actorEntitledTo(entity, actor) && "device" in entity) {
+        // This timelapse should be considered owned.
+        return dtoOwnedTimelapse(entity);
+    }
+
+    // Either not enough data in our `entity` payload, or the actor does not own this timelapse.
+    if (!entity.isPublished)
+        throw new Error("Attempted to DTO a unpublished timelapse as an actor that does not own it!");
+
+    return dtoPublicTimelapse(entity);
 }
 
 /**
@@ -114,20 +131,10 @@ export async function getTimelapseById(id: string, actor: Actor): Promise<Result
     if (!timelapse)
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
 
-    const isOwner = (
-        (actor === "SERVER")
-            ? true
-            : (
-                (actor && actor.id === timelapse.ownerId) ||
-                (actor && (actor.permissionLevel in oneOf("ADMIN", "ROOT"))
-            )
-        )
-    );
-
-    if (!timelapse.isPublished && !isOwner)
+    if (!timelapse.isPublished && !actorEntitledTo(timelapse, actor))
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
 
-    return isOwner ? dtoOwnedTimelapse(timelapse) : dtoTimelapse(timelapse);
+    return dtoTimelapse(timelapse, actor);
 }
 
 /**
@@ -287,19 +294,12 @@ export type Timelapse = z.infer<typeof TimelapseSchema>;
 export const TimelapseSchema = OwnedTimelapseSchema.partial({ private: true });
 
 export default router({
-    /**
-     * Finds a timelapse by its ID. If the timelapse is not yet published, and the user does not own
-     * the timelapse, the endpoint will report that the timelapse does not exist.
-     * 
-     * This endpoint will return a different view if the user owns the timelapse.
-     */
-    query: procedure
+    query: publicProcedure("GET", "/timelapse/query")
+        .summary("Finds a timelapse by its ID. If the timelapse is not yet published, and the user does not own the timelapse, the endpoint will report that the timelapse does not exist. This endpoint will return a different view if the user owns the timelapse.")
         .input(
             z.object({
-                /**
-                 * The ID of the timelapse to query information about.
-                 */
-                id: PublicId,
+                id: PublicId
+                    .describe("The ID of the timelapse to query information about."),
             })
         )
         .output(
@@ -317,43 +317,27 @@ export default router({
             return apiOk({ timelapse });
         }),
 
-    /**
-     * Creates a draft timelapse. Draft timelapses can be *commited* and turned into regular timelapses
-     * by calling `timelapse.commit`. Before a draft timelapse is commited, all AES-256-CBC encrypted
-     * data must be uploaded to the server using both the `videoToken` and the `thumbnailToken`
-     * via `/api/upload`.
-     * 
-     * The key or IV that the data is encrypted should be derived from the device passkey and timelapse ID.
-     * Other key/IV values will make the server unable to decrypt the timelapse.
-     * 
-     * This endpoint is planned to support chunked video uploads in the future. This will make draft
-     * timelapses have a longer lifespan, with their upload tokens being able to be re-used.
-     */
-    createDraft: protectedProcedure()
+    createDraft: protectedProcedure(["timelapse:write"], "POST", "/timelapse/createDraft")
+        .summary(`
+            Creates a draft timelapse. Draft timelapses can be commited and turned into regular timelapses by calling "timelapse.commit".
+            Before a draft timelapse is commited, all AES-256-CBC encrypted data must be uploaded to the server using both the "videoToken"
+            and the "thumbnailToken" via "/api/upload". The key or IV that the data is encrypted should be derived from the device passkey
+            and timelapse ID. Other key/IV values will make the server unable to decrypt the timelapse.
+        `)
         .input(z.object({
-            /**
-             * The container format of the video stream. This will be used to derive the MIME type
-             * of the video.
-             */
             containerType: TimelapseVideoContainerSchema
+                .describe("The container format of the video stream. This will be used to derive the MIME type of the video.")
         }))
         .output(
             apiResult({
-                /**
-                 * The ID that identifies the draft timelapse. When created, the resulting timelapse
-                 * will be identified by this value. 
-                 */
-                id: PublicId,
-
-                /**
-                 * Authorizes the client to upload the encrypted video via `/api/upload`.
-                 */
-                videoToken: z.uuid(),
-
-                /**
-                 * Authorizes the client to upload the encrypted thumbnail via `/api/upload`.
-                 */
+                id: PublicId
+                    .describe("The ID that identifies the draft timelapse. When created, the resulting timelapse will be identified by this value."),
+                
+                videoToken: z.uuid()
+                    .describe("Authorizes the client to upload the encrypted video via `/api/upload`."),
+                
                 thumbnailToken: z.uuid()
+                    .describe("Authorizes the client to upload the encrypted thumbnail via `/api/upload`.")
             })
         )
         .query(async (req) => {
@@ -387,10 +371,8 @@ export default router({
             return apiOk({ id: draft.id, videoToken: video.id, thumbnailToken: thumbnail.id });
         }),
 
-    /**
-     * Commits a draft timelapse.
-     */
-    commit: protectedProcedure()
+    commit: protectedProcedure(["timelapse:write"], "POST", "/timelapse/commit")
+        .summary("Commits a draft timelapse.")
         .input(
             z.object({
                 id: PublicId,
@@ -398,18 +380,11 @@ export default router({
                 description: TimelapseDescription,
                 visibility: TimelapseVisibilitySchema,
 
-                /**
-                 * An array of timestamps. Each timestamp counts the number of milliseconds since the
-                 * Unix epoch - equivalent to `Date.getTime()` in JavaScript. The frame count is
-                 * inferred by sorting the array, and always begins at 0.
-                 */
-                snapshots: z.array(z.int().min(0)).max(MAX_VIDEO_FRAME_COUNT),
-
-                /**
-                 * The device that the timelapse has been created on. This generally is used to
-                 * let other devices know what key to use to decrypt this timelapse.
-                 */
+                snapshots: z.array(z.int().min(0)).max(MAX_VIDEO_FRAME_COUNT)
+                    .describe("An array of timestamps. Each timestamp counts the number of milliseconds since the Unix epoch - equivalent to `Date.getTime()` in JavaScript. The frame count is inferred by sorting the array, and always begins at 0."),
+                
                 deviceId: z.uuid()
+                    .describe("The device that the timelapse has been created on. This generally is used to let other devices know what key to use to decrypt this timelapse.")
             })
         )
         .output(
@@ -489,33 +464,25 @@ export default router({
             return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
         }),
 
-    /**
-     * Updates the metadata of a timelapse.
-     */
-    update: protectedProcedure()
+    update: protectedProcedure(["timelapse:write"], "PATCH", "/timelapse/update")
+        .summary("Updates the metadata of a timelapse.")
         .input(
             z.object({
-                /**
-                 * The ID of the timelapse to update.
-                 */
-                id: PublicId,
-
-                /**
-                 * The changes to apply to the timelapse.
-                 */
+                id: PublicId
+                    .describe("The ID of the timelapse to update."),
+                    
                 changes: z.object({
                     name: TimelapseName.optional(),
                     description: TimelapseDescription.optional(),
                     visibility: TimelapseVisibilitySchema.optional()
                 })
+                    .describe("The changes to apply to the timelapse.")
             })
         )
         .output(
             apiResult({
-                /**
-                 * The new state of the timelapse, after applying the updates.
-                 */
-                timelapse: OwnedTimelapseSchema,
+                timelapse: OwnedTimelapseSchema
+                    .describe("The new state of the timelapse, after applying the updates."),
             })
         )
         .mutation(async (req) => {
@@ -557,10 +524,8 @@ export default router({
             return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
         }),
 
-    /**
-     * Permanently deletes a timelapse owned by the user.
-     */
-    delete: protectedProcedure()
+    delete: protectedProcedure(["timelapse:write"], "DELETE", "/timelapse/delete")
+        .summary("Permanently deletes a timelapse owned by the user.")
         .input(
             z.object({
                 id: PublicId,
@@ -580,35 +545,24 @@ export default router({
             }
         }),
 
-    /**
-     * Publishes a timelapse, making it immutable and accessible by administrators. This will decrypt
-     * all of the segments contained within the timelapse. If not unlisted, will also make the timelapse public.
-     */
-    publish: protectedProcedure()
+    publish: protectedProcedure(["timelapse:write"], "POST", "/timelapse/publish")
+        .summary("Publishes a timelapse, making it immutable and accessible by administrators. This will decrypt all of the segments contained within the timelapse. If not unlisted, will also make the timelapse public.")
         .input(
             z.object({
-                /**
-                 * The ID of the timelapse to published.
-                 */
-                id: PublicId,
+                id: PublicId
+                    .describe("The ID of the timelapse to publish."),
 
-                /**
-                 * The device passkey used to decrypt the timelapse.
-                 */
-                passkey: z.string().length(6),
+                passkey: z.string().length(6)
+                    .describe("The device passkey used to decrypt the timelapse."),
 
-                /**
-                 * The visibility setting for the published timelapse.
-                 */
                 visibility: TimelapseVisibilitySchema
+                    .describe("The visibility setting for the published timelapse.")
             })
         )
         .output(
             apiResult({
-                /**
-                 * The new state of the timelapse, after publishing.
-                 */
-                timelapse: OwnedTimelapseSchema,
+                timelapse: OwnedTimelapseSchema
+                    .describe("The new state of the timelapse, after publishing."),
             })
         )
         .mutation(async (req) => {
@@ -704,10 +658,8 @@ export default router({
             }
         }),
 
-    /**
-     * Finds all timelapses created by a given user.
-     */
-    findByUser: procedure
+    findByUser: publicProcedure("GET", "/timelapse/findByUser")
+        .summary("Finds all timelapses created by a given user.")
         .input(
             z.object({
                 user: PublicId,
@@ -715,10 +667,8 @@ export default router({
         )
         .output(
             apiResult({
-                /**
-                 * All timelapses created by the user.
-                 */
-                timelapses: z.array(TimelapseSchema),
+                timelapses: z.array(TimelapseSchema)
+                    .describe("All timelapses created by the user."),
             })
         )
         .query(async (req) => {
@@ -739,16 +689,11 @@ export default router({
                 }
             });
 
-            return apiOk({
-                timelapses: timelapses.map(x => x.ownerId == req.ctx.user?.id ? dtoOwnedTimelapse(x) : dtoTimelapse(x) ),
-            });
+            return apiOk({ timelapses: timelapses.map(x => dtoTimelapse(x, req.ctx.user)) });
         }),
 
-    /**
-     * Synchronizes a timelapse with a Hackatime project, converting all snapshots into heartbeats.
-     * This procedure can only be called **once** for a timelapse.
-     */
-    syncWithHackatime: protectedProcedure()
+    syncWithHackatime: protectedProcedure(["timelapse:write"], "POST", "/timelapse/syncWithHackatime")
+        .summary("Synchronizes a timelapse with a Hackatime project, converting all snapshots into heartbeats. This procedure can only be called once for a timelapse.")
         .input(
             z.object({
                 id: PublicId,
@@ -834,6 +779,6 @@ export default router({
                 include: TIMELAPSE_INCLUDES
             });
 
-            return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
+            return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.ctx.user) });
         })
 });

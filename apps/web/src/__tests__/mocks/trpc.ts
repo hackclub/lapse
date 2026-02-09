@@ -19,6 +19,7 @@ export function createMockContext(user: User | null = null): Context {
             json: vi.fn(),
         } as unknown as NextApiResponse,
         user,
+        scopes: []
     };
 }
 
