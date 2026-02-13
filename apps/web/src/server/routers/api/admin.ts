@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { apiResult, apiErr, apiOk, isAdmin } from "@/shared/common";
 
-import { router, protectedProcedure } from "@/server/trpc";
+import { router, adminProcedure } from "@/server/trpc";
 import { logRequest } from "@/server/serverCommon";
 import { deleteTimelapse } from "@/server/routers/api/timelapse";
 import { ApiDate, PublicId } from "@/server/routers/common";
@@ -21,30 +21,20 @@ import {
 import * as db from "@/generated/prisma/client";
 
 export default router({
-    /**
-     * Sets the ban status of a user. Only administrators can use this endpoint.
-     */
-    setBanStatus: protectedProcedure()
+    setBanStatus: adminProcedure()
+        .summary("Sets the ban status of a user. Only administrators can use this endpoint.")
         .input(z.object({
-            /**
-             * The ID of the user to ban or unban.
-             */
-            id: PublicId,
+            id: PublicId
+                .describe("The ID of the user to ban or unban."),
 
-            /**
-             * Whether to ban (`true`) or unban (`false`) the user.
-             */
-            isBanned: z.boolean(),
+            isBanned: z.boolean()
+                .describe("Whether to ban (`true`) or unban (`false`) the user."),
 
-            /**
-             * The public reason for the ban (shown to the user). Only used when `isBanned` is `true`.
-             */
-            reason: z.string().max(512).optional(),
+            reason: z.string().max(512).optional()
+                .describe("The public reason for the ban (shown to the user). Required when `isBanned` is `true`."),
 
-            /**
-             * The internal reason for the ban (only visible to admins). Only used when `isBanned` is `true`.
-             */
             reasonInternal: z.string().max(512).optional()
+                .describe("The internal reason for the ban (only visible to admins). Only used when `isBanned` is `true`.")
         }))
         .output(apiResult({
             user: UserSchema
@@ -53,10 +43,6 @@ export default router({
             logRequest("admin/setBanStatus", req);
 
             const actor = req.ctx.user;
-
-            if (!isAdmin(actor))
-                return apiErr("NO_PERMISSION", "Only administrators can change ban status.");
-
             const target = await database.user.findFirst({
                 where: { id: req.input.id },
                 include: { devices: true }
@@ -95,25 +81,17 @@ export default router({
             return apiOk({ user: await dtoUser(updatedUser, banRecord) });
         }),
 
-    /**
-     * Gets the ban history for a user. Only administrators can use this endpoint.
-     */
-    getBanHistory: protectedProcedure()
+    getBanHistory: adminProcedure()
+        .summary("Gets the ban history for a user. Only administrators can use this endpoint.")
         .input(z.object({
-            /**
-             * The ID of the user to get ban history for.
-             */
             id: PublicId
+                .describe("The ID of the user to get ban history for.")
         }))
         .output(apiResult({
             records: z.array(BanRecordSchema)
         }))
         .query(async (req) => {
             logRequest("admin/getBanHistory", req);
-
-            const actor = req.ctx.user;
-            if (!isAdmin(actor))
-                return apiErr("NO_PERMISSION", "Only administrators can view ban history.");
 
             const records = await database.banRecord.findMany({
                 where: { targetId: req.input.id },
@@ -124,10 +102,8 @@ export default router({
             return apiOk({ records: records.map(dtoBanRecord) });
         }),
 
-    /**
-     * Sets the permission level of a user. Only ROOT can use this endpoint.
-     */
-    setPermissionLevel: protectedProcedure()
+    setPermissionLevel: adminProcedure()
+        .summary("Sets the permission level of a user. Only ROOT can use this endpoint.")
         .input(z.object({
             id: PublicId,
             permissionLevel: PermissionLevelSchema
@@ -163,25 +139,17 @@ export default router({
             return apiOk({ user: await dtoUser(updated) });
         }),
 
-    /**
-     * Lists all users. Only administrators can use this endpoint.
-     */
-    list: protectedProcedure()
+    list: adminProcedure()
+        .summary("Lists all users. Only administrators can use this endpoint.")
         .input(z.object({
-            /**
-             * Maximum number of users to return.
-             */
-            limit: z.number().int().min(1).max(100).default(50),
+            limit: z.number().int().min(1).max(100).default(50)
+                .describe("Maximum number of users to return."),
 
-            /**
-             * Cursor for pagination.
-             */
-            cursor: PublicId.optional(),
+            cursor: PublicId.optional()
+                .describe("Cursor for pagination."),
 
-            /**
-             * If `true`, only returns banned users.
-             */
             onlyBanned: z.boolean().optional()
+                .describe("If `true`, only returns banned users.")
         }))
         .output(apiResult({
             users: z.array(UserSchema),
@@ -215,15 +183,11 @@ export default router({
             });
         }),
 
-    /**
-     * Deletes a user and all their associated data. Only ROOT can use this endpoint.
-     */
-    deleteUser: protectedProcedure()
+    deleteUser: adminProcedure()
+        .summary("Deletes a user and all their associated data. Only ROOT can use this endpoint.")
         .input(z.object({
-            /**
-             * The ID of the user to delete.
-             */
             id: PublicId
+                .describe("The ID of the user to delete.")
         }))
         .output(apiResult({}))
         .mutation(async (req) => {
@@ -276,52 +240,5 @@ export default router({
             });
 
             return apiOk({});
-        }),
-
-    /**
-     * Gets the ban information for the calling user. Used by the banned page to display ban details.
-     */
-    getMyBanInfo: protectedProcedure()
-        .input(z.object({}))
-        .output(apiResult({
-            ban: z.object({
-                bannedAt: ApiDate,
-                reason: z.string(),
-                reasonInternal: z.string(),
-                performedBy: z.object({
-                    id: PublicId,
-                    displayName: z.string()
-                })
-            }).nullable()
-        }))
-        .query(async (req) => {
-            logRequest("admin/getMyBanInfo", req);
-
-            if (!req.ctx.user.isBanned)
-                return apiOk({ ban: null });
-
-            const latestBanRecord = await database.banRecord.findFirst({
-                where: {
-                    targetId: req.ctx.user.id,
-                    action: "BAN"
-                },
-                orderBy: { createdAt: "desc" },
-                include: { performedBy: true }
-            });
-
-            if (!latestBanRecord)
-                return apiOk({ ban: null });
-
-            return apiOk({
-                ban: {
-                    bannedAt: latestBanRecord.createdAt.getTime(),
-                    reason: latestBanRecord.reason,
-                    reasonInternal: latestBanRecord.reasonInternal,
-                    performedBy: {
-                        id: latestBanRecord.performedBy.id,
-                        displayName: latestBanRecord.performedBy.displayName
-                    }
-                }
-            });
-        })
+        })   
 });

@@ -182,6 +182,7 @@ async function getContributorsFromGit(commits: GitHubCommit[]): Promise<{ contri
 }
 
 async function main() {
+    return;
     const useGit = hasGit();
     console.log(`Using ${useGit ? "git + GitHub API" : "GitHub API only"}`);
 
