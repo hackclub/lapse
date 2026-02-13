@@ -9,6 +9,7 @@ import global from "@/server/routers/api/global";
 import comment from "@/server/routers/api/comment";
 import hackatime from "@/server/routers/api/hackatime";
 import developer from "@/server/routers/api/developer";
+import report from "@/server/routers/api/report";
 
 export const appRouter = router({
     timelapse,
@@ -17,7 +18,8 @@ export const appRouter = router({
     global,
     comment,
     hackatime,
-    developer
+    developer,
+    report
 });
 
 // type definition of API
