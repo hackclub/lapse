@@ -1,6 +1,4 @@
-import "@/server/allow-only-server";
-
-import { logError } from "@/server/serverCommon";
+import { logError } from "@/logging.js";
 
 export interface WakaTimeCategorizedStat {
     name: string;
@@ -192,7 +190,7 @@ class HackatimeBase {
     protected async query<T>(method: "GET" | "POST", endpoint: string, params: object = {}) {
         const req = await fetch(`https://hackatime.hackclub.com/api/${endpoint}`, {
             method,
-            body: (method === "GET" || !params) ? undefined : JSON.stringify(params),
+            body: (method === "GET" || !params) ? "" : JSON.stringify(params),
             headers: new Headers({
                 "Authorization": `Bearer ${this.token}`,
                 "User-Agent": "lapse/0.1.0",

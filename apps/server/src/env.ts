@@ -1,5 +1,3 @@
-import "@/server/allow-only-server";
-
 /**
  * All known environment variables.
  */

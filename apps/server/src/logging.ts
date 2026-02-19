@@ -1,8 +1,8 @@
-import * as Sentry from "@sentry/nextjs";
-import type { NextApiRequest } from "next";
+import type { FastifyRequest } from "fastify";
+import * as Sentry from "@sentry/node";
 import { inspect } from "node:util";
 
-import * as db from "@/generated/prisma/client";
+import * as db from "@/generated/prisma/client.js";
 
 function inlineStringify(x: unknown) {
     return inspect(x, {
@@ -76,23 +76,12 @@ export function logError(scope: string, message: string, data: Record<string, un
     Sentry.logger.error(`(${scope}) ${message}`, remapData(data));
 }
 
-type PartialTRPCRequest = {
-    input: Record<string, unknown>;
-    ctx: {
-        user: db.User | null
-    }
-};
-
-export function logRequest(endpoint: string, req: PartialTRPCRequest) {
-    Sentry.logger.info(`(request) ${endpoint}`, {
-        input: req.input,
-        user: req.ctx.user
-    });
-
-    console.log(getPlain("info", "request", endpoint, { user: req.ctx.user, args: req.input }));
+export function logRequest(endpoint: string, input: unknown, user: db.User | null) {
+    Sentry.logger.info(`(request) ${endpoint}`, { input, user });
+    console.log(getPlain("info", "request", endpoint, { user, args: input }));
 }
 
-export function logNextRequest(endpoint: string, req: NextApiRequest) {
+export function logFastifyRequest(endpoint: string, req: FastifyRequest) {
     Sentry.logger.info(`(request) ${endpoint}`, { req });
     console.log(getPlain("info", "request", endpoint, { url: req.url }));
 }
