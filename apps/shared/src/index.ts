@@ -1,5 +1,0 @@
-export * from "./collections.js"
-export * from "./functional.js"
-export * from "./typing.js"
-export * from "./numeric.js"
-export * from "./temporal.js"
