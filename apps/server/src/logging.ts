@@ -1,6 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import * as Sentry from "@sentry/node";
-import { inspect } from "node:util";
+import * as path from "node:path";
+import { inspect, getCallSites } from "node:util";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -57,26 +58,36 @@ function remapData(data: Record<string, unknown>): Record<string, unknown> {
     );
 }
 
-export function logTracing(scope: string, data: Record<string, unknown> = {}) {
-    Sentry.logger.trace(`TRACING: (${scope})`, remapData(data));
+export function logTracing(data: Record<string, unknown> = {}) {
+    Sentry.logger.trace(`TRACING: (${getScope()})`, remapData(data));
 }
 
-export function logInfo(scope: string, message: string, data: Record<string, unknown> = {}) {
-    console.log(getPlain("info", scope,  message, data));
+function getScope() {
+    const callSite = getCallSites(3)[2];
+    return callSite ? `${path.basename(callSite.scriptName, path.extname(callSite.scriptName))}::${callSite.functionName}` : "";
+}
+
+export function logInfo(message: string, data: Record<string, unknown> = {}) {
+    const scope = getScope();
+    
+    console.log(getPlain("info", scope, message, data));
     Sentry.logger.info(`(${scope}) ${message}`, remapData(data));
 }
 
-export function logWarning(scope: string, message: string, data: Record<string, unknown> = {}) {
+export function logWarning(message: string, data: Record<string, unknown> = {}) {
+    const scope = getScope();
     console.warn(getPlain("warn", scope,  message, data));
     Sentry.logger.warn(`(${scope}) ${message}`, remapData(data));
 }
 
-export function logError(scope: string, message: string, data: Record<string, unknown> = {}) {
+export function logError(message: string, data: Record<string, unknown> = {}) {
+    const scope = getScope();
     console.error(getPlain("error", scope,  message, data));
     Sentry.logger.error(`(${scope}) ${message}`, remapData(data));
 }
 
 export function logRequest(endpoint: string, input: unknown, user: db.User | null) {
+    const scope = getScope();
     Sentry.logger.info(`(request) ${endpoint}`, { input, user });
     console.log(getPlain("info", "request", endpoint, { user, args: input }));
 }

@@ -36,7 +36,7 @@ export interface OwnedObject {
 }
 
 /**
- * Returns `true` if the actor is entitled to access the given `entity`.
+ * Returns `true` if the actor is entitled to elevated access to the given `entity`.
  */
 export function actorEntitledTo(entity: OwnedObject, actor: Actor) {
     return (

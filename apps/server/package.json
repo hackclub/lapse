@@ -9,6 +9,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
+    "postinstall": "prisma generate",
     "build": "prisma generate && pnpm tsc",
     "start": "pnpm run build && fastify start -l info dist/app.js",
     "watch": "tsc -w",
@@ -16,7 +17,8 @@
     "dev:start": "fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.954.0",
+    "@aws-sdk/client-s3": "^3.994.0",
+    "@aws-sdk/s3-request-presigner": "^3.994.0",
     "@hackclub/lapse-api": "workspace:*",
     "@hackclub/lapse-shared": "workspace:*",
     "@orpc/openapi": "^1.13.5",
@@ -26,6 +28,7 @@
     "@trpc/server": "^11.8.0",
     "dotenv": "^17.2.3",
     "jsonwebtoken": "^9.0.3",
+    "nanoid": "^5.1.6",
     "prisma": "^7.2.0",
     "zod": "^4.2.1"
   },

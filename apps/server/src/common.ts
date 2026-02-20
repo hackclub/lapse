@@ -1,4 +1,5 @@
 import type { LapseError } from "@hackclub/lapse-api";
+import { nanoid } from "nanoid";
 
 /**
  * Returns an `ApiResult<T>` object that represents a successful API response.
@@ -40,3 +41,10 @@ export class Err {
  * Represents a local operation. For API responses, see `ApiResult<T>`.
  */
 export type Result<T> = Ok<T> | Err;
+
+/**
+ * Generates a new `LapseId` - a 12-character-long NanoID.
+ */
+export function lapseId() {
+    return nanoid(12);
+}
