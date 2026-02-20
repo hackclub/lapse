@@ -1,22 +1,20 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { S3Client } from "@aws-sdk/client-s3";
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { ascending, assert, chunked, closest, oneOf, when } from "@hackclub/lapse-shared";
+import { HeadObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { oneOf, when } from "@hackclub/lapse-shared";
+import { TIMELAPSE_FRAME_LENGTH_MS, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
-import { containerTypeToExtension, containerTypeToMimeType, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, mimeTypeToContainerType, TIMELAPSE_FRAME_LENGTH_MS, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
 import { logMiddleware, requiredAuth, type Context } from "@/router.js";
-import { dtoKnownDevice, dtoPublicUser } from "@/routers/user.js";
+import { dtoPublicUser } from "@/routers/user.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
-
-import { apiOk, apiErr, type Result, Err } from "@/common.js";
+import { apiOk, apiErr, type Result, Err, lapseId } from "@/common.js";
 import { actorEntitledTo, type Actor } from "@/ownership.js";
-import { logError, logInfo } from "@/logging.js";
-import { generateThumbnail } from "@/videoProcessing.js";
+import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/hackatime.js";
 import { dtoComment, type DbComment } from "@/routers/comment.js";
+import { enqueueRealizeJob } from "@/job.js";
 
 const s3 = new S3Client({
     region: "auto",
@@ -28,7 +26,7 @@ const s3 = new S3Client({
 });
 
 export type DbTimelapse = db.Timelapse & { owner: db.User, comments: DbComment[] };
-export type DbOwnedTimelapse = DbTimelapse & { owner: db.User, device: db.KnownDevice | null };
+export type DbOwnedTimelapse = DbTimelapse & { owner: db.User };
 
 const os = implement(timelapseRouterContract)
     .$context<Context>()
@@ -48,13 +46,9 @@ export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
         description: entity.description,
         comments: entity.comments.map(dtoComment),
         visibility: entity.visibility,
-        playbackUrl: `${entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED}/${entity.s3Key}`,
-        thumbnailUrl: entity.thumbnailS3Key 
-            ? `${entity.isPublished ? env.S3_PUBLIC_URL_PUBLIC : env.S3_PUBLIC_URL_ENCRYPTED}/${entity.thumbnailS3Key}`
-            : null,
-        videoContainerKind: entity.containerKind,
-        isPublished: entity.isPublished,
-        duration: entity.duration,
+        playbackUrl: entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`,
+        thumbnailUrl: entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`,
+        duration: entity.duration
     };
 }
 
@@ -65,7 +59,6 @@ export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
     return {
         ...dtoPublicTimelapse(entity),
         private: {
-            device: entity.device ? dtoKnownDevice(entity.device) : null,
             hackatimeProject: entity.hackatimeProject
         }
     };
@@ -80,10 +73,6 @@ export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Acto
         // This timelapse should be considered owned.
         return dtoOwnedTimelapse(entity);
     }
-
-    // Either not enough data in our `entity` payload, or the actor does not own this timelapse.
-    if (!entity.isPublished)
-        throw new Error("Attempted to DTO a unpublished timelapse as an actor that does not own it!");
 
     return dtoPublicTimelapse(entity);
 }
@@ -111,20 +100,17 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
         }
     }
 
-    await database.snapshot.deleteMany({
-        where: { timelapseId: timelapse.id }
-    });
-
-    const bucket = timelapse.isPublished ? env.S3_PUBLIC_BUCKET_NAME : env.S3_ENCRYPTED_BUCKET_NAME; 
-
-    await s3.send(new DeleteObjectCommand({
-        Bucket: bucket,
-        Key: timelapse.s3Key
-    }));
+    // Scary stuff ahead! If we mess this up, we permanently lose data. We don't want that!
+    if (timelapse.s3Key) {
+        await s3.send(new DeleteObjectCommand({
+            Bucket: env.S3_PUBLIC_URL_PUBLIC,
+            Key: timelapse.s3Key
+        }));
+    }
 
     if (timelapse.thumbnailS3Key) {
         await s3.send(new DeleteObjectCommand({
-            Bucket: bucket,
+            Bucket: env.S3_PUBLIC_URL_PUBLIC,
             Key: timelapse.thumbnailS3Key
         }));
     }
@@ -133,7 +119,7 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
         where: { id: timelapse.id }
     });
 
-    logInfo("timelapse", `Timelapse ${timelapseId} deleted.`);
+    logInfo(`Timelapse ${timelapseId} (${timelapse.name}) deleted.`, { timelapse });
 }
 
 /**
@@ -148,7 +134,7 @@ export async function getTimelapseById(id: string, actor: Actor): Promise<Result
     if (!timelapse)
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
 
-    if (!timelapse.isPublished && !actorEntitledTo(timelapse, actor))
+    if (!actorEntitledTo(timelapse, actor))
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
 
     return dtoTimelapse(timelapse, actor);
@@ -159,7 +145,6 @@ export async function getTimelapseById(id: string, actor: Actor): Promise<Result
  */
 export const TIMELAPSE_INCLUDES = {
     owner: true,
-    device: true,
     comments: {
         include: { author: true },
         orderBy: {
@@ -180,109 +165,74 @@ export default os.router({
             return apiOk({ timelapse });
         }),
 
-    createDraft: os.createDraft
-        .use(requiredAuth())
-        .handler(async (req) => {
-            const caller = req.context.user;
-            
-            const baseId = crypto.randomUUID();
-
-            const video = await createUploadToken(database, {
-                ownerId: caller.id,
-                bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                key: `timelapses/${caller.id}/${baseId}.${containerTypeToExtension(req.input.containerType)}`,
-                mimeType: containerTypeToMimeType(req.input.containerType),
-                maxSize: MAX_VIDEO_UPLOAD_SIZE,
-            });
-
-            const thumbnail = await createUploadToken(database, {
-                ownerId: caller.id,
-                bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                key: `timelapses/${caller.id}/${baseId}-thumbnail.jpg`,
-                mimeType: "image/jpeg",
-                maxSize: MAX_THUMBNAIL_UPLOAD_SIZE,
-            });
-
-            const draft = await database.draftTimelapse.create({
-                data: {
-                    ownerId: caller.id,
-                    videoTokenId: video.id,
-                    thumbnailTokenId: thumbnail.id,
-                }
-            });
-
-            return apiOk({ id: draft.id, videoToken: video.id, thumbnailToken: thumbnail.id });
-        }),
-
-    commit: os.commit
+    publish: os.publish
         .use(requiredAuth())
         .handler(async (req) => {
             const caller = req.context.user;
 
             const draft = await database.draftTimelapse.findFirst({
-                where: { id: req.input.id, ownerId: caller.id },
-                include: { videoToken: true, thumbnailToken: true }
+                where: {
+                    id: req.input.id,
+                    ownerId: caller.id
+                }
             });
 
             if (!draft)
                 return apiErr("NOT_FOUND", `The draft timelapse ${req.input.id} couldn't be found.`);
 
-            const videoUpload = draft.videoToken;
-            const thumbnailUpload = draft.thumbnailToken;
+            // There _is_ a scenario where the caller just ignores our S3 upload URLs and never uploads the sessions they promised to upload.
+            let allUploaded = true;
 
-            assert(videoUpload.ownerId == caller.id, "Video upload token wasn't owned by draft owner");
-            assert(thumbnailUpload.ownerId == caller.id, "Thumbnail upload token wasn't owned by draft owner");
+            for (const session of draft.sessions) {
+                try {
+                    await s3.send(
+                        new HeadObjectCommand({
+                            Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+                            Key: session
+                        })
+                    );
+                }
+                catch (error) {
+                    logWarning(`User tried to publish a draft timelapse, but session ${session} cannot be accessed!`, { error });
+                    allUploaded = false;
+                    break;
+                }
+            }
 
-            if (!videoUpload.uploaded)
-                return apiErr("NO_FILE", "The video hasn't yet been uploaded.");
+            if (!allUploaded)
+                return apiErr("ERROR", "A session of the given draft timelapse hasn't been uploaded or otherwise cannot be accessed.");
 
-            if (!thumbnailUpload.uploaded)
-                return apiErr("NO_FILE", "The thumbnail hasn't yet been uploaded.");
+            const id = lapseId();
+            
+            // We associate the newly created Timelapse entity with the draft. When a draft has an associated timelapse, that means it is currently being processed, and thus will be hidden
+            // from any API queries.
+            await database.draftTimelapse.update({
+                where: { id: draft.id },
+                data: {
+                    associatedTimelapseId: id
+                }
+            })
 
-            const device = await database.knownDevice.findFirst({
-                where: { id: req.input.deviceId }
-            });
+            // After this job finishes, we'll get a callback on the server-side. When that happens, we'll assign the ready video to the timelapse we just created, and mark it as processed!
+            const realizeJob = await enqueueRealizeJob(id, draft.sessions, req.input.passkey);
+            if (!realizeJob.id) {
+                logWarning("We enqueued a realize job, but it does not have an ID! Something went very wrong!", { realizeJob });
+            }
 
-            if (!device)
-                return apiErr("DEVICE_NOT_FOUND", "The device creating this snapshot hasn't been registered with the server.");
-
-            if (device.ownerId != caller.id)
-                return apiErr("NO_PERMISSION", "The specified device doesn't belong to the logged in user.");
-
+            // We purposefully omit `s3Key` and `s3ThumbnailKey` here.
             const timelapse = await database.timelapse.create({
                 include: TIMELAPSE_INCLUDES,
                 data: {
-                    id: draft.id,
+                    id,
                     createdAt: draft.createdAt,
                     ownerId: caller.id,
-                    name: req.input.name,
-                    description: req.input.description,
+                    name: draft.name,
+                    description: draft.description,
                     visibility: req.input.visibility,
-                    containerKind: mimeTypeToContainerType(videoUpload.mimeType),
-                    isPublished: false,
-                    s3Key: videoUpload.key,
-                    thumbnailS3Key: thumbnailUpload.key,
-                    deviceId: req.input.deviceId,
-                    duration: (req.input.snapshots.length * TIMELAPSE_FRAME_LENGTH_MS) / 1000
+                    snapshots: draft.snapshots,
+                    duration: (draft.snapshots.length * TIMELAPSE_FRAME_LENGTH_MS) / 1000,
+                    associatedJobId: realizeJob.id
                 }
-            });
-
-            const sortedSnapshots = req.input.snapshots.sort(ascending());
-            
-            for (const batch of chunked(sortedSnapshots, 100)) {
-                await database.snapshot.createMany({
-                    skipDuplicates: true,
-                    data: batch.map((x, i) => ({
-                        timelapseId: timelapse.id,
-                        frame: i,
-                        createdAt: new Date(x)
-                    }))
-                });
-            }
-
-            await database.$transaction(async (tx) => {
-                await tx.draftTimelapse.delete({ where: { id: draft.id } });
-                await consumeUploadTokens(tx, [draft.videoTokenId, draft.thumbnailTokenId]);
             });
 
             return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
@@ -334,109 +284,11 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            try {
-                await deleteTimelapse(req.input.id, caller);
-                return apiOk({});
-            }
-            catch (error) {
-                logError("timelapse.delete", "Failed to delete timelapse!", { error });
-                return apiErr("ERROR", "Failed to delete timelapse");
-            }
-        }),
+            const res = await deleteTimelapse(req.input.id, caller);
+            if (res instanceof Err)
+                return res.toApiError();
 
-    publish: os.publish
-        .use(requiredAuth())
-        .handler(async (req) => {
-            const caller = req.context.user;
-
-            const timelapse = await database.timelapse.findFirst({
-                where: { id: req.input.id },
-            });
-
-            if (!timelapse)
-                return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
-
-            const canPublish =
-                caller.id === timelapse.ownerId ||
-                caller.permissionLevel in oneOf("ADMIN", "ROOT");
-
-            if (!canPublish)
-                return apiErr("NO_PERMISSION", "You don't have permission to publish this timelapse");
-
-            if (timelapse.isPublished)
-                return apiErr("ALREADY_PUBLISHED", "Timelapse already published");
-
-            try {
-                const encryptedObject = await s3.send(new GetObjectCommand({
-                    Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    Key: timelapse.s3Key
-                }));
-
-                const encryptedBuffer = await encryptedObject.Body?.transformToByteArray();
-
-                if (!encryptedBuffer)
-                    return apiErr("NO_FILE", "Failed to retrieve encrypted video");
-
-                let decryptedBuffer: Buffer;
-
-                try {
-                    decryptedBuffer = decryptVideo(
-                        encryptedBuffer,
-                        req.input.id,
-                        req.input.passkey
-                    );
-                }
-                catch {
-                    return apiErr("ERROR", "Invalid passkey provided. Please check your 6-digit PIN.");
-                }
-
-                await s3.send(new PutObjectCommand({
-                    Bucket: env.S3_PUBLIC_BUCKET_NAME,
-                    Key: timelapse.s3Key,
-                    Body: decryptedBuffer,
-                    ContentType: containerTypeToMimeType(timelapse.containerKind)
-                }));
-
-                // Generate and upload thumbnail
-                let thumbnailS3Key: string | null = null;
-                try {
-                    const thumbnailBuffer = await generateThumbnail(decryptedBuffer);
-                    thumbnailS3Key = timelapse.s3Key.replace(/\.(webm|mp4)$/, "-thumbnail.jpg");
-                    
-                    await s3.send(new PutObjectCommand({
-                        Bucket: env.S3_PUBLIC_BUCKET_NAME,
-                        Key: thumbnailS3Key,
-                        Body: thumbnailBuffer,
-                        ContentType: "image/jpeg"
-                    }));
-                }
-                catch (thumbnailError) {
-                    console.warn("(timelapse.ts)", "Failed to generate thumbnail for published timelapse:", thumbnailError);
-                    // Continue without thumbnail
-                }
-
-                await s3.send(new DeleteObjectCommand({
-                    Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    Key: timelapse.s3Key,
-                }));
-
-                const publishedTimelapse = await database.timelapse.update({
-                    where: { id: req.input.id },
-                    data: { 
-                        isPublished: true, 
-                        deviceId: null,
-                        thumbnailS3Key: thumbnailS3Key,
-                        visibility: req.input.visibility
-                    },
-                    include: TIMELAPSE_INCLUDES
-                });
-
-                return apiOk({ timelapse: dtoOwnedTimelapse(publishedTimelapse) });
-            }
-            catch (error) {
-                console.error("(timelapse.ts)", "Failed to decrypt and publish timelapse:", error);
-                return apiErr("ERROR", "Failed to process timelapse for publishing");
-            }
+            return apiOk({});
         }),
 
     findByUser: os.findByUser
@@ -494,42 +346,24 @@ export default os.router({
                 return apiErr("ERROR", "You don't have a Hackatime account! Create one at https://hackatime.hackclub.com.");
 
             const hackatime = new HackatimeUserApi(userApiKey);
-            
-            const snapshots = await database.snapshot.findMany({
-                where: { timelapseId: timelapse.id }
-            });
 
-            const heartbeats: WakaTimeHeartbeat[] = snapshots.map(x => ({
+            const heartbeats: WakaTimeHeartbeat[] = timelapse.snapshots.map(x => ({
                 entity: `${timelapse.name} (${timelapse.id})`,
-                time: x.createdAt.getTime() / 1000,
+                time: x.getTime() / 1000,
                 category: "timelapsing",
                 type: "timelapse",
-                user_agent: "wakatime/lapse (lapse) lapse/0.1.0 lapse/0.1.0",
+                user_agent: "wakatime/lapse (lapse) lapse/2.0.0 lapse/2.0.0",
                 project: req.input.hackatimeProject
             }));
 
             const assignedHeartbeats = await hackatime.pushHeartbeats(heartbeats);
             const failedHeartbeat = assignedHeartbeats.responses.find(x => x[1] < 200 || x[1] > 299);
             if (failedHeartbeat) {
-                logError("timelapse.syncWithHackatime", "Couldn't sync heartbeat!", { failedHeartbeat, snapshots, heartbeats });
+                logError("Couldn't sync heartbeat!", { failedHeartbeat, heartbeats, snapshots: timelapse.snapshots });
                 return apiErr("HACKATIME_ERROR", `Hackatime returned HTTP ${failedHeartbeat[1]} for heartbeat at ${failedHeartbeat[0]?.time}! Report this at https://github.com/hackclub/lapse.`);
             }
 
-            logInfo("timelapse.syncWithHackatime", `Synchronizing ${heartbeats.length} heartbeats with ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}`);
-            await Promise.all(
-                assignedHeartbeats.responses
-                    .map(x => x[0])
-                    .map(async (heartbeat) => {
-                        const snapshot = closest(heartbeat.time!, snapshots, x => x.createdAt.getTime() / 1000);
-                        
-                        await database.snapshot.update({
-                            where: { id: snapshot.id },
-                            data: { heartbeatId: heartbeat.id }
-                        });
-                    })
-            );
-
-            logInfo("timelapse.syncWithHackatime", `All heartbeats synchronized with snapshots for ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}!`);
+            logInfo(`All heartbeats synchronized with snapshots for ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}!`);
 
             const updatedTimelapse = await database.timelapse.update({
                 where: { id: req.input.id, ownerId: caller.id },

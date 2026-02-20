@@ -14,8 +14,14 @@ enum PermissionLevel {
 }
 
 enum TimelapseVisibility {
+  /// The timelapse should only be accessible from owner views or via direct URI access.
   UNLISTED
+
+  /// The timelapse can be accessed via any means of discovery.
   PUBLIC
+
+  /// Equivalent to `UNLISTED`, but cannot be changed, and indicates a timelapse that cannot be played.
+  FAILED_PROCESSING
 }
 
 enum VideoContainerKind {
@@ -108,6 +114,12 @@ model DraftTimelapse {
   /// Timestamps for each frame in the timelapse.
   snapshots               DateTime[]
 
+  /// If defined, this draft is currently in the process of being published. It should be considered immutable and hidden - draft timelapses
+  /// that are being published usually get removed after processing, but in the event of an error, this field may be changed back to `null`,
+  /// with the associated timelapse being marked as invalid.
+  associatedTimelapseId   String?          @unique
+  associatedTimelapse     Timelapse?       @relation(fields: [associatedTimelapseId], references: [id])
+
   deviceId              String
   device                KnownDevice        @relation(fields: [deviceId], references: [id])
 
@@ -123,10 +135,10 @@ model Timelapse {
   /// The date when the timelapse was created.
   createdAt             DateTime
 
-  /// The S3 key that points to the video.
-  s3Key                 String
+  /// The S3 key that points to the video. This may be `null` if `associatedJobId` is not `null`, which indicates the timelapse is still being processed.
+  s3Key                 String?
 
-  /// The S3 key that points to the thumbnail image.
+  /// The S3 key that points to the thumbnail image. This may be `null` if `associatedJobId` is not `null`, which indicates the timelapse is still being processed.
   thumbnailS3Key        String?
 
   /// The Hackatime project key associated with the timelapse. If `null`, the timelapse has not
@@ -142,12 +154,6 @@ model Timelapse {
   /// Specifies whether the timelapse can only be accessed via its URL.
   visibility            TimelapseVisibility     @default(UNLISTED)
 
-  /// Determines whether the timelapse is decrypted and can be accessed by users other than the owner.
-  isPublished           Boolean                 @default(false)
-
-  /// The container type used to store the video.
-  containerKind         VideoContainerKind
-
   /// The amount of seconds that this timelapse lasts for. This is inferred from the snapshots.
   duration              Float
 
@@ -158,10 +164,12 @@ model Timelapse {
   /// (e.g. encoding). The state of the job can be queried via BullMQ.
   associatedJobId       String?
 
+
   ownerId               String
   owner                 User                @relation(fields: [ownerId], references: [id])
 
   comments              Comment[]
+  associatedDraft       DraftTimelapse?
 }
 
 /// Represents a comment that belongs to a timelapse.

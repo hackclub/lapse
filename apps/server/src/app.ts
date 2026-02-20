@@ -9,10 +9,10 @@ import type { Context } from "@/router.js"
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
+import draftTimelapse from "@/routers/draftTimelapse.js"
 import comment from "@/routers/comment.js"
 import developer from "@/routers/developer.js"
 import global from "@/routers/global.js"
-import snapshot from "@/routers/snapshot.js"
 import hackatime from "@/routers/hackatime.js"
 
 const handler = new OpenAPIHandler(
@@ -22,8 +22,8 @@ const handler = new OpenAPIHandler(
         comment,
         developer,
         global,
-        snapshot,
-        hackatime
+        hackatime,
+        draftTimelapse
     }),
     {
         interceptors: [

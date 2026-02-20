@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { oneOf } from "@hackclub/lapse-shared";
 
@@ -11,7 +11,7 @@ import { env } from "@/env.js";
 import { database } from "@/db.js";
 
 import { apiOk, apiErr, lapseId, Err } from "@/common.js";
-import { logError } from "@/logging.js";
+import { logInfo } from "@/logging.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { actorEntitledTo, type Actor } from "@/ownership.js";
 
@@ -35,7 +35,7 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse): DraftTimelapse {
         description: entity.description,
         name: entity.name,
         editList: entity.editList.map(x => EditListEntrySchema.parse(x)),
-        sessions: entity.sessions
+        sessions: entity.sessions.map(x => `${env.S3_PUBLIC_URL_ENCRYPTED}/${x}`)
     };
 }
 
@@ -50,27 +50,22 @@ export async function deleteDraftTimelapse(id: string, actor: Actor) {
     if (!actorEntitledTo(draft, actor))
         return new Err("NO_PERMISSION", "You don't have permission to delete this timelapse");
 
+    // As the deletion of the draft is explicit (as opposed to implicit, which happens when we convert a draft to a published timelapse),
+    // we can safely remove the S3 resources associated with it.
     for (const session of draft.sessions) {
+        logInfo(`Deleting session ${session} from S3.`);
 
-    }
-
-    await s3.send(new DeleteObjectCommand({
-        Bucket: bucket,
-        Key: timelapse.s3Key
-    }));
-
-    if (timelapse.thumbnailS3Key) {
         await s3.send(new DeleteObjectCommand({
-            Bucket: bucket,
-            Key: timelapse.thumbnailS3Key
+            Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+            Key: session
         }));
     }
 
-    await database.timelapse.delete({
-        where: { id: timelapse.id }
+    await database.draftTimelapse.delete({
+        where: { id }
     });
 
-    logInfo("timelapse", `Timelapse ${timelapseId} deleted.`);
+    logInfo(`Draft timelapse ${id} deleted.`);
 }
 
 export default os.router({
@@ -174,13 +169,10 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            try {
-                await deleteTimelapse(req.input.id, caller);
-                return apiOk({});
-            }
-            catch (error) {
-                logError("timelapse.delete", "Failed to delete timelapse!", { error });
-                return apiErr("ERROR", "Failed to delete timelapse");
-            }
+            const res = await deleteDraftTimelapse(req.input.id, caller);
+            if (res instanceof Err)
+                return res.toApiError();
+
+            return apiOk({});
         })
 });

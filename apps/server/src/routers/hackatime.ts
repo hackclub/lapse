@@ -50,7 +50,7 @@ export default os.router({
                 return apiOk({ projects: filteredProjects });
             }
             catch (error) {
-                logError("user.getAllHackatimeProjects", "Failed to fetch Hackatime projects", { error, userId: caller.id });
+                logError("Failed to fetch Hackatime projects", { error, userId: caller.id });
                 return apiOk({ projects: [] });
             }
         }),

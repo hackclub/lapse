@@ -1,11 +1,5 @@
 {
   "extends": "@tsconfig/node24/tsconfig.json",
-  "exclude": [
-    "./prisma.config.ts",
-    "./prisma/**/*.ts",
-    "./dist",
-    "./etc"
-  ],
   "compilerOptions": {
     // File Layout
     "rootDir": "./src",

@@ -56,7 +56,7 @@ export default os.router({
                 .map(user => {
                     const aggregate = aggregates.find(x => x.ownerId == user.id);
                     if (!aggregate || aggregate._sum.duration === null) {
-                        logError("stats", `No aggregate found for user ID ${user.id} when assembling leaderboard.`);
+                        logError(`No aggregate found for user ID ${user.id} when assembling leaderboard.`);
                         return null;
                     }
 
@@ -79,7 +79,7 @@ export default os.router({
     recentTimelapses: os.recentTimelapses
         .handler(async (req) => {
             const timelapses = await database.timelapse.findMany({
-                where: { isPublished: true, visibility: "PUBLIC" },
+                where: { visibility: "PUBLIC" },
                 orderBy: { createdAt: "desc" },
                 include: {
                     owner: true,

@@ -3,5 +3,8 @@
 	"devDependencies": {
 		"biome": "^0.3.3",
 		"turbo": "^2.6.3"
+	},
+	"scripts": {
+		"dev:watch-all": "pnpm --parallel run watch"
 	}
 }

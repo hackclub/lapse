@@ -10,7 +10,7 @@ import { CommentSchema } from "@/contracts/comment";
  * Represents the possible visibility settings for a published timelapse.
  */
 export type TimelapseVisibility = z.infer<typeof TimelapseVisibilitySchema>;
-export const TimelapseVisibilitySchema = z.enum(["UNLISTED", "PUBLIC"]);
+export const TimelapseVisibilitySchema = z.enum(["UNLISTED", "PUBLIC", "FAILED_PROCESSING"]);
 
 /**
  * Represents supported container formats for timelapse video streams.
@@ -90,20 +90,15 @@ export const OwnedTimelapseSchema = TimelapsePayloadSchema.extend({
     comments: z.array(CommentSchema),
 
     /**
-     * The public URL that can be used to stream video data. If `isPublished` is `false`, the
-     * video data will be encrypted with a device's passkey.
+     * The public URL that can be used to stream video data. If `null`, the timelapse is still being processed.
      */
-    playbackUrl: z.url(),
+    playbackUrl: z.url().nullable(),
 
     /**
-     * The URL of the thumbnail image for this timelapse. Will be null if no thumbnail has been generated yet.
+     * The URL of the thumbnail image for this timelapse. If `null`, the timelapse is still being processed. It's recommended to derive the processing
+     * status of the timelapse from `playbackUrl`.
      */
     thumbnailUrl: z.url().nullable(),
-
-    /**
-     * The format of the video container.
-     */
-    videoContainerKind: TimelapseVideoContainerSchema,
 
     /**
      * The duration of the timelapse, in seconds. Must be non-negative.

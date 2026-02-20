@@ -105,7 +105,12 @@ export const env = {
     /**
      * The Slack API URL.
      */
-    get SLACK_API_URL() { return optional("SLACK_API_URL") || "https://slack.com/api" }
+    get SLACK_API_URL() { return optional("SLACK_API_URL") || "https://slack.com/api" },
+
+    /**
+     * The URL for the Redis database, used for job management via BullMQ.
+     */
+    get REDIS_URL() { return required("REDIS_URL") },
 };
 
 function required(name: string) {

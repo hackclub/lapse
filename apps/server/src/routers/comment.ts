@@ -40,10 +40,7 @@ export default os.router({
             const timelapse = await getTimelapseById(req.input.id, caller);
             if (timelapse instanceof Err)
                 return timelapse.toApiError();
-
-            if (!timelapse.isPublished)
-                return apiErr("ERROR", "Cannot post comments on unpublished timelapses.");
-
+            
             const comment = await database.comment.create({
                 data: {
                     authorId: caller.id,

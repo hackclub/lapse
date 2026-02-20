@@ -10,6 +10,7 @@ import { logError } from "@/logging.js";
 
 import * as db from "@/generated/prisma/client.js";
 import { deleteTimelapse } from "@/routers/timelapse.js";
+import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
 
 const os = implement(userRouterContract)
     .$context<Context>()
@@ -182,18 +183,20 @@ export default os.router({
             if (!device)
                 return apiErr("DEVICE_NOT_FOUND", "That device doesn't seem to exist!");
 
-            const timelapses = await database.timelapse.findMany({
+            // A consequence of removing a device is the permanent loss of all draft timelapses that are associated with that device that haven't been published - we
+            // lose the device key alongside the device, and such, we can never decrypt the draft.
+            const drafts = await database.draftTimelapse.findMany({
                 where: { deviceId: device.id }
             });
 
-            if (timelapses.some(x => x.ownerId != caller.id)) {
-                logError("user.removeDevice", "A timelapse has a device that is not owned by the author!", { ownerId: caller.id, timelapses });
+            if (drafts.some(x => x.ownerId != caller.id)) {
+                logError("A draft timelapse has a device that is not owned by the author!", { ownerId: caller.id, drafts });
                 return apiErr("ERROR", "That device seems to be used by another user! Please report this to @ascpixi on Slack.");
             }
 
             await Promise.all(
-                timelapses.map(async (timelapse) => {
-                    await deleteTimelapse(timelapse.id, caller);
+                drafts.map(async (timelapse) => {
+                    await deleteDraftTimelapse(timelapse.id, caller);
                 })
             );
 
