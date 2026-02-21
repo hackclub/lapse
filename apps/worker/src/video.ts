@@ -43,7 +43,7 @@ export async function probeVideo(file: string): Promise<ProbedVideo> {
  */
 export function selectDominantResolution(videos: ProbedVideo[]) {
     if (videos.length == 1)
-        return { width: videos[0]!.width, height: videos[0]!.height }; // I have NO idea why TypeScript thinks videos[0] might be undefined here.
+        return { width: videos[0].width, height: videos[0].height };
 
     const bucket = new Map<string, number>();
 
@@ -65,4 +65,23 @@ export function selectDominantResolution(videos: ProbedVideo[]) {
 
     const [width, height] = bestKey.split("x").map(Number);
     return { width, height };
+}
+
+/**
+ * Measures the duration of a video in seconds. 
+ */
+export async function measureVideoDuration(file: string) {
+    const { stdout } = await execFileAsync("ffprobe", [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        file
+    ]);
+
+    const duration = parseFloat(stdout.trim());
+
+    if (!Number.isFinite(duration) || duration <= 0)
+        throw new Error("Unable to determine valid video duration.");
+
+    return duration;
 }

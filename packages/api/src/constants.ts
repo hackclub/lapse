@@ -4,14 +4,15 @@
 // Aiming for ~6hrs of real-time footage to result in a timelapse that's ~10min long.
 
 /**
- * The *real-time* length, in milliseconds, of each frame in a timelapse.
- */
-export const TIMELAPSE_FRAME_LENGTH_MS = 2.5 * 1000;
-
-/**
- * The speed at which frames (each of which corresponds to `TIMELAPSE_FRAME_LENGTH_MS` of real-time) are played back.
+ * The speed at which frames (N of which correspond to `TIMELAPSE_FACTOR` seconds of real-time) are played back.
  */
 export const TIMELAPSE_FPS = 24;
+
+/**
+ * The amount of real-time seconds that correspond to 1 second of a timelapse. For example, a value of `4` means that 4 seconds of
+ * real-time footage will result in a one second timelapse.
+ */
+export const TIMELAPSE_FACTOR = 60; // 1 minute = 1 second
 
 /**
  * The maximum amount of frames accepted by the server. Files submitted that exceed this threshold might either fail to process or

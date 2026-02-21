@@ -35,6 +35,3 @@ function required(name: string) {
     return process.env[name];
 }
 
-function optional(name: string) {
-    return process.env[name];
-}

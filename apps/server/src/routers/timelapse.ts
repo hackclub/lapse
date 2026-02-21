@@ -2,7 +2,7 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { HeadObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { oneOf, when } from "@hackclub/lapse-shared";
-import { TIMELAPSE_FRAME_LENGTH_MS, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
+import { EditListEntrySchema, TIMELAPSE_FRAME_LENGTH_MS, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
 import { logMiddleware, requiredAuth, type Context } from "@/router.js";
@@ -214,7 +214,7 @@ export default os.router({
             })
 
             // After this job finishes, we'll get a callback on the server-side. When that happens, we'll assign the ready video to the timelapse we just created, and mark it as processed!
-            const realizeJob = await enqueueRealizeJob(id, draft.sessions, req.input.passkey);
+            const realizeJob = await enqueueRealizeJob(id, draft.sessions, req.input.passkey, draft.editList.map(x => EditListEntrySchema.parse(x)));
             if (!realizeJob.id) {
                 logWarning("We enqueued a realize job, but it does not have an ID! Something went very wrong!", { realizeJob });
             }

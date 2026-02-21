@@ -21,9 +21,6 @@
     "declaration": true,
     "declarationMap": true,
 
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-
     // Recommended Options
     "strict": true,
     "jsx": "react-jsx",

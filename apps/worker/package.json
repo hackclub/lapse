@@ -13,8 +13,10 @@
     "watch": "tsc -w"
   },
   "dependencies": {
-    "@hackclub/lapse-shared": "workspace:*",
+    "@aws-sdk/client-s3": "^3.994.0",
+    "@aws-sdk/lib-storage": "^3.995.0",
     "@hackclub/lapse-api": "workspace:*",
+    "@hackclub/lapse-shared": "workspace:*",
     "bullmq": "^5.69.3",
     "dotenv": "^17.2.3",
     "ioredis": "^5.9.2",
