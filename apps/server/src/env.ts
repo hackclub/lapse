@@ -111,6 +111,11 @@ export const env = {
      * The URL for the Redis database, used for job management via BullMQ.
      */
     get REDIS_URL() { return required("REDIS_URL") },
+
+    /**
+     * The port the HTTP web-server will listen on.
+     */
+    get PORT() { return optional("PORT") ?? "3123" }
 };
 
 function required(name: string) {

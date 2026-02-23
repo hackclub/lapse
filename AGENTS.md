@@ -10,7 +10,7 @@ Database models are defined in @apps/server/prisma/schema.prisma.
 API contracts are defined in @packages/api/src/contracts.
 Server endpoints are implemented in @apps/server/src/routers.
 
-When a user records a video, it first becomes a *draft timelapse* (`DraftTimelapse`). The video content of draft timelapses is always encrypted with a private key only known by the user - the server only serves to synchronize them with different user devices. This allow users to record timelapses on one device, and then edit them on the other. As draft timelapses may potentially hold PII, they must always be encrypted.
+When a user records a video, it first becomes a *draft timelapse* (`DraftTimelapse`). The video content of draft timelapses is always encrypted with a private key only known by the user - the server only serves to synchronize them with different user devices. This allows users to record timelapses on one device, and then edit them on the other. As draft timelapses may potentially hold PII, they must always be encrypted.
 
 A user can choose to publish a draft timelapse, creating a `Timelapse` as a result. This involves transcoding and applying edit lists to the video via the `worker`. The contents of a regular, published timelapse are not encrypted and may be viewed by any other user.
 

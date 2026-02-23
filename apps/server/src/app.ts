@@ -16,6 +16,7 @@ import comment from "@/routers/comment.js"
 import developer from "@/routers/developer.js"
 import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
+import { env } from "@/env.js"
 
 dotenv.config();
 
@@ -62,7 +63,7 @@ fastify.all("/api/*", async (req, reply) => {
     }
 });
 
-fastify.listen({ port: 3000 })
+fastify.listen({ port: parseInt(env.PORT) })
     .then(address => {
         const logo = [
             0, 1, 1, 1, 1, 2, 2, 0, -1,

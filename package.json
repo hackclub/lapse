@@ -3,6 +3,6 @@
 	"scripts": {
 		"dev": "pnpm --parallel run dev",
 		"dev:watch-all": "pnpm --parallel run watch",
-		"dev:setup-env": "pnpm install --filter @hackclub/lapse-devscripts && pnpm run --filter @hackclub/lapse-devscripts dev:setup-env"
+		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env"
 	}
 }

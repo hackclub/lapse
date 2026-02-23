@@ -2,13 +2,11 @@
 /**
  * Generates build-time information including commit ID, build date, and contributors.
  * This script is run at build time to capture the state of the repository.
- * 
- * Uses GitHub API when git is unavailable (e.g., in Docker builds).
  */
 
 import { execSync } from "child_process";
-import { writeFileSync } from "fs";
-import { join } from "path";
+import { writeFileSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
 
 interface Contributor {
     name: string;
@@ -241,7 +239,9 @@ async function main() {
     };
 
     const outputPath = join(__dirname, "../src/generated/build-info.json");
+    mkdirSync(dirname(outputPath), { recursive: true });
     writeFileSync(outputPath, JSON.stringify(buildInfo, null, 2));
+    
     console.log(`Build info written to ${outputPath}`);
     console.log(`  Commit: ${commitShort}`);
     console.log(`  Date: ${new Date(buildDate).toISOString()}`);

@@ -14,16 +14,20 @@ import { sleep } from "./common/util.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const DOCKER_STARTUP_DELAY = 1500;
-
 const DEFAULT_DATABASE_PORT = 5432;
-const DEFAULT_WEBSERVER_PORT = 3000;
+const DEFAULT_SERVER_PORT = 3123;
+const DEFAULT_REDIS_PORT = 6379;
 
 let databasePort = DEFAULT_DATABASE_PORT;
-let webserverPort = DEFAULT_WEBSERVER_PORT;
+let serverPort = DEFAULT_SERVER_PORT;
+let redisPort = DEFAULT_REDIS_PORT;
 
 function getDatabaseUrl() {
     return `postgresql://postgres:postgres@localhost:${databasePort}/lapse?schema=public`;
+}
+
+function getRedisUrl() {
+    return `redis://localhost:${redisPort}`;
 }
 
 let S3_ENDPOINT = "s3.localhost.localstack.cloud:4566";
@@ -33,9 +37,14 @@ let S3_ACCESS_KEY_ID = "test";
 let S3_SECRET_ACCESS_KEY = "test";
 
 const repoRoot = resolve(__dirname, "..", "..", "..");
-const webDir = resolve(__dirname, "..");
+const devscriptsDir = resolve(repoRoot, "apps", "devscripts");
+const clientDir = resolve(repoRoot, "apps", "client");
+const serverDir = resolve(repoRoot, "apps", "server");
+const workerDir = resolve(repoRoot, "apps", "worker");
 
 let composeFile: string;
+
+const spinner = ora({ color: "cyan" });
 
 async function resolveComposeFile() {
 	const lapseDevComposeFile = resolve(repoRoot, "lapse.dev.yaml");
@@ -103,10 +112,7 @@ async function askForPort(name: string, defaultPort: number): Promise<number> {
 }
 
 async function checkDockerRunning() {
-	const spinner = ora({
-		text: chalk.gray("Checking Docker daemon status..."),
-		color: "cyan",
-	}).start();
+	spinner.start(chalk.gray("Checking Docker daemon status..."));
 
 	try {
 		await execa("docker", ["ps"], { cwd: repoRoot });
@@ -126,10 +132,7 @@ async function checkDockerRunning() {
 };
 
 async function startDockerCompose() {
-	const spinner = ora({
-		text: chalk.gray("Starting Docker Compose services..."),
-		color: "cyan"
-	}).start();
+	spinner.start(chalk.gray("Starting Docker Compose services..."));
 
 	try {
 		await execa("docker", ["compose", "-f", composeFile, "up", "-d"], {
@@ -146,10 +149,7 @@ async function startDockerCompose() {
 };
 
 async function stopDockerCompose() {
-	const spinner = ora({
-		text: chalk.gray("Stopping Docker Compose services..."),
-		color: "cyan"
-	}).start();
+	spinner.start(chalk.gray("Stopping Docker Compose services..."));
 
 	try {
 		await execa("docker", ["compose", "-f", composeFile, "stop"], {
@@ -165,10 +165,7 @@ async function stopDockerCompose() {
 };
 
 async function downDockerCompose() {
-	const spinner = ora({
-		text: chalk.gray("Stopping Docker Compose services..."),
-		color: "cyan",
-	}).start();
+	spinner.start(chalk.gray("Stopping Docker Compose services..."));
 
 	try {
 		await execa("docker", ["compose", "-f", composeFile, "down"], {
@@ -183,33 +180,38 @@ async function downDockerCompose() {
 };
 
 async function waitForDatabase() {
-	const spinner = ora({
-		text: chalk.gray(`Waiting for database to be ready (${DOCKER_STARTUP_DELAY / 1000}s)...`),
-		color: "yellow",
-	}).start();
+	spinner.start(chalk.gray("Waiting for database to be ready..."));
 
-	const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-	let frameIndex = 0;
-	const interval = setInterval(() => {
-		spinner.text = chalk.gray(`Waiting for database ${frames[frameIndex]} `);
-		frameIndex = (frameIndex + 1) % frames.length;
-	}, 100);
+	const MAX_RETRIES = 30;
+	const RETRY_INTERVAL = 1000;
 
-	await sleep(DOCKER_STARTUP_DELAY);
+	for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+		try {
+			await execa("docker", [
+				"compose", "-f", composeFile,
+				"exec", "lapse-db",
+				"pg_isready", "-U", "postgres",
+			], { cwd: repoRoot });
 
-	clearInterval(interval);
-	spinner.succeed(chalk.green("Database should be ready"));
-};
+			spinner.succeed(chalk.green("Database is ready"));
+			return;
+		}
+		catch {
+			spinner.text = chalk.gray(`Waiting for database to be ready (attempt ${attempt}/${MAX_RETRIES})...`);
+			await sleep(RETRY_INTERVAL);
+		}
+	}
+
+	spinner.fail(chalk.red("Database did not become ready in time"));
+	throw new Error("Database did not become ready in time");
+}
 
 async function pushPrismaSchema() {
-	const spinner = ora({
-		text: chalk.gray("Pushing Prisma schema to database..."),
-		color: "magenta",
-	}).start();
+	spinner.start(chalk.gray("Pushing Prisma schema to database..."));
 
 	try {
 		await execa("pnpm", ["db:push"], {
-			cwd: webDir,
+			cwd: serverDir,
 			env: { ...process.env, DATABASE_URL: getDatabaseUrl() },
 		});
 
@@ -246,27 +248,37 @@ async function guideR2Setup() {
 	return { accessKeyId, secretAccessKey, s3_endpoint, public_url_public, public_url_encrypted };
 }
 
-async function updateEnvFile(envVars: Record<string, string>) {
-	const spinner = ora({
-		text: chalk.gray(`Updating .env file...`),
-		color: "cyan",
-	}).start();
+async function writeEnvFile(dir: string, envVars: Record<string, string>) {
+	let env = await fs.readFile(resolve(dir, ".env.example"), "utf-8");
+	for (const [key, value] of Object.entries(envVars)) {
+		env = env.replace(new RegExp(`^${key}=.*$`, "m"), `${key}=${value}`);
+	}
 
-	let env = "";
+	await fs.writeFile(resolve(dir, ".env"), env);
+}
+
+async function updateEnvFiles(envVars: {
+	server: Record<string, string>;
+	client: Record<string, string>;
+	worker: Record<string, string>;
+}) {
+	spinner.start(chalk.gray(`Updating .env files...`));
+
 	try {
-		env = await fs.readFile(resolve(webDir, ".env.example"), "utf-8");
-		for (const [key, value] of Object.entries(envVars)) {
-			env = env.replace(new RegExp(`^${key}=.*$`, "m"), `${key}=${value}`);
-		}
-
-		await fs.writeFile(resolve(webDir, ".env"), env);
+		await Promise.all([
+			writeEnvFile(serverDir, envVars.server),
+			writeEnvFile(clientDir, envVars.client),
+			writeEnvFile(workerDir, envVars.worker),
+		]);
+		
 		spinner.succeed(chalk.green("Environment variables updated successfully"));
+		logInfo(`Updated .env files for ${chalk.italic("server")}, ${chalk.italic("client")}, and ${chalk.italic("worker")}`);
 	}
 	catch (error) {
 		spinner.fail(chalk.red("Failed to update environment variables"));
 		throw error;
 	}
-};
+}
 
 /**
  * Adds a Localstack service to an existing Docker Compose file.
@@ -291,7 +303,7 @@ function buildLocalstackDockerComposeSection(composeFileContent: string, localst
 		],
 		volumes: [
 			"/var/run/docker.sock:/var/run/docker.sock",
-			"./init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh",
+			"./apps/devscripts/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh",
 			...(localstackImage.includes("persist") ? ["./localstack-data:/persisted-data"] : []),
 		],
 	};
@@ -305,21 +317,28 @@ function buildLocalstackDockerComposeSection(composeFileContent: string, localst
 
 
 async function updateDockerComposeFile(localstackImage: string | null) {
-	const spinner = ora({
-		text: chalk.gray(`Updating docker-compose.dev.yaml...`),
-		color: "cyan",
-	}).start();
+	spinner.start(chalk.gray(`Updating docker-compose.dev.yaml...`));
 
 	let composeContent = await fs.readFile(composeFile, "utf-8");
 	const composeObject = yaml.load(composeContent) as Record<string, unknown>;
 
+	const services = (composeObject["services"] ?? {}) as Record<string, Record<string, unknown>>;
+
 	// Update database port if non-default
-	if (databasePort !== DEFAULT_DATABASE_PORT && composeObject["services"]) {
-		const services = composeObject["services"] as Record<string, { ports?: string[] }>;
-		if (services["lapse-db"]?.ports) {
-			services["lapse-db"].ports = [`${databasePort}:5432`];
-		}
+	if (databasePort !== DEFAULT_DATABASE_PORT && services["lapse-db"]?.["ports"]) {
+		(services["lapse-db"] as { ports: string[] }).ports = [`${databasePort}:5432`];
 	}
+
+	services["lapse-redis"] = {
+		image: "redis:7-alpine",
+		container_name: "lapse-redis",
+		ports: [`${redisPort}:6379`],
+		volumes: ["redis-data:/data"],
+	};
+
+	const volumes = (composeObject["volumes"] ?? {}) as Record<string, unknown>;
+	volumes["redis-data"] = null;
+	composeObject["volumes"] = volumes;
 
 	composeContent = yaml.dump(composeObject, {
 		indent: 2,
@@ -331,7 +350,7 @@ async function updateDockerComposeFile(localstackImage: string | null) {
 		composeContent = buildLocalstackDockerComposeSection(composeContent, localstackImage);
 
 		// Ensure the init-s3.sh script is executable (required for LocalStack init hooks)
-		const initS3Path = resolve(repoRoot, "init-s3.sh");
+		const initS3Path = resolve(devscriptsDir, "init-s3.sh");
 		await fs.chmod(initS3Path, 0o755);
 	}
 
@@ -357,7 +376,8 @@ async function runSetup() {
 
 		logStep(++currentStep, TOTAL_STEPS, "Configuring ports...");
 		databasePort = await askForPort("database", DEFAULT_DATABASE_PORT);
-		webserverPort = await askForPort("web server", DEFAULT_WEBSERVER_PORT);
+		serverPort = await askForPort("API server", DEFAULT_SERVER_PORT);
+		redisPort = await askForPort("Redis", DEFAULT_REDIS_PORT);
 
 		logStep(++currentStep, TOTAL_STEPS, "Configuring storage backend...");
 		localstackORr2 = await askLocalstackOrR2();
@@ -396,16 +416,28 @@ async function runSetup() {
 		const SLACK_BOT_TOKEN = await askForInput("Enter Slack bot token (xoxb-...): ");
 
 		logStep(++currentStep, TOTAL_STEPS, "Updating environment variables...");
-		await updateEnvFile({
-			"DATABASE_URL": getDatabaseUrl(),
-			"PORT": webserverPort.toString(),
-			"HACKATIME_REDIRECT_URI": `http://localhost:${webserverPort}/api/auth-hackatime`,
-			"SLACK_BOT_TOKEN": SLACK_BOT_TOKEN,
-			"S3_ENDPOINT": S3_ENDPOINT,
-			"S3_ACCESS_KEY_ID": S3_ACCESS_KEY_ID,
-			"S3_SECRET_ACCESS_KEY": S3_SECRET_ACCESS_KEY,
-			"S3_PUBLIC_URL_PUBLIC": S3_PUBLIC_URL_PUBLIC,
-			"S3_PUBLIC_URL_ENCRYPTED": S3_PUBLIC_URL_ENCRYPTED,
+		await updateEnvFiles({
+			server: {
+				"DATABASE_URL": getDatabaseUrl(),
+				"REDIS_URL": getRedisUrl(),
+				"PORT": serverPort.toString(),
+				"HACKATIME_REDIRECT_URI": `http://localhost:${serverPort}/api/auth-hackatime`,
+				"SLACK_BOT_TOKEN": SLACK_BOT_TOKEN,
+				"S3_ENDPOINT": S3_ENDPOINT,
+				"S3_ACCESS_KEY_ID": S3_ACCESS_KEY_ID,
+				"S3_SECRET_ACCESS_KEY": S3_SECRET_ACCESS_KEY,
+				"S3_PUBLIC_URL_PUBLIC": S3_PUBLIC_URL_PUBLIC,
+				"S3_PUBLIC_URL_ENCRYPTED": S3_PUBLIC_URL_ENCRYPTED,
+			},
+			client: {
+				"NEXT_PUBLIC_API_URL": `http://localhost:${serverPort}`,
+			},
+			worker: {
+				"REDIS_URL": getRedisUrl(),
+				"S3_ENDPOINT": S3_ENDPOINT,
+				"S3_ACCESS_KEY_ID": S3_ACCESS_KEY_ID,
+				"S3_SECRET_ACCESS_KEY": S3_SECRET_ACCESS_KEY,
+			},
 		});
 
 		divider();
@@ -414,7 +446,8 @@ async function runSetup() {
 		console.log();
 		console.log(chalk.white("  Next steps:"));
 		console.log(chalk.gray("  1. Run ") + chalk.cyan("pnpm turbo run dev") + chalk.gray(" to start the development server"));
-		console.log(chalk.gray("  2. Open ") + chalk.cyan(`http://localhost:${webserverPort}`) + chalk.gray(" in your browser"));
+		console.log(chalk.gray("  2. The client will be available at ") + chalk.cyan("http://localhost:3000"));
+		console.log(chalk.gray("  3. The API server will be available at ") + chalk.cyan(`http://localhost:${serverPort}`));
 		divider();
 
 	}

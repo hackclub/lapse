@@ -5,6 +5,13 @@
   "private": true,
   "type": "module",
   "main": "dist/app.js",
+  "types": "dist/app.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/app.d.ts",
+      "default": "./dist/app.js"
+    }
+  },
   "author": "Hack Club",
   "license": "ISC",
   "packageManager": "pnpm@10.25.0",
