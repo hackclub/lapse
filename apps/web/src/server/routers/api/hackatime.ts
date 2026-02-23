@@ -97,7 +97,8 @@ export default router({
                 include: TIMELAPSE_INCLUDES,
                 where: {
                     ownerId: subject.id,
-                    hackatimeProject: req.input.projectKey
+                    hackatimeProject: req.input.projectKey,
+                    visibility: "PUBLIC"
                 }
             });
 
