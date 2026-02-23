@@ -1,8 +1,8 @@
 {
   "name": "@hackclub/lapse-shared",
+  "version": "2.0.0",
   "description": "Code shared between unrelated packages in Lapse",
   "private": true,
-  "version": "2.0.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,16 +13,14 @@
     }
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && tsc-alias --resolve-full-paths",
     "watch": "tsc -b --watch",
     "prepare": "pnpm run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "packageManager": "pnpm@10.25.0",
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
+    "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3"
   }
 }

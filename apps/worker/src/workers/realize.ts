@@ -62,38 +62,14 @@ export const RealizeJobOutputsSchema = z.object({
     timelapseId: z.string(),
 
     /**
-     * The resulting data or an error, depending on the state of the job.
+     * The S3 key for the video, stored in the public S3 bucket, shared by both the server and the worker.
      */
-    result: z.discriminatedUnion("success", [
-        z.object({
-            /**
-             * `true`; the job carried out successfully.
-             */
-            success: z.literal(true),
+    videoKey: z.string(),
 
-            /**
-             * The S3 key for the video, stored in the public S3 bucket, shared by both the server and the worker.
-             */
-            videoKey: z.string(),
-
-            /**
-             * The S3 key for the thumbnail, stored in the public S3 bucket, shared by both the server and the worker.
-             */
-            thumbnailKey: z.string()
-        }),
-
-        z.object({
-            /**
-             * `false`; processing has failed, and the associated timelapse entity's visibility should be set to `FAILED_PROCESSING`.
-             */
-            success: z.literal(false),
-
-            /**
-             * An internal error message that should be passed to the server log.
-             */
-            error: z.string()
-        })
-    ])
+    /**
+     * The S3 key for the thumbnail, stored in the public S3 bucket, shared by both the server and the worker.
+     */
+    thumbnailKey: z.string()
 });
 
 /**
@@ -107,7 +83,7 @@ export const REALIZE_JOB_QUEUE_NAME = "lapse-realize";
 async function execAndLog(log: JobLogger, name: string, args: string[]) {
     log.info(`invoking: ${name} ${args.join(" ")}`);
 
-    return await new Promise<Error | null>(resolve => {
+    return await new Promise<void>((resolve, reject) => {
         execFile(name, args, (error, stdout, stderr) => {
             log.error("stdout:");
             for (const line of stdout.split("\n")) {
@@ -121,12 +97,12 @@ async function execAndLog(log: JobLogger, name: string, args: string[]) {
 
             if (error) {
                 log.error(`${name} failed! ${error.message}, code=${error.code}, errno=${error.errno}`);
-                resolve(error);
+                reject(error);
                 return;
             }
 
             log.info(`${name} exited successfully!`);
-            resolve(null);
+            resolve();
         });
     });
 }
@@ -152,10 +128,9 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 encryptedBuffer = Buffer.from(await res.arrayBuffer());
             }
             catch (err) {
-                const error = `Could not retrieve session ${sessionUrl}; ${err instanceof Error ? err.message : err}`;
-
-                log.error(error);
-                return { timelapseId, result: { success: false, error } };
+                throw log.echo(
+                    new Error(`Could not retrieve session ${sessionUrl}; ${err instanceof Error ? err.message : err}`, { cause: err })
+                );
             }
 
             let decryptedBuffer: Buffer;
@@ -164,10 +139,9 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 decryptedBuffer = decryptVideo(encryptedBuffer, timelapseId, input.passkey);
             }
             catch (err) {
-                const error = `Could not decrypt session ${sessionUrl}; ${err instanceof Error ? err.message : err}`;
-                
-                log.error(error);
-                return { timelapseId, result: { success: false, error } };
+                throw log.echo(
+                    new Error(`Could not decrypt session ${sessionUrl}; ${err instanceof Error ? err.message : err}`, { cause: err })
+                );
             }
 
             const sessionPath = path.join(tmp, `session-${i}.webm`); // assuming webm here - but ffmpeg should be able to figure that out from the file headers
@@ -192,7 +166,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
         const normalizeFilters = sessions
             .map((_, i) => (
                 `[${i}:v]` + // input i, access video stream
-                `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=decrease,` +
+                `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=increase,` +
                 `pad=${resolution.width}:${resolution.height}:(ow-iw)/2:(oh-ih)/2,` +
                 `fps=${TIMELAPSE_FPS},format=yuv420p[v${i}]` // output goes to "v${i}"
             ))
@@ -257,7 +231,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
         const outputPath = path.join(tmp, "video.mp4");
         const thumbOutputPath = path.join(tmp, "thumbnail.avif");
 
-        const encodeErr = await execAndLog(log, "ffmpeg", [
+        await execAndLog(log, "ffmpeg", [
             // input definitions
             ...sessions.flatMap(x => [
                 "-fflags", "+discardcorrupt", // discard corrupted packets (as opposed to failing)
@@ -283,11 +257,6 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             outputPath
         ]);
 
-        if (encodeErr) {
-            // Uh oh... something went wrong during encoding.
-            return { timelapseId, result: { success: false, error: encodeErr.message } };
-        }
-
         // Thumbnail generation - we opt for a simple approach where we just get the frame in the middle of the video.
         const thumbnailTimestamp = (await measureVideoDuration(outputPath)) / 2;
 
@@ -302,35 +271,39 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             "-y"
         ];
 
-        const thumbErr = await execAndLog(log, "ffmpeg", [
-            ...baseThumbnailArgs,
-            "-c:v", "libaom-av1", // we use AVIF for our thumbnails as it's Baseline 2024
-            "-still-picture", "1",
-            "-crf", "35", // higher = smaller file
-            "-b:v", "0", // required for CRF-only mode
-            "-cpu-used", "4", // effort to put into the encode, lower = higher quality but slower
-            "-row-mt", "1",
-            "-pix_fmt", "yuv420p",
-            thumbOutputPath
-        ]);
-
-        if (thumbErr) {
+        try {
+            await execAndLog(log, "ffmpeg", [
+                ...baseThumbnailArgs,
+                "-c:v", "libaom-av1", // we use AVIF for our thumbnails as it's Baseline 2024
+                "-still-picture", "1",
+                "-crf", "35", // higher = smaller file
+                "-b:v", "0", // required for CRF-only mode
+                "-cpu-used", "4", // effort to put into the encode, lower = higher quality but slower
+                "-row-mt", "1",
+                "-pix_fmt", "yuv420p",
+                thumbOutputPath
+            ]);
+        }
+        catch (err) {
             // Hm. Something went wrong when generating our thumbnail. Try JPEG.
             log.warn("could not generate AVIF thumbnail; trying JPEG");
 
             thumbnailContentType = "image/jpeg";
-            const thumbErr = await execAndLog(log, "ffmpeg", [
-                ...baseThumbnailArgs,
-                "-c:v", "mjpeg",
-                "-q:v", "5",
-                "-pix_fmt", "yuvj420p",
-                thumbOutputPath
-            ]);
 
-            if (thumbErr) {
+            try {
+                await execAndLog(log, "ffmpeg", [
+                    ...baseThumbnailArgs,
+                    "-c:v", "mjpeg",
+                    "-q:v", "5",
+                    "-pix_fmt", "yuvj420p",
+                    thumbOutputPath
+                ]);
+            }
+            catch (err) {
                 // Well... we can't really proceed without a thumbnail.
-                log.error("JPEG fallback for thumbnail failed, cannot proceed");
-                return { timelapseId, result: { success: false, error: `Thumbnail generation failed; ${thumbErr.message}` } };
+                throw log.echo(
+                    new Error(`Could not generate thumbnail. ${err}`, { cause: err })
+                );
             }
 
             log.info("JPEG fallback for thumbnail was successful!");
@@ -354,8 +327,9 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             }).done();
         }
         catch (err) {
-            log.error(`couldn't upload video to S3! ${err}`);
-            return { timelapseId, result: { success: false, error: `S3 video upload failed. ${err}` } };
+            throw log.echo(
+                new Error(`S3 video upload failed. ${err}`, { cause: err })
+            );
         }
 
         try {
@@ -370,8 +344,9 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             }).done();
         }
         catch (err) {
-            log.error(`couldn't upload thumbnail to S3! ${err}`);
-            return { timelapseId, result: { success: false, error: `S3 thumbnail upload failed. ${err}` } };
+            throw log.echo(
+                new Error(`S3 thumbnail upload failed. ${err}`, { cause: err })
+            );
         }
         
         try {
@@ -391,11 +366,8 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
         // be notified of our ready job afterwards.
         return {
             timelapseId,
-            result: {
-                success: true,
-                videoKey,
-                thumbnailKey
-            }
+            videoKey,
+            thumbnailKey
         };
     },
     { connection: redis }

@@ -39,7 +39,10 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse): DraftTimelapse {
     };
 }
 
-export async function deleteDraftTimelapse(id: string, actor: Actor) {
+/**
+ * Deletes a draft timelapse alongside all of its associated S3 resources. Does *not* delete any other database object.
+ */
+export async function deleteDraftTimelapse(id: string, actor: Actor): Promise<Err | void> {
     const draft = await database.draftTimelapse.findFirst({
         where: { id }
     });

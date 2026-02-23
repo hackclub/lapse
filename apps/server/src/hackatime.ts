@@ -199,7 +199,7 @@ class HackatimeBase {
         });
 
         if (!req.ok) {
-            logError("hackatime", "API request failed!", { req, method, params });
+            logError("API request failed!", { req, method, params });
             throw new Error(`Hackatime API request failed with HTTP ${req.status}`);
         }
 

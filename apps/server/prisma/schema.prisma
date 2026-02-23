@@ -164,7 +164,6 @@ model Timelapse {
   /// (e.g. encoding). The state of the job can be queried via BullMQ.
   associatedJobId       String?
 
-
   ownerId               String
   owner                 User                @relation(fields: [ownerId], references: [id])
 

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
 import { HeadObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { oneOf, when } from "@hackclub/lapse-shared";
-import { EditListEntrySchema, TIMELAPSE_FRAME_LENGTH_MS, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
+import { oneOf } from "@hackclub/lapse-shared";
+import { EditListEntrySchema, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
 import { logMiddleware, requiredAuth, type Context } from "@/router.js";
@@ -122,6 +122,7 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
     logInfo(`Timelapse ${timelapseId} (${timelapse.name}) deleted.`, { timelapse });
 }
 
+
 /**
  * Finds a timelapse by its ID.
  */
@@ -134,10 +135,37 @@ export async function getTimelapseById(id: string, actor: Actor): Promise<Result
     if (!timelapse)
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
 
-    if (!actorEntitledTo(timelapse, actor))
+    // Only owners and/or administrators can view timelapses that have failed processing OR are still being processed.
+    if (
+        !actorEntitledTo(timelapse, actor) && (
+            timelapse.visibility === "FAILED_PROCESSING" ||
+            timelapse.associatedJobId != null
+        )
+    ) {
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
+    }
 
     return dtoTimelapse(timelapse, actor);
+}
+
+/**
+ * Computes the length of a timelapse by its snapshots. A snapshot is a timestamp of when a video frame was captured.
+ */
+export function durationBySnapshots(snapshots: Date[]): number {
+    const TOLERANCE = 2 * 60 * 1000; // spans in two adjacent snapshots that are larger than this are ignored and not summed
+
+    if (snapshots.length <= 1)
+        return 0;
+
+    let totalDuration = 0;
+    for (let i = 1; i < snapshots.length; i++) {
+        const span = snapshots[i].getTime() - snapshots[i - 1].getTime();
+        if (span <= TOLERANCE) {
+            totalDuration += span;
+        }
+    }
+
+    return totalDuration / 1000;
 }
 
 /**
@@ -230,7 +258,7 @@ export default os.router({
                     description: draft.description,
                     visibility: req.input.visibility,
                     snapshots: draft.snapshots,
-                    duration: (draft.snapshots.length * TIMELAPSE_FRAME_LENGTH_MS) / 1000,
+                    duration: durationBySnapshots(draft.snapshots),
                     associatedJobId: realizeJob.id
                 }
             });
@@ -244,7 +272,7 @@ export default os.router({
             const caller = req.context.user;
 
             const timelapse = await database.timelapse.findFirst({
-                where: { id: req.input.id },
+                where: { id: req.input.id }
             });
 
             if (!timelapse)
@@ -256,6 +284,9 @@ export default os.router({
 
             if (!canEdit)
                 return apiErr("NOT_FOUND", "You don't have permission to edit this timelapse");
+
+            if (timelapse.visibility === "FAILED_PROCESSING")
+                return apiErr("ERROR", "You can only delete timelapses that failed processing");
 
             const updateData: Partial<db.Timelapse> = {};
             if (req.input.changes.name) {
@@ -295,18 +326,18 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const isViewingSelf = caller && caller.id === req.input.user;
-            const isAdmin = caller && (caller.permissionLevel in oneOf("ADMIN", "ROOT"));
+            const isEntitled = (
+                (caller && caller.id === req.input.user) || // viewing self
+                (caller && (caller.permissionLevel in oneOf("ADMIN", "ROOT"))) // caller is admin
+            );
 
             const timelapses = await database.timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
                 orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: req.input.user,
-                    ...when(!isViewingSelf && !isAdmin, {
-                        isPublished: true,
-                        visibility: "PUBLIC"
-                    })
+                    visibility: isEntitled ? undefined : "PUBLIC", // if user is not entitled to view all timelapses, only show PUBLIC ones
+                    associatedJobId: isEntitled ? undefined : null // same as above. only show timelapses that aren't processing to the public
                 }
             });
 
@@ -334,7 +365,7 @@ export default os.router({
 
             let userApiKey: string | null;
 
-            if (process.env.NODE_ENV !== "production" && env.DEV_HACKATIME_FALLBACK_KEY) {
+            if (process.env["NODE_ENV"] !== "production" && env.DEV_HACKATIME_FALLBACK_KEY) {
                 userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
             }
             else {

@@ -1,13 +1,18 @@
-#!/usr/bin/env tsx
-import { sleep } from "@/shared/common";
-import chalk from "chalk";
 import { Command } from "commander";
 import { execa } from "execa";
-import ora from "ora";
-import { resolve } from "node:path";
 import { input, select } from "@inquirer/prompts";
-import fs from "node:fs/promises";
+import chalk from "chalk";
+import ora from "ora";
 import yaml from "js-yaml";
+import { resolve } from "node:path";
+import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+
+import { sleep } from "./common/util.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const DOCKER_STARTUP_DELAY = 1500;
 
@@ -309,8 +314,8 @@ async function updateDockerComposeFile(localstackImage: string | null) {
 	const composeObject = yaml.load(composeContent) as Record<string, unknown>;
 
 	// Update database port if non-default
-	if (databasePort !== DEFAULT_DATABASE_PORT && composeObject.services) {
-		const services = composeObject.services as Record<string, { ports?: string[] }>;
+	if (databasePort !== DEFAULT_DATABASE_PORT && composeObject["services"]) {
+		const services = composeObject["services"] as Record<string, { ports?: string[] }>;
 		if (services["lapse-db"]?.ports) {
 			services["lapse-db"].ports = [`${databasePort}:5432`];
 		}

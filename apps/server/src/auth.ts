@@ -163,9 +163,9 @@ function hasOboClaims(token: string) {
 
     const payload = decoded as Record<string, unknown>;
     return (
-        payload.actorId !== undefined ||
-        payload.aud === OBO_AUDIENCE ||
-        payload.iss === OBO_ISSUER
+        payload["actorId"] !== undefined ||
+        payload["aud"] === OBO_AUDIENCE ||
+        payload["iss"] === OBO_ISSUER
     );
 }
 

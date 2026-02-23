@@ -1,5 +1,4 @@
 {
-  "extends": "@tsconfig/node24/tsconfig.json",
   "exclude": [
     "./prisma.config.ts",
     "./prisma/**/*.ts",
@@ -12,9 +11,6 @@
     "outDir": "./dist",
 
     "baseUrl": "./src",
-    "paths": {
-      "@/*": ["*"]
-    },
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module

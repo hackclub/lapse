@@ -18,4 +18,9 @@ export class JobLogger {
     error(message: string) {
         console.error(`${this.jobName}@${this.jobId}: error: ${message}`);
     }
+
+    echo(error: Error) {
+        this.error(`${error}`);
+        return error;
+    }
 }

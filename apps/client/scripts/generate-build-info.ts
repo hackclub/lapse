@@ -72,10 +72,13 @@ async function fetchAllCommits(): Promise<GitHubCommit[]> {
         }
 
         const commits: GitHubCommit[] = await response.json();
-        if (commits.length === 0) break;
+        if (commits.length === 0)
+            break;
 
         allCommits.push(...commits);
-        if (commits.length < perPage) break;
+        if (commits.length < perPage)
+            break;
+
         page++;
     }
 
@@ -99,10 +102,13 @@ async function fetchContributorsFromAPI(): Promise<GitHubContributor[]> {
         }
 
         const contributors: GitHubContributor[] = await response.json();
-        if (contributors.length === 0) break;
+        if (contributors.length === 0)
+            break;
 
         allContributors.push(...contributors);
-        if (contributors.length < perPage) break;
+        if (contributors.length < perPage)
+            break;
+
         page++;
     }
 
@@ -141,7 +147,8 @@ async function getContributorsFromGitHub(commits: GitHubCommit[]): Promise<{ con
 
 async function getContributorsFromGit(commits: GitHubCommit[]): Promise<{ contributors: Contributor[]; allHaveGitHub: boolean }> {
     const shortlogOutput = exec("git shortlog -sne --no-merges HEAD");
-    if (!shortlogOutput) return { contributors: [], allHaveGitHub: true };
+    if (!shortlogOutput)
+        return { contributors: [], allHaveGitHub: true };
 
     const emailToGitHub = new Map<string, string>();
     for (const commit of commits) {
@@ -156,13 +163,15 @@ async function getContributorsFromGit(commits: GitHubCommit[]): Promise<{ contri
 
     for (const line of shortlogOutput.split("\n")) {
         const match = line.match(/^\s*(\d+)\s+(.+?)\s+<([^>]+)>$/);
-        if (!match) continue;
+        if (!match)
+            continue;
 
         const commits = parseInt(match[1], 10);
         const name = match[2].trim();
         const email = match[3].trim().toLowerCase();
 
-        if (isBot(name) || isBot(email)) continue;
+        if (isBot(name) || isBot(email))
+            continue;
 
         const github = emailToGitHub.get(email) || null;
 
@@ -194,6 +203,7 @@ async function main() {
         if (!commitId) {
             commitId = exec("git rev-parse HEAD") || "unknown";
         }
+
         const commitDateStr = exec(`git show -s --format=%cI ${commitId}`);
         buildDate = commitDateStr ? new Date(commitDateStr).getTime() : Date.now();
     }
@@ -203,12 +213,14 @@ async function main() {
             if (!commitId) {
                 commitId = latestCommit.sha;
             }
+            
             buildDate = new Date(latestCommit.commit.author.date).getTime();
         }
         else {
             if (!commitId) {
                 commitId = "unknown";
             }
+            
             buildDate = Date.now();
         }
     }

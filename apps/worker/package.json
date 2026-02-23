@@ -9,7 +9,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
-    "build": "pnpm tsc",
+    "build": "pnpm tsc && tsc-alias",
     "watch": "tsc -w"
   },
   "dependencies": {
@@ -25,6 +25,7 @@
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^25.0.3",
+    "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3"
   }
 }

@@ -5,17 +5,19 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
-  "author": "Hack Club",
-  "license": "ISC",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "postinstall": "prisma generate",
-    "build": "prisma generate && pnpm tsc",
-    "start": "pnpm run build && fastify start -l info dist/app.js",
+    "build": "prisma generate && pnpm tsc && tsc-alias",
+    "start": "pnpm run build && pnpm exec fastify start -l info dist/app.js",
     "watch": "tsc -w",
-    "dev": "pnpm run build && pnpm exec concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"pnpm:watch\" \"pnpm:dev:start\"",
-    "dev:start": "fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js",
-    "dev:console": "tsx ./etc/scripts/console.ts"
+    "dev": "pnpm run build && pnpm run dev:start",
+    "dev:start": "pnpm exec fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js",
+    "dev:console": "tsx ./etc/scripts/console.ts",
+    "db:migrate": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.994.0",
@@ -29,7 +31,9 @@
     "@sentry/node": "^10.39.0",
     "@trpc/server": "^11.8.0",
     "bullmq": "^5.69.3",
+    "chalk": "^5.6.2",
     "dotenv": "^17.2.3",
+    "fastify": "^5.7.4",
     "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.3",
     "nanoid": "^5.1.6",
@@ -41,7 +45,7 @@
     "@tsconfig/node24": "^24.0.4",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.0.3",
-    "fastify": "^5.7.4",
+    "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3"
   }
 }

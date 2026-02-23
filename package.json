@@ -1,10 +1,8 @@
 {
 	"packageManager": "pnpm@10.25.0",
-	"devDependencies": {
-		"biome": "^0.3.3",
-		"turbo": "^2.6.3"
-	},
 	"scripts": {
-		"dev:watch-all": "pnpm --parallel run watch"
+		"dev": "pnpm --parallel run dev",
+		"dev:watch-all": "pnpm --parallel run watch",
+		"dev:setup-env": "pnpm install --filter @hackclub/lapse-devscripts && pnpm run --filter @hackclub/lapse-devscripts dev:setup-env"
 	}
 }
