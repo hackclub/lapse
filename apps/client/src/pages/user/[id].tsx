@@ -5,23 +5,23 @@ import Icon from "@hackclub/icons";
 import type { Timelapse } from "@/server/routers/api/timelapse";
 import type { User, PublicUser } from "@/server/routers/api/user";
 
-import { trpc } from "@/client/trpc";
-import { markdownToJsx } from "@/client/markdown";
+import { trpc } from "@/trpc";
+import { markdownToJsx } from "@/markdown";
 import { assert, matchOrDefault, validateUrl } from "@/shared/common";
 
-import { useAuth } from "@/client/hooks/useAuth";
-import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
+import { useAuth } from "@/hooks/useAuth";
+import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 
-import RootLayout from "@/client/components/RootLayout";
-import { ProfilePicture } from "@/client/components/ProfilePicture";
+import RootLayout from "@/components/RootLayout";
+import { ProfilePicture } from "@/components/ProfilePicture";
 
-import { Button } from "@/client/components/ui/Button";
-import { Skeleton } from "@/client/components/ui/Skeleton";
-import { TextInput } from "@/client/components/ui/TextInput";
-import { ErrorModal } from "@/client/components/ui/ErrorModal";
-import { TimelapseGrid } from "@/client/components/TimelapseGrid";
-import { WindowedModal } from "@/client/components/ui/WindowedModal";
-import { TextareaInput } from "@/client/components/ui/TextareaInput";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { TextInput } from "@/components/ui/TextInput";
+import { ErrorModal } from "@/components/ui/ErrorModal";
+import { TimelapseGrid } from "@/components/TimelapseGrid";
+import { WindowedModal } from "@/components/ui/WindowedModal";
+import { TextareaInput } from "@/components/ui/TextareaInput";
 
 export default function Page() {
   const router = useRouter();

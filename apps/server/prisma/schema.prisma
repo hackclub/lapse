@@ -190,22 +190,53 @@ model Comment {
   createdAt   DateTime                @default(now())
 }
 
+/// Represents an OAuth2 service client (app).
 model ServiceClient {
+  /// The *internal* ID of the service client. This should never be exposed to API callers - see `clientId` for the actual OAuth2 client ID.
   id                  String                       @id @default(uuid())
-  name                String
-  description         String                       @default("")
-  homepageUrl         String                       @default("")
-  iconUrl             String                       @default("")
+
+  /// The actual client ID used in OAuth2 operations of the app.
   clientId            String                       @unique
+
+  /// An scrypt hash of the client secret, in the format of "<16 byte salt>:<64 byte hash>".
   clientSecretHash    String
+
+  /// The user-friendly name of the service client.
+  name                String
+
+  /// A description of the service client.
+  description         String                       @default("")
+
+  /// The URL of the main page of the app.
+  homepageUrl         String                       @default("")
+
+  /// A URL to the icon of the app. May be empty.
+  iconUrl             String                       @default("")
+
+  /// The scopes that are available to this client.
   scopes              String[]                     @default([])
+
+  /// The allowed redirect URIs.
   redirectUris        String[]                     @default([])
+
+  /// Whether this OAuth2 app should be deemed trusted - untrusted apps should warnings when authenticating to let the user know that
+  /// it is not an official Hack Club HQ app.
   trustLevel          ServiceClientTrustLevel      @default(UNTRUSTED)
+
+  /// The ID of the owner of the client.
   createdByUserId     String
   createdByUser       User                         @relation(fields: [createdByUserId], references: [id])
+
+  /// The time at which this client was created.
   createdAt           DateTime                     @default(now())
+
+  /// The last time this record has been updated.
   updatedAt           DateTime                     @updatedAt
+
+  /// The last time any application has authenticated with this client. `null` if never used.
   lastUsedAt          DateTime?
+
+  /// The time at which this application has been revoked at. `null` if not revoked.
   revokedAt           DateTime?
 
   tokenAudits         ServiceTokenAudit[]

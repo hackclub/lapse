@@ -17,6 +17,9 @@ export const OAUTH_SCOPE_GROUPS = {
         "user:read": "Read your profile",
         "user:write": "Update your profile",
     },
+    Internal: {
+        "elevated": "Read, write, and update all data on behalf of you"
+    }
 } as const;
 
 /**

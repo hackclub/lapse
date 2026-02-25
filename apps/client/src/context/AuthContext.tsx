@@ -1,0 +1,77 @@
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { useRouter } from "next/router";
+import type { User } from "@hackclub/lapse-api";
+
+import { trpc } from "@/trpc";
+import { useOnce } from "@/hooks/useOnce";
+import { useCache } from "@/hooks/useCache";
+
+interface AuthContextValue {
+    currentUser: User | null;
+    isLoading: boolean;
+    signOut: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+interface AuthProviderProps {
+    children: ReactNode;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+    const router = useRouter();
+
+    const [userCache, setUserCache] = useCache<User>("user");
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useOnce(async () => {
+        console.log("(AuthContext.tsx) authenticating...");
+        const req = await trpc.user.myself.query({});
+
+        console.log("(AuthContext.tsx) response:", req);
+
+        if (!req.ok || req.data.user === null) {
+            console.log("(AuthContext.tsx) user is not authenticated");
+            setUserCache(null);
+            setIsLoading(false);
+            return;
+        }
+
+        console.log("(AuthContext.tsx) user is authenticated");
+        setUserCache(req.data.user);
+        setCurrentUser(req.data.user);
+        setIsLoading(false);
+    });
+
+    const signOut = useCallback(async () => {
+        console.log("(AuthContext.tsx) signing out...");
+        await trpc.user.signOut.mutate({});
+        setUserCache(null);
+        setCurrentUser(null);
+        router.push("/");
+        router.reload();
+    }, [router, setUserCache]);
+
+    const effectiveUser = isLoading ? userCache : currentUser;
+
+    const value: AuthContextValue = {
+        currentUser: effectiveUser,
+        isLoading,
+        signOut
+    };
+
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+        </AuthContext.Provider>
+    );
+}
+
+export function useAuthContext(): AuthContextValue {
+    const context = useContext(AuthContext);
+    if (context === null) {
+        throw new Error("useAuthContext must be used within an AuthProvider");
+    }
+    return context;
+}

@@ -68,7 +68,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const user = await database.user.findFirst({
+            const user = await database().user.findFirst({
                 include: { devices: true },
                 where: { id: caller.id }
             });
@@ -86,19 +86,19 @@ export default os.router({
             let dbUser: DbCompositeUser | null;
 
             if (req.input.handle) {
-                dbUser = await database.user.findFirst({
+                dbUser = await database().user.findFirst({
                     where: { handle: req.input.handle.trim() },
                     include: { devices: true }
                 });
             }
             else if (req.input.id) {
-                dbUser = await database.user.findFirst({
+                dbUser = await database().user.findFirst({
                     where: { id: req.input.id },
                     include: { devices: true }
                 });
             }
             else if (req.input.hackatimeId) {
-                dbUser = await database.user.findFirst({
+                dbUser = await database().user.findFirst({
                     where: { hackatimeId: req.input.hackatimeId.toString() },
                     include: { devices: true }
                 });
@@ -135,7 +135,7 @@ export default os.router({
                 ...when(changes.urls !== undefined, { urls: changes.urls! })
             };
 
-            const updatedUser = await database.user.update({
+            const updatedUser = await database().user.update({
                 where: { id: req.input.id },
                 data: updateData,
                 include: { devices: true }
@@ -149,7 +149,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
             
-            const devices = await database.knownDevice.findMany({
+            const devices = await database().knownDevice.findMany({
                 where: { ownerId: caller.id }
             });
 
@@ -161,7 +161,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
             
-            const device = await database.knownDevice.create({
+            const device = await database().knownDevice.create({
                 data: {
                     name: req.input.name,
                     ownerId: caller.id
@@ -176,7 +176,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
             
-            const device = await database.knownDevice.findFirst({
+            const device = await database().knownDevice.findFirst({
                 where: { id: req.input.id, ownerId: caller.id }
             });
 
@@ -185,7 +185,7 @@ export default os.router({
 
             // A consequence of removing a device is the permanent loss of all draft timelapses that are associated with that device that haven't been published - we
             // lose the device key alongside the device, and such, we can never decrypt the draft.
-            const drafts = await database.draftTimelapse.findMany({
+            const drafts = await database().draftTimelapse.findMany({
                 where: { deviceId: device.id }
             });
 
@@ -200,7 +200,7 @@ export default os.router({
                 })
             );
 
-            await database.knownDevice.delete({
+            await database().knownDevice.delete({
                 where: { id: req.input.id, ownerId: caller.id }
             });
 
@@ -225,7 +225,7 @@ export default os.router({
             const caller = req.context.user;
 
             const projects = new Map<string, number>();
-            const timelapses = await database.timelapse.findMany({
+            const timelapses = await database().timelapse.findMany({
                 select: {
                     hackatimeProject: true,
                     duration: true
@@ -265,7 +265,7 @@ export default os.router({
             if (!req.input.id && !caller)
                 return apiErr("MISSING_PARAMS", "'id' is required when not authenticated.");
             
-            const aggregate = await database.timelapse.aggregate({
+            const aggregate = await database().timelapse.aggregate({
                 _sum: { duration: true },
                 where: { ownerId: req.input.id ?? caller.id }
             });
@@ -278,7 +278,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            await database.user.update({
+            await database().user.update({
                 data: { lastHeartbeat: new Date() },
                 where: { id: caller.id }
             });

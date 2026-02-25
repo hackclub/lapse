@@ -3,35 +3,35 @@ import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import Icon from "@hackclub/icons";
 
-import type { Timelapse, TimelapseVisibility, Comment, HackatimeProject } from "@/client/api";
+import type { Timelapse, TimelapseVisibility, Comment, HackatimeProject } from "@/api";
 
 import { assert, formatDuration } from "@/shared/common";
 
-import { trpc } from "@/client/trpc";
-import { useAsyncEffect } from "@/client/hooks/useAsyncEffect";
-import { deviceStorage } from "@/client/deviceStorage";
-import { decryptVideo } from "@/client/encryption";
-import { useAuth } from "@/client/hooks/useAuth";
-import { markdownToJsx } from "@/client/markdown";
+import { trpc } from "@/trpc";
+import { useAsyncEffect } from "@/hooks/useAsyncEffect";
+import { deviceStorage } from "@/deviceStorage";
+import { decryptVideo } from "@/encryption";
+import { useAuth } from "@/hooks/useAuth";
+import { markdownToJsx } from "@/markdown";
 
-import RootLayout from "@/client/components/RootLayout";
-import { ErrorModal } from "@/client/components/ui/ErrorModal";
-import { LoadingModal } from "@/client/components/ui/LoadingModal";
-import { ProfilePicture } from "@/client/components/ProfilePicture";
-import { Button } from "@/client/components/ui/Button";
-import { WindowedModal } from "@/client/components/ui/WindowedModal";
-import { TextInput } from "@/client/components/ui/TextInput";
-import { TextareaInput } from "@/client/components/ui/TextareaInput";
-import { PasskeyModal } from "@/client/components/ui/PasskeyModal";
-import { VisibilityPicker } from "@/client/components/ui/VisibilityPicker";
-import { DropdownInput } from "@/client/components/ui/DropdownInput";
-import { Skeleton } from "@/client/components/ui/Skeleton";
-import { Badge } from "@/client/components/ui/Badge";
-import { Bullet } from "@/client/components/ui/Bullet";
-import { TimeAgo } from "@/client/components/TimeAgo";
-import { CommentSection } from "@/client/components/CommentSection";
-import { PublishModal } from "@/client/components/ui/layout/PublishModal";
-import { Duration } from "@/client/components/Duration";
+import RootLayout from "@/components/RootLayout";
+import { ErrorModal } from "@/components/ui/ErrorModal";
+import { LoadingModal } from "@/components/ui/LoadingModal";
+import { ProfilePicture } from "@/components/ProfilePicture";
+import { Button } from "@/components/ui/Button";
+import { WindowedModal } from "@/components/ui/WindowedModal";
+import { TextInput } from "@/components/ui/TextInput";
+import { TextareaInput } from "@/components/ui/TextareaInput";
+import { PasskeyModal } from "@/components/ui/PasskeyModal";
+import { VisibilityPicker } from "@/components/ui/VisibilityPicker";
+import { DropdownInput } from "@/components/ui/DropdownInput";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Badge } from "@/components/ui/Badge";
+import { Bullet } from "@/components/ui/Bullet";
+import { TimeAgo } from "@/components/TimeAgo";
+import { CommentSection } from "@/components/CommentSection";
+import { PublishModal } from "@/components/ui/layout/PublishModal";
+import { Duration } from "@/components/Duration";
 
 export default function Page() {
   const router = useRouter();

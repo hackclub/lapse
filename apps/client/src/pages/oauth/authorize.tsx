@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 
-import RootLayout from "@/client/components/RootLayout";
-import { Button } from "@/client/components/ui/Button";
+import RootLayout from "@/components/RootLayout";
+import { Button } from "@/components/ui/Button";
 
-import { useAuth } from "@/client/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { OAUTH_SCOPE_GROUPS } from "@/shared/oauthScopes";
 import Icon from "@hackclub/icons";
 

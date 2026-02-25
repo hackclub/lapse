@@ -81,7 +81,7 @@ export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Acto
  * Permanently deletes a timelapse, including all its snapshots and S3 files.
  */
 export async function deleteTimelapse(timelapseId: string, actor: Actor): Promise<Result<void>> {
-    const timelapse = await database.timelapse.findFirst({
+    const timelapse = await database().timelapse.findFirst({
         where: { id: timelapseId }
     });
 
@@ -115,7 +115,7 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
         }));
     }
 
-    await database.timelapse.delete({
+    await database().timelapse.delete({
         where: { id: timelapse.id }
     });
 
@@ -127,7 +127,7 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
  * Finds a timelapse by its ID.
  */
 export async function getTimelapseById(id: string, actor: Actor): Promise<Result<Timelapse | OwnedTimelapse>> {
-    const timelapse = await database.timelapse.findFirst({
+    const timelapse = await database().timelapse.findFirst({
         where: { id },
         include: TIMELAPSE_INCLUDES
     });
@@ -198,7 +198,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const draft = await database.draftTimelapse.findFirst({
+            const draft = await database().draftTimelapse.findFirst({
                 where: {
                     id: req.input.id,
                     ownerId: caller.id
@@ -234,7 +234,7 @@ export default os.router({
             
             // We associate the newly created Timelapse entity with the draft. When a draft has an associated timelapse, that means it is currently being processed, and thus will be hidden
             // from any API queries.
-            await database.draftTimelapse.update({
+            await database().draftTimelapse.update({
                 where: { id: draft.id },
                 data: {
                     associatedTimelapseId: id
@@ -248,7 +248,7 @@ export default os.router({
             }
 
             // We purposefully omit `s3Key` and `s3ThumbnailKey` here.
-            const timelapse = await database.timelapse.create({
+            const timelapse = await database().timelapse.create({
                 include: TIMELAPSE_INCLUDES,
                 data: {
                     id,
@@ -271,7 +271,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const timelapse = await database.timelapse.findFirst({
+            const timelapse = await database().timelapse.findFirst({
                 where: { id: req.input.id }
             });
 
@@ -301,7 +301,7 @@ export default os.router({
                 updateData.visibility = req.input.changes.visibility;
             }
 
-            const updatedTimelapse = await database.timelapse.update({
+            const updatedTimelapse = await database().timelapse.update({
                 where: { id: req.input.id },
                 data: updateData,
                 include: TIMELAPSE_INCLUDES
@@ -331,7 +331,7 @@ export default os.router({
                 (caller && (caller.permissionLevel in oneOf("ADMIN", "ROOT"))) // caller is admin
             );
 
-            const timelapses = await database.timelapse.findMany({
+            const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
                 orderBy: { createdAt: "desc" },
                 where: {
@@ -349,7 +349,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const timelapse = await database.timelapse.findFirst({
+            const timelapse = await database().timelapse.findFirst({
                 where: { id: req.input.id, ownerId: caller.id },
                 include: { owner: true }
             });
@@ -396,7 +396,7 @@ export default os.router({
 
             logInfo(`All heartbeats synchronized with snapshots for ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}!`);
 
-            const updatedTimelapse = await database.timelapse.update({
+            const updatedTimelapse = await database().timelapse.update({
                 where: { id: req.input.id, ownerId: caller.id },
                 data: { hackatimeProject: req.input.hackatimeProject },
                 include: TIMELAPSE_INCLUDES

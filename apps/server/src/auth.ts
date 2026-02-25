@@ -213,7 +213,7 @@ export async function getAuthenticatedUser(req: FastifyRequest) {
         return null;
 
     try {
-        const user = await database.user.findFirst({
+        const user = await database().user.findFirst({
             where: { id: payload.userId },
         });
 
@@ -241,8 +241,8 @@ export async function getRestAuthContext(req: FastifyRequest,): Promise<RestAuth
     if (oboPayload) {
         try {
             const [user, actor] = await Promise.all([
-                database.user.findFirst({ where: { id: oboPayload.userId } }),
-                database.serviceClient.findFirst({
+                database().user.findFirst({ where: { id: oboPayload.userId } }),
+                database().serviceClient.findFirst({
                     where: { id: oboPayload.actorId, revokedAt: null },
                 }),
             ]);
@@ -265,7 +265,7 @@ export async function getRestAuthContext(req: FastifyRequest,): Promise<RestAuth
         return { user: null, actor: null, scopes: [] };
 
     try {
-        const user = await database.user.findFirst({
+        const user = await database().user.findFirst({
             where: { id: payload.userId },
         });
 

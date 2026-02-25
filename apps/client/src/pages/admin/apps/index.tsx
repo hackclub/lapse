@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
-import RootLayout from "@/client/components/RootLayout";
-import { Button } from "@/client/components/ui/Button";
-import { useAuth } from "@/client/hooks/useAuth";
-import { trpc } from "@/client/trpc";
+import RootLayout from "@/components/RootLayout";
+import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/hooks/useAuth";
+import { trpc } from "@/trpc";
 
 type AdminApp = {
   id: string

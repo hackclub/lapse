@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@hackclub/icons";
 
-import { OAuthApp } from "@/client/api";
-import { trpc } from "@/client/trpc";
-import { useAuth } from "@/client/hooks/useAuth";
-import { Button } from "@/client/components/ui/Button";
-import { WindowedModal } from "@/client/components/ui/WindowedModal";
-import RootLayout from "@/client/components/RootLayout";
+import { OAuthApp } from "@/api";
+import { trpc } from "@/trpc";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/Button";
+import { WindowedModal } from "@/components/ui/WindowedModal";
+import RootLayout from "@/components/RootLayout";
 
 import { OAUTH_SCOPE_GROUPS } from "@/shared/oauthScopes";
 

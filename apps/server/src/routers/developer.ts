@@ -59,7 +59,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const app = await database.serviceClient.findFirst({
+            const app = await database().serviceClient.findFirst({
                 where: {
                     id: req.input.id,
                     createdByUserId: caller.id,
@@ -79,7 +79,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const app = await database.serviceClient.findFirst({
+            const app = await database().serviceClient.findFirst({
                 where: { id: req.input.id, createdByUserId: caller.id, revokedAt: null }
             });
         
@@ -110,7 +110,7 @@ export default os.router({
                 }
             }
     
-            const updated = await database.serviceClient.update({
+            const updated = await database().serviceClient.update({
                 where: { id: app.id },
                 include: { createdByUser: true },
                 data: {
@@ -131,14 +131,14 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
             
-            const app = await database.serviceClient.findFirst({
+            const app = await database().serviceClient.findFirst({
                 where: { id: req.input.id, createdByUserId: caller.id, revokedAt: null }
             });
         
             if (!app)
                 return apiErr("NOT_FOUND", `App with ID ${req.input.id} not found.`);
 
-            await database.serviceClient.update({
+            await database().serviceClient.update({
                 where: { id: req.input.id },
                 data: { revokedAt: new Date() }
             });
@@ -151,7 +151,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const apps = await database.serviceClient.findMany({
+            const apps = await database().serviceClient.findMany({
                 where: { createdByUserId: caller.id, revokedAt: null },
                 orderBy: { createdAt: "desc" },
                 include: { createdByUser: true },
@@ -193,7 +193,7 @@ export default os.router({
     getAllApps: os.getAllApps
         .use(requiredAuth("ADMIN"))
         .handler(async (req) => {
-            const apps = await database.serviceClient.findMany({
+            const apps = await database().serviceClient.findMany({
                 include: { createdByUser: true },
                 orderBy: { createdAt: "desc" }
             });
@@ -208,19 +208,19 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const app = await database.serviceClient.findUnique({
+            const app = await database().serviceClient.findUnique({
                 where: { id: req.input.id }
             });
     
             if (!app)
                 return apiErr("NOT_FOUND", `App with ID ${req.input.id} not found.`);
     
-            const updated = await database.serviceClient.update({
+            const updated = await database().serviceClient.update({
                 where: { id: req.input.id },
                 data: { trustLevel: req.input.trustLevel }
             });
 
-             await database.serviceClientReview.create({
+             await database().serviceClientReview.create({
                 data: {
                     serviceClientId: req.input.id,
                     reviewedByUserId: caller.id,
@@ -236,7 +236,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const grants = await database.serviceGrant.findMany({
+            const grants = await database().serviceGrant.findMany({
                 include: { serviceClient: true },
                 where: { userId: caller.id, revokedAt: null },
                 orderBy: { createdAt: "desc" }
@@ -252,7 +252,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const grant = await database.serviceGrant.findUnique({
+            const grant = await database().serviceGrant.findUnique({
                 where: { id: req.input.grantId }
             });
 
@@ -262,7 +262,7 @@ export default os.router({
             if (grant.userId !== caller.id)
                 return apiErr("NO_PERMISSION", "You do not have permission to revoke this grant.");
 
-            await database.serviceGrant.update({
+            await database().serviceGrant.update({
                 where: { id: req.input.grantId },
                 data: { revokedAt: new Date() }
             });

@@ -30,7 +30,7 @@ export default os.router({
                 return apiOk({ leaderboard: leaderboardCache });
             }
 
-            const aggregates = await database.timelapse.groupBy({
+            const aggregates = await database().timelapse.groupBy({
                 by: ["ownerId"],
                 where: {
                     createdAt: {
@@ -42,7 +42,7 @@ export default os.router({
                 take: 10
             });
 
-            const users = await database.user.findMany({
+            const users = await database().user.findMany({
                 where: { id: { in: aggregates.map(x => x.ownerId) } },
                 select: {
                     id: true,
@@ -78,7 +78,7 @@ export default os.router({
 
     recentTimelapses: os.recentTimelapses
         .handler(async (req) => {
-            const timelapses = await database.timelapse.findMany({
+            const timelapses = await database().timelapse.findMany({
                 where: { visibility: "PUBLIC" },
                 orderBy: { createdAt: "desc" },
                 include: {
@@ -95,7 +95,7 @@ export default os.router({
 
     activeUsers: os.activeUsers
         .handler(async (req) => {
-            const res = await database.user.aggregate({
+            const res = await database().user.aggregate({
                 _count: { lastHeartbeat: true },
                 where: {
                     lastHeartbeat: { gt: new Date(new Date().getTime() - ACTIVE_USERS_EXPIRY_MS) }

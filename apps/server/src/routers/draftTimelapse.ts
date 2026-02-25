@@ -43,7 +43,7 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse): DraftTimelapse {
  * Deletes a draft timelapse alongside all of its associated S3 resources. Does *not* delete any other database object.
  */
 export async function deleteDraftTimelapse(id: string, actor: Actor): Promise<Err | void> {
-    const draft = await database.draftTimelapse.findFirst({
+    const draft = await database().draftTimelapse.findFirst({
         where: { id }
     });
 
@@ -64,7 +64,7 @@ export async function deleteDraftTimelapse(id: string, actor: Actor): Promise<Er
         }));
     }
 
-    await database.draftTimelapse.delete({
+    await database().draftTimelapse.delete({
         where: { id }
     });
 
@@ -80,7 +80,7 @@ export default os.router({
             if (caller.id != req.input.user && !(caller.permissionLevel in oneOf("ADMIN", "ROOT")))
                 return apiErr("NO_PERMISSION", "You may only query draft timelapses for yourself.");
 
-            const timelapses = await database.draftTimelapse.findMany({
+            const timelapses = await database().draftTimelapse.findMany({
                 where: {
                     ownerId: req.context.user.id
                 }
@@ -110,7 +110,7 @@ export default os.router({
                 ))
             );
 
-            const device = await database.knownDevice.findFirst({
+            const device = await database().knownDevice.findFirst({
                 where: {
                     id: req.input.deviceId,
                     ownerId: caller.id
@@ -120,7 +120,7 @@ export default os.router({
             if (!device)
                 return apiErr("DEVICE_NOT_FOUND", `The specified known device ${req.input.deviceId} could not be found.`);
 
-            const draft = await database.draftTimelapse.create({
+            const draft = await database().draftTimelapse.create({
                 data: {
                     id,
                     name: req.input.name,
@@ -145,7 +145,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const draft = await database.draftTimelapse.findFirst({
+            const draft = await database().draftTimelapse.findFirst({
                 where: { id: req.input.id },
             });
 
@@ -159,7 +159,7 @@ export default os.router({
             if (!canEdit)
                 return apiErr("NO_PERMISSION", "You don't have permission to edit this draft timelapse!");
 
-            const updated = await database.draftTimelapse.update({
+            const updated = await database().draftTimelapse.update({
                 where: { id: req.input.id },
                 data: req.input.changes
             });

@@ -1,6 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { ORPCError, os } from "@orpc/server";
-import { permissionLevelOrdinal, type PermissionLevel, type User } from "@hackclub/lapse-api";
+import { permissionLevelOrdinal, type LapseOAuthScope, type PermissionLevel, type User } from "@hackclub/lapse-api";
 import type { ResponseHeadersPluginContext } from "@orpc/server/plugins";
 
 import * as db from "@/generated/prisma/client.js";
@@ -12,6 +12,7 @@ import { logRequest } from "@/logging.js";
  */
 export interface Context extends ResponseHeadersPluginContext {
     user: db.User | null;
+    scopes: LapseOAuthScope[];
     req: FastifyRequest;
 }
 
@@ -40,7 +41,7 @@ export function requiredAuth(minimumLevel?: PermissionLevel) {
     return os
         .$context<Context>()
         .middleware(async ({ context, next }) => {
-            const { req, user } = context;
+            const { req, user, scopes } = context;
 
             if (
                 !user ||
@@ -51,7 +52,7 @@ export function requiredAuth(minimumLevel?: PermissionLevel) {
             
 
             return next<ProtectedContext>({
-                context: { req, user }
+                context: { req, user, scopes }
             });
         });
 }

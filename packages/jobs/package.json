@@ -1,0 +1,29 @@
+{
+  "name": "@hackclub/lapse-jobs",
+  "version": "2.0.0",
+  "description": "Job contracts shared between the server and the worker",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && tsc-alias --resolve-full-paths",
+    "watch": "tsc -b --watch",
+    "prepare": "pnpm run build"
+  },
+  "packageManager": "pnpm@10.25.0",
+  "dependencies": {
+    "@hackclub/lapse-api": "workspace:*"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.4",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3"
+  }
+}

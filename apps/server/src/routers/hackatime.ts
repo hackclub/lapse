@@ -20,7 +20,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
             
-            const dbUser = await database.user.findFirst({
+            const dbUser = await database().user.findFirst({
                 where: { id: caller.id }
             });
 
@@ -60,7 +60,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const subject = await database.user.findFirst({
+            const subject = await database().user.findFirst({
                 where: {
                     hackatimeId: req.input.hackatimeUserId.toString()
                 }
@@ -69,7 +69,7 @@ export default os.router({
             if (!subject)
                 return apiOk({ count: 0, timelapses: [] });
 
-            const timelapses = await database.timelapse.findMany({
+            const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
                 where: {
                     ownerId: subject.id,

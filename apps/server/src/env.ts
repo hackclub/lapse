@@ -65,6 +65,12 @@ export const env = {
     get JWT_SECRET() { return required("JWT_SECRET") },
 
     /**
+     * The secret key used for creating JWT tokens for OAuth2 access codes.
+     */
+    // Generate one using [openssl rand -hex 32]!
+    get JWT_SECRET_ACCESS_TOKENS() { return required("JWT_SECRET_ACCESS_TOKENS") },
+
+    /**
      * The 32-byte secret key used to generate encrypted upload tokens, represented as a 64 character hex string.
      */
     // Generate one using [openssl rand -hex 32]!
@@ -115,7 +121,12 @@ export const env = {
     /**
      * The port the HTTP web-server will listen on.
      */
-    get PORT() { return optional("PORT") ?? "3123" }
+    get PORT() { return optional("PORT") ?? "3123" },
+
+    /**
+     * The URL to the PostgreSQL database to use for Prisma.
+     */
+    get DATABASE_URL() { return required("DATABASE_URL") }
 };
 
 function required(name: string) {

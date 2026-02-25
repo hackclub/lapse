@@ -41,7 +41,7 @@ export default os.router({
             if (timelapse instanceof Err)
                 return timelapse.toApiError();
             
-            const comment = await database.comment.create({
+            const comment = await database().comment.create({
                 data: {
                     authorId: caller.id,
                     timelapseId: req.input.id,
@@ -58,7 +58,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const comment = await database.comment.findUnique({
+            const comment = await database().comment.findUnique({
                 where: { id: req.input.commentId }
             });
 
@@ -68,7 +68,7 @@ export default os.router({
             if (comment.authorId !== caller.id)
                 return apiErr("NO_PERMISSION", "You can only delete your own comments.");
 
-            await database.comment.delete({
+            await database().comment.delete({
                 where: { id: req.input.commentId }
             });
 

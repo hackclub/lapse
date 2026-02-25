@@ -12,7 +12,7 @@
     "start": "pnpm run build && pnpm exec fastify start -l info dist/app.js",
     "watch": "tsc -w",
     "dev": "pnpm run build && pnpm run dev:start",
-    "dev:start": "pnpm exec fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js",
+    "dev:start": "pnpm exec node ./dist/app.js",
     "dev:console": "tsx ./etc/scripts/console.ts",
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
@@ -23,8 +23,9 @@
     "@aws-sdk/client-s3": "^3.994.0",
     "@aws-sdk/s3-request-presigner": "^3.994.0",
     "@hackclub/lapse-api": "workspace:*",
+    "@hackclub/lapse-jobs": "workspace:*",
     "@hackclub/lapse-shared": "workspace:*",
-    "@hackclub/lapse-worker": "workspace:*",
+    "@node-oauth/oauth2-server": "^5.2.1",
     "@orpc/openapi": "^1.13.5",
     "@orpc/server": "^1.13.5",
     "@prisma/adapter-pg": "^7.2.0",
@@ -46,6 +47,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.0.3",
     "fastify-cli": "^7.4.1",
+    "require-in-the-middle": "^8.0.1",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3"
   }

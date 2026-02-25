@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { matchOrDefault } from "@/shared/common";
 
-import RootLayout from "@/client/components/RootLayout";
-import { useAuthContext } from "@/client/context/AuthContext";
+import RootLayout from "@/components/RootLayout";
+import { useAuthContext } from "@/context/AuthContext";
 
 export default function Auth() {
   const router = useRouter();

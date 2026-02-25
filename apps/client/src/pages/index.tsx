@@ -5,16 +5,16 @@ import { useEffect, useState } from "react";
 
 import { descending, formatDuration } from "@/shared/common";
 
-import { TimeAgo } from "@/client/components/TimeAgo";
-import { Footer } from "@/client/components/Footer";
-import { Button } from "@/client/components/ui/Button";
-import { TimelapseGrid } from "@/client/components/TimelapseGrid";
+import { TimeAgo } from "@/components/TimeAgo";
+import { Footer } from "@/components/Footer";
+import { Button } from "@/components/ui/Button";
+import { TimelapseGrid } from "@/components/TimelapseGrid";
 
-import { trpc } from "@/client/trpc";
-import { useAuth } from "@/client/hooks/useAuth";
-import { useCache } from "@/client/hooks/useCache";
-import { useCachedApiCall } from "@/client/hooks/useCachedApiCall";
-import RootLayout from "@/client/components/RootLayout";
+import { trpc } from "@/trpc";
+import { useAuth } from "@/hooks/useAuth";
+import { useCache } from "@/hooks/useCache";
+import { useCachedApiCall } from "@/hooks/useCachedApiCall";
+import RootLayout from "@/components/RootLayout";
 import clsx from "clsx";
 
 export default function Home() {

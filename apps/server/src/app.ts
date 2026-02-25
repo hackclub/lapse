@@ -1,13 +1,17 @@
+import "dotenv/config";
+
 import Fastify from "fastify"
-import { onError, os } from "@orpc/server"
+import { implement, onError, os } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
 import { ResponseHeadersPlugin } from "@orpc/server/plugins"
 import chalk from "chalk"
-import * as dotenv from "dotenv";
+import { compositeRouterContract } from "@hackclub/lapse-api";
 
-import { getAuthenticatedUser } from "@/auth.js"
+import { getAuthenticatedUser } from "@/oauth.js"
 import { apiErr } from "@/common.js"
 import type { Context } from "@/router.js"
+import { initDatabase, initRedis } from "@/db.js";
+import { env } from "@/env.js"
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -16,20 +20,20 @@ import comment from "@/routers/comment.js"
 import developer from "@/routers/developer.js"
 import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
-import { env } from "@/env.js"
-
-dotenv.config();
+import internal from "@/routers/internal.js"
 
 const handler = new OpenAPIHandler(
-    os.$context<Context>().router({
-        user,
-        timelapse,
-        comment,
-        developer,
-        global,
-        hackatime,
-        draftTimelapse
-    }),
+    implement(compositeRouterContract)
+        .$context<Context>()
+        .router({
+            user,
+            timelapse,
+            draftTimelapse,
+            comment,
+            developer,
+            global,
+            hackatime
+        }),
     {
         interceptors: [
             onError(err => {
@@ -51,11 +55,11 @@ fastify.addContentTypeParser("*", (request, payload, done) => {
 });
 
 fastify.all("/api/*", async (req, reply) => {
-    const user = await getAuthenticatedUser(req);
+    const { user, scopes } = await getAuthenticatedUser(req);
 
     const { matched } = await handler.handle(req, reply, {
         prefix: "/api",
-        context: { req, user }
+        context: { req, user, scopes }
     });
 
     if (!matched) {
@@ -65,30 +69,45 @@ fastify.all("/api/*", async (req, reply) => {
 
 fastify.listen({ port: parseInt(env.PORT) })
     .then(address => {
-        const logo = [
-            0, 1, 1, 1, 1, 2, 2, 0, -1,
-            1, 1, 3, 3, 3, 3, 4, 4, -1,
-            1, 1, 3, 3, 3, 3, 4, 4, -1,
-            1, 1, 2, 3, 3, 4, 4, 4, -1,
-            1, 1, 2, 3, 3, 4, 4, 5, -1,
-            1, 2, 3, 3, 3, 3, 5, 5, -1,
-            2, 2, 3, 3, 3, 3, 5, 5, -1,
-            0, 4, 4, 4, 5, 5, 5, 0
-        ]
-            .map(x => (
-                x == 0 ? " " :
-                x == 1 ? `${chalk.bgHex("#f97b40")}` :
-                x == 2 ? `${chalk.bgHex("#f66a43")}` :
-                x == 3 ? `${chalk.bgHex("#ffffff")}` :
-                x == 4 ? `${chalk.bgHex("#f04b4c")}` :
-                x == 5 ? `${chalk.bgHex("#ed394e")}` :
-                "\n"
-            ))
-            .join("")
-            .split("\n");
+        if (process.env["NODE_ENV"] === "development") {
+            chalk.level = 3;
 
-        logo[3] += `${chalk.reset()}  ⧗ Lapse Server v2.0.0`;
-        logo[4] += `${chalk.reset()}  > local: ${address}`;
+            const logo = [
+                0, 1, 1, 1, 1, 2, 2, 0, -1,
+                1, 1, 3, 3, 3, 3, 4, 4, -1,
+                1, 1, 3, 3, 3, 3, 4, 4, -1,
+                1, 1, 2, 3, 3, 4, 4, 4, -1,
+                1, 1, 2, 3, 3, 4, 4, 5, -1,
+                1, 2, 3, 3, 3, 3, 5, 5, -1,
+                2, 2, 3, 3, 3, 3, 5, 5, -1,
+                0, 4, 4, 4, 5, 5, 5, 0
+            ]
+                .map(x => (
+                    x == 0 ? "  " :
+                    x == 1 ? `${chalk.bgHex("#f97b40")("  ")}` :
+                    x == 2 ? `${chalk.bgHex("#f66a43")("  ")}` :
+                    x == 3 ? `${chalk.bgHex("#ffffff")("  ")}` :
+                    x == 4 ? `${chalk.bgHex("#f04b4c")("  ")}` :
+                    x == 5 ? `${chalk.bgHex("#ed394e")("  ")}` :
+                    "\n"
+                ))
+                .join("")
+                .split("\n");
 
-        console.log(logo.join("\n"));
+            logo[2] += `${chalk.reset()}   ${chalk.hex("#f66a43")("⧗ Lapse Server v2.0.0")}`;
+            logo[3] += `${chalk.reset()}   > ${chalk.bold("local")}: ${address}`;
+            logo[4] += `${chalk.reset()}   > ${chalk.bold("connected to Redis")}: ${env.REDIS_URL.substring(0, 32)}...`;
+            logo[5] += `${chalk.reset()}   > ${chalk.bold("connected to database")}: ${env.DATABASE_URL.substring(0, 32)}...`;
+
+            console.log(" \n ");
+            console.log(logo.join("\n"));
+            console.log(" \n ");
+        }
+        else {
+            // We don't need anything flashy for production environments
+            console.log("⧗ Lapse Server v2.0.0");
+        }
+
+        initDatabase();
+        initRedis();
     });

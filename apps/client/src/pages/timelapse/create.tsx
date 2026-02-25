@@ -8,27 +8,27 @@ import clsx from "clsx";
 import { TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
 import { assert } from "@/shared/common";
 
-import { createMediaRecorder, mergeVideoSessions, videoGenerateThumbnail } from "@/client/videoProcessing";
-import { encryptVideo, encryptData, getCurrentDevice } from "@/client/encryption";
-import { deviceStorage, LocalSnapshot } from "@/client/deviceStorage";
-import { apiUpload } from "@/client/upload";
-import { trpc } from "@/client/trpc";
+import { createMediaRecorder, mergeVideoSessions, videoGenerateThumbnail } from "@/videoProcessing";
+import { encryptVideo, encryptData, getCurrentDevice } from "@/encryption";
+import { deviceStorage, LocalSnapshot } from "@/deviceStorage";
+import { apiUpload } from "@/upload";
+import { trpc } from "@/trpc";
 
-import { useOnce } from "@/client/hooks/useOnce";
-import { useAuth } from "@/client/hooks/useAuth";
-import { useInterval } from "@/client/hooks/useInterval";
+import { useOnce } from "@/hooks/useOnce";
+import { useAuth } from "@/hooks/useAuth";
+import { useInterval } from "@/hooks/useInterval";
 
-import RootLayout from "@/client/components/RootLayout";
-import { TimeSince } from "@/client/components/TimeSince";
-import { Button } from "@/client/components/ui/Button";
-import { Modal, ModalHeader, ModalContent } from "@/client/components/ui/Modal";
-import { WindowedModal } from "@/client/components/ui/WindowedModal";
-import { LoadingModal } from "@/client/components/ui/LoadingModal";
-import { ErrorModal } from "@/client/components/ui/ErrorModal";
-import { TextareaInput } from "@/client/components/ui/TextareaInput";
-import { TextInput } from "@/client/components/ui/TextInput";
-import { DropdownInput } from "@/client/components/ui/DropdownInput";
-import { PillControlButton } from "@/client/components/ui/PillControlButton";
+import RootLayout from "@/components/RootLayout";
+import { TimeSince } from "@/components/TimeSince";
+import { Button } from "@/components/ui/Button";
+import { Modal, ModalHeader, ModalContent } from "@/components/ui/Modal";
+import { WindowedModal } from "@/components/ui/WindowedModal";
+import { LoadingModal } from "@/components/ui/LoadingModal";
+import { ErrorModal } from "@/components/ui/ErrorModal";
+import { TextareaInput } from "@/components/ui/TextareaInput";
+import { TextInput } from "@/components/ui/TextInput";
+import { DropdownInput } from "@/components/ui/DropdownInput";
+import { PillControlButton } from "@/components/ui/PillControlButton";
 
 import RecordIcon from "@/client/assets/icons/record.svg";
 import PauseIcon from "@/client/assets/icons/pause.svg";

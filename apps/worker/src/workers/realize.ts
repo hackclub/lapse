@@ -1,8 +1,8 @@
-import { z } from "zod";
 import { Worker } from "bullmq";
 import { S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import { EditListEntrySchema, THUMBNAIL_SIZE, TIMELAPSE_FACTOR, TIMELAPSE_FPS, type EditListEntry } from "@hackclub/lapse-api";
+import { THUMBNAIL_SIZE, TIMELAPSE_FACTOR, TIMELAPSE_FPS, type EditListEntry } from "@hackclub/lapse-api";
+import { REALIZE_JOB_QUEUE_NAME, RealizeJobInputsSchema, type RealizeJobInputs, type RealizeJobOutputs } from "@hackclub/lapse-jobs";
 
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
@@ -24,58 +24,6 @@ const s3 = new S3Client({
         secretAccessKey: env.S3_SECRET_ACCESS_KEY,
     },
 });
-
-/**
- * Represents the inputs for a `realize` job.
- */
-export type RealizeJobInputs = z.infer<typeof RealizeJobInputsSchema>;
-export const RealizeJobInputsSchema = z.object({
-    /**
-     * The ID of the target timelapse.
-     */
-    timelapseId: z.string(),
-
-    /**
-     * An array of public S3 URLs that point to the encrypted sessions that should compose the resulting timelapse.
-     */
-    sessionUrls: z.url().array(),
-
-    /**
-     * The passkey that will decrypt the target timelapse.
-     */
-    passkey: z.string(),
-
-    /**
-     * An array of edits to perform while encoding the video.
-     */
-    editList: EditListEntrySchema.array()
-});
-
-/**
- * Represents the outputs for a `realize` job.
- */
-export type RealizeJobOutputs = z.infer<typeof RealizeJobOutputsSchema>;
-export const RealizeJobOutputsSchema = z.object({
-    /**
-     * The timelapse that the `realize` job was running for.
-     */
-    timelapseId: z.string(),
-
-    /**
-     * The S3 key for the video, stored in the public S3 bucket, shared by both the server and the worker.
-     */
-    videoKey: z.string(),
-
-    /**
-     * The S3 key for the thumbnail, stored in the public S3 bucket, shared by both the server and the worker.
-     */
-    thumbnailKey: z.string()
-});
-
-/**
- * Identifies the `realize` job queue within BullMQ.
- */
-export const REALIZE_JOB_QUEUE_NAME = "lapse-realize";
 
 /**
  * Equivalent to `execFile`, but also logs everything through the given `JobLogger` and returns an `Error` if the invocation failed.
@@ -370,5 +318,5 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             thumbnailKey
         };
     },
-    { connection: redis }
+    { connection: redis, autorun: false }
 );

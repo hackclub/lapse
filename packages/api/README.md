@@ -3,6 +3,7 @@ This package defines the OpenAPI-compatible oRPC contracts that are guaranteed t
 
 In order to use the contracts in this package, you'll first have to install the oRPC client:
 ```sh
+# Use whichever package manager you fancy. npm is used as an example!
 npm install @orpc/openapi
 ```
 

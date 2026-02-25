@@ -1,8 +1,11 @@
-export {
-    REALIZE_JOB_QUEUE_NAME,
-    type RealizeJobInputs,
-    RealizeJobInputsSchema,
-    type RealizeJobOutputs,
-    RealizeJobOutputsSchema
-} from "./workers/realize.js";
+import { realizeJobWorker } from "@/workers/realize.js";
 
+async function main() {
+    console.log("⧗  Lapse (Background Worker) v2.0.0");
+
+    await realizeJobWorker.run();
+
+    console.log("   All workers started!");
+}
+
+main();

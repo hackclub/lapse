@@ -1,8 +1,8 @@
 import type { AppType } from "next/app";
 
 import "@/client/styles/globals.css";
-import { AuthProvider } from "@/client/context/AuthContext";
-import { initLogBucket } from "@/client/logBucket";
+import { AuthProvider } from "@/context/AuthContext";
+import { initLogBucket } from "@/logBucket";
 
 initLogBucket();
 
