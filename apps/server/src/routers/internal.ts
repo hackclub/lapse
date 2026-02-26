@@ -23,7 +23,7 @@ export default os
          */
         handleHackatimeAuth: os.route({
             method: "GET",
-            path: "/internal/handleHackatimeAuth",
+            path: "/internal/handleHackatimeCallback",
             inputStructure: "detailed"
         })
             .input(z.object({
@@ -34,6 +34,6 @@ export default os
                 })
             }))
             .handler(async (req) => {
-
+                
             })
     });

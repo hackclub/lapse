@@ -1,7 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import { ORPCError, os } from "@orpc/server";
 import { permissionLevelOrdinal, type LapseOAuthScope, type PermissionLevel, type User } from "@hackclub/lapse-api";
-import type { ResponseHeadersPluginContext } from "@orpc/server/plugins";
+import type { RequestHeadersPluginContext, ResponseHeadersPluginContext } from "@orpc/server/plugins";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -10,7 +10,10 @@ import { logRequest } from "@/logging.js";
 /**
  * Represents Lapse-specific server-side information about an incoming API request.
  */
-export interface Context extends ResponseHeadersPluginContext {
+export interface Context extends
+    ResponseHeadersPluginContext, // resHeaders
+    RequestHeadersPluginContext // reqHeaders
+{
     user: db.User | null;
     scopes: LapseOAuthScope[];
     req: FastifyRequest;

@@ -193,7 +193,7 @@ class HackatimeBase {
             body: (method === "GET" || !params) ? "" : JSON.stringify(params),
             headers: new Headers({
                 "Authorization": `Bearer ${this.token}`,
-                "User-Agent": "lapse/0.1.0",
+                "User-Agent": "lapse/2.0.0",
                 "Content-Type": "application/json"
             })
         });
@@ -267,5 +267,19 @@ export class HackatimeOAuthApi extends HackatimeBase {
         );
 
         return res.projects;
+    }
+
+    /**
+     * Queries information about the authenticated user.
+     */
+    async me() {
+        return await this.query<{
+            id: number,
+            emails: string[],
+            slack_id?: string,
+            github_username?: string
+        }>(
+            "GET", "v1/authenticated/me"
+        );
     }
 }

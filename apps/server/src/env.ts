@@ -3,6 +3,11 @@
  */
 export const env = {
     /**
+     * The base URL the API is hosted on.
+     */
+    get BASE_URL() { return required("BASE_URL") },
+
+    /**
      * The S3 name for the bucket that stores encrypted (private) user content.
      */
     get S3_ENCRYPTED_BUCKET_NAME() { return required("S3_ENCRYPTED_BUCKET_NAME") },
@@ -52,11 +57,6 @@ export const env = {
      * The Hackatime server URL for OAuth.
      */
     get HACKATIME_URL() { return required("NEXT_PUBLIC_HACKATIME_URL") },
-
-    /**
-     * The OAuth redirect URI for Hackatime authentication.
-     */
-    get HACKATIME_REDIRECT_URI() { return required("HACKATIME_REDIRECT_URI") },
 
     /**
      * The secret key used for JWT token generation and verification.
@@ -126,7 +126,18 @@ export const env = {
     /**
      * The URL to the PostgreSQL database to use for Prisma.
      */
-    get DATABASE_URL() { return required("DATABASE_URL") }
+    get DATABASE_URL() { return required("DATABASE_URL") },
+
+    /**
+     * A permanent public URL to the image asset to use as the default profile picture placeholder.
+     */
+    get DEFAULT_PFP_URL() { return required("DEFAULT_PFP_URL") },
+
+    /**
+     * The ID of the canonical OAuth client, which will be allowed to handle consent screens, request the `elevated` scope, and bypass
+     * consent modals when authorizing. In production, this is the main `lapse.hackclub.com` client.
+     */
+    get CANONICAL_OAUTH_CLIENT_ID() { return required("CANONICAL_OAUTH_CLIENT_ID") }
 };
 
 function required(name: string) {

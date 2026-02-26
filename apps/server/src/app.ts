@@ -3,7 +3,7 @@ import "dotenv/config";
 import Fastify from "fastify"
 import { implement, onError, os } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
-import { ResponseHeadersPlugin } from "@orpc/server/plugins"
+import { RequestHeadersPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins"
 import chalk from "chalk"
 import { compositeRouterContract } from "@hackclub/lapse-api";
 
@@ -20,7 +20,7 @@ import comment from "@/routers/comment.js"
 import developer from "@/routers/developer.js"
 import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
-import internal from "@/routers/internal.js"
+import auth from "@/routers/auth.js"
 
 const handler = new OpenAPIHandler(
     implement(compositeRouterContract)
@@ -32,7 +32,8 @@ const handler = new OpenAPIHandler(
             comment,
             developer,
             global,
-            hackatime
+            hackatime,
+            auth
         }),
     {
         interceptors: [
@@ -41,7 +42,8 @@ const handler = new OpenAPIHandler(
             })
         ],
         plugins: [
-            new ResponseHeadersPlugin()
+            new ResponseHeadersPlugin(),
+            new RequestHeadersPlugin<Context>(),
         ]
     }
 );
