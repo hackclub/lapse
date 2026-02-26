@@ -1,5 +1,3 @@
-import { AsyncQueue } from "@/util/queuing";
-
 /**
  * Represents a locally stored snapshot. This will represent the structure on the server-side database.
  */
@@ -49,6 +47,23 @@ const DB_VERSION = 1;
 const DB_TIMELAPSES_STORE_NAME = "timelapses";
 const DB_SNAPSHOTS_STORE_NAME = "snapshots";
 const DB_DEVICES_STORE_NAME = "devices";
+
+class AsyncQueue {
+    private currentTask: Promise<unknown> = Promise.resolve();
+
+    enqueue<T>(task: () => Promise<T>): Promise<T> {
+        const promise = this.currentTask.then(() => task());
+        this.currentTask = promise.then(
+            () => {},
+            () => {}
+        );
+        return promise;
+    }
+
+    async synchronize(): Promise<void> {
+        return this.enqueue(async () => {});
+    }
+}
 
 /**
  * Securely stores data on the client device. 
