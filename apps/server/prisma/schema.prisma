@@ -55,7 +55,7 @@ model User {
   permissionLevel           PermissionLevel   @default(USER)
   handle                    String            @unique
   displayName               String
-  profilePictureUrl         String?
+  profilePictureUrl         String
   bio                       String            @default("")
   urls                      String[]          @default([])
   hackatimeId               String?
