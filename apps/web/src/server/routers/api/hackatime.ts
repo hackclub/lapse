@@ -8,7 +8,7 @@ import { router, protectedProcedure, publicProcedure } from "@/server/trpc";
 import { logError, logRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
 import { HackatimeOAuthApi } from "@/server/hackatime";
-import { dtoTimelapse, TIMELAPSE_INCLUDES, TimelapseSchema, OwnedTimelapseSchema } from "@/server/routers/api/timelapse";
+import { dtoTimelapse, dtoOwnedTimelapse, TIMELAPSE_INCLUDES, TimelapseSchema, OwnedTimelapseSchema } from "@/server/routers/api/timelapse";
 
 /**
  * Represents a Hackatime project of a given user.
@@ -92,7 +92,7 @@ export default router({
 
             return apiOk({
                 count: timelapses.length,
-                timelapses: timelapses.map(x => dtoTimelapse(x, req.ctx.user))
+                timelapses: timelapses.map(x => dtoOwnedTimelapse(x))
             });
         }),
 
