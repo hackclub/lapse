@@ -8,7 +8,7 @@ import { router, protectedProcedure, publicProcedure } from "@/server/trpc";
 import { logError, logRequest } from "@/server/serverCommon";
 import { database } from "@/server/db";
 import { HackatimeOAuthApi } from "@/server/hackatime";
-import { dtoTimelapse, TIMELAPSE_INCLUDES, TimelapseSchema } from "@/server/routers/api/timelapse";
+import { dtoTimelapse, dtoOwnedTimelapse, TIMELAPSE_INCLUDES, TimelapseSchema, OwnedTimelapseSchema } from "@/server/routers/api/timelapse";
 
 /**
  * Represents a Hackatime project of a given user.
@@ -62,6 +62,38 @@ export default router({
                 logError("user.getAllHackatimeProjects", "Failed to fetch Hackatime projects", { error, userId: req.ctx.user.id });
                 return apiOk({ projects: [] });
             }
+        }),
+
+    myTimelapsesForProject: protectedProcedure(["timelapse:read"], "GET", "/hackatime/myTimelapsesForProject")
+        .summary("Gets the authenticated user's public and unlisted timelapses associated with the given Hackatime project key.")
+        .input(z.object({
+            projectKey: z.string().min(1).max(256)
+                .describe("The exact, case-sensitive Hackatime project key to query.")
+        }))
+        .output(apiResult({
+            count: z.number()
+                .describe("The number of timelapses made by the authenticated user associated with the project key."),
+
+            timelapses: z.array(OwnedTimelapseSchema)
+                .describe("The timelapses made by the authenticated user associated with the project key.")
+        }))
+        .query(async (req) => {
+            logRequest("hackatime/myTimelapsesForProject", req);
+
+            const timelapses = await database.timelapse.findMany({
+                include: TIMELAPSE_INCLUDES,
+                where: {
+                    ownerId: req.ctx.user.id,
+                    hackatimeProject: req.input.projectKey,
+                    isPublished: true,
+                    visibility: { in: ["PUBLIC", "UNLISTED"] }
+                }
+            });
+
+            return apiOk({
+                count: timelapses.length,
+                timelapses: timelapses.map(x => dtoOwnedTimelapse(x))
+            });
         }),
 
     timelapsesForProject: publicProcedure("GET", "/hackatime/timelapsesForProject")
