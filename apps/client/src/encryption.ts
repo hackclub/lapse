@@ -2,7 +2,7 @@ import platform from "platform";
 import type { KnownDevice } from "@hackclub/lapse-api";
 
 import { deviceStorage, LocalDevice } from "@/deviceStorage";
-import { trpc } from "@/trpc";
+import { api } from "@/api"; 
 
 export interface KeyIvPair {
     key: ArrayBuffer;
@@ -72,7 +72,7 @@ function generatePasskey() {
 export async function getCurrentDevice(): Promise<LocalDevice> {
     const existing = (await deviceStorage.getAllDevices()).find(x => x.thisDevice);
     if (existing) {
-        const res = await trpc.user.getDevices.query({});
+        const res = await api.user.getDevices({});
 
         if (res.ok) {
             if (res.data.devices.some((d: KnownDevice) => d.id === existing.id))
@@ -88,7 +88,7 @@ export async function getCurrentDevice(): Promise<LocalDevice> {
     }
 
     // We haven't registered this device with the server yet! Assign it an ID.
-    const res = await trpc.user.registerDevice.mutate({
+    const res = await api.user.registerDevice({
         name: platform.description ?? navigator.platform
     });
 

@@ -5,26 +5,23 @@ import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import clsx from "clsx";
 
-import { TIMELAPSE_FRAME_LENGTH_MS } from "@/shared/constants";
-import { assert } from "@/shared/common";
-
 import { createMediaRecorder, mergeVideoSessions, videoGenerateThumbnail } from "@/videoProcessing";
 import { encryptVideo, encryptData, getCurrentDevice } from "@/encryption";
-import { deviceStorage, LocalSnapshot } from "@/deviceStorage";
-import { apiUpload } from "@/upload";
-import { trpc } from "@/trpc";
+import { deviceStorage } from "@/deviceStorage";
+import { api } from "@/api";
+import { TIMELAPSE_FPS, TIMELAPSE_FACTOR } from "@hackclub/lapse-api";
 
 import { useOnce } from "@/hooks/useOnce";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
 
-import RootLayout from "@/components/RootLayout";
+import RootLayout from "@/components/layout/RootLayout";
 import { TimeSince } from "@/components/TimeSince";
 import { Button } from "@/components/ui/Button";
-import { Modal, ModalHeader, ModalContent } from "@/components/ui/Modal";
-import { WindowedModal } from "@/components/ui/WindowedModal";
-import { LoadingModal } from "@/components/ui/LoadingModal";
-import { ErrorModal } from "@/components/ui/ErrorModal";
+import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
+import { WindowedModal } from "@/components/layout/WindowedModal";
+import { LoadingModal } from "@/components/layout/LoadingModal";
+import { ErrorModal } from "@/components/layout/ErrorModal";
 import { TextareaInput } from "@/components/ui/TextareaInput";
 import { TextInput } from "@/components/ui/TextInput";
 import { DropdownInput } from "@/components/ui/DropdownInput";
@@ -33,6 +30,7 @@ import { PillControlButton } from "@/components/ui/PillControlButton";
 import RecordIcon from "@/client/assets/icons/record.svg";
 import PauseIcon from "@/client/assets/icons/pause.svg";
 import StopIcon from "@/client/assets/icons/stop.svg";
+import { assert } from "@hackclub/lapse-shared";
 
 export default function Page() {
   const router = useRouter();
@@ -64,27 +62,27 @@ export default function Page() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [isFrozen, setIsFrozen] = useState(false);
-  const isFrozenRef = useRef(false);
-
+  const [isPaused, setIsPaused] = useState(false);
 
   const mainPreviewRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const currentStream = cameraStream || screenStream;
-  const isRecording = !isFrozen && !setupModalOpen;
+  const isRecording = !isPaused && !setupModalOpen;
 
+  // When recording, we emit heartbeats - these have nothing to do with Hackatime heartbeats; they are
+  // only use for the public user recording count on the header.
   useInterval(async () => {
     if (isRecording) {
-      await trpc.user.emitHeartbeat.mutate({});
+      await api.user.emitHeartbeat({});
     }
   }, 30 * 1000);
 
   useEffect(() => {
     document.title = setupModalOpen ? "Lapse"
-      : isFrozen ? `⏸️ PAUSED: ${name} - Lapse`
+      : isPaused ? `⏸️ PAUSED: ${name} - Lapse`
       : `🔴 REC: ${name} - Lapse`;
-  }, [name, setupModalOpen, isFrozen]);
+  }, [name, setupModalOpen, isPaused]);
 
   useEffect(() => {
     async function enumerateCameras() {
@@ -117,40 +115,18 @@ export default function Page() {
     console.group("(create.tsx) An incomplete timelapse has been detected!");
     console.log("(create.tsx) - timelapse:", activeTimelapse);
 
-    const snapshots = await deviceStorage.getAllSnapshots();
+    const snapshots = activeTimelapse.snapshots;
     console.log("(create.tsx) - snapshots:", snapshots);
     console.groupEnd();
 
     let adjustedStartTime = new Date(activeTimelapse.startedAt);
-    if (snapshots.length > 0) {
-      const sessionGroups = new Map<number, LocalSnapshot[]>();
-      for (const snapshot of snapshots) {
-        if (!sessionGroups.has(snapshot.session)) {
-          sessionGroups.set(snapshot.session, []);
-        }
-
-        sessionGroups.get(snapshot.session)!.push(snapshot);
-      }
-
-      console.group("(create.tsx) Sessions:");
-      let totalElapsedTime = 0;
-      for (const [session, sessionSnapshots] of sessionGroups) {
-        if (sessionSnapshots.length > 1) {
-          const sorted = sessionSnapshots.sort((a, b) => a.createdAt - b.createdAt);
-          const sessionStart = sorted[0].createdAt;
-          const sessionEnd = sorted[sorted.length - 1].createdAt;
-          const sessionDuration = sessionEnd - sessionStart;
-          totalElapsedTime += sessionDuration;
-
-          console.log(`(create.tsx) Session ${session}: ${sessionDuration}ms (${sessionSnapshots.length} snapshots)`);
-        }
-      }
-      console.groupEnd();
+    if (snapshots.length > 1) {
+      const sorted = [...snapshots].sort((a, b) => a - b);
+      const totalElapsedTime = sorted[sorted.length - 1] - sorted[0];
 
       adjustedStartTime = new Date(Date.now() - totalElapsedTime);
       setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
 
-      console.log("(create.tsx) session groups:", sessionGroups);
       console.log("(create.tsx) total elapsed time:", totalElapsedTime);
     }
 
@@ -162,9 +138,11 @@ export default function Page() {
     setSetupModalOpen(true);
   });
 
-
+  /**
+   * Handles a single frame. This takes the frame in `canvas` and encodes it via `MediaRecorder`.
+   */
   const captureFrame = useCallback(async (timelapseId?: number) => {
-    if (isFrozenRef.current)
+    if (isPaused)
       return;
 
     const video = mainPreviewRef.current;
@@ -175,13 +153,14 @@ export default function Page() {
 
     const ctx = canvas.getContext("2d");
     if (!ctx)
-      return;
+      throw new Error("Cannot get 2D context from the canvas!");
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
     if (recorder && recorder.state === "recording") {
+      // This will call the callback in `ondataavailable`! We set it up in
       recorder.requestData();
     }
 
@@ -189,15 +168,16 @@ export default function Page() {
     if (activeTimelapseId == null)
       throw new Error("captureFrame() was called, but currentTimelapseId is null");
 
-    deviceStorage.saveSnapshot({
-      createdAt: Date.now(),
-      session: currentSession
-    });
+    deviceStorage.appendSnapshot(activeTimelapseId, Date.now());
+  }, [recorder, currentTimelapseId, currentSession, isPaused]);
 
-  }, [recorder, currentTimelapseId, currentSession]);
-
-  async function onCreate() {
-    console.log("(create.tsx) creating a new timelapse!");
+  /**
+   * Runs when the user begins recording a timelapse. This function is **NOT** invoked as soon
+   * as we navigate to the page - only when the user actually selects the media source and confirms
+   * their selection do we call this function.
+   */
+  async function onBegin() {
+    console.log("(create.tsx) timelapse recording begin!");
 
     mainPreviewRef.current!.srcObject = currentStream!;
     setSetupModalOpen(false);
@@ -207,7 +187,6 @@ export default function Page() {
 
     if (isDiscarding && currentTimelapseId) {
       console.log("(create.tsx) discarding previous timelapse:", currentTimelapseId);
-      await deviceStorage.deleteAllSnapshots();
       await deviceStorage.deleteTimelapse(currentTimelapseId);
       setCurrentTimelapseId(null);
       activeTimelapseId = null;
@@ -216,8 +195,6 @@ export default function Page() {
     }
 
     if (!activeTimelapseId) {
-      // Creating a new timelapse
-
       const now = new Date();
       setStartedAt(now);
       setIsCreated(true);
@@ -227,7 +204,8 @@ export default function Page() {
         description,
         startedAt: now.getTime(),
         chunks: [],
-        isActive: true,
+        snapshots: [],
+        isActive: true
       });
 
       setCurrentTimelapseId(timelapseId);
@@ -250,7 +228,7 @@ export default function Page() {
     // Only set up recording if not already active (for new timelapses or resumed ones)
     if (!recorder || recorder.state === "inactive") {
       const canvas = canvasRef.current!;
-      const stream = canvas.captureStream(1000 / TIMELAPSE_FRAME_LENGTH_MS);
+      const stream = canvas.captureStream(TIMELAPSE_FPS);
 
       const newRecorder = createMediaRecorder(stream);
 
@@ -259,16 +237,12 @@ export default function Page() {
           return;
 
         assert(activeTimelapseId != null, "activeTimelapseId was null when ondataavailable was called");
-        await deviceStorage.appendChunk(
-          activeTimelapseId,
-          ev.data,
-          currentSession
-        );
+        await deviceStorage.appendChunk(activeTimelapseId, ev.data, currentSession);
       };
 
       console.log("(create.tsx) creating new recorder!", newRecorder);
       setRecorder(newRecorder);
-      newRecorder.start(TIMELAPSE_FRAME_LENGTH_MS);
+      newRecorder.start(1000 / TIMELAPSE_FPS);
 
       if (frameInterval) {
         console.warn("(create.tsx) clearing previous frame capture interval.");
@@ -277,13 +251,13 @@ export default function Page() {
 
       const newInterval = setInterval(
         () => captureFrame(activeTimelapseId!),
-        TIMELAPSE_FRAME_LENGTH_MS
+        1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS
       );
 
       setFrameInterval(newInterval);
     }
 
-    setFreeze(false);
+    setPause(false);
   }
 
   async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
@@ -319,7 +293,7 @@ export default function Page() {
           setVideoSourceKind("NONE");
           setNeedsVideoSource(true);
           setSetupModalOpen(true);
-          setFreeze(true);
+          setPause(true);
           setTimeout(() => {
             if (window.location.href.includes("/timelapse/create")) {
               alert("Your screen sharing has ended. Please select a new video source to continue your timelapse.");
@@ -420,21 +394,19 @@ export default function Page() {
     setChangingSource(false);
   }
 
-  function setFreeze(shouldBeFrozen: boolean) {
-    if ( (shouldBeFrozen && !isFrozen) || (!shouldBeFrozen && isFrozen) ) {
-      toggleFreeze();
+  function setPause(shouldBePaused: boolean) {
+    if ( (shouldBePaused && !isPaused) || (!shouldBePaused && isPaused) ) {
+      togglePause();
     }
   }
 
-  function toggleFreeze() {
-    if (isFrozen) {
-      setIsFrozen(false);
-      isFrozenRef.current = false;
+  function togglePause() {
+    if (isPaused) {
+      setIsPaused(false);
       recorder?.resume();
     }
     else {
-      setIsFrozen(true);
-      isFrozenRef.current = true;
+      setIsPaused(true);
       recorder?.pause();
     }
   }
@@ -484,7 +456,7 @@ export default function Page() {
 
         setUploadStage("Requesting upload URL...");
         setUploadProgress(30);
-        const uploadRes = await trpc.timelapse.createDraft.query({ containerType: "WEBM" });
+        const uploadRes = await api.timelapse.createDraft({ containerType: "WEBM" });
         console.log("(upload) timelapse.createDraft response:", uploadRes);
 
         if (!uploadRes.ok)
@@ -540,23 +512,20 @@ export default function Page() {
 
         setUploadStage("Finalizing timelapse...");
         setUploadProgress(85);
-        const snapshots = await deviceStorage.getAllSnapshots();
-        const snapshotTimestamps = snapshots.map(s => s.createdAt);
-
         const device = await getCurrentDevice();
 
         console.log("(upload) finalizing upload now!");
         console.log("(upload) - name:", name);
         console.log("(upload) - description:", description);
-        console.log("(upload) - snapshots:", snapshotTimestamps);
+        console.log("(upload) - snapshots:", timelapse.snapshots);
 
-        const createRes = await trpc.timelapse.commit.mutate({
+        const createRes = await api.timelapse.commit({
           id: uploadRes.data.id,
           name,
           description,
           visibility: "UNLISTED",
           deviceId: device.id,
-          snapshots: snapshotTimestamps,
+          snapshots: timelapse.snapshots,
         });
 
         console.log("(upload) timelapse.create response:", createRes);
@@ -570,7 +539,6 @@ export default function Page() {
 
         if (currentTimelapseId) {
           await deviceStorage.markComplete(currentTimelapseId);
-          await deviceStorage.deleteAllSnapshots();
           await deviceStorage.deleteTimelapse(currentTimelapseId);
           setCurrentTimelapseId(null);
         }
@@ -626,7 +594,6 @@ export default function Page() {
       }
 
       if (currentTimelapseId) {
-        await deviceStorage.deleteAllSnapshots();
         await deviceStorage.deleteTimelapse(currentTimelapseId);
         setCurrentTimelapseId(null);
       }
@@ -641,7 +608,7 @@ export default function Page() {
 
   function openSetupModal() {
     setSetupModalOpen(true);
-    setFreeze(true);
+    setPause(true);
   }
 
   function onSubmitModalClose() {
@@ -654,7 +621,7 @@ export default function Page() {
     }
     else {
       setSetupModalOpen(false);
-      setFreeze(false);
+      setPause(false);
     }
   }
 
@@ -759,13 +726,14 @@ export default function Page() {
                             <Button onClick={() => setIsDiscarding(false)} kind="regular" icon="view-back">
                               Back
                             </Button>
-                            <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary" className="flex-1">
+
+                            <Button onClick={onBegin} disabled={isCreateDisabled} kind="primary" className="flex-1">
                               Create
                             </Button>
                           </>
                         ) : (
                           <>
-                            <Button onClick={onCreate} disabled={isCreateDisabled} kind="primary" className="flex-1">
+                            <Button onClick={onBegin} disabled={isCreateDisabled} kind="primary" className="flex-1">
                               {
                                 needsVideoSource ? "Resume"
                                 : isCreated ? "Update"
@@ -838,8 +806,8 @@ export default function Page() {
 
         {/* controls (overlay) */}
         <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">
-          <PillControlButton onClick={toggleFreeze}>
-            {isFrozen ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} />}
+          <PillControlButton onClick={togglePause}>
+            {isPaused ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} />}
           </PillControlButton>
 
           <PillControlButton onClick={() => setSubmitModalOpen(true)}>

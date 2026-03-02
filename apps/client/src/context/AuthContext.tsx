@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import { useRouter } from "next/router";
 import type { User } from "@hackclub/lapse-api";
 
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 import { useOnce } from "@/hooks/useOnce";
 import { useCache } from "@/hooks/useCache";
 
@@ -14,11 +14,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-interface AuthProviderProps {
+export function AuthProvider({ children }: {
     children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+}) {
     const router = useRouter();
 
     const [userCache, setUserCache] = useCache<User>("user");
@@ -27,7 +25,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     useOnce(async () => {
         console.log("(AuthContext.tsx) authenticating...");
-        const req = await trpc.user.myself.query({});
+        const req = await api.user.myself({});
 
         console.log("(AuthContext.tsx) response:", req);
 
@@ -46,7 +44,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const signOut = useCallback(async () => {
         console.log("(AuthContext.tsx) signing out...");
-        await trpc.user.signOut.mutate({});
+        await api.user.signOut({});
         setUserCache(null);
         setCurrentUser(null);
         router.push("/");
@@ -70,8 +68,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 export function useAuthContext(): AuthContextValue {
     const context = useContext(AuthContext);
-    if (context === null) {
+    if (context === null)
         throw new Error("useAuthContext must be used within an AuthProvider");
-    }
+
     return context;
 }

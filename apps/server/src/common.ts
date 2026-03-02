@@ -2,14 +2,14 @@ import type { LapseError } from "@hackclub/lapse-api";
 import { nanoid } from "nanoid";
 
 /**
- * Returns an `ApiResult<T>` object that represents a successful API response.
+ * Returns an `LapseResult<T>` object that represents a successful API response.
  */
 export function apiOk<T>(data: T) {
     return { ok: true as const, data };
 }
 
 /**
- * Returns an `ApiResult<T>` object that represents a failed API response.
+ * Returns an `LapseResult<T>` object that represents a failed API response.
  */
 export function apiErr(error: LapseError, message: string) {
     return { ok: false as const, error, message };

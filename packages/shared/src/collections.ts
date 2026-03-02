@@ -43,3 +43,22 @@ export function* chunked<T>(array: T[], n: number) {
         yield array.slice(i, i + n);
     }
 }
+
+/**
+ * Returns `true` if `a` and `b` are of equal length and contain the same elements, irrespective of order.
+ */
+export function arraysEqual<T>(a: T[], b: T[]) {
+    if (a.length != b.length)
+        return false;
+
+    a = a.toSorted();
+    b = b.toSorted();
+
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}

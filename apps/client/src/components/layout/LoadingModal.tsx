@@ -1,6 +1,6 @@
 import Icon from "@hackclub/icons";
 
-import { Modal, ModalHeader } from "./Modal";
+import { Modal, ModalHeader } from "@/components/layout/Modal";
 
 export function LoadingModal({
   isOpen,

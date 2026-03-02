@@ -18,6 +18,7 @@
   "dependencies": {
     "@hackclub/icons": "^0.0.15",
     "@hackclub/lapse-api": "workspace:*",
+    "@hackclub/lapse-shared": "workspace:*",
     "@orpc/client": "^1.13.5",
     "@orpc/contract": "^1.13.5",
     "@orpc/openapi": "^1.13.5",

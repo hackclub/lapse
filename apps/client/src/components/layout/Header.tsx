@@ -9,11 +9,11 @@ import LapseLogo from "@/client/assets/icon.svg";
 import { useAuth } from "@/hooks/useAuth";
 
 import { Button } from "@/components/ui/Button";
-import { ProfilePicture } from "@/components/ProfilePicture";
-import { SettingsView } from "@/components/ui/layout/SettingsView";
+import { ProfilePicture } from "@/components/entity/ProfilePicture";
+import { SettingsView } from "@/components/layout/SettingsView";
 import { useCachedState } from "@/hooks/useCachedState";
 import { useInterval } from "@/hooks/useInterval";
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 
 
 export function Header() {
@@ -24,7 +24,7 @@ export function Header() {
   const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
 
   useInterval(async () => {
-    const res = await trpc.global.activeUsers.query({});
+    const res = await api.global.activeUsers({});
     if (!res.ok) {
       console.error("(Header.tsx) could not query active users!", res);
       return;

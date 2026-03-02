@@ -269,7 +269,7 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
     }
 }
 
-export const oauth = new OAuth2Server({
+export const oauthSrv = new OAuth2Server({
     model: new LapseAuthorizationCodeModel(),
     accessTokenLifetime: 60 * 60 * 24 * 30, // 30d
 });

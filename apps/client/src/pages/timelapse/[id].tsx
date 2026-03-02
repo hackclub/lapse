@@ -2,70 +2,46 @@ import NextLink from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import Icon from "@hackclub/icons";
+import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-api";
+import { assert } from "@hackclub/lapse-shared";
 
-import type { Timelapse, TimelapseVisibility, Comment, HackatimeProject } from "@/api";
-
-import { assert, formatDuration } from "@/shared/common";
-
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
-import { deviceStorage } from "@/deviceStorage";
-import { decryptVideo } from "@/encryption";
 import { useAuth } from "@/hooks/useAuth";
 import { markdownToJsx } from "@/markdown";
 
-import RootLayout from "@/components/RootLayout";
-import { ErrorModal } from "@/components/ui/ErrorModal";
-import { LoadingModal } from "@/components/ui/LoadingModal";
-import { ProfilePicture } from "@/components/ProfilePicture";
+import RootLayout from "@/components/layout/RootLayout";
+import { ErrorModal } from "@/components/layout/ErrorModal";
+import { LoadingModal } from "@/components/layout/LoadingModal";
+import { ProfilePicture } from "@/components/entity/ProfilePicture";
 import { Button } from "@/components/ui/Button";
-import { WindowedModal } from "@/components/ui/WindowedModal";
+import { WindowedModal } from "@/components/layout/WindowedModal";
 import { TextInput } from "@/components/ui/TextInput";
 import { TextareaInput } from "@/components/ui/TextareaInput";
-import { PasskeyModal } from "@/components/ui/PasskeyModal";
-import { VisibilityPicker } from "@/components/ui/VisibilityPicker";
-import { DropdownInput } from "@/components/ui/DropdownInput";
+import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
-import { CommentSection } from "@/components/CommentSection";
-import { PublishModal } from "@/components/ui/layout/PublishModal";
+import { CommentSection } from "@/components/entity/CommentSection";
 import { Duration } from "@/components/Duration";
 
 export default function Page() {
   const router = useRouter();
   const { currentUser } = useAuth(false);
 
-  const [fetchStarted, setFetchStarted] = useState(false);
   const [timelapse, setTimelapse] = useState<Timelapse | null>(null);
-  const [videoObjUrl, setVideoObjUrl] = useState<string | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorIsCritical, setErrorIsCritical] = useState(false);
-  
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editVisibility, setEditVisibility] = useState<TimelapseVisibility>("PUBLIC");
   const [isUpdating, setIsUpdating] = useState(false);
-  
-  const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
-  const [missingDeviceName, setMissingDeviceName] = useState<string>("");
-  const [invalidPasskeyAttempt, setInvalidPasskeyAttempt] = useState(false);
-  
-  const [syncModalOpen, setSyncModalOpen] = useState(false);
-  const [hackatimeProject, setHackatimeProject] = useState("");
-  const [hackatimeProjects, setHackatimeProjects] = useState<HackatimeProject[]>([]);
-  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const [publishModalOpen, setPublishModalOpen] = useState(false);
-
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
   const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
+
   useEffect(() => {
     if (!timelapse)
       return;
@@ -89,7 +65,7 @@ export default function Page() {
   }
 
   useAsyncEffect(async () => {
-    if (!router.isReady || fetchStarted)
+    if (!router.isReady)
       return;
 
     try {
@@ -100,10 +76,8 @@ export default function Page() {
         return;
       }
 
-      setFetchStarted(true);
-
       console.log("([id].tsx) querying timelapse...");
-      const res = await trpc.timelapse.query.query({ id });
+      const res = await api.timelapse.query({ id });
       if (!res.ok) {
         console.error("([id].tsx) couldn't fetch that timelapse!", res);
         setCriticalError(res.message);
@@ -118,57 +92,9 @@ export default function Page() {
       const video = videoRef.current;
       assert(video != null, "<video> element ref should've been loaded by now");
 
-      if (timelapse.isPublished) {
-        // Video is decrypted - we don't have to decrypt it client-side!
+      // The playback URL might be null if the video has failed processing.
+      if (timelapse.playbackUrl) {
         video.src = timelapse.playbackUrl;
-      }
-      else {
-        // This case is trickier - we have to decrypt the video client-side with the device passkey.
-        const devices = await deviceStorage.getAllDevices();
-        assert(timelapse.private != undefined, "Non-published timelapse that we have access to should always have private fields");
-        assert(timelapse.private.device != null, "Non-published timelapse should always have a device");
-
-        // go home typescript, you're drunk... 
-        const originDevice = devices.find(x => x.id == timelapse.private!.device!.id);
-
-        if (!originDevice) {
-          setMissingDeviceName(timelapse.private.device.name);
-          setInvalidPasskeyAttempt(false);
-          setPasskeyModalOpen(true);
-          return;
-        }
-
-        const vidRes = await fetch(timelapse.playbackUrl, { method: "GET" });
-        if (!vidRes.ok) {
-          console.error("([id].tsx) could not fetch timelapse playback URL!", vidRes);
-          console.error(`([id].tsx) playback URL was: ${timelapse.playbackUrl}`);
-          setCriticalError(`Failed to load timelapse video, HTTP ${vidRes.status}!`);
-          return;
-        }
-        
-        const vidData = await vidRes.arrayBuffer();
-        
-        try {
-          // Decrypt the video data using the device passkey and timelapse ID
-          const decryptedData = await decryptVideo(
-            vidData,
-            timelapse.id,
-            originDevice.passkey
-          );
-          
-          // Create a blob from the decrypted data and assign it to the video element
-          const videoBlob = new Blob([decryptedData], { type: "video/mp4" });
-          const url = URL.createObjectURL(videoBlob);
-          setVideoObjUrl(url);
-          video.src = url;
-        }
-        catch (decryptionError) {
-          console.warn("([id].tsx) decryption failed:", decryptionError);
-          setMissingDeviceName(timelapse.private.device.name);
-          setInvalidPasskeyAttempt(true);
-          setPasskeyModalOpen(true);
-          return;
-        }
       }
     }
     catch (apiErr) {
@@ -182,60 +108,6 @@ export default function Page() {
     }
   }, [router, router.isReady]);
 
-  // Cleanup the video URL when component unmounts or videoUrl changes
-  useEffect(() => {
-    return () => {
-      if (videoObjUrl) {
-        URL.revokeObjectURL(videoObjUrl);
-      }
-    };
-  }, [videoObjUrl]);
-
-  async function handlePublish(visibility: TimelapseVisibility) {
-    if (!timelapse || !currentUser) return;
-
-    setPublishModalOpen(false);
-
-    try {
-      setIsPublishing(true);
-
-      assert(timelapse.private != undefined, "Non-published timelapse that we have access to should always have private fields");
-      assert(timelapse.private.device != null, "Non-published timelapse should always have a device");
-
-      const devices = await deviceStorage.getAllDevices();
-      const originDevice = devices.find(x => x.id === timelapse.private!.device!.id);
-
-      if (!originDevice) {
-        setRegularError("Device passkey not found. Cannot publish this timelapse.");
-        return;
-      }
-
-      const result = await trpc.timelapse.publish.mutate({
-        id: timelapse.id,
-        passkey: originDevice.passkey,
-        visibility
-      });
-
-      if (result.ok) {
-        setTimelapse(result.data.timelapse);
-      } 
-      else {
-        setRegularError(`Failed to publish: ${result.error}`);
-      }
-    } 
-    catch (error) {
-      console.error("([id].tsx) error publishing timelapse:", error);
-      setCriticalError(
-        error instanceof Error
-          ? error.message
-          : "An error occurred while publishing the timelapse."
-      );
-    } 
-    finally {
-      setIsPublishing(false);
-    }
-  }
-
   function handleEdit() {
     if (!timelapse)
       return;
@@ -247,12 +119,13 @@ export default function Page() {
   };
 
   async function handleUpdate() {
-    if (!timelapse) return;
+    if (!timelapse)
+      return;
 
     try {
       setIsUpdating(true);
 
-      const result = await trpc.timelapse.update.mutate({
+      const result = await api.timelapse.update({
         id: timelapse.id,
         changes: {
           name: editName.trim(),
@@ -280,97 +153,17 @@ export default function Page() {
 
   const isUpdateDisabled = !editName.trim() || isUpdating;
 
-  async function handleSyncWithHackatime() {
-    if (!timelapse || !currentUser)
-      return;
-
-    setHackatimeProject("");
-    setSyncModalOpen(true);
-    setIsLoadingProjects(true);
-
-    try {
-      const res = await trpc.hackatime.allProjects.query({});
-      setHackatimeProjects(res.ok ? res.data.projects : []);
-    }
-    catch (error) {
-      setHackatimeProjects([]);
-    }
-    finally {
-      setIsLoadingProjects(false);
-    }
-  };
-
-  async function handleConfirmSync() {
-    if (!timelapse)
-      return;
-
-    const projectName = hackatimeProject.trim();
-    if (!projectName)
-      return;
-
-    try {
-      setIsSyncing(true);
-
-      const result = await trpc.timelapse.syncWithHackatime.mutate({
-        id: timelapse.id,
-        hackatimeProject: projectName
-      });
-
-      if (result.ok) {
-        setTimelapse(result.data.timelapse);
-        setSyncModalOpen(false);
-        setHackatimeProject("");
-      } 
-      else {
-        setRegularError(`Failed to sync with Hackatime: ${result.error}`);
-      }
-    } 
-    catch (error) {
-      console.error("([id].tsx) error syncing with Hackatime:", error);
-      setRegularError(error instanceof Error ? error.message : "An error occurred while syncing with Hackatime.");
-    } 
-    finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const isSyncDisabled = !hackatimeProject.trim() || isSyncing;
-
-  async function handlePasskeySubmit(passkey: string) {
-    if (!timelapse?.private?.device) return;
-
-    try {
-      await deviceStorage.saveDevice({
-        id: timelapse.private.device.id,
-        passkey: passkey,
-        thisDevice: false
-      });
-
-      // Retry loading the timelapse with the new passkey
-      setFetchStarted(false);
-      setInvalidPasskeyAttempt(false);
-      setPasskeyModalOpen(false);
-    }
-    catch (error) {
-      console.error("([id].tsx) Error saving device passkey:", error);
-      setRegularError("Failed to save passkey. Please try again.");
-    }
-  }
-
   async function handleDeleteTimelapse() {
-    if (!timelapse || !isOwned) return;
+    if (!timelapse || !isOwned)
+      return;
 
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this timelapse? This action cannot be undone."
-    );
-
-    if (!confirmed) return;
+    if (!window.confirm("Are you sure you want to delete this timelapse? This action cannot be undone."))
+      return;
 
     try {
       setIsDeleting(true);
-      setPasskeyModalOpen(false);
 
-      const result = await trpc.timelapse.delete.mutate({ id: timelapse.id });
+      const result = await api.timelapse.delete({ id: timelapse.id });
 
       if (result.ok) {
         router.push(`/user/@${timelapse.owner.handle}`);
@@ -399,7 +192,7 @@ export default function Page() {
           <video 
             ref={videoRef} 
             controls
-            poster={timelapse?.isPublished ? timelapse?.thumbnailUrl || undefined : undefined}
+            poster={timelapse?.thumbnailUrl ?? undefined}
             className="aspect-video w-full h-min md:rounded-2xl bg-[#000]"
           />
 
@@ -411,20 +204,6 @@ export default function Page() {
                     <Icon glyph="edit" size={24} />
                     Edit details
                   </Button>
-
-                  { !timelapse.isPublished && (
-                    <Button kind="primary" className="gap-2 w-full" onClick={() => setPublishModalOpen(true)} disabled={isPublishing}>
-                      <Icon glyph="send-fill" size={24} />
-                      {isPublishing ? "Publishing..." : "Publish"}
-                    </Button>
-                  ) }
-
-                  { timelapse.isPublished && !timelapse.private?.hackatimeProject && (
-                    <Button className="gap-2 w-full" onClick={handleSyncWithHackatime} kind="primary">
-                      <Icon glyph="history" size={24} />
-                      Sync with Hackatime
-                    </Button>
-                  ) }
                 </>
               ) : (
                 <>
@@ -443,12 +222,8 @@ export default function Page() {
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-bold text-smoke leading-tight">
                 { timelapse?.name || <Skeleton /> }
-                
-                { timelapse && !timelapse.isPublished && (
-                  <Badge variant="warning" className="ml-4">UNPUBLISHED</Badge>
-                )}
 
-                { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
+                { timelapse && timelapse.visibility === "UNLISTED" && (
                   <Badge variant="default" className="ml-4">UNLISTED</Badge>
                 ) }
               </h1>
@@ -479,9 +254,9 @@ export default function Page() {
             </p>
           </div>
           
-          { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && isOwned && (
+          { timelapse && timelapse.visibility === "UNLISTED" && isOwned && (
             <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
-              <Icon glyph="private-fill" size={32} className="text-yellow flex-shrink-0" />
+              <Icon glyph="private-fill" size={32} className="text-yellow shrink-0" />
               <p className="text-yellow">
                 This timelapse is unlisted and can only be viewed via the link or by staff. Click on
                 "Edit details" to change this.
@@ -489,7 +264,13 @@ export default function Page() {
             </div>
           )}
 
-          { timelapse && timelapse.isPublished && <CommentSection timelapseId={timelapse.id} comments={localComments} setComments={setLocalComments} /> }
+          { timelapse && (
+            <CommentSection
+              timelapseId={timelapse.id}
+              comments={localComments}
+              setComments={setLocalComments}
+            />
+          ) }
         </div>
       </div>
 
@@ -528,60 +309,12 @@ export default function Page() {
             {isUpdating ? "Updating..." : "Update"}
           </Button>
 
-          { !timelapse?.isPublished && (
-            <div className="flex flex-col gap-2 pt-4 border-t border-slate">
-              <Button onClick={handleDeleteTimelapse} disabled={isDeleting} kind="destructive">
-                <Icon glyph="delete" size={24} />
-                {isDeleting ? "Deleting..." : "Delete Timelapse"}
-              </Button>
-            </div>
-          )}
-        </div>
-      </WindowedModal>
-
-      <WindowedModal
-        icon="history"
-        title="Sync with Hackatime"
-        description="Import your timelapse snapshots to Hackatime as heartbeats. This can only be done once per timelapse."
-        isOpen={syncModalOpen}
-        setIsOpen={setSyncModalOpen}
-      >
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
-            <Icon glyph="important" size={24} className="text-yellow flex-shrink-0" />
-            <div>
-              <p className="font-bold text-yellow">One-time sync</p>
-              <p className="text-smoke">You can only sync a timelapse with Hackatime once. Make sure you choose the correct project name.</p>
-            </div>
+          <div className="flex flex-col gap-2 pt-4 border-t border-slate">
+            <Button onClick={handleDeleteTimelapse} disabled={isDeleting} kind="destructive">
+              <Icon glyph="delete" size={24} />
+              {isDeleting ? "Deleting..." : "Delete Timelapse"}
+            </Button>
           </div>
-
-          {isLoadingProjects ? (
-            <div className="text-secondary text-center">Loading projects...</div>
-          ) : (
-            <>
-              <DropdownInput
-                label="Project Name"
-                description="Select an existing Hackatime project or type to create a new one."
-                value={hackatimeProject}
-                onChange={setHackatimeProject}
-                options={hackatimeProjects.map(project => ({
-                  value: project.name,
-                  searchLabel: project.name,
-                  label: (
-                    <div className="flex justify-between w-full">
-                      <span>{project.name}</span>
-                      <span className="text-secondary">{formatDuration(project.totalSeconds)}</span>
-                    </div>
-                  )
-                }))}
-                allowUserCustom
-              />
-
-              <Button onClick={handleConfirmSync} disabled={isSyncDisabled} kind="primary">
-                {isSyncing ? "Syncing..." : "Sync with Hackatime"}
-              </Button>
-            </>
-          )}
         </div>
       </WindowedModal>
 
@@ -590,42 +323,6 @@ export default function Page() {
         setIsOpen={(open) => !open && setError(null)}
         message={error || ""}
         onClose={errorIsCritical ? () => router.back() : undefined}
-        onRetry={
-          error?.includes("Failed to load") ? () => {
-            setError(null);
-            setFetchStarted(false);
-          } : undefined
-        }
-      />
-
-      <LoadingModal
-        isOpen={isPublishing}
-        title="Publishing Timelapse"
-        message="We're decrypting your timelapse - hold tight!"
-      />
-
-      <PasskeyModal
-        isOpen={passkeyModalOpen}
-        setIsOpen={setPasskeyModalOpen}
-        description={`Enter the 6-digit PIN for ${missingDeviceName} to decrypt the timelapse`}
-        onPasskeySubmit={handlePasskeySubmit}
-        onDelete={isOwned && !timelapse?.isPublished ? handleDeleteTimelapse : undefined}
-      >
-        {invalidPasskeyAttempt && (
-          <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
-            <Icon glyph="important" size={24} className="text-yellow flex-shrink-0" />
-            <div>
-              <p className="font-bold text-yellow">Invalid passkey</p>
-              <p className="text-smoke">The passkey you entered could not decrypt this timelapse. Please try again.</p>
-            </div>
-          </div>
-        )}
-      </PasskeyModal>
-
-      <PublishModal
-        isOpen={publishModalOpen}
-        setIsOpen={setPublishModalOpen}
-        onSelect={handlePublish}
       />
     </RootLayout>
   );

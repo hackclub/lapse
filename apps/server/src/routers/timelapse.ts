@@ -48,7 +48,8 @@ export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
         visibility: entity.visibility,
         playbackUrl: entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`,
         thumbnailUrl: entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`,
-        duration: entity.duration
+        duration: entity.duration,
+        isDraft: false
     };
 }
 
@@ -58,6 +59,7 @@ export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
 export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
     return {
         ...dtoPublicTimelapse(entity),
+        isDraft: false,
         private: {
             hackatimeProject: entity.hackatimeProject
         }

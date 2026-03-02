@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Icon from "@hackclub/icons";
 
 import { phantomSans } from "@/fonts";
-import { IconGlyph } from "@/components/ui/util";
+import type { IconGlyph } from "@/common";
 import { useIsMounted } from "@/hooks/useIsMounted";
 
 function getSearchableLabel(entry: DropdownEntryAny): string {

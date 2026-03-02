@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import { OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
 
-import RootLayout from "@/components/RootLayout";
+import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
 
 import { useAuth } from "@/hooks/useAuth";
-import { OAUTH_SCOPE_GROUPS } from "@/shared/oauthScopes";
 import Icon from "@hackclub/icons";
 
 type ServiceInfo = {

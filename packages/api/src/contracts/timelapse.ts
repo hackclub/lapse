@@ -50,17 +50,17 @@ export const TimelapsePayloadSchema = z.object({
     /**
      * The name of the timelapse, as set by the user.
      */
-    name: TimelapseName.optional(),
+    name: TimelapseName,
 
     /**
      * The description of the timelapse, as set by the user.
      */
-    description: TimelapseDescription.optional(),
+    description: TimelapseDescription,
 
     /**
      * Determines the discoverability of the timelapse.
      */
-    visibility: TimelapseVisibilitySchema.optional()
+    visibility: TimelapseVisibilitySchema
 });
 
 /**
@@ -68,43 +68,30 @@ export const TimelapsePayloadSchema = z.object({
  */
 export type OwnedTimelapse = z.infer<typeof OwnedTimelapseSchema>;
 export const OwnedTimelapseSchema = TimelapsePayloadSchema.extend({
-    /**
-     * The ID of timelapse.
-     */
-    id: LapseId,
+    id: LapseId
+        .describe("The ID of the timelapse."),
 
-    /**
-     * The date when the timelapse was created.
-     */
-    createdAt: LapseDate,
+    createdAt: LapseDate
+        .describe("The date when the timelapse was created."),
 
-    /**
-     * Information about the owner/author of the timelapse.
-     */
-    owner: PublicUserSchema,
+    owner: PublicUserSchema
+        .describe("Information about the owner/author of the timelapse."),
 
-    /**
-     * All comments for this timelapse.
-     */
-    // TODO: If we get to the point where timelapses can actually get viral and have a lot of comments, we'll have to paginate this.
-    comments: z.array(CommentSchema),
+    comments: z.array(CommentSchema)
+        .describe("All comments for this timelapse. TODO: If we get to the point where timelapses can actually get viral and have a lot of comments, we'll have to paginate this."),
 
-    /**
-     * The public URL that can be used to stream video data. If `null`, the timelapse is still being processed.
-     */
-    playbackUrl: z.url().nullable(),
+    playbackUrl: z.url().nullable()
+        .describe("The public URL that can be used to stream video data. If `null`, the timelapse is still being processed."),
 
-    /**
-     * The URL of the thumbnail image for this timelapse. If `null`, the timelapse is still being processed. It's recommended to derive the processing
-     * status of the timelapse from `playbackUrl`.
-     */
-    thumbnailUrl: z.url().nullable(),
+    thumbnailUrl: z.url().nullable()
+        .describe("The URL of the thumbnail image for this timelapse. If `null`, the timelapse is still being processed. It's recommended to derive the processing status of the timelapse from `playbackUrl`."),
 
-    /**
-     * The duration of the timelapse, in seconds. Must be non-negative.
-     */
-    duration: z.number().min(0),
+    duration: z.number().min(0)
+        .describe("The duration of the timelapse, in seconds. Must be non-negative."),
     
+    isDraft: z.literal(false)
+        .describe("Always `false`. This field is provided for convenience when using strongly-typed clients."),
+
     /**
      * Data accessible only to the author or administrators.
      */
@@ -121,7 +108,10 @@ export const OwnedTimelapseSchema = TimelapsePayloadSchema.extend({
  * Represents a timelapse that may or may not be owned by the calling user.
  */
 export type Timelapse = z.infer<typeof TimelapseSchema>;
-export const TimelapseSchema = OwnedTimelapseSchema.partial({ private: true });
+export const TimelapseSchema = OwnedTimelapseSchema.partial({ private: true }).extend({
+    isDraft: z.literal(false)
+        .describe("Always `false`. This field is provided for convenience when using strongly-typed clients.")
+});
 
 export const timelapseRouterContract = {
     query: contract("GET", "/timelapse/query")
@@ -171,7 +161,7 @@ export const timelapseRouterContract = {
                 id: LapseId
                     .describe("The ID of the timelapse to update."),
                     
-                changes: TimelapsePayloadSchema
+                changes: TimelapsePayloadSchema.partial()
                     .describe("The changes to apply to the timelapse.")
             })
         )

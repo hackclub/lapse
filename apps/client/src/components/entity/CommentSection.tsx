@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
+import type { Comment } from "@hackclub/lapse-api";
 
-import type { Comment } from "@/api";
-import { CommentRenderer } from "@/components/CommentRenderer";
-import { ProfilePicture } from "@/components/ProfilePicture";
+import { CommentRenderer } from "@/components/entity/CommentRenderer";
+import { ProfilePicture } from "@/components/entity/ProfilePicture";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 
 export function CommentSection({ comments, setComments, timelapseId }: {
   comments: Comment[],
@@ -61,10 +61,10 @@ export function CommentSection({ comments, setComments, timelapseId }: {
 
                   <Button
                     icon="send-fill"
-                    className="!h-10 w-min rounded-xl text-sm"
+                    className="h-10! w-min rounded-xl text-sm"
                     kind="primary"
                     onClick={async () => {
-                      const res = await trpc.comment.create.mutate({
+                      const res = await api.comment.create({
                         id: timelapseId,
                         content: commentComposerText
                       });
@@ -87,15 +87,17 @@ export function CommentSection({ comments, setComments, timelapseId }: {
       }
 
       <div className="flex flex-col gap-4">
-        { comments.map(x => (
-          <CommentRenderer
-            comment={x}
-            key={x.id}
-            onDelete={(commentId) => {
-              setComments(prev => prev.filter(c => c.id !== commentId));
-            }}
-          />
-        ))}
+        {
+          comments.map(x => (
+            <CommentRenderer
+              comment={x}
+              key={x.id}
+              onDelete={(commentId) => {
+                setComments(prev => prev.filter(c => c.id !== commentId));
+              }}
+            />
+          ))
+        }
       </div>
     </div>
   )

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { matchOrDefault } from "@/shared/common";
 
-import RootLayout from "@/components/RootLayout";
+import RootLayout from "@/components/layout/RootLayout";
 import { useAuthContext } from "@/context/AuthContext";
 
 export default function Auth() {

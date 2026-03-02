@@ -1,17 +1,9 @@
 import { PropsWithChildren } from "react";
 
-import { Modal, ModalHeader, ModalContent } from "./Modal";
-import { IconGlyph } from "./util";
+import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
+import type { IconGlyph } from "@/common";
 
-export function WindowedModal({
-  children,
-  title,
-  description,
-  shortDescription,
-  icon,
-  isOpen,
-  setIsOpen
-}: PropsWithChildren<{
+export function WindowedModal({ children, title, description, shortDescription, icon, isOpen, setIsOpen }: PropsWithChildren<{
   isOpen: boolean;
   setIsOpen: (x: boolean) => void;
   icon: IconGlyph;

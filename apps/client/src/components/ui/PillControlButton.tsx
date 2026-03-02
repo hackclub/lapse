@@ -1,5 +1,3 @@
-import { IconGlyph } from "@/components/ui/util";
-import Icon from "@hackclub/icons";
 import { PropsWithChildren } from "react";
 
 export function PillControlButton({ children, onClick }: PropsWithChildren<{

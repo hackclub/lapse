@@ -1,14 +1,15 @@
 import NextLink from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { markdownToJsx } from "../markdown";
-import { ProfilePicture } from "./ProfilePicture";
-import { Bullet } from "@/components/ui/Bullet";
-
-import type { Comment } from "@/api";
-import { TimeAgo } from "@/components/TimeAgo";
-import { useAuth } from "@/hooks/useAuth";
-import { trpc } from "@/trpc";
 import Icon from "@hackclub/icons";
+import type { Comment } from "@hackclub/lapse-api";
+
+import { markdownToJsx } from "@/markdown";
+import { api } from "@/api";
+import { useAuth } from "@/hooks/useAuth";
+
+import { ProfilePicture } from "@/components/entity/ProfilePicture";
+import { Bullet } from "@/components/ui/Bullet";
+import { TimeAgo } from "@/components/TimeAgo";
 
 export function CommentRenderer({ comment, onDelete }: {
   comment: Comment,
@@ -92,7 +93,7 @@ export function CommentRenderer({ comment, onDelete }: {
                 if (!confirm("Are you sure you want to delete this comment?"))
                   return;
 
-                const res = await trpc.comment.delete.mutate({
+                const res = await api.comment.delete({
                   commentId: comment.id
                 });
 
@@ -116,5 +117,5 @@ export function CommentRenderer({ comment, onDelete }: {
         {formattedContent}
       </div>
     </article>
-  )
+  );
 }

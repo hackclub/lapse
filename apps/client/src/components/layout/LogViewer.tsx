@@ -22,6 +22,7 @@ export function LogViewer({ className }: { className?: string }) {
 
   useEffect(() => {
     setLogs(getLogs());
+    
     return subscribeToLogs(() => {
       setLogs(getLogs());
     });

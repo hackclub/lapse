@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
+import type { DraftTimelapse, KnownDevice, Timelapse } from "@hackclub/lapse-api";
 
-import type { KnownDevice } from "@/server/routers/api/user";
-import type { Timelapse } from "@/server/routers/api/timelapse";
-
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 import { deviceStorage, LocalDevice } from "@/deviceStorage";
 import { useAuth } from "@/hooks/useAuth";
 
-import { WindowedModal } from "@/components/ui/WindowedModal";
+import { WindowedModal } from "@/components/layout/WindowedModal";
 import { Button } from "@/components/ui/Button";
-import { PasskeyModal } from "@/components/ui/PasskeyModal";
-import { ErrorModal } from "@/components/ui/ErrorModal";
-import { OAuthGrantsView } from "@/components/ui/layout/OAuthGrantsView";
+import { PasskeyModal } from "@/components/layout/PasskeyModal";
+import { ErrorModal } from "@/components/layout/ErrorModal";
+import { OAuthGrantsView } from "@/components/layout/OAuthGrantsView";
 
 export function SettingsView({ isOpen, setIsOpen }: {
   isOpen: boolean,
@@ -26,7 +24,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
   const [currentDeviceForPin, setCurrentDeviceForPin] = useState<string | null>(null);
   const [deviceToRemove, setDeviceToRemove] = useState<string | null>(null);
   const [removeDeviceModalOpen, setRemoveDeviceModalOpen] = useState(false);
-  const [timelapsesToRemove, setTimelapsesToRemove] = useState<Timelapse[]>([]);
+  const [timelapsesToRemove, setTimelapsesToRemove] = useState<DraftTimelapse[]>([]);
   const [connectedServicesOpen, setConnectedServicesOpen] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +39,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
     (async () => {
       setLocalDevices(await deviceStorage.getAllDevices());
 
-      const res = await trpc.user.getDevices.query({});
+      const res = await api.user.getDevices({});
       console.log("(SettingsView.tsx) user.getDevices =", res);
 
       if (res.ok) {
@@ -54,20 +52,18 @@ export function SettingsView({ isOpen, setIsOpen }: {
     if (!auth.currentUser)
       return;
 
-    const res = await trpc.timelapse.findByUser.query({ user: auth.currentUser.id });
+    const res = await api.draftTimelapse.query({ user: auth.currentUser.id });
     if (!res.ok) {
       console.error("(SettingsView.tsx) timelapse.findByUser failed when trying to remove a device!", res);
       setError(res.message);
       return;
     }
 
-    const unpublishedTimelapses = res.data.timelapses.filter(
-      (t: Timelapse) => "private" in t && t.private && t.private.device?.id === deviceId && !t.isPublished
-    );
+    const timelapses = res.data.timelapses;
 
-    if (unpublishedTimelapses.length > 0) {
+    if (timelapses.length > 0) {
       setDeviceToRemove(deviceId);
-      setTimelapsesToRemove(unpublishedTimelapses);
+      setTimelapsesToRemove(timelapses);
       setRemoveDeviceModalOpen(true);
     }
     else {
@@ -76,7 +72,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
   }
 
   async function confirmRemoveDevice(deviceId: string) {
-    const req = await trpc.user.removeDevice.mutate({ id: deviceId });
+    const req = await api.user.removeDevice({ id: deviceId });
     if (!req.ok) {
       setError(req.message);
       return;
@@ -203,7 +199,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
                           <Button
                             kind="regular"
                             onClick={() => handleRemoveDevice(device.id)}
-                            className="!px-5"
+                            className="px-5!"
                           >
                             <Icon glyph="delete" size={20} />
                           </Button>
@@ -296,6 +292,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
           >
             Remove Device
           </Button>
+          
           <Button
             kind="regular"
             onClick={cancelRemoveDevice}

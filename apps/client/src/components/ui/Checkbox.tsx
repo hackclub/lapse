@@ -1,12 +1,6 @@
 import { ReactNode } from "react";
 
-export function Checkbox({
-  label,
-  description,
-  checked,
-  onChange,
-  disabled
-}: {
+export function Checkbox({ label, description, checked, onChange, disabled }: {
   label: string,
   description: ReactNode,
   checked: boolean,
@@ -26,7 +20,7 @@ export function Checkbox({
     >
       <div className="flex items-center gap-2">
         <div
-          className={`flex-shrink-0 w-5 h-5 rounded border transition-colors ${
+          className={`shrink-0 w-5 h-5 rounded border transition-colors ${
             checked
               ? "bg-red border-red"
               : "bg-dark border-slate"

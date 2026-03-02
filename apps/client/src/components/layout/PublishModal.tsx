@@ -1,6 +1,7 @@
-import { Modal, ModalHeader, ModalContent } from "../Modal";
-import { VisibilityPicker } from "../VisibilityPicker";
-import type { TimelapseVisibility } from "@/api";
+import type { TimelapseVisibility } from "@hackclub/lapse-api";
+
+import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
+import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 
 export function PublishModal({
   isOpen,

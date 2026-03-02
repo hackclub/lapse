@@ -1,5 +1,3 @@
-import { PropsWithChildren } from "react";
-
 export function Link({ content, newTab, href }: {
   content?: string,
   href: string,

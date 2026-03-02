@@ -47,6 +47,7 @@ export const authRouterContract = {
         .input(z.object({
             query: z.object({
                 // This is not in our usual naming convention, as we're following OAuth's spec.
+                response_type: z.literal("code"),
                 client_id: z.string(),
                 redirect_uri: z.url(),
                 scope: z.string(),
@@ -54,5 +55,47 @@ export const authRouterContract = {
                 code_challenge: z.string(),
                 code_challenge_method: z.literal("S256") // we don't allow plain!
             })
+        })),
+
+    grantConsent: contract("POST", "/auth/grantConsent")
+        .route({ summary: "Generates a token that represents approved consent to a pending OAuth2 request. **This can only be called when authenticated with the `elevated` scope, which is only available to the canonical app.**" })
+        .input(z.object({
+            clientId: z.string()
+                .describe("The client ID to issue the consent token for."),
+
+            state: z.string()
+                .describe("The state variable, to prevent CSRF attacks."),
+
+            scopes: z.string().array()
+                .describe("The scopes to grant access to.")
+        }))
+        .output(z.object({
+            token: z.base64url()
+                .describe("The token that should be passed to /auth/continue in order to continue the OAuth2 authorization flow.")
+        })),
+
+    token: contract("POST", "/auth/token")
+        .route({
+            summary: "Exchanges an authorization code for an access token.",
+            inputStructure: "detailed",
+            outputStructure: "detailed"
+        })
+        .input(z.object({
+            // We expect this to be application/x-www-form-urlencode - oRPC should handle that here:
+            //      https://github.com/middleapi/orpc/blob/819ed2e0897b18a5d6a4ca85ba68568f055004a1/packages/openapi-client/src/adapters/standard/openapi-serializer.ts#L72-L74
+            body: z.object({
+                grant_type: z.literal("authorization_code"),
+                code: z.string(),
+                redirect_uri: z.url(),
+                client_id: z.string().optional(),
+                code_verifier: z.string().optional()
+            })
+        }))
+        .output(z.object({
+            access_token: z.jwt(),
+            token_type: z.literal("Bearer"),
+            expires_in: z.number(),
+            refresh_token: z.string().optional(),
+            scope: z.string().optional()
         }))
 };

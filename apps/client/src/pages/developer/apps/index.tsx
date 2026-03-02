@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@hackclub/icons";
+import { OAuthApp, OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
 
-import { OAuthApp } from "@/api";
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/Button";
-import { WindowedModal } from "@/components/ui/WindowedModal";
-import RootLayout from "@/components/RootLayout";
-
-import { OAUTH_SCOPE_GROUPS } from "@/shared/oauthScopes";
+import { WindowedModal } from "@/components/layout/WindowedModal";
+import RootLayout from "@/components/layout/RootLayout";
 
 const scopeEntries = Object.entries(OAUTH_SCOPE_GROUPS).flatMap(
   ([group, scopes]) =>
@@ -68,7 +66,7 @@ export default function DeveloperApps() {
       setError(null);
 
       try {
-        const res = await trpc.developer.getAllOwnedApps.query({});
+        const res = await api.developer.getAllOwnedApps({});
 
         if (!res.ok) {
           setError(`Unable to load apps: ${res.message}`);
@@ -100,7 +98,7 @@ export default function DeveloperApps() {
     setSecretResult(null);
 
     try {
-      const res = await trpc.developer.createApp.mutate({
+      const res = await api.developer.createApp({
         name: formState.name,
         description: formState.description,
         homepageUrl: formState.homepageUrl,
@@ -141,7 +139,7 @@ export default function DeveloperApps() {
     setError(null);
 
     try {
-      const res = await trpc.developer.revokeApp.mutate({ id: appId });
+      const res = await api.developer.revokeApp({ id: appId });
       if (!res.ok) {
         setError(`Unable to delete app: ${res.message}`);
         return;
@@ -170,7 +168,7 @@ export default function DeveloperApps() {
     setError(null);
 
     try {
-      const res = await trpc.developer.rotateAppSecret.mutate({ id: appId });
+      const res = await api.developer.rotateAppSecret({ id: appId });
 
       if (!res.ok) {
         setError(`Unable to rotate secret: ${res.message}`);
@@ -227,7 +225,7 @@ export default function DeveloperApps() {
     setSaveNotice(null);
 
     try {
-      const res = await trpc.developer.updateApp.mutate({
+      const res = await api.developer.updateApp({
         id: appModalId,
         name: formState.name,
         description: formState.description,
@@ -259,7 +257,7 @@ export default function DeveloperApps() {
       <div className="flex flex-col gap-8 px-16 py-4 sm:px-24">
         <div className="flex justify-between">
           <div className="flex items-center gap-4">
-            <Icon glyph="code" width={48} height={48} className="flex-shrink-0" />
+            <Icon glyph="code" width={48} height={48} className="shrink-0" />
 
             <div>
               <h1 className="text-3xl font-bold">Developer Apps</h1>

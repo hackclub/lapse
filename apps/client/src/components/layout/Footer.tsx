@@ -1,15 +1,13 @@
-import { TimeAgo } from "./TimeAgo";
-import { Link } from "./ui/Link";
+import { TimeAgo } from "@/components/TimeAgo";
+import { Link } from "@/components/ui/Link";
 import buildInfoJson from "@/generated/build-info.json";
 
-interface BuildInfo {
+const BUILD_INFO = buildInfoJson as {
   commitId: string;
   commitShort: string;
   buildDate: number;
   contributors: Array<{ name: string; github?: string }>;
-}
-
-const buildInfo = buildInfoJson as BuildInfo;
+};
 
 function ContributorLink({ name, github }: { name: string; github?: string }) {
   if (github) {
@@ -29,7 +27,7 @@ function ContributorLink({ name, github }: { name: string; github?: string }) {
 }
 
 export function Footer() {
-  const { commitShort, buildDate, contributors } = buildInfo;
+  const { commitShort, buildDate, contributors } = BUILD_INFO;
 
   const hasValidBuild = commitShort && commitShort !== "dev" && buildDate > 0;
 
@@ -41,7 +39,7 @@ export function Footer() {
           <>
             {" "}Build{" "}
             <Link 
-              href={`https://github.com/hackclub/lapse/commit/${buildInfo.commitId}`}
+              href={`https://github.com/hackclub/lapse/commit/${BUILD_INFO.commitId}`}
               content={commitShort}
               newTab
             />

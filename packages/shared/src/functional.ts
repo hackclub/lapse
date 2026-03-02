@@ -54,3 +54,10 @@ export function match<K extends string | number, T>(selector: K, cases: Record<K
 export function oneOf<T extends PropertyKey>(...values: T[]): Record<T, true> {
     return Object.fromEntries(values.map(x => [x, true])) as Record<T, true>;
 }
+
+/**
+ * Returns a one-element array when `condition` is `true` - otherwise, returns `[]`.
+ */
+export function maybe<T>(element: T, condition: boolean) {
+    return condition ? [element] as const : [] as const;
+}

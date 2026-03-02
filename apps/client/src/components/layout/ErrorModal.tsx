@@ -1,10 +1,11 @@
 import Icon from "@hackclub/icons";
 import clsx from "clsx";
 
-import { Modal } from "./Modal";
-import { Button } from "./Button";
-import { IconGlyph } from "./util";
-import { LogViewer } from "./LogViewer";
+import { Modal } from "@/components/layout/Modal";
+import { Button } from "@/components/ui/Button";
+import { LogViewer } from "@/components/layout/LogViewer";
+
+import type { IconGlyph } from "@/common";
 
 export interface ErrorModalButton {
   label: string;
@@ -59,7 +60,7 @@ export function ErrorModal({
   const finalButtons = buttons || defaultButtons;
 
   return (
-    <Modal isOpen={isOpen} size="FULL" className={clsx("!p-4 sm:!p-12 lg:!p-24", className)}>
+    <Modal isOpen={isOpen} size="FULL" className={clsx("p-4! sm:p-12! lg:p-24!", className)}>
       <div className="flex flex-col p-6 gap-4 overflow-visible">
         <div className="flex flex-row items-center gap-3">
           <Icon glyph={icon} size={32} className="text-red shrink-0" />

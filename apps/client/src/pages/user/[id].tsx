@@ -5,22 +5,22 @@ import Icon from "@hackclub/icons";
 import type { Timelapse } from "@/server/routers/api/timelapse";
 import type { User, PublicUser } from "@/server/routers/api/user";
 
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 import { markdownToJsx } from "@/markdown";
 import { assert, matchOrDefault, validateUrl } from "@/shared/common";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 
-import RootLayout from "@/components/RootLayout";
-import { ProfilePicture } from "@/components/ProfilePicture";
+import RootLayout from "@/components/layout/RootLayout";
+import { ProfilePicture } from "@/components/entity/ProfilePicture";
 
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextInput } from "@/components/ui/TextInput";
-import { ErrorModal } from "@/components/ui/ErrorModal";
-import { TimelapseGrid } from "@/components/TimelapseGrid";
-import { WindowedModal } from "@/components/ui/WindowedModal";
+import { ErrorModal } from "@/components/layout/ErrorModal";
+import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
+import { WindowedModal } from "@/components/layout/WindowedModal";
 import { TextareaInput } from "@/components/ui/TextareaInput";
 
 export default function Page() {
@@ -47,7 +47,7 @@ export default function Page() {
     assert(typeof id === "string", `router.query.id was a ${typeof id} (expected a string)`);
 
     try {
-      const userRes = await trpc.user.query.query(
+      const userRes = await api.user.query(
         id.startsWith("@") ? { handle: id.substring(1).trim() } : { id } 
       );
 
@@ -63,7 +63,7 @@ export default function Page() {
 
       setUser(userRes.data.user);
 
-      const timelapsesRes = await trpc.timelapse.findByUser.query({
+      const timelapsesRes = await api.timelapse.findByUser({
         user: userRes.data.user.id
       });
 
@@ -105,7 +105,7 @@ export default function Page() {
     try {
       setIsUpdating(true);
 
-      const result = await trpc.user.update.mutate({
+      const result = await api.user.update({
         id: user.id,
         changes: {
           displayName: editDisplayName.trim(),

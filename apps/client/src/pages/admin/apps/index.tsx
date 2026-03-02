@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
-import RootLayout from "@/components/RootLayout";
+import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 
 type AdminApp = {
   id: string
@@ -39,7 +39,7 @@ export default function AdminApps() {
       setError(null);
 
       try {
-        const res = await trpc.developer.getAllApps.query({});
+        const res = await api.developer.getAllApps({});
 
         if (!res.ok) {
           setError(res.message ?? "Unable to load apps.");
@@ -63,7 +63,7 @@ export default function AdminApps() {
     setError(null);
 
     try {
-      const res = await trpc.developer.updateAppTrustLevel.mutate({
+      const res = await api.developer.updateAppTrustLevel({
         id: appId,
         trustLevel
       });

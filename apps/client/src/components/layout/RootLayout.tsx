@@ -2,7 +2,7 @@ import Head from "next/head";
 import { PropsWithChildren } from "react";
 import clsx from "clsx";
 
-import { Header } from "@/components/ui/layout/Header";
+import { Header } from "@/components/layout/Header";
 import { jetBrainsMono, phantomSans } from "@/fonts";
 
 export default function RootLayout({

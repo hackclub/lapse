@@ -1,8 +1,8 @@
 import clsx from "clsx";
 import { PropsWithChildren } from "react";
-import { IconGlyph } from "./util";
 import Icon from "@hackclub/icons";
-import Link from "next/link";
+
+import type { IconGlyph } from "@/common";
 import { useRouter } from "next/router";
 
 export type ButtonKind =
@@ -38,7 +38,7 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
         (kind == "primary") && "bg-red text-white",
         (kind == "regular") && "bg-dark border-slate border shadow text-white",
         (kind == "destructive") && "bg-dark border-red border shadow text-red",
-        (disabled) && "!bg-darkless",
+        (disabled) && "bg-darkless!",
         (!disabled) && "hover:scale-[102%] active:scale-[98%]",
         className
       )}

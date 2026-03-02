@@ -27,9 +27,10 @@ export const MAX_VIDEO_FRAME_COUNT = 86400;
 export const THUMBNAIL_SIZE = 640;
 
 /**
- * The combined maximum size of video chunks that the client can upload, in bytes.
+ * The combined maximum size of video chunks that the client can upload, in bytes. This is only used for
+ * draft timelapses.
  */
-export const MAX_VIDEO_UPLOAD_SIZE = 384 * 1024 * 1024; // 384 MiB
+export const MAX_VIDEO_UPLOAD_SIZE = 1024 * 1024 * 1024; // 1 GiB
 
 /**
  * The maximum size for an encrypted thumbnail. As thumbnails for published videos are always generated on the server, this constant

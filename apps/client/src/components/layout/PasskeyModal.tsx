@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
 
-import { Button } from "./Button";
-import { WindowedModal } from "./WindowedModal";
+import { Button } from "@/components/ui/Button";
+import { WindowedModal } from "@/components/layout/WindowedModal";
 
 export function PasskeyModal({ isOpen, setIsOpen, description, onPasskeySubmit, onDelete, children }: {
   isOpen: boolean;

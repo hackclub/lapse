@@ -71,6 +71,12 @@ export const env = {
     get JWT_SECRET_ACCESS_TOKENS() { return required("JWT_SECRET_ACCESS_TOKENS") },
 
     /**
+     * The secret key used for generating JWT tokens for consent approval tokens.
+     */
+    // Generate one using [openssl rand -hex 32]!
+    get JWT_CONSENT_TOKENS() { return required("JWT_CONSENT_TOKENS") },
+
+    /**
      * The 32-byte secret key used to generate encrypted upload tokens, represented as a 64 character hex string.
      */
     // Generate one using [openssl rand -hex 32]!
@@ -132,6 +138,11 @@ export const env = {
      * A permanent public URL to the image asset to use as the default profile picture placeholder.
      */
     get DEFAULT_PFP_URL() { return required("DEFAULT_PFP_URL") },
+
+    /**
+     * The URL used to render the consent modal UI. This needs to point to the canonical app, and will be provided with the `clientId` and `scopes` URL query parameters.
+     */
+    get CONSENT_URL() { return required("CONSENT_URL") },
 
     /**
      * The ID of the canonical OAuth client, which will be allowed to handle consent screens, request the `elevated` scope, and bypass

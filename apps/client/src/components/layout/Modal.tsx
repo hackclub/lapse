@@ -1,14 +1,10 @@
 import { PropsWithChildren, ReactNode } from "react";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
-import { IconGlyph } from "./util";
 
-export function Modal({
-  children,
-  isOpen,
-  className,
-  size
-}: PropsWithChildren<{
+import type { IconGlyph } from "@/common";
+
+export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
   isOpen: boolean;
   setIsOpen?: (x: boolean) => void;
   className?: string;
@@ -38,15 +34,7 @@ export function Modal({
   );
 }
 
-export function ModalHeader({
-  icon,
-  title,
-  description,
-  shortDescription,
-  children,
-  showCloseButton,
-  onClose
-}: {
+export function ModalHeader({ icon, title, description, shortDescription, children, showCloseButton, onClose }: {
   icon?: IconGlyph;
   title?: string;
   description?: string;

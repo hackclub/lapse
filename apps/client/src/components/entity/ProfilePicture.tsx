@@ -1,9 +1,9 @@
 import NextLink from "next/link";
 import clsx from "clsx";
+import { match } from "@hackclub/lapse-shared";
+import { type PublicUser } from "@hackclub/lapse-api";
 
-import { match } from "@/shared/common";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { PublicUser } from "@/api";
 
 export function ProfilePicture({
   user,

@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { ApiResult } from "@/shared/common";
+import { type LapseResult } from "@hackclub/lapse-api";
 import { useOnce } from "@/hooks/useOnce";
 
-export function useApiCall<TRes>(caller: () => Promise<ApiResult<TRes>>) {
+export function useApiCall<TRes>(caller: () => Promise<LapseResult<TRes>>) {
     const [value, setValue] = useState<TRes | null>(null);
 
     useOnce(async () => {

@@ -4,13 +4,15 @@ import { createORPCClient, onError } from "@orpc/client";
 import { OpenAPILink } from "@orpc/openapi-client/fetch";
 import { compositeRouterContract } from "@hackclub/lapse-api";
 
-// You"ll need an OAuth token obtained from the canonical client to get access to a user account.
-
 const link = new OpenAPILink(compositeRouterContract, {
   url: process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com",
-  headers: () => ({
-    "Authorization": `Bearer ${TOKEN}`,
-  }),
+  headers: () => {
+    const token = localStorage.getItem("lapse:token");
+    
+    return {
+      "Authorization": token ? `Bearer ${btoa(token)}` : undefined,
+    };
+  },
   fetch: (request, init) => {
     return globalThis.fetch(request, {
       ...init,
@@ -20,8 +22,11 @@ const link = new OpenAPILink(compositeRouterContract, {
   interceptors: [
     onError((error) => {
       console.error(error)
-    });
+    })
   ],
 });
 
-const client: JsonifiedClient<ContractRouterClient<typeof contract>> = createORPCClient(link);
+/**
+ * The main API client.
+ */
+export const api: JsonifiedClient<ContractRouterClient<typeof compositeRouterContract>> = createORPCClient(link);

@@ -6,23 +6,23 @@ import { useEffect, useState } from "react";
 import { descending, formatDuration } from "@/shared/common";
 
 import { TimeAgo } from "@/components/TimeAgo";
-import { Footer } from "@/components/Footer";
+import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/Button";
-import { TimelapseGrid } from "@/components/TimelapseGrid";
+import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
-import RootLayout from "@/components/RootLayout";
+import RootLayout from "@/components/layout/RootLayout";
 import clsx from "clsx";
 
 export default function Home() {
   const router = useRouter();
   const auth = useAuth(false);
 
-  const reqLeaderboard = useCachedApiCall(() => trpc.global.weeklyLeaderboard.query({}), "leaderboard");
-  const reqRecent = useCachedApiCall(() => trpc.global.recentTimelapses.query({}), "recent");
+  const reqLeaderboard = useCachedApiCall(() => api.global.weeklyLeaderboard({}), "leaderboard");
+  const reqRecent = useCachedApiCall(() => api.global.recentTimelapses({}), "recent");
 
   const [totalTimeCache, setTotalTimeCache] = useCache<string>("currentUserTotalTime");
   const [totalTime, setTotalTime] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function Home() {
       if (!auth.currentUser)
         return;
 
-      const res = await trpc.user.hackatimeProjects.query({});
+      const res = await api.user.hackatimeProjects({});
       if (!res.ok) {
         console.error("(index.tsx) Could not fetch the user's Hackatime projects!", res);
         return;
@@ -62,7 +62,7 @@ export default function Home() {
       if (!auth.currentUser)
         return;
 
-      const res = await trpc.user.getTotalTimelapseTime.query({ id: auth.currentUser.id });
+      const res = await api.user.getTotalTimelapseTime({ id: auth.currentUser.id });
       if (!res.ok) {
         console.error("(index.tsx) Could not fetch the user's total timelapse time!", res);
         return;

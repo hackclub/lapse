@@ -106,10 +106,12 @@ model DraftTimelapse {
   editList                Json[]
 
   /// A list of S3 keys for all sessions of the timelapse.
+  /// Each session is encrypted with the user's device key.
   sessions                String[]
 
-  /// A user-generated thumbnail. This is always encrypted with the user's device key.
-  thumbnailBytes          Bytes
+  /// The S3 key pointing to the user-generated thumbnail.
+  /// This is always encrypted with the user's device key.
+  thumbnailKey            String
 
   /// Timestamps for each frame in the timelapse.
   snapshots               DateTime[]

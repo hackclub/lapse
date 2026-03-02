@@ -1,6 +1,4 @@
 /* eslint-disable @next/next/no-img-element */
-"use client";
-
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
 
@@ -96,7 +94,7 @@ export function ThumbnailImage({
 
   if (isLoading) {
     return (
-      <div className={`bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center ${className}`}>
+      <div className={`bg-linear-to-br from-purple-400 to-pink-400 flex items-center justify-center ${className}`}>
         <Icon glyph="clock" size={48} className="text-white opacity-80 animate-pulse" />
       </div>
     );
@@ -104,7 +102,7 @@ export function ThumbnailImage({
 
   if (!decryptedThumbnail) {
     return (
-      <div className={`bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center ${className}`}>
+      <div className={`bg-linear-to-br from-purple-400 to-pink-400 flex items-center justify-center ${className}`}>
         <Icon
           glyph="history"
           size={48}
@@ -131,7 +129,7 @@ export function ThumbnailImage({
         }}
       />
       <div
-        className={`absolute inset-0 bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center ${className}`}
+        className={`absolute inset-0 bg-linear-to-br from-purple-400 to-pink-400 flex items-center justify-center ${className}`}
         style={{ display: "none" }}
       >
         <Icon glyph="history" size={48} className="text-white opacity-80" />

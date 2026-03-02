@@ -3,15 +3,7 @@ import { ReactNode } from "react";
 import { InputField } from "@/components/ui/InputField";
 import { Dropdown, DropdownTree } from "@/components/ui/Dropdown";
 
-export function DropdownInput<TKey extends string>({
-  value,
-  label,
-  description,
-  onChange,
-  disabled,
-  options,
-  allowUserCustom
-}: {
+export function DropdownInput<TKey extends string>({ value, label, description, onChange, disabled, options, allowUserCustom }: {
   value: TKey,
   options: DropdownTree<TKey>,
   onChange: (value: TKey) => void,

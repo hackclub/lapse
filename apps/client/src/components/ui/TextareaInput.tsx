@@ -1,4 +1,4 @@
-import { InputField } from "./InputField";
+import { InputField } from "@/components/ui/InputField";
 
 export function TextareaInput({ value, label, description, maxLength, onChange }: {
   label: string,

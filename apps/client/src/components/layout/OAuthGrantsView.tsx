@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
+import { OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
 
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
-import { OAUTH_SCOPE_GROUPS } from "@/shared/oauthScopes";
-import { trpc } from "@/trpc";
+import { api } from "@/api";
 
-import { WindowedModal } from "@/components/ui/WindowedModal";
+import { WindowedModal } from "@/components/layout/WindowedModal";
 
 const groupOrder = ["Timelapses", "Comments", "Profile", "Insights"];
 
@@ -50,7 +50,7 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
       setError(null);
 
       try {
-        const res = await trpc.developer.getOwnedOAuthGrants.query({});
+        const res = await api.developer.getOwnedOAuthGrants({});
 
         if (!res.ok) {
           setError(res.message ?? "Unable to load grants.");
@@ -60,7 +60,7 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
         setGrants(res.data.grants);
       }
       catch (err) {
-        console.error("(OAuthGrantsView) failed to load grants", err);
+        console.error("(OAuthGrantsView.tsx) failed to load grants", err);
         setError("Unable to load grants.");
       }
       finally {
@@ -74,7 +74,7 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
     setError(null);
 
     try {
-      const result = await trpc.developer.revokeOAuthGrant.mutate({ grantId });
+      const result = await api.developer.revokeOAuthGrant({ grantId });
 
       if (result.ok) {
         setGrants(grants.filter(grant => grant.id !== grantId));
@@ -84,7 +84,7 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
       }
     }
     catch (err) {
-      console.error("(OAuthGrantsView) failed to revoke", err);
+      console.error("(OAuthGrantsView.tsx) failed to revoke", err);
       setError("Unable to revoke grant.");
     }
     finally {
@@ -147,7 +147,7 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button kind="destructive" onClick={() => revokeGrant(grant.id)} className="!px-6">
+                    <Button kind="destructive" onClick={() => revokeGrant(grant.id)} className="px-6!">
                       Revoke
                     </Button>
                   </div>
