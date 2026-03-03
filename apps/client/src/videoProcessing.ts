@@ -4,7 +4,7 @@ import { THUMBNAIL_SIZE } from "@hackclub/lapse-api";
  * Generates a preview thumbnail for a given video.
  */
 export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
-    console.log("(videoProcessing.ts) generating thumbnail via fallback for", videoBlob);
+    console.log("(videoProcessing.ts) generating thumbnail for", videoBlob);
 
     const canvas = document.createElement("canvas");
     const video = document.createElement("video");
@@ -17,7 +17,7 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
 
         await new Promise<void>((resolve, reject) => {
             video.onloadeddata = () => resolve();
-            video.onerror = () => reject(new Error("Failed to load video for thumbnail generation"));
+            video.onerror = (err) => reject(err);
         });
 
         const dimension = (d1: number, d2: number) => d1 > d2
@@ -44,7 +44,7 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
         return blob;
     }
     catch (err) {
-        console.warn("(videoProcessing.ts) could not generate thumbnail - falling back to black image", err);
+        console.warn("(videoProcessing.ts) could not generate thumbnail - falling back to black image!", err);
         return await fetch(`data:image/webp;base64,UklGRiwAAABXRUJQVlA4TB8AAAAvf8JZAAcQEf0PCAkS/4+3EtH/jP/85z//+c9//l8AAA==`).then(x => x.blob());
     }
     finally {

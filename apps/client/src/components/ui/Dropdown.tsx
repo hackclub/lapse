@@ -311,30 +311,32 @@ export function Dropdown<TKey extends string>({ value, onChange, options, disabl
           ? undefined
           : createPortal(
             (
-              <div
-                ref={dropdownRef}
-                style={{ top: anchor?.y, left: anchor?.x, width: anchor?.width }}
-                role="listbox"
-                className={clsx(
-                  phantomSans.className,
-                  "transition-[translate,opacity] flex flex-col absolute border border-slate bg-dark rounded-lg p-4 shadow-xl z-100 max-h-64 overflow-y-auto overscroll-contain",
-                  isEffectivelyOpen && "translate-y-12 opacity-100",
-                  !isEffectivelyOpen && "translate-y-10 opacity-0 pointer-events-none"
-                )}
-              >
-                {
-                  showCreateOption && (
-                    <div
-                      role="option"
-                      onClick={handleCreateCustom}
-                      className="transition-colors px-4 py-1 rounded flex items-center gap-2 cursor-pointer hover:bg-darkless text-primary"
-                    >
-                      <Icon glyph="plus" size={18} />
-                      <span>Create &ldquo;{inputValue.trim()}&rdquo;</span>
-                    </div>
-                  )
-                }
-                { renderBranch(filteredOptions) }
+              <div className="absolute top-0 left-0 w-screen h-screen overflow-hidden">
+                <div
+                  ref={dropdownRef}
+                  style={{ top: anchor?.y, left: anchor?.x, width: anchor?.width }}
+                  role="listbox"
+                  className={clsx(
+                    phantomSans.className,
+                    "transition-[translate,opacity] flex flex-col relative border border-slate bg-dark rounded-lg p-4 shadow-xl z-100 max-h-64 overflow-y-auto overscroll-contain",
+                    isEffectivelyOpen && "translate-y-12 opacity-100",
+                    !isEffectivelyOpen && "translate-y-10 opacity-0 pointer-events-none"
+                  )}
+                >
+                  {
+                    showCreateOption && (
+                      <div
+                        role="option"
+                        onClick={handleCreateCustom}
+                        className="transition-colors px-4 py-1 rounded flex items-center gap-2 cursor-pointer hover:bg-darkless text-primary"
+                      >
+                        <Icon glyph="plus" size={18} />
+                        <span>Create &ldquo;{inputValue.trim()}&rdquo;</span>
+                      </div>
+                    )
+                  }
+                  { renderBranch(filteredOptions) }
+                </div>
               </div>
             ),
             document.body

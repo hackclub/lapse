@@ -430,7 +430,7 @@ async function runSetup() {
 				"S3_PUBLIC_URL_ENCRYPTED": S3_PUBLIC_URL_ENCRYPTED,
 			},
 			client: {
-				"NEXT_PUBLIC_API_URL": `http://localhost:${serverPort}/api`,
+				"NEXT_PUBLIC_API_URL": `http://localhost:${serverPort}`,
 			},
 			worker: {
 				"REDIS_URL": getRedisUrl(),

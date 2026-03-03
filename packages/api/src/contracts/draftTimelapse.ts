@@ -52,7 +52,7 @@ export const DraftTimelapseSchema = DraftTimelapsePayloadSchema.extend({
     createdAt: LapseDate
         .describe("The timestamp when the draft timelapse was created."),
 
-    previewThumbnail: z.base64url()
+    previewThumbnail: z.url()
         .describe("An URL to an encrypted user-generated preview thumbnail that represents the timelapse."),
 
     deviceId: z.uuid()

@@ -35,7 +35,12 @@ function getPlain(severity: string, scope: string, message: string, data: Record
         [ message, ...Object.entries(data).map(x => `${x[0]}: ${inlineStringify(x[1])}`) ]
     ).replaceAll("\n", `\n${prefix} `);
 
-    return `${prefix} ${stringified}`;
+    let colorPrefix = process.env["NODE_ENV"] !== "development" ? "" :
+        severity == "warn" ? "\x1b[33m" :
+        severity == "error" ? "\x1b[31m" :
+        "";
+
+    return `${colorPrefix}${prefix} ${stringified}${colorPrefix == "" ? "" : "\x1b[0m"}`;
 }
 
 function remapData(data: Record<string, unknown>): Record<string, unknown> {
@@ -63,7 +68,7 @@ export function logTracing(data: Record<string, unknown> = {}) {
 }
 
 function getScope() {
-    const callSite = getCallSites(3)[2];
+    const callSite = getCallSites().find(x => x.scriptName.trim() != "" && !x.scriptName.includes("logging") && x.functionName.trim() != "");
     return callSite ? `${path.basename(callSite.scriptName, path.extname(callSite.scriptName))}::${callSite.functionName}` : "";
 }
 
@@ -76,13 +81,13 @@ export function logInfo(message: string, data: Record<string, unknown> = {}) {
 
 export function logWarning(message: string, data: Record<string, unknown> = {}) {
     const scope = getScope();
-    console.warn(getPlain("warn", scope,  message, data));
+    console.warn(getPlain("warn", scope, message, data));
     Sentry.logger.warn(`(${scope}) ${message}`, remapData(data));
 }
 
 export function logError(message: string, data: Record<string, unknown> = {}) {
     const scope = getScope();
-    console.error(getPlain("error", scope,  message, data));
+    console.error(getPlain("error", scope, message, data));
     Sentry.logger.error(`(${scope}) ${message}`, remapData(data));
 }
 

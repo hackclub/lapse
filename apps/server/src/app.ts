@@ -2,7 +2,7 @@ import "dotenv/config";
 
 import Fastify from "fastify"
 import fastifyCors from "@fastify/cors"
-import { implement, onError } from "@orpc/server"
+import { implement, onError, ORPCError, ValidationError } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { RequestHeadersPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins"
@@ -27,6 +27,7 @@ import developer from "@/routers/developer.js"
 import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
 import auth from "@/routers/auth.js"
+import z from "zod";
 
 const router = implement(compositeRouterContract)
     .$context<Context>()
@@ -46,7 +47,12 @@ const handler = new OpenAPIHandler(
     {
         interceptors: [
             onError(err => {
-                console.error(err);
+                if (err instanceof ORPCError && err.cause instanceof ValidationError) {
+                    logError(z.prettifyError(err.cause), { err, zodError: err.cause });
+                }
+                else {
+                    logError(`${err}`, { err });
+                }
             })
         ],
         plugins: [

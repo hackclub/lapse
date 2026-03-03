@@ -59,6 +59,17 @@ class AsyncQueue {
     }
 }
 
+async function doesFileExist(directoryHandle: FileSystemDirectoryHandle, fileName: string) {
+    for await (const entry of directoryHandle.values()) {
+        if (entry.kind === "file" && entry.name === fileName) {
+            return true;
+        }
+    }
+
+  return false;
+}
+
+
 /**
  * Securely stores data on the client device.
  */
@@ -67,18 +78,24 @@ export class DeviceStorage {
     private serialQueue = new AsyncQueue();
 
     private async ensureInit(): Promise<void> {
-        if (!this.root) {
-            await this.init();
-        }
-    }
+        if (this.root)
+            return;
 
-    private async init(): Promise<void> {
         if (navigator.storage.persist) {
             const persisted = await navigator.storage.persist();
             console.log(`(deviceStorage.ts) persistence ${persisted ? "granted" : "denied"}`);
         }
 
         this.root = await navigator.storage.getDirectory();
+
+        const lapseRoot = await this.getLapseDir();
+        if (!await doesFileExist(lapseRoot, "store.json")) {
+            console.log("(deviceStorage.ts) no OPFS store found - creating a new one");
+            await this.writeStore({ devices: [], timelapse: null });
+        }
+        else {
+            console.log("(deviceStorage.ts) existing OPFS store found");
+        }
     }
 
     private async getLapseDir(): Promise<FileSystemDirectoryHandle> {
@@ -86,17 +103,15 @@ export class DeviceStorage {
     }
 
     private async readStore(): Promise<Store> {
-        try {
-            const dir = await this.getLapseDir();
-            const fileHandle = await dir.getFileHandle("store.json");
-            const file = await fileHandle.getFile();
-            const text = await file.text();
-            return v.parse(StoreSchema, JSON.parse(text));
-        }
-        catch {
-            console.log("(deviceStorage.ts) can't open OPFS store - creating a new one!");
-            return { devices: [], timelapse: null };
-        }
+        await this.ensureInit();
+
+        const dir = await this.getLapseDir();
+        const fileHandle = await dir.getFileHandle("store.json");
+        const file = await fileHandle.getFile();
+        const data = v.parse(StoreSchema, JSON.parse(await file.text()));
+
+        console.log("(deviceStorage.ts) deviceStorage data store read!", data);
+        return data;
     }
 
     private async writeStore(data: Store): Promise<void> {
@@ -168,6 +183,8 @@ export class DeviceStorage {
     }
 
     async appendChunk(sessionId: number, chunk: Blob): Promise<void> {
+        console.debug(`(deviceStorage.ts) appendChunk(${sessionId}) ->`, chunk);
+
         return await this.operation(async () => {
             await this.ensureInit();
 
@@ -235,7 +252,8 @@ export class DeviceStorage {
             await this.ensureInit();
 
             const store = await this.readStore();
-            if (!store.timelapse) return;
+            if (!store.timelapse)
+                return;
 
             store.timelapse.snapshots.push(timestamp);
             await this.writeStore(store);

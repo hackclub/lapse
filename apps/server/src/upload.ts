@@ -61,6 +61,7 @@ export function attachUploadServer(app: FastifyInstance) {
             s3ClientConfig: {
                 bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                 endpoint: env.S3_ENDPOINT,
+                region: "auto",
                 credentials: {
                     accessKeyId: env.S3_ACCESS_KEY_ID,
                     secretAccessKey: env.S3_SECRET_ACCESS_KEY
@@ -75,12 +76,27 @@ export function attachUploadServer(app: FastifyInstance) {
             }
         },
 
+        // The tus S3 store always uses the upload ID as the key. By default, tus generates a random one. As we have a defined S3 structure, we
+        // *don't* want that, and thus we override our namingFunction.
         namingFunction(req) {
             const token = requireUploadToken(req);
             if (token instanceof Err) // this shouldn't really happen as we verify everything in onIncomingRequest
                 throw new Error(token.message);
 
             return token.key;
+        },
+
+        // Now, as we put S3 keys as upload IDs, and those S3 keys are expected to have slashes in them, if we would put them out-right in the URL (which the default generateUrl implementation does),
+        // we'd cause tus to report 404 errors when trying to find our uploads. Because of this, we encode the IDs as base64 in the URLs.
+        generateUrl(req, { proto, host, path, id }) {
+            return `${proto}://${host}${path}/${Buffer.from(id).toString("base64url")}`;
+        },
+
+        getFileIdFromRequest(req, lastPath) {
+            if (!lastPath)
+                return;
+
+            return Buffer.from(lastPath, "base64url").toString("utf8");
         },
 
         async onUploadCreate(req, upload) {
@@ -92,6 +108,11 @@ export function attachUploadServer(app: FastifyInstance) {
                 throw { status_code: 413, body: `Upload size (${upload.size}) exceeds maximum size (${token.maxSize}).` };
 
             return {};
+        },
+
+        onResponseError(req, err) {
+            logError(`tus: ${err instanceof Error ? err.message.trim() : `HTTP ${err.status_code}: ${err.body.trim()}`}`, { err, req });
+            return undefined;
         }
     });
 

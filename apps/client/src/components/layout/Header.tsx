@@ -15,7 +15,6 @@ import { useCachedState } from "@/hooks/useCachedState";
 import { useInterval } from "@/hooks/useInterval";
 import { api } from "@/api";
 
-
 export function Header() {
   const auth = useAuth(false);
   const router = useRouter();

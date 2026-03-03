@@ -583,7 +583,7 @@ export default function Page() {
             )}
           />
 
-          <TimeSince active={isRecording} startTime={startedAt} initialElapsedSeconds={initialElapsedSeconds} />
+          <TimeSince active={isRecording} startTime={startedAt} initialElapsedSeconds={initialElapsedSeconds} showUnknown={setupState != "UPDATE"} />
         </div>
 
         {/* controls (overlay) */}

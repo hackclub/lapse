@@ -73,7 +73,7 @@ export class TimelapseVideoSession {
         this.video.srcObject = provider;
 
         this.recorder = createMediaRecorder(stream);
-        this.recorder.addEventListener("dataavailable", () => this.handleRecorderData);
+        this.recorder.ondataavailable = (ev) => this.handleRecorderData(ev);
         this.recorder.start(); // we will extract data via requestData()
     
         this.intervalId = this.setFrameInterval();
