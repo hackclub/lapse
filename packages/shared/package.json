@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsc -b && tsc-alias --resolve-full-paths",
-    "watch": "tsc -b --watch",
+    "watch": "tsc -b && tsc-alias --resolve-full-paths -w",
     "prepare": "pnpm run build"
   },
   "packageManager": "pnpm@10.25.0",
