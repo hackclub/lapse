@@ -1,14 +1,15 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import clsx from "clsx";
+import prettyBytes from "pretty-bytes";
 
-import { createMediaRecorder, mergeVideoSessions, videoGenerateThumbnail } from "@/videoProcessing";
-import { encryptVideo, encryptData, getCurrentDevice } from "@/encryption";
+import { videoGenerateThumbnail } from "@/videoProcessing";
+import { encryptVideo, encryptData, getCurrentDevice, EncryptedVideoStream } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
-import { api } from "@/api";
+import { api, apiUpload } from "@/api";
 import { TIMELAPSE_FPS, TIMELAPSE_FACTOR } from "@hackclub/lapse-api";
 
 import { useOnce } from "@/hooks/useOnce";
@@ -30,61 +31,25 @@ import { PillControlButton } from "@/components/ui/PillControlButton";
 import RecordIcon from "@/client/assets/icons/record.svg";
 import PauseIcon from "@/client/assets/icons/pause.svg";
 import StopIcon from "@/client/assets/icons/stop.svg";
-import { assert } from "@hackclub/lapse-shared";
+import { TimelapseVideoSession } from "@/timelapseVideoSession";
+import { SteppedProgress } from "@/common";
 
-export default function Page() {
-  const router = useRouter();
-  useAuth(true);
-
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [setupModalOpen, setSetupModalOpen] = useState(true);
-  const [submitModalOpen, setSubmitModalOpen] = useState(false);
-  const [isCreated, setIsCreated] = useState(false);
+function MediaSourceSelector({ description, stream, setStream, onInterrupt }: {
+  description: React.ReactNode,
+  stream: MediaStream | null,
+  setStream: React.Dispatch<SetStateAction<MediaStream | null>>,
+  onInterrupt: () => void
+}) {
   const [videoSourceKind, setVideoSourceKind] = useState("NONE");
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [screenLabel, setScreenLabel] = useState("Screen");
   const [changingSource, setChangingSource] = useState(false);
+
+  const [screenLabel, setScreenLabel] = useState("Screen");
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
-  const [startedAt, setStartedAt] = useState(new Date());
-  const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
-  const [frameInterval, setFrameInterval] = useState<NodeJS.Timeout | null>(null);
-  const [currentTimelapseId, setCurrentTimelapseId] = useState<number | null>(null);
-  const [needsVideoSource, setNeedsVideoSource] = useState(false);
-  const [currentSession] = useState<number>(Date.now());
-  const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
-  const [isDiscarding, setIsDiscarding] = useState(false);
 
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStage, setUploadStage] = useState<string>("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [isPaused, setIsPaused] = useState(false);
-
-  const mainPreviewRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  const currentStream = cameraStream || screenStream;
-  const isRecording = !isPaused && !setupModalOpen;
-
-  // When recording, we emit heartbeats - these have nothing to do with Hackatime heartbeats; they are
-  // only use for the public user recording count on the header.
-  useInterval(async () => {
-    if (isRecording) {
-      await api.user.emitHeartbeat({});
-    }
-  }, 30 * 1000);
-
-  useEffect(() => {
-    document.title = setupModalOpen ? "Lapse"
-      : isPaused ? `⏸️ PAUSED: ${name} - Lapse`
-      : `🔴 REC: ${name} - Lapse`;
-  }, [name, setupModalOpen, isPaused]);
-
-  useEffect(() => {
+  // Every single time the available media devices (e.g. cameras) change (e.g. plug/unplug), update our local state that takes track
+  // of this. We *would* prefer to just use the browser's information outright, but we have to enumerate them, so that's not really an option.
+  useOnce(() => {
     async function enumerateCameras() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -100,168 +65,11 @@ export default function Page() {
     enumerateCameras();
 
     navigator.mediaDevices.addEventListener("devicechange", enumerateCameras);
-    return () => {
-      navigator.mediaDevices.removeEventListener("devicechange", enumerateCameras);
-    };
-  }, []);
-
-  useOnce(async () => {
-    const activeTimelapse = await deviceStorage.getActiveTimelapse();
-    if (!activeTimelapse) {
-      console.log("(create.tsx) no timelapse was started previously.");
-      return;
-    }
-
-    console.group("(create.tsx) An incomplete timelapse has been detected!");
-    console.log("(create.tsx) - timelapse:", activeTimelapse);
-
-    const snapshots = activeTimelapse.snapshots;
-    console.log("(create.tsx) - snapshots:", snapshots);
-    console.groupEnd();
-
-    let adjustedStartTime = new Date(activeTimelapse.startedAt);
-    if (snapshots.length > 1) {
-      const sorted = [...snapshots].sort((a, b) => a - b);
-      const totalElapsedTime = sorted[sorted.length - 1] - sorted[0];
-
-      adjustedStartTime = new Date(Date.now() - totalElapsedTime);
-      setInitialElapsedSeconds(Math.floor(totalElapsedTime / 1000));
-
-      console.log("(create.tsx) total elapsed time:", totalElapsedTime);
-    }
-
-    setCurrentTimelapseId(activeTimelapse.id);
-    setStartedAt(adjustedStartTime);
-    setIsCreated(true);
-
-    setNeedsVideoSource(true);
-    setSetupModalOpen(true);
+    return () => { navigator.mediaDevices.removeEventListener("devicechange", enumerateCameras); };
   });
 
-  /**
-   * Handles a single frame. This takes the frame in `canvas` and encodes it via `MediaRecorder`.
-   */
-  const captureFrame = useCallback(async (timelapseId?: number) => {
-    if (isPaused)
-      return;
-
-    const video = mainPreviewRef.current;
-    const canvas = canvasRef.current;
-
-    if (!video || !canvas)
-      return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx)
-      throw new Error("Cannot get 2D context from the canvas!");
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-
-    if (recorder && recorder.state === "recording") {
-      // This will call the callback in `ondataavailable`! We set it up in
-      recorder.requestData();
-    }
-
-    const activeTimelapseId = timelapseId ?? currentTimelapseId;
-    if (activeTimelapseId == null)
-      throw new Error("captureFrame() was called, but currentTimelapseId is null");
-
-    deviceStorage.appendSnapshot(activeTimelapseId, Date.now());
-  }, [recorder, currentTimelapseId, currentSession, isPaused]);
-
-  /**
-   * Runs when the user begins recording a timelapse. This function is **NOT** invoked as soon
-   * as we navigate to the page - only when the user actually selects the media source and confirms
-   * their selection do we call this function.
-   */
-  async function onBegin() {
-    console.log("(create.tsx) timelapse recording begin!");
-
-    mainPreviewRef.current!.srcObject = currentStream!;
-    setSetupModalOpen(false);
-    setNeedsVideoSource(false);
-
-    let activeTimelapseId = currentTimelapseId;
-
-    if (isDiscarding && currentTimelapseId) {
-      console.log("(create.tsx) discarding previous timelapse:", currentTimelapseId);
-      await deviceStorage.deleteTimelapse(currentTimelapseId);
-      setCurrentTimelapseId(null);
-      activeTimelapseId = null;
-      setIsDiscarding(false);
-      setInitialElapsedSeconds(0);
-    }
-
-    if (!activeTimelapseId) {
-      const now = new Date();
-      setStartedAt(now);
-      setIsCreated(true);
-
-      const timelapseId = await deviceStorage.saveTimelapse({
-        name,
-        description,
-        startedAt: now.getTime(),
-        chunks: [],
-        snapshots: [],
-        isActive: true
-      });
-
-      setCurrentTimelapseId(timelapseId);
-      activeTimelapseId = timelapseId;
-
-      console.log(`(create.tsx) new local timelapse created with ID ${timelapseId}`);
-    }
-    else {
-      if (currentTimelapseId) {
-        const existingTimelapse = await deviceStorage.getTimelapse(currentTimelapseId);
-
-        if (existingTimelapse) {
-          existingTimelapse.name = name;
-          existingTimelapse.description = description;
-          await deviceStorage.saveTimelapse(existingTimelapse);
-        }
-      }
-    }
-
-    // Only set up recording if not already active (for new timelapses or resumed ones)
-    if (!recorder || recorder.state === "inactive") {
-      const canvas = canvasRef.current!;
-      const stream = canvas.captureStream(TIMELAPSE_FPS);
-
-      const newRecorder = createMediaRecorder(stream);
-
-      newRecorder.ondataavailable = async (ev) => {
-        if (ev.data.size <= 0)
-          return;
-
-        assert(activeTimelapseId != null, "activeTimelapseId was null when ondataavailable was called");
-        await deviceStorage.appendChunk(activeTimelapseId, ev.data, currentSession);
-      };
-
-      console.log("(create.tsx) creating new recorder!", newRecorder);
-      setRecorder(newRecorder);
-      newRecorder.start(1000 / TIMELAPSE_FPS);
-
-      if (frameInterval) {
-        console.warn("(create.tsx) clearing previous frame capture interval.");
-        clearInterval(frameInterval);
-      }
-
-      const newInterval = setInterval(
-        () => captureFrame(activeTimelapseId!),
-        1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS
-      );
-
-      setFrameInterval(newInterval);
-    }
-
-    setPause(false);
-  }
-
-  async function onVideoSourceChange(ev: ChangeEvent<HTMLSelectElement>) {
-    if (ev.target.value == videoSourceKind)
+  async function onVideoSourceChange(value: string) {
+    if (value == videoSourceKind)
       return; // no change
 
     if (changingSource) {
@@ -271,98 +79,83 @@ export default function Page() {
 
     setChangingSource(true);
 
-    function disposeStreams() {
-      setScreenLabel("Screen");
-
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
-        setCameraStream(null);
-      }
-
-      if (screenStream) {
-        screenStream.getTracks().forEach((track) => track.stop());
-        setScreenStream(null);
-      }
-    }
-
-    function addStreamStoppedAlertListener(stream: MediaStream) {
-      stream.getTracks().forEach(track => {
+    // Browsers may choose to interrupt our streams (e.g. user clicks "Stop sharing") - we handle this case here.
+    function listenOnStreamInterrupted(stream: MediaStream) {
+      for (const track of stream.getVideoTracks()) {
         track.addEventListener("ended", () => {
-          console.log("(create.tsx) camera track ended externally:", track.label);
-          setCameraStream(null);
+          console.warn("(create.tsx) camera track ended externally:", track.label);
+          setStream(null);
           setVideoSourceKind("NONE");
-          setNeedsVideoSource(true);
-          setSetupModalOpen(true);
-          setPause(true);
-          setTimeout(() => {
-            if (window.location.href.includes("/timelapse/create")) {
-              alert("Your screen sharing has ended. Please select a new video source to continue your timelapse.");
-            }
-          }, 5000);
+          onInterrupt();
         });
-      });
+      };
     }
 
-    console.log("(create.tsx) video source changed to", ev.target.value);
+    console.log("(create.tsx) video source changed to", value);
 
-    if (ev.target.value.startsWith("CAMERA:")) {
+    let newStream: MediaStream | null = null;
 
-      const cameraId = ev.target.value.substring(7);
-      let stream: MediaStream;
+    if (value.startsWith("CAMERA:")) {
+      const cameraId = value.substring(7);
 
       try {
         if (cameraId && cameraId.trim().length > 0) {
-          stream = await navigator.mediaDevices.getUserMedia({
+          // We selected an option formatted like CAMERA:<ID>, which means that the user selected a camera before.
+          newStream = await navigator.mediaDevices.getUserMedia({
             video: { deviceId: { exact: cameraId } },
             audio: false
           });
         }
         else {
-          stream = await navigator.mediaDevices.getUserMedia({
+          // No camera was selected before. The browser will ask the user for the camera to use.
+          newStream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: false
           });
 
-          stream.getTracks().forEach(track => track.stop());
-
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const cameras = devices.filter(device => device.kind === "videoinput" && device.deviceId);
-          setAvailableCameras(cameras);
-
-          if (cameras.length > 0) {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: { deviceId: { exact: cameras[0].deviceId } },
-              audio: false
-            });
-            setSelectedCameraId(cameras[0].deviceId);
+          const deviceId = newStream.getVideoTracks()[0]?.getSettings()?.deviceId;
+          if (deviceId) {
+            // Nice - we know which device was actually selected.
+            setSelectedCameraId(deviceId);
           }
           else {
-            throw new Error("No cameras available");
+            // Hm. The browser doesn't want to tell us which camera was actually selected - this means we can't actually update the UI to
+            // display which device was selected. For better UX, we default to the first device. This way, we at least display what's currently selected...
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cameras = devices.filter(device => device.kind === "videoinput" && device.deviceId);
+            setAvailableCameras(cameras);
+
+            if (cameras.length > 0) {
+              newStream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: cameras[0].deviceId } },
+                audio: false
+              });
+
+              setSelectedCameraId(cameras[0].deviceId);
+            }
+            else {
+              throw new Error("No cameras available"); // This will trickle down to the catch clause below!
+            }
           }
         }
       }
       catch (apiErr) {
-        console.error("(create.tsx) could not request permissions for camera stream.", apiErr);
+        console.warn("(create.tsx) could not request permissions for camera stream.", apiErr);
         setChangingSource(false);
         return;
       }
 
-      console.log("(create.tsx) stream retrieved!", stream);
+      console.log("(create.tsx) stream retrieved!", newStream);
+      setStream(newStream);
 
-      addStreamStoppedAlertListener(stream);
-
-      disposeStreams();
-      setCameraStream(stream);
       setVideoSourceKind("CAMERA");
       setSelectedCameraId(cameraId);
     }
-    else if (ev.target.value == "SCREEN") {
-      let stream: MediaStream;
-
+    else if (value == "SCREEN") {
       try {
-        stream = await navigator.mediaDevices.getDisplayMedia({
+        newStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
-          audio: false,
+          audio: false
         });
       }
       catch (apiErr) {
@@ -373,25 +166,162 @@ export default function Page() {
 
       console.log("(create.tsx) screen stream retrieved!", stream);
 
-      addStreamStoppedAlertListener(stream);
-
-      let screenLabel: string | null = stream.getVideoTracks()[0].label;
+      // We *may* be able to extract a nice label for the window on some user agents. If not, we'll just display "Screen".
+      let screenLabel: string | null = newStream.getVideoTracks()[0].label;
       if (screenLabel.includes("://") || screenLabel.includes("window:")) {
         screenLabel = null;
       }
 
-      disposeStreams();
-      setScreenStream(stream);
       setVideoSourceKind("SCREEN");
       setScreenLabel(screenLabel ? `Screen (${screenLabel})` : "Screen");
     }
     else {
-      setNeedsVideoSource(true);
-      disposeStreams();
+      newStream = null;
       setVideoSourceKind("NONE");
     }
 
+    if (newStream) {
+      listenOnStreamInterrupted(newStream);
+    }
+
+    setStream(newStream);
     setChangingSource(false);
+  }
+
+  return (
+    <>
+      <DropdownInput
+        label="Video source"
+        description={description}
+        value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
+        onChange={onVideoSourceChange}
+        disabled={changingSource}
+        options={[
+          { value: "NONE", disabled: true, label: "(none)" },
+          { value: "SCREEN", icon: "photo", label: screenLabel },
+          ...(
+            (availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0) // ...if any cameras are loaded, then...
+            ? [
+              // We got permission from the user to fetch their cameras - display them.
+              {
+                label: "Cameras", icon: "instagram" as const, group: availableCameras
+                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
+                  .map((x, i) => (
+                    {
+                      value: `CAMERA:${x.deviceId}`,
+                      label: x.label && x.label.trim().length > 0 // if we have a label...
+                        ? x.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim() // ...remove UUIDs from it and display it.
+                        : `Camera ${i + 1}` // otherwise, just use the index.
+                    }
+                  ))
+              }
+            ] : [
+              // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
+              // option, that when clicked, will prompt them for permission.
+              { label: "Camera", value: "CAMERA:" }
+            ])
+        ]}
+      />
+
+      {stream && (
+        <div className="flex flex-col gap-2">
+          <video
+            autoPlay
+            muted
+            className="h-auto rounded-md"
+            style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
+            ref={el => {
+              if (el && el.srcObject !== stream) {
+                el.srcObject = stream;
+              }
+            }}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function Page() {
+  const router = useRouter();
+  useAuth(true);
+
+  // This manages most of our video recording work. Each time we switch windows or refresh Lapse, we create a new session - this is needed,
+  // as every time the resolution changes, the initial chunk also changes.
+  const [videoSession, setVideoSession] = useState<TimelapseVideoSession | null>();
+
+  // The main stream for the capture. We take this from the MediaSourceSelector.
+  const [stream, setStream] = useState<MediaStream | null>(null);
+
+  const [setupModalOpen, setSetupModalOpen] = useState(true);
+
+  const [startedAt, setStartedAt] = useState(new Date());
+  const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
+  const [isDiscarding, setIsDiscarding] = useState(false);
+
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<string>("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [isPaused, setIsPaused] = useState(false);
+
+  const mainPreviewRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const isRecording = !isPaused && !setupModalOpen;
+
+  // When recording, we emit heartbeats - these have nothing to do with Hackatime heartbeats; they are
+  // only use for the public user recording count on the header.
+  useInterval(async () => {
+    if (isRecording) {
+      await api.user.emitHeartbeat({});
+    }
+  }, 30 * 1000);
+
+  useEffect(() => {
+    document.title = setupModalOpen ? "Lapse"
+      : isPaused ? `⏸️ PAUSED`
+      : `🔴 REC`;
+  }, [setupModalOpen, isPaused]);
+
+  /**
+   * Runs when the user begins recording a new session for a timelapse. This function is **NOT** invoked as soon
+   * as we navigate to the page - only when the user actually selects the media source and confirms
+   * their selection do we call this function.
+   * 
+   * This function MAY be called when the user *changes* their media source, thus creating a new session for an existing timelapse.
+   * @param shouldDiscard If `true`, if a timelapse already is stored in the user's device storage, it should be discarded. This is a **destructive operation**.
+   */
+  async function onSessionBegin(shouldDiscard: boolean, stream: MediaStream) {
+    mainPreviewRef.current!.srcObject = stream;
+    setSetupModalOpen(false); // when the session begins, the setup modal closes
+    setNeedsVideoSource(false);
+
+    let existing = await deviceStorage.getTimelapse();
+
+    if (shouldDiscard) {
+      if (existing != null) {
+        console.log("(create.tsx) ⚠️ discarding previous timelapse!", existing);
+        await deviceStorage.deleteTimelapse();
+        existing = null;
+      }
+      else {
+        console.warn("(create.tsx) onSessionBegin() was called with shouldDiscard = true, but no active timelapse is present");
+      }
+    }
+
+    if (!existing) {
+      // No timelapse has been stored before - we need to create one.
+      existing = await deviceStorage.createTimelapse();
+      setStartedAt(new Date());
+    }
+    else {
+      console.log("(create.tsx) new timelapse session created!");
+    }
+
+    // ...and we're off!
+    setVideoSession(new TimelapseVideoSession(stream));
   }
 
   function setPause(shouldBePaused: boolean) {
@@ -412,190 +342,119 @@ export default function Page() {
   }
 
   async function stopRecording() {
-    if (frameInterval) {
-      clearInterval(frameInterval);
-      setFrameInterval(null);
-    }
-
-    if (!recorder) {
-      console.warn("(create.tsx) attempted to stop the recording while recorder was null!");
+    if (!videoSession) {
+      console.warn("(create.tsx) attempted to stop the recording while no session has been started yet!");
       return;
     }
 
-    recorder.onstop = async () => {
-      try {
-        console.log("(upload) synchronizing deviceStorage...");
-        await deviceStorage.sync();
-        console.log("(upload) synchronized! proceeding!");
+    await videoSession.stop();
+    setVideoSession(null);
 
-        setIsUploading(true);
+    setIsUploading(true);
+
+    function bytesProgressCallback(uploaded: number, total: number) {
+      setUploadProgress((uploaded / total) * 100);
+      setUploadStage(`Uploading video session... (${prettyBytes(uploaded)}/${prettyBytes(total)})`);
+    }
+
+    let progress = new SteppedProgress(6, setUploadStage, setUploadProgress);
+
+    try {
+      // ------------------------------------------------------- //
+      progress.advance(0, "Loading data from disk...");
+
+      await deviceStorage.sync(); // if we have any pending operations (e.g. writing chunks to disk), wait for them to finish
+
+      const sessions = await deviceStorage.getTimelapseVideoSessions();
+      const timelapse = await deviceStorage.getTimelapse();
+      if (!timelapse || sessions.length == 0) {
+        console.error("(create.tsx) No local timelapse, or no sessions have been captured! Your browser storage might be malfuctioning...?", timelapse, sessions);
+        throw new Error("No local timelapse, or no sessions have been captured");
+      }
+
+      console.log("(create.tsx) recording stopped!", timelapse);
+
+      // ------------------------------------------------------- //
+      progress.advance(1, "Generating thumbnail...");
+      const thumbnail = await videoGenerateThumbnail(sessions[0]);
+      console.log("(create.tsx) thumbnail generated:", thumbnail);
+
+      // ------------------------------------------------------- //
+      progress.advance(2, "Talking with the server...");
+      const device = await getCurrentDevice();
+      const res = await api.draftTimelapse.create({
+        snapshots: timelapse.snapshots,
+        thumbnailSize: thumbnail.size,
+        deviceId: device.id,
+        sessions: sessions.map(x => ({ fileSize: x.size }))
+      });
+
+      console.log("(create.tsx) draftTimelapse.create response:", res);
+
+      if (!res.ok)
+        throw new Error(res.message);
+
+      // ------------------------------------------------------- //
+      for (const [i, session] of sessions.entries()) {
         setUploadProgress(0);
-        setUploadStage("Preparing upload...");
+        setUploadStage(`Encrypting session #${i + 1}...`);
+        const encrypted = await encryptData(session); // TODO: Salt this!
 
-        assert(currentTimelapseId != null, "Attempted to stop the recording while currentTimelapseId is null");
+        console.log(`(create.tsx) encrypted session #${i + 1}:`, encrypted);
 
-        const timelapse = await deviceStorage.getTimelapse(currentTimelapseId);
-        if (!timelapse)
-          throw new Error(`Could not find a timelapse in IndexedDB with ID of ${currentTimelapseId}`);
-
-        console.log("(upload) recording stopped!", timelapse);
-
-        setUploadStage("Processing video...");
-        setUploadProgress(5);
-
-        const merged = await mergeVideoSessions(timelapse);
-
-        console.log("(upload) - merged session data:", merged);
-
-        setUploadStage("Generating thumbnail...");
-        setUploadProgress(25);
-
-        const thumbnail = await videoGenerateThumbnail(merged);
-
-        console.log("(upload) thumbnail generated:", thumbnail);
-
-        setUploadStage("Requesting upload URL...");
-        setUploadProgress(30);
-        const uploadRes = await api.timelapse.createDraft({ containerType: "WEBM" });
-        console.log("(upload) timelapse.createDraft response:", uploadRes);
-
-        if (!uploadRes.ok)
-          throw new Error(uploadRes.message);
-
-        setUploadStage("Encrypting video...");
-        setUploadProgress(35);
-
-        const encrypted = await encryptVideo(merged, uploadRes.data.id, (stage, progress) => {
-          setUploadStage(stage);
-          setUploadProgress(35 + Math.floor(progress * 0.25)); // 35-60%
-        });
-
-        console.log("(upload) - encrypted data:", encrypted);
-
-        setUploadStage("Uploading video to server...");
-        setUploadProgress(60);
-        console.log("(upload) uploading video via proxy endpoint");
-
-        const vidStatus = await apiUpload(
-          uploadRes.data.videoToken,
-          new Blob([encrypted.data], { type: "video/webm" })
-        );
-
-        if (!vidStatus.ok)
-          throw new Error(vidStatus.message);
-
-        setUploadProgress(80);
-
-        console.log("(upload) video uploaded successfully", vidStatus);
-
-        setUploadStage("Encrypting thumbnail...");
-        setUploadProgress(75);
-
-        const encryptedThumbnail = await encryptData(thumbnail, uploadRes.data.id, (stage, progress) => {
-          setUploadStage(stage);
-          setUploadProgress(75 + Math.floor(progress * 0.05)); // 75-80%
-        });
-
-        console.log("(upload) - encrypted thumbnail:", encryptedThumbnail);
-
-        setUploadStage("Uploading thumbnail...");
-        setUploadProgress(80);
-
-        const thumbnailStatus = await apiUpload(
-          uploadRes.data.thumbnailToken,
-          new Blob([encryptedThumbnail.data], { type: "image/jpeg" })
-        );
-        if (!thumbnailStatus.ok)
-          throw new Error(thumbnailStatus.message);
-
-        console.log("(upload) thumbnail uploaded successfully", thumbnailStatus);
-
-        setUploadStage("Finalizing timelapse...");
-        setUploadProgress(85);
-        const device = await getCurrentDevice();
-
-        console.log("(upload) finalizing upload now!");
-        console.log("(upload) - name:", name);
-        console.log("(upload) - description:", description);
-        console.log("(upload) - snapshots:", timelapse.snapshots);
-
-        const createRes = await api.timelapse.commit({
-          id: uploadRes.data.id,
-          name,
-          description,
-          visibility: "UNLISTED",
-          deviceId: device.id,
-          snapshots: timelapse.snapshots,
-        });
-
-        console.log("(upload) timelapse.create response:", createRes);
-
-        if (!createRes.ok)
-          throw new Error(createRes.error);
-
-        setUploadStage("Cleaning up local data...");
-        setUploadProgress(95);
-        console.log("(upload) timelapse created successfully! yay!");
-
-        if (currentTimelapseId) {
-          await deviceStorage.markComplete(currentTimelapseId);
-          await deviceStorage.deleteTimelapse(currentTimelapseId);
-          setCurrentTimelapseId(null);
-        }
-
-        setUploadStage("Upload complete!");
-        setUploadProgress(100);
-
-        router.push(`/timelapse/${createRes.data.timelapse.id}`);
+        setUploadStage("Uploading video session...");
+        await apiUpload(res.data.sessionUploadTokens[i], session, bytesProgressCallback);
       }
-      catch (apiErr) {
-        console.error("(create.tsx) upload failed:", apiErr);
-        setIsUploading(false);
-        setError(apiErr instanceof Error ? apiErr.message : "An unknown error occurred during upload");
-      }
-    };
 
-    recorder?.stop();
-    setRecorder(null);
+      console.log("(create.tsx) all sessions uploaded successfully!");
+      // ------------------------------------------------------- //
+
+      progress.advance(3, "Encrypting thumbnail...");
+      const encryptedThumb = await encryptData(thumbnail);
+      console.log("(create.tsx) - encrypted thumbnail:", encryptedThumb);
+
+      await apiUpload(
+        res.data.thumbnailUploadToken,
+        new Blob([encryptedThumb.data], { type: "image/webp" }),
+        bytesProgressCallback
+      );
+      
+      console.log("(create.tsx) thumbnail uploaded successfully! we're done, yay!");
+
+      progress.advance(4, "Cleaning up local data...");
+
+      await deviceStorage.markComplete();
+      await deviceStorage.deleteTimelapse();
+
+      progress.advance(5, "Upload complete!");
+
+      // We're done here! We can dispose of the stream.
+      if (stream) {
+        stream.getTracks().forEach(x => x.stop());
+      }
+
+      router.push(`/draft/${res.data.draftTimelapse.id}`);
+    }
+    catch (apiErr) {
+      console.error("(create.tsx) upload failed:", apiErr);
+      setIsUploading(false);
+      setError(apiErr instanceof Error ? apiErr.message : "An unknown error occurred during upload");
+    }
   }
-
-  useEffect(() => {
-    return () => {
-      if (frameInterval) {
-        clearInterval(frameInterval);
-      }
-    };
-  }, [frameInterval]);
 
   async function discardRecording() {
     if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
       return;
 
     try {
-      if (frameInterval) {
-        clearInterval(frameInterval);
-        setFrameInterval(null);
+      if (videoSession) {
+        await videoSession.stop();
+        setVideoSession(null);
       }
 
-      if (recorder) {
-        recorder.onstop = null;
-        recorder.stop();
-        setRecorder(null);
-      }
-
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
-        setCameraStream(null);
-      }
-
-      if (screenStream) {
-        screenStream.getTracks().forEach((track) => track.stop());
-        setScreenStream(null);
-      }
-
-      if (currentTimelapseId) {
-        await deviceStorage.deleteTimelapse(currentTimelapseId);
-        setCurrentTimelapseId(null);
+      if (stream) {
+        await deviceStorage.deleteTimelapse();
+        stream.getTracks().forEach(x => x.stop());
       }
 
       router.push("/");
@@ -604,11 +463,6 @@ export default function Page() {
       console.error("(create.tsx) failed to discard timelapse:", err);
       setError(err instanceof Error ? err.message : "Failed to discard timelapse");
     }
-  }
-
-  function openSetupModal() {
-    setSetupModalOpen(true);
-    setPause(true);
   }
 
   function onSubmitModalClose() {
@@ -625,8 +479,12 @@ export default function Page() {
     }
   }
 
-  const isCreateDisabled = videoSourceKind === "NONE";
-  const anyCamerasLoaded = availableCameras.filter(camera => camera.deviceId && camera.deviceId.length > 0).length > 0;
+  // The media stream selector detects interrupts in the streams it selects for us - we handle those events here.
+  function handleStreamInterrupt() {
+    
+  }
+
+  // TODO: the modals are still very silly indeed, we need to fix that
 
   return (
     <RootLayout showHeader={false}>
@@ -654,6 +512,7 @@ export default function Page() {
           showCloseButton={true}
           onClose={onSubmitModalClose}
         />
+
         <ModalContent>
           <div className="overflow-x-hidden overflow-y-visible p-px -m-px">
             <div
@@ -664,82 +523,32 @@ export default function Page() {
               style={{ width: "200%" }}
             >
               {[false, true].map((panelIsDiscarding) => {
-                const videoSourceDescription = panelIsDiscarding
-                  ? <span className="text-red">This will permanently discard your previous timelapse.</span>
-                  : "Record your screen, camera, or any other video source.";
-
                 return (
-                  <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 flex-shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
+                  <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
                     <div className="flex flex-col gap-6">
-                      <DropdownInput
-                        label="Video source"
-                        description={videoSourceDescription}
-                        value={videoSourceKind === "CAMERA" && selectedCameraId ? `CAMERA:${selectedCameraId}` : videoSourceKind}
-                        onChange={(value) => onVideoSourceChange({ target: { value } } as ChangeEvent<HTMLSelectElement>)}
-                        disabled={changingSource}
-                        options={[
-                          { value: "NONE", disabled: true, label: "(none)" },
-                          { value: "SCREEN", icon: "photo", label: screenLabel },
-                          ...(
-                            anyCamerasLoaded
-                            ? [
-                              // We got permission from the user to fetch their cameras - display them.
-                              {
-                                label: "Cameras", icon: "instagram" as const, group: availableCameras
-                                  .filter(camera => camera.deviceId && camera.deviceId.length > 0)
-                                  .map((camera, index) => (
-                                    {
-                                      value: `CAMERA:${camera.deviceId}`,
-                                      label: camera.label && camera.label.trim().length > 0
-                                        ? camera.label.replace(/\([A-Fa-f0-9]+:[A-Fa-f0-9]+\)/, "").trim()
-                                        : `Camera ${index + 1}`
-                                    }
-                                  ))
-                              }
-                            ] : [
-                              // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
-                              // option, that when clicked, will prompt them for permission.
-                              { label: "Camera", value: "CAMERA:" }
-                            ])
-                        ]}
+                      <MediaSourceSelector
+                        stream={stream}
+                        setStream={setStream}
+                        onInterrupt={handleStreamInterrupt}
+                        description={
+                          panelIsDiscarding
+                            ? <span className="text-red">This will permanently discard your previous timelapse.</span>
+                            : "Record your screen, camera, or any other video source."
+                        }
                       />
-
-                      {(cameraStream || screenStream) && (
-                        <div className="flex flex-col gap-2">
-                          <video
-                            autoPlay
-                            muted
-                            className="h-auto rounded-md"
-                            style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
-                            ref={(el) => {
-                              if (el && isDiscarding === panelIsDiscarding && el.srcObject !== currentStream) {
-                                el.srcObject = currentStream;
-                              }
-                            }}
-                          />
-                        </div>
-                      )}
 
                       <div className="flex gap-4 w-full">
                         {panelIsDiscarding ? (
                           <>
-                            <Button onClick={() => setIsDiscarding(false)} kind="regular" icon="view-back">
-                              Back
-                            </Button>
-
-                            <Button onClick={onBegin} disabled={isCreateDisabled} kind="primary" className="flex-1">
-                              Create
-                            </Button>
+                            <Button onClick={() => setIsDiscarding(false)} kind="regular" icon="view-back">Back</Button>
+                            <Button onClick={() => onSessionBegin(true, stream!)} disabled={!stream} kind="primary" className="flex-1">Create</Button>
                           </>
                         ) : (
                           <>
-                            <Button onClick={onBegin} disabled={isCreateDisabled} kind="primary" className="flex-1">
-                              {
-                                needsVideoSource ? "Resume"
-                                : isCreated ? "Update"
-                                : "Create"
-                              }
+                            <Button onClick={() => onSessionBegin(false, stream!)} disabled={!stream} kind="primary" className="flex-1">
+                              { needsVideoSource ? "Resume" : isCreated ? "Update" : "Create" }
                             </Button>
+
                             {needsVideoSource && (
                               <Button onClick={() => setIsDiscarding(true)} kind="destructive" icon="delete">
                                 Discard
@@ -756,40 +565,6 @@ export default function Page() {
           </div>
         </ModalContent>
       </Modal>
-
-      <WindowedModal
-        icon="send-fill"
-        title="Submit your timelapse"
-        description="Submitting will end your timelapse and save all of your progress!"
-        isOpen={submitModalOpen}
-        setIsOpen={x => setSubmitModalOpen(x)}
-      >
-        <div className="flex flex-col gap-6">
-          <TextInput
-            field={{
-              label: "Name",
-              description: "The title of your timelapse. You can change it later!"
-            }}
-            value={name}
-            onChange={setName}
-            maxLength={60}
-          />
-
-          <TextareaInput
-            label="Description"
-            description="Displayed under your timelapse. Optional."
-            value={description}
-            onChange={setDescription}
-            maxLength={280}
-          />
-
-          <div className="flex gap-4 w-full">
-            <Button onClick={() => stopRecording()} disabled={!name || name.trim().length == 0} kind="primary">Submit</Button>
-            <Button onClick={() => setSubmitModalOpen(false)} kind="regular">Cancel</Button>
-            <Button onClick={discardRecording} kind="destructive" icon="delete">Discard</Button>
-          </div>
-        </div>
-      </WindowedModal>
 
       <div className="flex w-screen h-screen bg-dark p-8 relative">
         {/* stats (overlay) */}
@@ -810,7 +585,7 @@ export default function Page() {
             {isPaused ? <RecordIcon className="p-3" width={48} height={48} /> : <PauseIcon className="p-3" width={48} height={48} />}
           </PillControlButton>
 
-          <PillControlButton onClick={() => setSubmitModalOpen(true)}>
+          <PillControlButton onClick={() => stopRecording()}>
             <StopIcon className="p-3" width={48} height={48} />
           </PillControlButton>
 

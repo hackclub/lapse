@@ -7,13 +7,13 @@ export declare const RealizeJobInputsSchema: z.ZodObject<{
     timelapseId: z.ZodString;
     sessionUrls: z.ZodArray<z.ZodURL>;
     passkey: z.ZodString;
-    editList: import("zod").ZodArray<import("zod").ZodObject<{
-        begin: import("zod").ZodInt;
-        end: import("zod").ZodInt;
-        kind: import("zod").ZodEnum<{
+    editList: z.ZodArray<z.ZodObject<{
+        begin: z.ZodInt;
+        end: z.ZodInt;
+        kind: z.ZodEnum<{
             CUT: "CUT";
         }>;
-    }, import("zod/v4/core").$strip>>;
+    }, z.core.$strip>>;
 }, z.core.$strip>;
 /**
  * Represents the outputs for a `realize` job.

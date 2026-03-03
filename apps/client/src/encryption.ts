@@ -113,14 +113,6 @@ export interface KeyIvPair {
     ivSalt: ArrayBuffer;
 }
 
-export interface EncryptedVideoStream {
-    data: ArrayBuffer;
-    key: string;
-    iv: string;
-    keySalt: string;
-    ivSalt: string;
-}
-
 export interface EncryptedDataStream {
     data: ArrayBuffer;
     key: string;
@@ -179,18 +171,10 @@ async function deriveKeyIvPair(timelapseId: string, passkey?: string): Promise<K
     };
 }
 
-export async function encryptData(
-    dataBlob: Blob, 
-    timelapseId: string,
-    onProgress?: (stage: string, progress: number) => void
-): Promise<EncryptedDataStream> {
-    onProgress?.("Deriving encryption keys...", 5);
-    const { key, iv, keySalt, ivSalt } = await deriveKeyIvPair(timelapseId);
-    
-    onProgress?.("Reading data...", 15);
+export async function encryptData(dataBlob: Blob): Promise<EncryptedDataStream> {
+    const { key, iv, keySalt, ivSalt } = await deriveKeyIvPair("");
     const dataBuffer = await dataBlob.arrayBuffer();
 
-    onProgress?.("Preparing encryption...", 25);
     const cryptoKey = await crypto.subtle.importKey(
         "raw",
         key,
@@ -198,8 +182,6 @@ export async function encryptData(
         false,
         ["encrypt"]
     );
-    
-    onProgress?.("Encrypting data...", 30);
     
     // Encrypt the entire data as one continuous stream to avoid IV reuse
     // AES-CBC requires unique IVs or proper chaining between blocks
@@ -209,8 +191,6 @@ export async function encryptData(
         dataBuffer
     );
     
-    onProgress?.("Encryption complete", 100);
-    
     return {
         data: encryptedBuffer,
         key: Array.from(new Uint8Array(key)).map(b => b.toString(16).padStart(2, "0")).join(""),
@@ -218,14 +198,6 @@ export async function encryptData(
         keySalt: Array.from(new Uint8Array(keySalt)).map(b => b.toString(16).padStart(2, "0")).join(""),
         ivSalt: Array.from(new Uint8Array(ivSalt)).map(b => b.toString(16).padStart(2, "0")).join("")
     };
-}
-
-export async function encryptVideo(
-    videoBlob: Blob, 
-    timelapseId: string,
-    onProgress?: (stage: string, progress: number) => void
-): Promise<EncryptedVideoStream> {
-    return encryptData(videoBlob, timelapseId, onProgress);
 }
 
 export async function decryptData(
@@ -258,12 +230,4 @@ export async function decryptData(
         console.warn(`(encryption.ts) decryption failed! passkey=${passkey}, id=${timelapseId}`, err, encryptedData);
         throw err;
     }
-}
-
-export async function decryptVideo(
-    encryptedData: ArrayBuffer | Uint8Array,
-    timelapseId: string,
-    passkey: string
-): Promise<ArrayBuffer> {
-    return decryptData(encryptedData, timelapseId, passkey);
 }

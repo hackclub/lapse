@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import Fastify from "fastify"
-import { implement, onError, os } from "@orpc/server"
+import { implement, onError } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { RequestHeadersPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins"
@@ -25,6 +25,7 @@ import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
 import auth from "@/routers/auth.js"
 import { logError } from "@/logging.js";
+import { attachUploadServer } from "@/upload.js";
 
 const router = implement(compositeRouterContract)
     .$context<Context>()
@@ -60,15 +61,15 @@ const openApiGenerator = new OpenAPIGenerator({
     ]
 });
 
-const fastify = Fastify();
+const server = Fastify();
 
-fastify.addContentTypeParser("*", (request, payload, done) => {
+server.addContentTypeParser("*", (request, payload, done) => {
   // Fully utilize oRPC feature by allowing any content type
   // And let oRPC parse the body manually by passing `undefined`
   done(null, undefined);
 });
 
-fastify.all("/api/*", async (req, reply) => {
+server.all("/api/*", async (req, reply) => {
     const { user, scopes } = await getAuthenticatedUser(req);
 
     if (req.url === "/health") {
@@ -154,7 +155,9 @@ fastify.all("/api/*", async (req, reply) => {
     }
 });
 
-fastify.listen({ port: parseInt(env.PORT) })
+attachUploadServer(server);
+
+server.listen({ port: parseInt(env.PORT) })
     .then(address => {
         if (process.env["NODE_ENV"] === "development") {
             chalk.level = 3;

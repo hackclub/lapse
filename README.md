@@ -29,6 +29,8 @@ When developing, it's a good idea to re-compile all packages on the fly!
 pnpm dev:watch-all
 ```
 
+If you're interested, you're welcome to build your own custom client! See [`./docs/custom-clients.md`](./docs/custom-clients.md) for more info.
+
 ## 🛠️ Deployment
 Lapse is meant to be deployed via Docker, featuring three main services out-of-the-box: `client`, `server`, and `worker`. 
 - `client`: the web client server. Interfaces with `server` - use `Dockerfile.client` to deploy this service.

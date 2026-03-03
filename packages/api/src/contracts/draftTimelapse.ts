@@ -27,7 +27,7 @@ export const EditListEntrySchema = z.object({
  */
 export type DraftTimelapsePayload = z.infer<typeof DraftTimelapsePayloadSchema>;
 export const DraftTimelapsePayloadSchema = z.object({
-    name: TimelapseName
+    name: TimelapseName.optional()
         .describe("The current name of the draft timelapse."),
 
     description: TimelapseDescription
@@ -62,7 +62,7 @@ export const DraftTimelapseSchema = DraftTimelapsePayloadSchema.extend({
         .describe("The user that has created this draft timelapse."),
 
     isDraft: z.literal(true)
-        .describe("Always `true`. This field is provided for convenience when using strongly-typed clients.")
+        .describe("Always `true`. This field is provided for convenience when using strongly-typed clients."),
 });
 
 export const draftTimelapseRouterContract = {
@@ -81,10 +81,10 @@ export const draftTimelapseRouterContract = {
     create: contract("POST", "/draftTimelapse/create")
         .route({ summary: `Creates a draft timelapse. Draft timelapses can be published and turned into regular timelapses by calling "timelapse.publish".` })
         .input(z.object({
-            name: TimelapseName
+            name: TimelapseName.optional()
                 .describe("The name to assign to the created timelapse draft."),
 
-            description: TimelapseDescription
+            description: TimelapseDescription.optional()
                 .describe("The description to assign to the created timelapse draft."),
 
             snapshots: z.array(z.int().min(0)).max(MAX_VIDEO_FRAME_COUNT)
@@ -92,7 +92,7 @@ export const draftTimelapseRouterContract = {
                 
             deviceId: z.uuid()
                 .describe("The device that the timelapse has been created on. This is used to let other devices know which key to use to decrypt this timelapse."),
-
+                
             sessions: z.array(
                 z.object({
                     fileSize: z.number()
@@ -115,11 +115,11 @@ export const draftTimelapseRouterContract = {
                 draftTimelapse: DraftTimelapseSchema
                     .describe("The newly created draft timelapse."),
 
-                sessionUploadUrls: z.array(z.url())
-                    .describe("An array identfying the upload URLs for each session. To upload, issue a PUT HTTP request to the URLs with the binary data."),
+                sessionUploadTokens: z.array(z.jwt())
+                    .describe("An array containing the upload JWT tokens to pass over as the tus metadata when uploading the sessions."),
 
-                thumbnailUploadUrl: z.url()
-                    .describe("The upload URL for the encrypted preview thumbnail. This thumbnail will *not* be used when publishing, and will be encrypted with the device's passkey.")
+                thumbnailUploadToken: z.jwt()
+                    .describe("The `tus` upload JWT token identifying the encrypted preview thumbnail. This thumbnail will *not* be used when publishing, and will be encrypted with the device's passkey.")
             })
         ),
 

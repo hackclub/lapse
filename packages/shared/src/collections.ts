@@ -62,3 +62,15 @@ export function arraysEqual<T>(a: T[], b: T[]) {
 
     return true;
 }
+
+/**
+ * Returns an array of `[0, ..., n-1]`.
+ */
+export function range(n: number) {
+    const arr: number[] = [];
+    for (let i = 0; i < n; i++) {
+        arr.push(i);
+    }
+
+    return arr;
+}

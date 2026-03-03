@@ -2,7 +2,7 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { oneOf } from "@hackclub/lapse-shared";
+import { oneOf, range } from "@hackclub/lapse-shared";
 
 import * as db from "@/generated/prisma/client.js";
 import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse } from "@hackclub/lapse-api";
@@ -15,6 +15,7 @@ import { logInfo } from "@/logging.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { actorEntitledTo, type Actor } from "@/ownership.js";
 import { dtoPublicUser } from "@/routers/user.js";
+import { issueUploadToken } from "@/upload.js";
 
 const s3 = new S3Client({
     region: "auto",
@@ -34,7 +35,7 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
         description: entity.description,
-        name: entity.name,
+        name: entity.name ?? undefined,
         editList: entity.editList.map(x => EditListEntrySchema.parse(x)),
         sessions: entity.sessions.map(x => `${env.S3_PUBLIC_URL_ENCRYPTED}/${x}`),
         previewThumbnail: `${env.S3_PUBLIC_URL_ENCRYPTED}/${entity.thumbnailKey}`,
@@ -105,25 +106,9 @@ export default os.router({
             if (totalSize > MAX_VIDEO_UPLOAD_SIZE)
                 return apiErr("SIZE_LIMIT", `The total of the session file sizes (${totalSize} bytes) exceeds the maximum (${MAX_VIDEO_UPLOAD_SIZE} bytes).`);
 
-            if (req.input.thumbnailSize > MAX_THUMBNAIL_UPLOAD_SIZE)
-                return apiErr("SIZE_LIMIT", `The size of the thumbnail (${totalSize} bytes) exceeds the maximum (${MAX_THUMBNAIL_UPLOAD_SIZE} bytes).`);
-
-            const PRESIGNED_EXPIRY = 3600; // one hour
-
             // We use pre-signed S3 URLs for the session upload URLs.
-            const sessionKeys = req.input.sessions.map((x, i) => `timelapses/${caller.id}/${id}-session${i}.webm`);
-            const sessionUploadUrls = await Promise.all(
-                req.input.sessions.map((x, i) => getSignedUrl(
-                    s3,
-                    new PutObjectCommand({
-                        Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                        Key: `timelapses/${caller.id}/${id}-session${i}.webm`,
-                        ContentType: "video/webm",
-                        ContentLength: x.fileSize
-                    }),
-                    { expiresIn: PRESIGNED_EXPIRY } // one hour
-                ))
-            );
+            const sessionKeys = range(req.input.sessions.length).map(i => `timelapses/${caller.id}/${id}-session${i}.webm`);
+            const sessionTokens = req.input.sessions.map((x, i) => issueUploadToken(sessionKeys[i], x.fileSize));
 
             const device = await database().knownDevice.findFirst({
                 where: {
@@ -136,16 +121,7 @@ export default os.router({
                 return apiErr("DEVICE_NOT_FOUND", `The specified known device ${req.input.deviceId} could not be found.`);
 
             const thumbnailKey = `timelapses/${caller.id}/${id}-thumbnail.webp`;
-            const thumbnailUploadUrl = await getSignedUrl(
-                s3,
-                new PutObjectCommand({
-                    Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
-                    Key: thumbnailKey,
-                    ContentType: "image/webp",
-                    ContentLength: req.input.thumbnailSize
-                }),
-                { expiresIn: PRESIGNED_EXPIRY }
-            );
+            const thumbnailUploadToken = issueUploadToken(thumbnailKey, MAX_THUMBNAIL_UPLOAD_SIZE);
 
             const draft = await database().draftTimelapse.create({
                 include: { owner: true },
@@ -163,8 +139,8 @@ export default os.router({
             });
 
             return apiOk({
-                sessionUploadUrls,
-                thumbnailUploadUrl,
+                sessionUploadTokens: sessionTokens,
+                thumbnailUploadToken,
                 draftTimelapse: dtoDraftTimelapse(draft)
             });
         }),

@@ -1,24 +1,12 @@
-/**
- * Represents a video chunk. Serves to guard against interruptions between recordings.
- * Chunks are merged together into one video stream before being uploaded to the server.
- */
-export interface LocalChunk {
-    data: Blob;
-    timestamp: number;
-    session: number;
-}
+import * as v from "valibot";
 
 /**
- * An in-progress timelapse, stored locally.
+ * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
  */
-export interface LocalTimelapse {
-    id: number;
-    name: string;
-    description: string;
+export interface StoredTimelapse {
     startedAt: number;
-    chunks: LocalChunk[];
     snapshots: number[];
-    isActive: boolean;
+    sessions: number[];
 }
 
 /**
@@ -35,20 +23,24 @@ export interface LocalDevice {
  */
 export type LocalDevices = LocalDevice[];
 
-interface StoredChunk {
-    timestamp: number;
-    session: number;
-}
+const LocalTimelapseSchema = v.object({
+    startedAt: v.number(),
+    snapshots: v.array(v.number()),
+    sessions: v.array(v.number()),
+    isActive: v.boolean(),
+});
 
-interface StoredTimelapse {
-    id: number;
-    name: string;
-    description: string;
-    startedAt: number;
-    chunks: StoredChunk[];
-    snapshots: number[];
-    isActive: boolean;
-}
+const DeviceSchema = v.object({
+    id: v.string(),
+    passkey: v.string(),
+    thisDevice: v.boolean(),
+});
+
+type Store = v.InferOutput<typeof StoreSchema>;
+const StoreSchema = v.object({
+    devices: v.array(DeviceSchema),
+    timelapse: v.nullable(LocalTimelapseSchema),
+});
 
 class AsyncQueue {
     private currentTask: Promise<unknown> = Promise.resolve();
@@ -68,7 +60,7 @@ class AsyncQueue {
 }
 
 /**
- * Securely stores data on the client device using the Origin Private File System.
+ * Securely stores data on the client device.
  */
 export class DeviceStorage {
     private root: FileSystemDirectoryHandle | null = null;
@@ -89,261 +81,184 @@ export class DeviceStorage {
         this.root = await navigator.storage.getDirectory();
     }
 
-    private async getDir(path: string[], create = false): Promise<FileSystemDirectoryHandle> {
-        let dir = this.root!;
-        for (const segment of path) {
-            dir = await dir.getDirectoryHandle(segment, { create });
-        }
-        return dir;
+    private async getLapseDir(): Promise<FileSystemDirectoryHandle> {
+        return await this.root!.getDirectoryHandle("lapse", { create: true });
     }
 
-    private async readJson<T>(dir: FileSystemDirectoryHandle, name: string): Promise<T | null> {
+    private async readStore(): Promise<Store> {
         try {
-            const fileHandle = await dir.getFileHandle(name);
+            const dir = await this.getLapseDir();
+            const fileHandle = await dir.getFileHandle("store.json");
             const file = await fileHandle.getFile();
             const text = await file.text();
-            return JSON.parse(text) as T;
+            return v.parse(StoreSchema, JSON.parse(text));
         }
         catch {
-            return null;
+            console.log("(deviceStorage.ts) can't open OPFS store - creating a new one!");
+            return { devices: [], timelapse: null };
         }
     }
 
-    private async writeJson(dir: FileSystemDirectoryHandle, name: string, data: unknown): Promise<void> {
-        const fileHandle = await dir.getFileHandle(name, { create: true });
+    private async writeStore(data: Store): Promise<void> {
+        const dir = await this.getLapseDir();
+        const fileHandle = await dir.getFileHandle("store.json", { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(data));
         await writable.close();
-    }
-
-    private async writeBlob(dir: FileSystemDirectoryHandle, name: string, blob: Blob): Promise<void> {
-        const fileHandle = await dir.getFileHandle(name, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-    }
-
-    private async readBlob(dir: FileSystemDirectoryHandle, name: string): Promise<Blob | null> {
-        try {
-            const fileHandle = await dir.getFileHandle(name);
-            return await fileHandle.getFile();
-        }
-        catch {
-            return null;
-        }
-    }
-
-    private async nextTimelapseId(): Promise<number> {
-        const timelapsesDir = await this.getDir(["timelapses"], true);
-        const counter = await this.readJson<{ nextId: number }>(timelapsesDir, "_counter.json");
-        const nextId = counter?.nextId ?? 1;
-        await this.writeJson(timelapsesDir, "_counter.json", { nextId: nextId + 1 });
-        return nextId;
     }
 
     private async operation<T>(block: () => Promise<T>) {
         return await this.serialQueue.enqueue(block);
     }
 
-    private async _saveTimelapse(timelapse: LocalTimelapse | Omit<LocalTimelapse, "id">): Promise<number> {
-        await this.ensureInit();
+    async createTimelapse(): Promise<StoredTimelapse> {
+        return await this.operation(async () => {
+            await this.ensureInit();
 
-        let id: number;
-        if ("id" in timelapse) {
-            id = timelapse.id;
-        }
-        else {
-            id = await this.nextTimelapseId();
-        }
+            const store = await this.readStore();
+            store.timelapse = {
+                startedAt: Date.now(),
+                snapshots: [],
+                sessions: [],
+                isActive: true
+            };
 
-        const timelapseDir = await this.getDir(["timelapses", String(id)], true);
-        const chunksDir = await this.getDir(["timelapses", String(id), "chunks"], true);
+            await this.writeStore(store);
+            console.log("(deviceStorage.ts) timelapse created:", store.timelapse);
 
-        const existingMeta = await this.readJson<StoredTimelapse>(timelapseDir, "meta.json");
-        const existingChunkCount = existingMeta?.chunks.length ?? 0;
-
-        for (let i = existingChunkCount; i < timelapse.chunks.length; i++) {
-            await this.writeBlob(chunksDir, `${i}.bin`, timelapse.chunks[i].data);
-        }
-
-        const stored: StoredTimelapse = {
-            id,
-            name: timelapse.name,
-            description: timelapse.description,
-            startedAt: timelapse.startedAt,
-            chunks: timelapse.chunks.map(c => ({ timestamp: c.timestamp, session: c.session })),
-            snapshots: timelapse.snapshots,
-            isActive: timelapse.isActive,
-        };
-
-        await this.writeJson(timelapseDir, "meta.json", stored);
-        console.log("(deviceStorage.ts) saveTimelapse ->", stored);
-        return id;
+            return store.timelapse;
+        });
     }
 
-    async saveTimelapse(timelapse: LocalTimelapse | Omit<LocalTimelapse, "id">): Promise<number> {
-        return await this.operation(() => this._saveTimelapse(timelapse));
+    async getTimelapse(): Promise<StoredTimelapse | null> {
+        return await this.operation(async () => {
+            await this.ensureInit();
+
+            const store = await this.readStore();
+            if (!store.timelapse)
+                return null;
+
+            return store.timelapse;
+        });
     }
 
-    private async _getTimelapse(id: number): Promise<LocalTimelapse | null> {
-        await this.ensureInit();
+    async getTimelapseVideoSessions(): Promise<Blob[]> {
+        return await this.operation(async () => {
+            await this.ensureInit();
 
-        try {
-            const timelapseDir = await this.getDir(["timelapses", String(id)]);
-            const meta = await this.readJson<StoredTimelapse>(timelapseDir, "meta.json");
-            if (!meta) return null;
+            const store = await this.readStore();
+            if (!store.timelapse)
+                return [];
 
-            const chunks: LocalChunk[] = [];
+            const dir = await this.getLapseDir();
+            const blobs: Blob[] = [];
 
-            if (meta.chunks.length > 0) {
-                const chunksDir = await this.getDir(["timelapses", String(id), "chunks"]);
-
-                for (let i = 0; i < meta.chunks.length; i++) {
-                    const blob = await this.readBlob(chunksDir, `${i}.bin`);
-                    if (!blob) continue;
-
-                    chunks.push({
-                        data: blob,
-                        timestamp: meta.chunks[i].timestamp,
-                        session: meta.chunks[i].session,
-                    });
+            for (const sessionId of store.timelapse.sessions) {
+                try {
+                    const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`);
+                    blobs.push(await fileHandle.getFile());
+                }
+                catch (err) {
+                    console.warn(`(deviceStorage.ts) could not read session ${sessionId} - skipping`, err);
                 }
             }
 
-            return {
-                id: meta.id,
-                name: meta.name,
-                description: meta.description,
-                startedAt: meta.startedAt,
-                chunks,
-                snapshots: meta.snapshots,
-                isActive: meta.isActive,
-            };
-        }
-        catch {
-            return null;
-        }
-    }
-
-    async getTimelapse(id: number): Promise<LocalTimelapse | null> {
-        return await this.operation(() => this._getTimelapse(id));
-    }
-
-    async getActiveTimelapse(): Promise<LocalTimelapse | null> {
-        return await this.operation(async () => {
-            await this.ensureInit();
-
-            let timelapsesDir: FileSystemDirectoryHandle;
-            try {
-                timelapsesDir = await this.getDir(["timelapses"]);
-            }
-            catch {
-                return null;
-            }
-
-            for await (const [, handle] of timelapsesDir.entries()) {
-                if (handle.kind !== "directory") continue;
-
-                const meta = await this.readJson<StoredTimelapse>(handle as FileSystemDirectoryHandle, "meta.json");
-                if (meta?.isActive)
-                    return await this._getTimelapse(meta.id);
-            }
-
-            return null;
+            return blobs;
         });
     }
 
-    async appendChunk(timelapseId: number, chunk: Blob, session: number): Promise<void> {
+    async appendChunk(sessionId: number, chunk: Blob): Promise<void> {
         return await this.operation(async () => {
             await this.ensureInit();
 
-            let timelapseDir: FileSystemDirectoryHandle;
-            try {
-                timelapseDir = await this.getDir(["timelapses", String(timelapseId)]);
-            }
-            catch {
+            const store = await this.readStore();
+            if (!store.timelapse) {
+                console.warn(`(deviceStorage.ts) attempted to call appendChunk, but no timelapse is registered!`, chunk);
                 return;
             }
 
-            const meta = await this.readJson<StoredTimelapse>(timelapseDir, "meta.json");
-            if (!meta) return;
+            if (!store.timelapse.sessions.includes(sessionId)) {
+                store.timelapse.sessions.push(sessionId);
+                await this.writeStore(store);
+            }
 
-            const chunkIndex = meta.chunks.length;
-            const chunksDir = await this.getDir(["timelapses", String(timelapseId), "chunks"], true);
-            await this.writeBlob(chunksDir, `${chunkIndex}.bin`, chunk);
-
-            meta.chunks.push({ timestamp: Date.now(), session });
-            await this.writeJson(timelapseDir, "meta.json", meta);
-
-            console.debug(`(deviceStorage.ts) appendChunk(${timelapseId}) -> chunk ${chunkIndex}`);
+            const dir = await this.getLapseDir();
+            const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`, { create: true });
+            const file = await fileHandle.getFile();
+            const writable = await fileHandle.createWritable({ keepExistingData: true });
+            await writable.seek(file.size);
+            await writable.write(chunk);
+            await writable.close();
         });
     }
 
-    async markComplete(timelapseId: number): Promise<void> {
+    async markComplete(): Promise<void> {
         return await this.operation(async () => {
             await this.ensureInit();
 
-            let timelapseDir: FileSystemDirectoryHandle;
-            try {
-                timelapseDir = await this.getDir(["timelapses", String(timelapseId)]);
-            }
-            catch {
+            const store = await this.readStore();
+            if (!store.timelapse)
                 return;
-            }
 
-            const meta = await this.readJson<StoredTimelapse>(timelapseDir, "meta.json");
-            if (!meta) return;
+            store.timelapse.isActive = false;
+            await this.writeStore(store);
 
-            meta.isActive = false;
-            await this.writeJson(timelapseDir, "meta.json", meta);
-
-            console.log(`(deviceStorage.ts) markComplete(${timelapseId})`);
+            console.log("(deviceStorage.ts) timelapse marked as complete");
         });
     }
 
-    async deleteTimelapse(id: number): Promise<void> {
+    async deleteTimelapse(): Promise<void> {
         return await this.operation(async () => {
             await this.ensureInit();
 
-            try {
-                const timelapsesDir = await this.getDir(["timelapses"]);
-                await timelapsesDir.removeEntry(String(id), { recursive: true });
-            }
-            catch {
-                // Directory doesn't exist
+            const store = await this.readStore();
+            const sessions = store.timelapse?.sessions ?? [];
+            store.timelapse = null;
+            await this.writeStore(store);
+
+            const dir = await this.getLapseDir();
+            for (const sessionId of sessions) {
+                try {
+                    await dir.removeEntry(`session-${sessionId}.webm`);
+                }
+                catch (err) {
+                    console.warn(`(deviceStorage.ts) could not delete session ${sessionId}`, err);
+                }
             }
 
-            console.log(`(deviceStorage.ts) deleteTimelapse(${id})`);
+            console.log("(deviceStorage.ts) locally stored timelapse deleted");
         });
     }
 
-    async appendSnapshot(timelapseId: number, timestamp: number): Promise<void> {
+    async appendSnapshot(timestamp: number): Promise<void> {
         return await this.operation(async () => {
             await this.ensureInit();
 
-            let timelapseDir: FileSystemDirectoryHandle;
-            try {
-                timelapseDir = await this.getDir(["timelapses", String(timelapseId)]);
-            }
-            catch {
-                return;
-            }
+            const store = await this.readStore();
+            if (!store.timelapse) return;
 
-            const meta = await this.readJson<StoredTimelapse>(timelapseDir, "meta.json");
-            if (!meta) return;
+            store.timelapse.snapshots.push(timestamp);
+            await this.writeStore(store);
 
-            meta.snapshots.push(timestamp);
-            await this.writeJson(timelapseDir, "meta.json", meta);
-
-            console.debug(`(deviceStorage.ts) appendSnapshot(${timelapseId}) ->`, timestamp);
+            console.debug("(deviceStorage.ts) appendSnapshot ->", timestamp);
         });
     }
 
     async saveDevice(device: LocalDevice): Promise<string> {
         return await this.operation(async () => {
             await this.ensureInit();
-            const devicesDir = await this.getDir(["devices"], true);
-            await this.writeJson(devicesDir, `${device.id}.json`, device);
+
+            const store = await this.readStore();
+            const existingIndex = store.devices.findIndex(d => d.id === device.id);
+
+            if (existingIndex >= 0) {
+                store.devices[existingIndex] = device;
+            }
+            else {
+                store.devices.push(device);
+            }
+
+            await this.writeStore(store);
 
             console.log("(deviceStorage.ts) saveDevice ->", device);
             return device.id;
@@ -353,8 +268,9 @@ export class DeviceStorage {
     async getDevice(id: string): Promise<LocalDevice | null> {
         return await this.operation(async () => {
             await this.ensureInit();
-            const devicesDir = await this.getDir(["devices"], true);
-            return await this.readJson<LocalDevice>(devicesDir, `${id}.json`);
+
+            const store = await this.readStore();
+            return store.devices.find(d => d.id === id) ?? null;
         });
     }
 
@@ -362,23 +278,8 @@ export class DeviceStorage {
         return await this.operation(async () => {
             await this.ensureInit();
 
-            let devicesDir: FileSystemDirectoryHandle;
-            try {
-                devicesDir = await this.getDir(["devices"]);
-            }
-            catch {
-                return [];
-            }
-
-            const devices: LocalDevices = [];
-            for await (const [name, handle] of devicesDir.entries()) {
-                if (handle.kind !== "file" || !name.endsWith(".json")) continue;
-
-                const device = await this.readJson<LocalDevice>(devicesDir, name);
-                if (device) devices.push(device);
-            }
-
-            return devices;
+            const store = await this.readStore();
+            return store.devices;
         });
     }
 
@@ -386,13 +287,9 @@ export class DeviceStorage {
         return await this.operation(async () => {
             await this.ensureInit();
 
-            try {
-                const devicesDir = await this.getDir(["devices"]);
-                await devicesDir.removeEntry(`${id}.json`);
-            }
-            catch {
-                // File doesn't exist
-            }
+            const store = await this.readStore();
+            store.devices = store.devices.filter(d => d.id !== id);
+            await this.writeStore(store);
 
             console.log(`(deviceStorage.ts) deleteDevice(${id})`);
         });
@@ -403,7 +300,11 @@ export class DeviceStorage {
      */
     async sync() {
         await this.serialQueue.synchronize();
+        console.log("(deviceStorage.ts) device storage has been synchronized");
     }
 }
 
+/**
+ * Allows for storing persistent binary data directly on the user's device.
+ */
 export const deviceStorage = new DeviceStorage();

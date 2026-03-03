@@ -1,5 +1,5 @@
 # Authenticating users to Lapse
-The Lapse hackend (api.lapse.hackclub.com) serves as an **identity broker** between Hackatime and Lapse clients.
+The Lapse backend (`api.lapse.hackclub.com`) serves as an **identity broker** between Hackatime and Lapse clients.
 
 We feature the following scopes:
 

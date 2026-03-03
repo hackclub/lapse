@@ -19,7 +19,8 @@
   },
   "packageManager": "pnpm@10.25.0",
   "dependencies": {
-    "@hackclub/lapse-api": "workspace:*"
+    "@hackclub/lapse-api": "workspace:*",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",

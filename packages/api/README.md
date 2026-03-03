@@ -37,3 +37,5 @@ const link = new OpenAPILink(contract, {
 
 const client: JsonifiedClient<ContractRouterClient<typeof contract>> = createORPCClient(link);
 ```
+
+## Uploading

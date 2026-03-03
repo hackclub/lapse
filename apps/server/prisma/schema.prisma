@@ -86,8 +86,8 @@ model DraftTimelapse {
   /// The date and time when the draft timelapse has been created.
   createdAt             DateTime    @default(now())
 
-  /// The name (title) of the timelapse.
-  name                  String
+  /// The name (title) of the timelapse. If `null`, this means that the timelapse has not yet been given a name by the author.
+  name                  String?
 
   /// The description of the timelapse. This can contain a limited subset of Markdown (bold, italic, strikethrough, code).
   description           String                  @default("")

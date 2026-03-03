@@ -77,10 +77,10 @@ export const env = {
     get JWT_CONSENT_TOKENS() { return required("JWT_CONSENT_TOKENS") },
 
     /**
-     * The 32-byte secret key used to generate encrypted upload tokens, represented as a 64 character hex string.
+     * The secret key used to generate JWT tus upload tokens.
      */
     // Generate one using [openssl rand -hex 32]!
-    get UPLOAD_TOKEN_PRIVATE_KEY() { return required("UPLOAD_TOKEN_PRIVATE_KEY") },
+    get JWT_UPLOAD_TOKEN() { return required("JWT_UPLOAD_TOKEN") },
 
     /**
      * The 16-byte IV used to generate encrypted upload tokens, represented as a 32 character hex string.

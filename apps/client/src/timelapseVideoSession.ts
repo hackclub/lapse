@@ -2,8 +2,6 @@ import { deviceStorage } from "@/deviceStorage";
 import { TIMELAPSE_FACTOR, TIMELAPSE_FPS } from "@hackclub/lapse-api";
 import { assert } from "@hackclub/lapse-shared";
 
-const FRAME_DELAY = 1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS;
-
 const BITS_PER_PIXEL = 48;
 function createMediaRecorder(stream: MediaStream) {
     const tracks = stream.getVideoTracks();
@@ -37,7 +35,7 @@ function createMediaRecorder(stream: MediaStream) {
     const h = metadata.height ?? 1080;
     const bitrate = w * h * BITS_PER_PIXEL;
 
-    console.log(`(videoProcessing.ts) bitrate=${bitrate} (${bitrate / 1000}kbit/s, ${bitrate / 1000 / 1000}mbit/s), format=${mime}`);
+    console.log(`(videoProcessing.ts) bitrate=${bitrate} (${Math.floor(bitrate / 1000)}kbit/s, ${Math.floor(bitrate / 1000 / 1000)}mbit/s), format=${mime}`);
 
     return new MediaRecorder(stream, {
         videoBitsPerSecond: bitrate,
@@ -52,13 +50,20 @@ function createMediaRecorder(stream: MediaStream) {
  */
 export class TimelapseVideoSession {
     public isPaused: boolean = false;
+    public readonly sessionId: number;
 
     private recorder: MediaRecorder;
     private canvas: HTMLCanvasElement;
     private video: HTMLVideoElement;
     private canvasCtx: CanvasRenderingContext2D;
+    private intervalId: ReturnType<typeof setInterval>;
 
-    constructor (provider: MediaProvider, private sessionId: number, private localTimelapseId: number) {
+    /**
+     * Creates a new `TimelapseVideoSession`, immediately capturing new chunks.
+     * @param provider The media provider (most likely a video stream) to blit frames *from*.
+     */
+    constructor (provider: MediaProvider) {
+        this.sessionId = Date.now();
         this.canvas = document.createElement("canvas");
         this.canvasCtx = this.canvas.getContext("2d")!;
 
@@ -68,11 +73,21 @@ export class TimelapseVideoSession {
         this.video.srcObject = provider;
 
         this.recorder = createMediaRecorder(stream);
-        this.recorder.addEventListener("dataavailable", this.handleRecorderData.bind(this));
+        this.recorder.addEventListener("dataavailable", () => this.handleRecorderData);
         this.recorder.start(); // we will extract data via requestData()
+    
+        this.intervalId = this.setFrameInterval();
     }
 
-    captureFrame() {
+    // Starts capturing data.
+    private setFrameInterval() {
+        return setInterval(() => {
+            this.captureFrame();
+        }, 1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS);
+    }
+
+    // Captures a single frame (not a chunk!)
+    private captureFrame() {
         if (this.isPaused)
             return;
 
@@ -93,13 +108,35 @@ export class TimelapseVideoSession {
 
         this.recorder.requestData(); // will call handleRecorderData
 
-        deviceStorage.appendSnapshot(this.localTimelapseId, Date.now());
+        deviceStorage.appendSnapshot(Date.now());
     }
 
-    async handleRecorderData(ev: BlobEvent) {
+    private async handleRecorderData(ev: BlobEvent) {
         if (ev.data.size <= 0)
             return;
 
-        await deviceStorage.appendChunk(this.localTimelapseId, ev.data, this.sessionId);
+        await deviceStorage.appendChunk(this.sessionId, ev.data);
+    }
+
+    /**
+     * Stops the internal `MedaiRecorder`, waiting for all data to be flushed.
+     */
+    stop(): Promise<void> {
+        return new Promise<void>(resolve => {
+            clearInterval(this.intervalId);
+
+            this.recorder.onstop = () => resolve();
+            this.recorder.stop();
+        });
+    }
+
+    pause() {
+        this.recorder.pause();
+        clearInterval(this.intervalId);
+    }
+
+    resume() {
+        this.recorder.resume();
+        this.intervalId = this.setFrameInterval();
     }
 }

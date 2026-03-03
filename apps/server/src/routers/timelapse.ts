@@ -256,7 +256,7 @@ export default os.router({
                     id,
                     createdAt: draft.createdAt,
                     ownerId: caller.id,
-                    name: draft.name,
+                    name: draft.name ?? `Timelapse at ${draft.createdAt.toLocaleString("en-US", { month: "long", day: "numeric", minute: "numeric", hour: "numeric" })}`,
                     description: draft.description,
                     visibility: req.input.visibility,
                     snapshots: draft.snapshots,
