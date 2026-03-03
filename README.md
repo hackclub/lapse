@@ -19,7 +19,7 @@ pnpm install
 pnpm dev:init
 
 # Start the web client and backend
-pnpm turbo run dev
+pnpm dev
 ```
 
 To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively.

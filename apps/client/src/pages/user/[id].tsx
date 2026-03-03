@@ -1,13 +1,11 @@
 import { useRouter } from "next/router";
 import { useState } from "react";
 import Icon from "@hackclub/icons";
-
-import type { Timelapse } from "@/server/routers/api/timelapse";
-import type { User, PublicUser } from "@/server/routers/api/user";
+import type { Timelapse, User, PublicUser } from "@hackclub/lapse-api";
+import { assert, validateUrl, matchOrDefault } from "@hackclub/lapse-shared";
 
 import { api } from "@/api";
 import { markdownToJsx } from "@/markdown";
-import { assert, matchOrDefault, validateUrl } from "@/shared/common";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
@@ -52,7 +50,7 @@ export default function Page() {
       );
 
       if (!userRes.ok) {
-        setError(userRes.error);
+        setError(userRes.message);
         return;
       }
 
@@ -68,7 +66,7 @@ export default function Page() {
       });
 
       if (!timelapsesRes.ok) {
-        setError(timelapsesRes.error);
+        setError(timelapsesRes.message);
         return;
       }
 
@@ -119,7 +117,7 @@ export default function Page() {
         setEditModalOpen(false);
       }
       else {
-        setError(`Failed to update profile: ${result.error}`);
+        setError(`Failed to update profile: ${result.message}`);
       }
     }
     catch (error) {
@@ -163,7 +161,7 @@ export default function Page() {
 
             <div className="flex flex-col">
               <h1 className="text-4xl font-bold">{ user ? user.displayName : <Skeleton className="w-48" /> }</h1>
-              <p className="text-secondary text-lg m-0">{ user ? `@${user.handle}` : <Skeleton className="w-32 !h-3" /> }</p>
+              <p className="text-secondary text-lg m-0">{ user ? `@${user.handle}` : <Skeleton className="w-32 h-3!" /> }</p>
 
               { user?.bio && user.bio.trim().length > 0 && (
                 <p className="text-smoke text-lg leading-relaxed mb-4 max-w-2xl mt-2">
@@ -174,30 +172,30 @@ export default function Page() {
               <div className="flex flex-col text-muted">
                 <div className="flex items-center gap-2">
                   <Icon glyph="clock" size={16} />
-                  <span>{ user ? `Joined ${formatJoinDate(user.createdAt)}` : <Skeleton className="w-64 !h-3" /> }</span>
+                  <span>{ user ? `Joined ${formatJoinDate(user.createdAt)}` : <Skeleton className="w-64 h-3!" /> }</span>
                 </div>
 
                 { (user?.urls ?? []).length > 0 && (
                   user!.urls.map(url => (
                     <div key={url} className="flex items-center gap-2">
                       <Icon
-                        size={16}
-                        glyph={
-                          matchOrDefault(new URL(url).hostname, {
-                            "x.com": "twitter", // seriously?
-                            "twitter.com": "twitter",
-                            "twitch.tv": "twitch",
-                            "github.com": "github",
-                            "messenger.com": "messenger-fill",
-                            "instagram.com": "instagram",
-                            "hackclub.slack.com": "slack-fill",
-                            "medium.com": "medium-fill",
-                            "facebook.com": "facebook",
-                            "youtube.com": "youtube",
-                            "youtu.be": "youtube"
-                          }) ?? "link"
-                        }
-                      />
+                         size={16}
+                         glyph={
+                           matchOrDefault(new URL(url).hostname, {
+                             "x.com": "twitter", // seriously?
+                             "twitter.com": "twitter",
+                             "twitch.tv": "twitch",
+                             "github.com": "github",
+                             "messenger.com": "messenger-fill",
+                             "instagram.com": "instagram",
+                             "hackclub.slack.com": "slack-fill",
+                             "medium.com": "medium-fill",
+                             "facebook.com": "facebook",
+                             "youtube.com": "youtube",
+                             "youtu.be": "youtube"
+                           }) ?? "link"
+                         }
+                       />
 
                       <a
                         href={url}

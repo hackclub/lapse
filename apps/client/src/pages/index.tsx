@@ -2,10 +2,9 @@ import NextLink from "next/link";
 import NextImage from "next/image";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import clsx from "clsx";
+import { descending, formatDuration } from "@hackclub/lapse-shared";
 
-import { descending, formatDuration } from "@/shared/common";
-
-import { TimeAgo } from "@/components/TimeAgo";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/Button";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
@@ -15,7 +14,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
 import RootLayout from "@/components/layout/RootLayout";
-import clsx from "clsx";
 
 export default function Home() {
   const router = useRouter();

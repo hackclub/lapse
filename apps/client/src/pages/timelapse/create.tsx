@@ -1,16 +1,16 @@
-"use client";
-
-import { ChangeEvent, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { SetStateAction, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import clsx from "clsx";
 import prettyBytes from "pretty-bytes";
+import { assert, match } from "@hackclub/lapse-shared";
 
 import { videoGenerateThumbnail } from "@/videoProcessing";
-import { encryptVideo, encryptData, getCurrentDevice, EncryptedVideoStream } from "@/encryption";
+import { encryptData, getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
 import { api, apiUpload } from "@/api";
-import { TIMELAPSE_FPS, TIMELAPSE_FACTOR } from "@hackclub/lapse-api";
+import { TimelapseVideoSession } from "@/timelapseVideoSession";
+import { SteppedProgress } from "@/common";
 
 import { useOnce } from "@/hooks/useOnce";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,27 +20,25 @@ import RootLayout from "@/components/layout/RootLayout";
 import { TimeSince } from "@/components/TimeSince";
 import { Button } from "@/components/ui/Button";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
-import { WindowedModal } from "@/components/layout/WindowedModal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
-import { TextareaInput } from "@/components/ui/TextareaInput";
-import { TextInput } from "@/components/ui/TextInput";
 import { DropdownInput } from "@/components/ui/DropdownInput";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 
 import RecordIcon from "@/client/assets/icons/record.svg";
 import PauseIcon from "@/client/assets/icons/pause.svg";
 import StopIcon from "@/client/assets/icons/stop.svg";
-import { TimelapseVideoSession } from "@/timelapseVideoSession";
-import { SteppedProgress } from "@/common";
 
-function MediaSourceSelector({ description, stream, setStream, onInterrupt }: {
+type VideoSourceKind = "NONE" | "CAMERA" | "SCREEN";
+
+function MediaSourceSelector({ description, stream, setStream, onInterrupt, videoSourceKind, setVideoSourceKind }: {
   description: React.ReactNode,
   stream: MediaStream | null,
   setStream: React.Dispatch<SetStateAction<MediaStream | null>>,
-  onInterrupt: () => void
+  onInterrupt: () => void,
+  videoSourceKind: VideoSourceKind,
+  setVideoSourceKind: (x: VideoSourceKind) => void
 }) {
-  const [videoSourceKind, setVideoSourceKind] = useState("NONE");
   const [changingSource, setChangingSource] = useState(false);
 
   const [screenLabel, setScreenLabel] = useState("Screen");
@@ -253,7 +251,17 @@ export default function Page() {
   // The main stream for the capture. We take this from the MediaSourceSelector.
   const [stream, setStream] = useState<MediaStream | null>(null);
 
+  // Setup modal state.
+  // Depending on several factors, our setup modal can be in different discrete states:
+  //    - INIT: initialization is required, and no existing timelapse exists; we aren't recording
+  //    - INIT_CONTINUE: an existing timelapse exists; the user is currently choosing to keep an existing local timelapse
+  //    - INIT_DISCARD: an existing timelapse exists; the user is currently choosing to discard the existing local timelapse and to make a new one
+  //    - UPDATE: we are recording, and the user is re-configuring the timelapse (e.g. switching windows)
+  const [setupState, setSetupState] = useState<"INIT" | "INIT_CONTINUE" | "INIT_DISCARD" | "UPDATE">("INIT");
   const [setupModalOpen, setSetupModalOpen] = useState(true);
+
+  // The kind of video source our MediaSourceSelector gave us. This is used so that we know when to horizontally flip our preview.
+  const [videoSourceKind, setVideoSourceKind] = useState<VideoSourceKind>("NONE");
 
   const [startedAt, setStartedAt] = useState(new Date());
   const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
@@ -285,6 +293,14 @@ export default function Page() {
       : `🔴 REC`;
   }, [setupModalOpen, isPaused]);
 
+  useOnce(async () => {
+    const existing = await deviceStorage.getTimelapse();
+
+    if (existing && setupState !== "INIT") {
+      setSetupState("INIT_CONTINUE");
+    }
+  });
+
   /**
    * Runs when the user begins recording a new session for a timelapse. This function is **NOT** invoked as soon
    * as we navigate to the page - only when the user actually selects the media source and confirms
@@ -296,15 +312,29 @@ export default function Page() {
   async function onSessionBegin(shouldDiscard: boolean, stream: MediaStream) {
     mainPreviewRef.current!.srcObject = stream;
     setSetupModalOpen(false); // when the session begins, the setup modal closes
-    setNeedsVideoSource(false);
 
     let existing = await deviceStorage.getTimelapse();
 
     if (shouldDiscard) {
+      // It's a bit illogical for the following assertion to fail - discarding ONLY can happen when we open the setup modal at the beginning
+      // (i.e. INIT/INIT_CONTINUE/INIT_DISCARD). This realistically only fails for UPDATE, which can't really discard.
+      assert(stream == null && videoSession == null, "Discarding a timelapse, but we already had a stream/video session running");
+
       if (existing != null) {
-        console.log("(create.tsx) ⚠️ discarding previous timelapse!", existing);
-        await deviceStorage.deleteTimelapse();
-        existing = null;
+        if (!window.confirm("Are you sure you want to overwrite your existing timelapse? It will be lost forever! (A long time!)"))
+          return;
+
+        try {
+          console.log("(create.tsx) ⚠️ discarding previous timelapse!", existing);
+          await deviceStorage.deleteTimelapse();
+          existing = null;
+
+          router.push("/");
+        }
+        catch (err) {
+          console.error("(create.tsx) failed to discard timelapse:", err);
+          setError(err instanceof Error ? err.message : "Failed to discard timelapse");
+        }
       }
       else {
         console.warn("(create.tsx) onSessionBegin() was called with shouldDiscard = true, but no active timelapse is present");
@@ -333,11 +363,11 @@ export default function Page() {
   function togglePause() {
     if (isPaused) {
       setIsPaused(false);
-      recorder?.resume();
+      videoSession?.resume();
     }
     else {
       setIsPaused(true);
-      recorder?.pause();
+      videoSession?.pause();
     }
   }
 
@@ -442,41 +472,12 @@ export default function Page() {
     }
   }
 
-  async function discardRecording() {
-    if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
-      return;
-
-    try {
-      if (videoSession) {
-        await videoSession.stop();
-        setVideoSession(null);
-      }
-
-      if (stream) {
-        await deviceStorage.deleteTimelapse();
-        stream.getTracks().forEach(x => x.stop());
-      }
-
-      router.push("/");
-    }
-    catch (err) {
-      console.error("(create.tsx) failed to discard timelapse:", err);
-      setError(err instanceof Error ? err.message : "Failed to discard timelapse");
-    }
-  }
-
-  function onSubmitModalClose() {
-    if (!isCreated || !currentStream) {
+  function onSetupModalClose() {
+    if (setupState != "UPDATE") {
       router.back();
     }
-    else if (needsVideoSource) {
-      setSetupModalOpen(true);
-      alert("You must select a video source first.");
-    }
-    else {
-      setSetupModalOpen(false);
-      setPause(false);
-    }
+
+    setSetupModalOpen(false);
   }
 
   // The media stream selector detects interrupts in the streams it selects for us - we handle those events here.
@@ -491,26 +492,26 @@ export default function Page() {
       <Modal isOpen={setupModalOpen}>
         <ModalHeader
           icon={isDiscarding ? "plus-fill" : "clock-fill"}
-          title={
-            isDiscarding ? "Create timelapse"
-            : needsVideoSource ? "Resume timelapse"
-            : isCreated ? "Update timelapse"
-            : "Create timelapse"
-          }
-          description={
-            isDiscarding ? "After you click Create, your timelapse will start recording!"
-            : needsVideoSource ? "Select your video source to resume recording your timelapse."
-            : isCreated ? "Update your timelapse settings."
-            : "After you click Create, your timelapse will start recording!"
-          }
-          shortDescription={
-            isDiscarding ? "Select a video source"
-            : needsVideoSource ? "Select a video source to resume."
-            : isCreated ? "Update your timelapse settings."
-            : "Select a video source"
-          }
           showCloseButton={true}
-          onClose={onSubmitModalClose}
+          onClose={onSetupModalClose}
+          title={match(setupState, {
+            "INIT": "Create timelapse",
+            "INIT_CONTINUE": "Resume timelapse",
+            "INIT_DISCARD": "Overwrite timelapse",
+            "UPDATE": "Update timelapse"
+          })}
+          description={match(setupState, {
+            "INIT": "After you click Create, your timelapse will start recording!",
+            "INIT_CONTINUE": "Select your video source to resume recording your timelapse.",
+            "INIT_DISCARD": "After you click Create, your timelapse will start recording!",
+            "UPDATE": "Update your timelapse settings."
+          })}
+          shortDescription={match(setupState, {
+            "INIT": "Select a video source",
+            "INIT_CONTINUE": "Select a video source to resume",
+            "INIT_DISCARD": "Select a video source",
+            "UPDATE": "Update your timelapse settings"
+          })}
         />
 
         <ModalContent>
@@ -518,49 +519,55 @@ export default function Page() {
             <div
               className={clsx(
                 "flex transition-transform duration-200 ease-out",
-                isDiscarding && "-translate-x-1/2"
+                setupState === "INIT_DISCARD" && "-translate-x-1/2"
               )}
               style={{ width: "200%" }}
             >
-              {[false, true].map((panelIsDiscarding) => {
-                return (
-                  <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
-                    <div className="flex flex-col gap-6">
-                      <MediaSourceSelector
-                        stream={stream}
-                        setStream={setStream}
-                        onInterrupt={handleStreamInterrupt}
-                        description={
-                          panelIsDiscarding
-                            ? <span className="text-red">This will permanently discard your previous timelapse.</span>
-                            : "Record your screen, camera, or any other video source."
-                        }
-                      />
+              {/*
+                We have two panels rendered at the same time for the nice scrolling animation when the user hits "discard". The other one is only
+                of importance if setupState is INIT_CONTINUE or INIT_DISCARD.
+              */}
+              {[false, true].map((panelIsDiscarding) => (
+                <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
+                  <div className="flex flex-col gap-6">
+                    <MediaSourceSelector
+                      stream={stream} setStream={setStream}
+                      videoSourceKind={videoSourceKind} setVideoSourceKind={setVideoSourceKind}
+                      onInterrupt={handleStreamInterrupt}
+                      description={
+                        panelIsDiscarding
+                          ? <span className="text-red">This will permanently discard your previous timelapse.</span>
+                          : "Record your screen, camera, or any other video source."
+                      }
+                    />
 
-                      <div className="flex gap-4 w-full">
-                        {panelIsDiscarding ? (
-                          <>
-                            <Button onClick={() => setIsDiscarding(false)} kind="regular" icon="view-back">Back</Button>
-                            <Button onClick={() => onSessionBegin(true, stream!)} disabled={!stream} kind="primary" className="flex-1">Create</Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button onClick={() => onSessionBegin(false, stream!)} disabled={!stream} kind="primary" className="flex-1">
-                              { needsVideoSource ? "Resume" : isCreated ? "Update" : "Create" }
+                    <div className="flex gap-4 w-full">
+                      {panelIsDiscarding ? (
+                        <>
+                          <Button onClick={() => setSetupState("INIT_CONTINUE")} kind="regular" icon="view-back">Back</Button>
+                          <Button onClick={() => onSessionBegin(true, stream!)} disabled={!stream} kind="primary" className="flex-1">Create</Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button onClick={() => onSessionBegin(false, stream!)} disabled={!stream} kind="primary" className="flex-1">
+                            {
+                              setupState == "INIT_CONTINUE" ? "Resume" :
+                              setupState == "UPDATE" ? "Update" :
+                              "Create"
+                            }
+                          </Button>
+
+                          { setupState === "INIT_CONTINUE" || setupState === "INIT_DISCARD" && (
+                            <Button onClick={() => setIsDiscarding(true)} kind="destructive" icon="delete">
+                              Discard
                             </Button>
-
-                            {needsVideoSource && (
-                              <Button onClick={() => setIsDiscarding(true)} kind="destructive" icon="delete">
-                                Discard
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </div>
+                          ) }
+                        </>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
         </ModalContent>
