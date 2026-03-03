@@ -51,12 +51,12 @@ export const env = {
     /**
      * The Hackatime OAuth client ID for authentication.
      */
-    get HACKATIME_CLIENT_ID() { return required("NEXT_PUBLIC_HACKATIME_CLIENT_ID") },
+    get HACKATIME_CLIENT_ID() { return required("HACKATIME_CLIENT_ID") },
 
     /**
      * The Hackatime server URL for OAuth.
      */
-    get HACKATIME_URL() { return required("NEXT_PUBLIC_HACKATIME_URL") },
+    get HACKATIME_URL() { return required("HACKATIME_URL") },
 
     /**
      * The secret key used for JWT token generation and verification.

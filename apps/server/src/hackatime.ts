@@ -190,7 +190,7 @@ class HackatimeBase {
     protected async query<T>(method: "GET" | "POST", endpoint: string, params: object = {}) {
         const req = await fetch(`https://hackatime.hackclub.com/api/${endpoint}`, {
             method,
-            body: (method === "GET" || !params) ? "" : JSON.stringify(params),
+            body: (method === "GET" || !params) ? undefined : JSON.stringify(params),
             headers: new Headers({
                 "Authorization": `Bearer ${this.token}`,
                 "User-Agent": "lapse/2.0.0",

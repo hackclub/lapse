@@ -64,9 +64,11 @@ export function dtoUser(entity: DbCompositeUser): User {
 
 export default os.router({
     myself: os.myself
-        .use(requiredAuth())
         .handler(async (req) => {
             const caller = req.context.user;
+
+            if (!caller)
+                return apiOk({ user: null });
 
             const user = await database().user.findFirst({
                 include: { devices: true },

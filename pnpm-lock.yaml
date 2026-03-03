@@ -198,6 +198,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.994.0
         version: 3.994.0
+      '@fastify/cors':
+        specifier: ^11.2.0
+        version: 11.2.0
       '@hackclub/lapse-api':
         specifier: workspace:*
         version: link:../../packages/api
@@ -207,6 +210,9 @@ importers:
       '@hackclub/lapse-shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@inquirer/prompts':
+        specifier: ^8.2.1
+        version: 8.2.1(@types/node@25.0.3)
       '@node-oauth/oauth2-server':
         specifier: ^5.2.1
         version: 5.2.1
@@ -1455,6 +1461,9 @@ packages:
 
   '@fastify/ajv-compiler@4.0.5':
     resolution: {integrity: sha512-KoWKW+MhvfTRWL4qrhUwAAZoaChluo0m0vbiJlGMt2GXvL4LVPQEjt8kSpHI3IBq5Rez8fg+XeH3cneztq+C7A==}
+
+  '@fastify/cors@11.2.0':
+    resolution: {integrity: sha512-LbLHBuSAdGdSFZYTLVA3+Ch2t+sA6nq3Ejc6XLAKiQ6ViS2qFnvicpj0htsx03FyYeLs04HfRNBsz/a8SvbcUw==}
 
   '@fastify/deepmerge@3.2.1':
     resolution: {integrity: sha512-N5Oqvltoa2r9z1tbx4xjky0oRR60v+T47Ic4J1ukoVQcptLOrIdRnCSdTGmOmajZuHVKlTnfcmrjyqsGEW1ztA==}
@@ -8278,6 +8287,11 @@ snapshots:
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
       fast-uri: 3.1.0
+
+  '@fastify/cors@11.2.0':
+    dependencies:
+      fastify-plugin: 5.1.0
+      toad-cache: 3.7.0
 
   '@fastify/deepmerge@3.2.1': {}
 

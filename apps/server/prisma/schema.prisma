@@ -226,8 +226,8 @@ model ServiceClient {
   trustLevel          ServiceClientTrustLevel      @default(UNTRUSTED)
 
   /// The ID of the owner of the client.
-  createdByUserId     String
-  createdByUser       User                         @relation(fields: [createdByUserId], references: [id])
+  createdByUserId     String?
+  createdByUser       User?                        @relation(fields: [createdByUserId], references: [id])
 
   /// The time at which this client was created.
   createdAt           DateTime                     @default(now())

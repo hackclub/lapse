@@ -15,7 +15,7 @@ const os = implement(developerRouterContract)
 /**
  * Represents a `db.ServiceClient` with related tables included.
  */
-export type DbOAuthApp = db.ServiceClient & { createdByUser: db.User };
+export type DbOAuthApp = db.ServiceClient & { createdByUser: db.User | null };
 
 /**
  * Represents a `db.ServiceGrant` with related tables included.
@@ -33,11 +33,11 @@ export function dtoOAuthApp(entity: DbOAuthApp): OAuthApp {
         scopes: entity.scopes,
         trustLevel: entity.trustLevel,
         clientId: entity.clientId,
-        createdBy: {
+        createdBy: entity.createdByUser ? {
             id: entity.createdByUser.id,
             handle: entity.createdByUser.handle,
             displayName: entity.createdByUser.displayName
-        },
+        } : null,
         createdAt: entity.createdAt.toISOString()
     };
 }
@@ -62,7 +62,7 @@ export default os.router({
             const app = await database().serviceClient.findFirst({
                 where: {
                     id: req.input.id,
-                    createdByUserId: caller.id,
+                    createdByUserId: caller.permissionLevel === "ROOT" ? undefined : caller.id,
                     revokedAt: null
                 }
             });
@@ -80,7 +80,7 @@ export default os.router({
             const caller = req.context.user;
 
             const app = await database().serviceClient.findFirst({
-                where: { id: req.input.id, createdByUserId: caller.id, revokedAt: null }
+                where: { id: req.input.id, createdByUserId: caller.permissionLevel === "ROOT" ? undefined : caller.id, revokedAt: null }
             });
         
             if (!app)
@@ -132,7 +132,7 @@ export default os.router({
             const caller = req.context.user;
             
             const app = await database().serviceClient.findFirst({
-                where: { id: req.input.id, createdByUserId: caller.id, revokedAt: null }
+                where: { id: req.input.id, createdByUserId: caller.permissionLevel === "ROOT" ? undefined : caller.id, revokedAt: null }
             });
         
             if (!app)

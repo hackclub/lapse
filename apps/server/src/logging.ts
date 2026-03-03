@@ -87,9 +87,8 @@ export function logError(message: string, data: Record<string, unknown> = {}) {
 }
 
 export function logRequest(endpoint: string, input: unknown, user: db.User | null) {
-    const scope = getScope();
     Sentry.logger.info(`(request) ${endpoint}`, { input, user });
-    console.log(getPlain("info", "request", endpoint, { user, args: input }));
+    console.log(getPlain("info", "request", `${endpoint}(${inlineStringify(input)}) from ${user?.handle ?? "<anon>"}`, {}));
 }
 
 export function logFastifyRequest(endpoint: string, req: FastifyRequest) {

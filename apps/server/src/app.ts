@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import Fastify from "fastify"
+import fastifyCors from "@fastify/cors"
 import { implement, onError } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -13,8 +14,10 @@ import { compositeRouterContract } from "@hackclub/lapse-api";
 import { getAuthenticatedUser } from "@/oauth.js"
 import { apiErr } from "@/common.js"
 import type { Context } from "@/router.js"
-import { database, initDatabase, initRedis } from "@/db.js";
+import { database, initDatabase } from "@/db.js";
 import { env } from "@/env.js"
+import { logError } from "@/logging.js";
+import { attachUploadServer } from "@/upload.js";
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -24,8 +27,6 @@ import developer from "@/routers/developer.js"
 import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
 import auth from "@/routers/auth.js"
-import { logError } from "@/logging.js";
-import { attachUploadServer } from "@/upload.js";
 
 const router = implement(compositeRouterContract)
     .$context<Context>()
@@ -62,6 +63,12 @@ const openApiGenerator = new OpenAPIGenerator({
 });
 
 const server = Fastify();
+
+server.register(fastifyCors, {
+    origin: true,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+});
 
 server.addContentTypeParser("*", (request, payload, done) => {
   // Fully utilize oRPC feature by allowing any content type
@@ -199,5 +206,4 @@ server.listen({ port: parseInt(env.PORT) })
         }
 
         initDatabase();
-        initRedis();
     });

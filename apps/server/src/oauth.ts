@@ -186,20 +186,26 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
         };
     }
 
-    async getClient(clientId: string, clientSecret: string): Promise<OAuth2Server.Client | OAuth2Server.Falsey> {
+    async getClient(clientId: string, clientSecret: string | null): Promise<OAuth2Server.Client | OAuth2Server.Falsey> {
         const client = await database().serviceClient.findFirst({
             include: { grants: true },
             where: {
-                clientId,
-
-                // Docs state "Can be null." for `clientSecret`, but our typings don't have that... just to be safe, we check if it's falsy.
-                clientSecretHash: clientSecret ? hashServiceSecret(clientSecret) : undefined
+                clientId
             }
         });
 
         if (!client) {
-            logWarning(`Attempted to find a non-existent client ${clientId} (or secret is wrong).`);
+            logWarning(`Attempted to find a non-existent client ${clientId}.`);
             return null;
+        }
+
+        // Only verify the secret if one was provided (during token endpoint)
+        if (clientSecret) {
+            const expectedHash = hashServiceSecret(clientSecret);
+            if (client.clientSecretHash !== expectedHash) {
+                logWarning(`Client secret mismatch for client ${clientId}.`);
+                return null;
+            }
         }
 
         return this.dtoDbClient(client);

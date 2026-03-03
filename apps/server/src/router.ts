@@ -32,7 +32,7 @@ export interface ProtectedContext extends Context {
 export const logMiddleware = os
     .$context<Context>()
     .middleware(async ({ context, next }, input) => {
-        logRequest(context.req.url, input, context.user);
+        logRequest(context.req.url.split("?")[0], input, context.user);
         return next({ context });
     });
 

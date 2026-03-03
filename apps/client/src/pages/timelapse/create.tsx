@@ -25,9 +25,9 @@ import { ErrorModal } from "@/components/layout/ErrorModal";
 import { DropdownInput } from "@/components/ui/DropdownInput";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 
-import RecordIcon from "@/client/assets/icons/record.svg";
-import PauseIcon from "@/client/assets/icons/pause.svg";
-import StopIcon from "@/client/assets/icons/stop.svg";
+import RecordIcon from "@/assets/icons/record.svg";
+import PauseIcon from "@/assets/icons/pause.svg";
+import StopIcon from "@/assets/icons/stop.svg";
 
 type VideoSourceKind = "NONE" | "CAMERA" | "SCREEN";
 

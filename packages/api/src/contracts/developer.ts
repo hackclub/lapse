@@ -28,7 +28,7 @@ export const OAuthAppSchema = z.object({
         id: z.string(),
         handle: z.string(),
         displayName: z.string()
-    }),
+    }).nullable(),
     createdAt: z.string()
 });
 

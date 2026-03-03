@@ -81,7 +81,7 @@ export const authRouterContract = {
             outputStructure: "detailed"
         })
         .input(z.object({
-            // We expect this to be application/x-www-form-urlencode - oRPC should handle that here:
+            // We expect this to be application/x-www-form-urlencoded - oRPC should handle that here:
             //      https://github.com/middleapi/orpc/blob/819ed2e0897b18a5d6a4ca85ba68568f055004a1/packages/openapi-client/src/adapters/standard/openapi-serializer.ts#L72-L74
             body: z.object({
                 grant_type: z.literal("authorization_code"),
@@ -90,12 +90,35 @@ export const authRouterContract = {
                 client_id: z.string().optional(),
                 code_verifier: z.string().optional()
             })
-        }))
-        .output(z.object({
-            access_token: z.jwt(),
-            token_type: z.literal("Bearer"),
-            expires_in: z.number(),
-            refresh_token: z.string().optional(),
-            scope: z.string().optional()
+        })),
+
+    hackatimeCallback: contract()
+        .route({
+            method: "GET",
+            path: "/auth/hackatimeCallback",
+            inputStructure: "detailed",
+            outputStructure: "detailed",
+            successStatus: 307
+        })
+        .input(z.object({
+            query: z.object({
+                code: z.string().optional(),
+                state: z.string().optional(),
+                error: z.string().optional()
+            })
+        })),
+
+    continue: contract()
+        .route({
+            method: "GET",
+            path: "/auth/continue",
+            inputStructure: "detailed",
+            outputStructure: "detailed",
+            successStatus: 307
+        })
+        .input(z.object({
+            query: z.object({
+                consentToken: z.jwt()
+            })
         }))
 };

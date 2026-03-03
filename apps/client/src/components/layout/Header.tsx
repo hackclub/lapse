@@ -4,7 +4,7 @@ import Icon from "@hackclub/icons";
 import { useState } from "react";
 import clsx from "clsx";
 
-import LapseLogo from "@/client/assets/icon.svg";
+import LapseLogo from "@/assets/icon.svg";
 
 import { useAuth } from "@/hooks/useAuth";
 

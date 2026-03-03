@@ -16,8 +16,10 @@ export function database(): PrismaClient {
 }
 
 export function redis(): Redis {
-    if (!_redis)
-        throw new Error("Attempted to access the Redis connection before initialization.");
+    if (!_redis) {
+        _redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+        logInfo("Successfully connected to Redis.");
+    }
 
     return _redis;
 }
@@ -30,14 +32,5 @@ export function initDatabase() {
     _database = new PrismaClient({ adapter });
 
     logInfo("Successfully connected to the database.");
-}
-
-export function initRedis() {
-    if (_redis)
-        throw new Error("Attempted to initialize the Redis connection twice.");
-
-    _redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
-
-    logInfo("Successfully connected to Redis.");
 }
 

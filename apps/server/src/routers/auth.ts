@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { implement, ORPCError, os } from "@orpc/server";
+import { implement, ORPCError } from "@orpc/server";
 import { authRouterContract, MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH, type LapseOAuthScope, type OAuthErrorCode } from "@hackclub/lapse-api";
 import { createHash, randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
@@ -8,18 +8,16 @@ import OAuth2Server from "@node-oauth/oauth2-server";
 import * as db from "@/generated/prisma/client.js";
 
 import { logMiddleware, requiredAuth, type Context } from "@/router.js";
-import { getTimelapseById } from "@/routers/timelapse.js";
-import { apiErr, apiOk, Err } from "@/common.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { getCookie, setCookie } from "@orpc/server/helpers";
 import { logError, logInfo, logWarning } from "@/logging.js";
-import { arraysEqual, oneOf } from "@hackclub/lapse-shared";
+import { arraysEqual } from "@hackclub/lapse-shared";
 import { HackatimeOAuthApi } from "@/hackatime.js";
 import { slackQueryProfile } from "@/slack.js";
 import { oauthSrv } from "@/oauth.js";
 
-const osc = implement(authRouterContract)
+const os = implement(authRouterContract)
     .$context<Context>()
     .use(logMiddleware);
 
@@ -132,8 +130,8 @@ function readOAuthCookie(reqHeaders?: Headers) {
     }
 }
 
-export default osc.router({
-    authorize: osc.authorize // note: user-agent endpoint
+export default os.router({
+    authorize: os.authorize // note: user-agent endpoint
         .handler(async (req) => {
             const state = randomBytes(16).toString("base64url");
             const codeVerifier = randomBytes(32).toString("base64url");
@@ -179,7 +177,7 @@ export default osc.router({
             };
         }),
 
-    grantConsent: osc.grantConsent
+    grantConsent: os.grantConsent
         .use(requiredAuth())
         .handler(async (req) => {
             if (!req.context.scopes.includes("elevated")) {
@@ -198,22 +196,7 @@ export default osc.router({
         }),
 
     // The routes below are not defined in the contracts, as we don't want the client to be calling them directly! We only want to access them through redirects.
-    hackatimeCallback: os
-        .$context<Context>()
-        .route({
-            method: "GET",
-            path: "/auth/hackatimeCallback",
-            inputStructure: "detailed",
-            outputStructure: "detailed",
-            successStatus: 307
-        })
-        .input(z.object({
-            query: z.object({
-                code: z.string().optional(),
-                state: z.string().optional(),
-                error: z.string().optional()
-            })
-        }))
+    hackatimeCallback: os.hackatimeCallback
         .handler(async (req) => {
             const oauthData = readOAuthCookie(req.context.reqHeaders);
 
@@ -386,14 +369,14 @@ export default osc.router({
             
             // If this is our canonical client, we go straight to the point, just giving them the code. Consent is implicit here.
             if (oauthData.cid == env.CANONICAL_OAUTH_CLIENT_ID) {
-                const url = new URL("/auth/continue");
+                const url = new URL(`${env.BASE_URL}/auth/continue`);
                 url.searchParams.set("consentToken", createConsentToken({
                     cid: oauthData.cid,
                     scp: oauthData.scp,
                     sub: dbUser.id
                 }));
 
-                return { headers: { location: "/auth/continue" } };
+                return { headers: { location: url.href } };
             }
 
             // Otherwise, consent must be explicit (this is a third-party app), so we redirect the user to our canonical client to confirm.
@@ -406,20 +389,7 @@ export default osc.router({
 
     // This endpoint is called after the user gives the requesting app consent to get a token to their account. For canonical apps, as no consent modal has to be displayed, the user
     // is immidiately redirected to /auth/continue.
-    continue: os
-        .$context<Context>()
-        .route({
-            method: "GET",
-            path: "/auth/continue",
-            inputStructure: "detailed",
-            outputStructure: "detailed",
-            successStatus: 307
-        })
-        .input(z.object({
-            query: z.object({
-                consentToken: z.jwt()
-            })
-        }))
+    continue: os.continue
         .handler(async (req) => {
             let consent: ConsentJwt;
 
@@ -439,22 +409,13 @@ export default osc.router({
             
             if (
                 consent.cid !== oauthData.cid ||
-                arraysEqual(consent.scp, oauthData.scp)
+                !arraysEqual(consent.scp, oauthData.scp)
             ) {
                 logWarning(`Provided consent token (${consent.cid}, ${consent.scp.join(" ")}) doesn't match OAuth cookie (${oauthData.cid}, ${oauthData.scp.join(" ")})`, { oauthData, consent });
                 throw new ORPCError("BAD_REQUEST", {
                     message: "Consent token does not match cookie data."
                 });
             }
-
-            const url = new URL(req.context.req.originalUrl);
-            url.searchParams.set("response_type", "code");
-            url.searchParams.set("client_id", oauthData.cid);
-            url.searchParams.set("redirect_uri", oauthData.uri);
-            url.searchParams.set("scope", oauthData.scp.join(" "));
-            url.searchParams.set("state", oauthData.stt);
-            url.searchParams.set("code_challenge", oauthData.ccv);
-            url.searchParams.set("code_challenge_method", "S256");
 
             const oauthResponse = new OAuth2Server.Response();
             await oauthSrv.authorize(
@@ -471,7 +432,12 @@ export default osc.router({
                         "code_challenge_method": "S256"
                     }
                 }),
-                oauthResponse
+                oauthResponse,
+                {
+                    authenticateHandler: {
+                        handle: () => ({ id: consent.sub }),
+                    },
+                }
             );
 
             return {
@@ -481,26 +447,30 @@ export default osc.router({
             };
         }),
 
-    token: osc.token
+    token: os.token
         .handler(async (req) => {
             const oauthResponse = new OAuth2Server.Response();
             const token = await oauthSrv.token(
                 new OAuth2Server.Request({
-                    method: "GET",
-                    query: { ...req.input.body },
+                    method: "POST",
+                    query: {},
+                    body: req.input.body,
                     headers: {
-                        authorization: (req.context.reqHeaders?.get("Authorization") ?? undefined)!
-                    },
+                        "content-type": "application/x-www-form-urlencoded",
+                        "content-length": req.context.req.headers["content-length"]!
+                    }
                 }),
                 oauthResponse
             );
-
+        
             return {
-                access_token: token.accessToken,
-                expires_in: token.accessTokenExpiresAt!.getTime() / 1000,
-                refresh_token: token.refreshToken,
-                token_type: "Bearer",
-                scope: token.scope?.join(" ") ?? ""
+                body: {
+                    access_token: token.accessToken,
+                    expires_in: token.accessTokenExpiresAt!.getTime() / 1000,
+                    refresh_token: token.refreshToken,
+                    token_type: "Bearer",
+                    scope: token.scope?.join(" ") ?? ""
+                }
             };
         })
 });

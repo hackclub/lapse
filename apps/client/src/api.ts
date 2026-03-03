@@ -8,7 +8,7 @@ import * as tus from "tus-js-client";
 /**
  * The absolute URL at which the API is hosted at.
  */
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com/api";
 
 const link = new OpenAPILink(compositeRouterContract, {
   url: API_URL,
@@ -16,7 +16,7 @@ const link = new OpenAPILink(compositeRouterContract, {
     const token = localStorage.getItem("lapse:token");
     
     return {
-      "Authorization": token ? `Bearer ${btoa(token)}` : undefined,
+      "Authorization": token ? `Bearer ${token}` : undefined,
     };
   },
   fetch: (request, init) => {
