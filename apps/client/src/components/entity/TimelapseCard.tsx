@@ -10,6 +10,7 @@ import { ProfilePicture } from "@/components/entity/ProfilePicture"
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { Duration } from "@/components/Duration";
+import clsx from "clsx";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -55,9 +56,13 @@ export function TimelapseCard({ timelapse }: {
 
   return (
     <article
-      onClick={() => router.push(`/timelapse/${timelapse.id}`)}
-      className="flex flex-col gap-4 sm:gap-5 cursor-pointer sm:max-w-80"
+      onClick={() => router.push(`/${timelapse.isDraft ? "draft" : "timelapse"}/${timelapse.id}`)}
       role="button"
+      className={clsx(
+        "flex flex-col cursor-pointer sm:max-w-80",
+        !timelapse.isDraft && "gap-4 sm:gap-5",
+        timelapse.isDraft && "gap-3"
+      )}
     >
       <div role="img" className="relative w-full aspect-video rounded-lg sm:rounded-2xl overflow-hidden">
         {
@@ -74,14 +79,28 @@ export function TimelapseCard({ timelapse }: {
       </div>
       
       <div className="flex gap-2 sm:gap-3 w-full justify-center items-center sm:items-start">
-        <ProfilePicture user={timelapse.owner} size="sm" className="" />
+        { !timelapse.isDraft && <ProfilePicture user={timelapse.owner} size="sm" className="" /> }
 
         <div className="flex flex-col w-full">
-          <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl line-clamp-1">{timelapse.name}</h1>
-          <h2 className="text-md sm:text-xl text-secondary flex gap-1 sm:gap-2">
-            <span className="truncate">@{timelapse.owner.displayName}</span>
-            <Bullet />
-            <TimeAgo date={timelapse.createdAt} className="shrink-0" />
+          <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl line-clamp-1">{timelapse.name ?? "(untitled)"}</h1>
+          <h2 className={clsx(
+            "text-md sm:text-xl text-secondary",
+            !timelapse.isDraft && "flex gap-1 sm:gap-2"
+          )}>
+            {
+              !timelapse.isDraft
+                ? (
+                  <>
+                    <span className="truncate">@{timelapse.owner.displayName}</span>
+                    <Bullet />
+                    <TimeAgo date={timelapse.createdAt} className="shrink-0" />
+                  </>
+                ) : (
+                  <>
+                    Created <b><TimeAgo date={timelapse.createdAt} className="shrink-0" /></b>
+                  </>
+                )
+            }
           </h2>
         </div>
       </div>

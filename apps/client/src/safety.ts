@@ -27,7 +27,7 @@ export async function retryable<T>(label: string, procedure: () => T | Promise<T
             console.error(`(safety.ts) Attempt #${attempt + 1} failed for ${label}. Retrying in ${delay}ms.`, value);
 
             await sleep(delay);
-            delay *= 500;
+            delay *= 2;
 
             console.log(`(safety.ts) Retrying ${label} now (attempt #${attempt + 1}).`, procedure);
             lastError = value;

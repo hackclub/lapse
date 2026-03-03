@@ -1,8 +1,9 @@
 import { useRouter } from "next/router";
+import NextImage from "next/image";
 import { useState } from "react";
 import Icon from "@hackclub/icons";
-import type { Timelapse, User, PublicUser } from "@hackclub/lapse-api";
-import { assert, validateUrl, matchOrDefault } from "@hackclub/lapse-shared";
+import { type Timelapse, type User, type PublicUser, DraftTimelapse } from "@hackclub/lapse-api";
+import { assert, validateUrl, matchOrDefault, descending } from "@hackclub/lapse-shared";
 
 import { api } from "@/api";
 import { markdownToJsx } from "@/markdown";
@@ -26,6 +27,7 @@ export default function Page() {
   const { currentUser } = useAuth(false);
 
   const [user, setUser] = useState<User | PublicUser | null>(null);
+  const [drafts, setDrafts] = useState<DraftTimelapse[] | null>(null);
   const [timelapses, setTimelapses] = useState<Timelapse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,16 +63,23 @@ export default function Page() {
 
       setUser(userRes.data.user);
 
-      const timelapsesRes = await api.timelapse.findByUser({
-        user: userRes.data.user.id
-      });
-
+      const timelapsesRes = await api.timelapse.findByUser({ user: userRes.data.user.id });
       if (!timelapsesRes.ok) {
         setError(timelapsesRes.message);
         return;
       }
 
       setTimelapses(timelapsesRes.data.timelapses);
+
+      if (userRes.data.user.id === currentUser?.id) {
+        const draftsRes = await api.draftTimelapse.query({ user: userRes.data.user.id });
+        if (!draftsRes.ok) {
+          setError(draftsRes.message);
+          return;
+        }
+
+        setDrafts(draftsRes.data.timelapses);
+      }
     }
     catch (apiErr) {
       console.error("([id].tsx) Error fetching user data:", apiErr);
@@ -226,6 +235,29 @@ export default function Page() {
             ) }
           </div>
         </div>
+
+        {
+          (drafts && drafts.length > 0) && (
+            <div className="py-16 px-0 sm:px-16">
+              <div className="border-dashed border-black border rounded-xl p-12 flex flex-col gap-8">
+                <div className="flex gap-4">
+                  <NextImage
+                    src="/images/orpheus-time.png" alt=""
+                    width={1200} height={1200}
+                    className="w-16 h-16"
+                  />
+
+                  <div className="flex flex-col gap-1">
+                    <h1 className="font-bold text-3xl">Draft timelapses</h1>
+                    <p className="text-lg">You have some timelapses that haven't been published yet!</p>
+                  </div>
+                </div>
+
+                <TimelapseGrid timelapses={drafts.toSorted(descending(x => x.createdAt))} className="gap-y-16" />
+              </div>
+            </div>
+          )
+        }
 
         <TimelapseGrid timelapses={timelapses ?? []} className="gap-y-16 py-16 px-0 sm:px-16" />
       </div>

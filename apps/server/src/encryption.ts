@@ -27,7 +27,7 @@ export function decryptVideo(
     timelapseId: string,
     passkey: string
 ): Buffer {
-    const { keySalt, ivSalt } = deriveSalts(timelapseId);
+    const { keySalt, ivSalt } = deriveSalts("");
     
     const passkeyBuffer = Buffer.from(passkey, "utf8");
     

@@ -264,8 +264,7 @@ export default function Page() {
   const [videoSourceKind, setVideoSourceKind] = useState<VideoSourceKind>("NONE");
 
   const [startedAt, setStartedAt] = useState(new Date());
-  const [initialElapsedSeconds, setInitialElapsedSeconds] = useState(0);
-  const [isDiscarding, setIsDiscarding] = useState(false);
+
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
@@ -295,8 +294,7 @@ export default function Page() {
 
   useOnce(async () => {
     const existing = await deviceStorage.getTimelapse();
-
-    if (existing && setupState !== "INIT") {
+    if (existing) {
       setSetupState("INIT_CONTINUE");
     }
   });
@@ -347,7 +345,18 @@ export default function Page() {
       setStartedAt(new Date());
     }
     else {
-      console.log("(create.tsx) new timelapse session created!");
+      console.log("(create.tsx) resuming existing timelapse!");
+
+      const TOLERANCE = 2 * 60 * 1000;
+      let totalMs = 0;
+      for (let i = 1; i < existing.snapshots.length; i++) {
+        const span = existing.snapshots[i] - existing.snapshots[i - 1];
+        if (span <= TOLERANCE) {
+          totalMs += span;
+        }
+      }
+
+      setStartedAt(new Date(Date.now() - totalMs));
     }
 
     // ...and we're off!
@@ -424,11 +433,16 @@ export default function Page() {
       if (!res.ok)
         throw new Error(res.message);
 
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(sessions[0]);
+      a.download = "session.webm";
+      a.click();
+
       // ------------------------------------------------------- //
       for (const [i, session] of sessions.entries()) {
         setUploadProgress(0);
         setUploadStage(`Encrypting session #${i + 1}...`);
-        const encrypted = await encryptData(session); // TODO: Salt this!
+        const encrypted = await encryptData(session);
 
         console.log(`(create.tsx) encrypted session #${i + 1}:`, encrypted);
 
@@ -485,13 +499,11 @@ export default function Page() {
     
   }
 
-  // TODO: the modals are still very silly indeed, we need to fix that
-
   return (
     <RootLayout showHeader={false}>
       <Modal isOpen={setupModalOpen}>
         <ModalHeader
-          icon={isDiscarding ? "plus-fill" : "clock-fill"}
+          icon={setupState == "INIT_DISCARD" ? "plus-fill" : "clock-fill"}
           showCloseButton={true}
           onClose={onSetupModalClose}
           title={match(setupState, {
@@ -557,8 +569,8 @@ export default function Page() {
                             }
                           </Button>
 
-                          { setupState === "INIT_CONTINUE" || setupState === "INIT_DISCARD" && (
-                            <Button onClick={() => setIsDiscarding(true)} kind="destructive" icon="delete">
+                          { (setupState === "INIT_CONTINUE" || setupState === "INIT_DISCARD") && (
+                            <Button onClick={() => setSetupState("INIT_DISCARD")} kind="destructive" icon="delete">
                               Discard
                             </Button>
                           ) }
@@ -583,7 +595,7 @@ export default function Page() {
             )}
           />
 
-          <TimeSince active={isRecording} startTime={startedAt} initialElapsedSeconds={initialElapsedSeconds} showUnknown={setupState != "UPDATE"} />
+          <TimeSince active={isRecording} startTime={startedAt} showUnknown={stream == null || setupModalOpen} />
         </div>
 
         {/* controls (overlay) */}

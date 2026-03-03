@@ -56,6 +56,7 @@ export class TimelapseVideoSession {
     private canvas: HTMLCanvasElement;
     private video: HTMLVideoElement;
     private canvasCtx: CanvasRenderingContext2D;
+    private canvasStreamTrack: CanvasCaptureMediaStreamTrack;
     private intervalId: ReturnType<typeof setInterval>;
 
     /**
@@ -70,7 +71,9 @@ export class TimelapseVideoSession {
         const stream = this.canvas.captureStream(0); // 0 = capture frames only when we call requestFrame()
 
         this.video = document.createElement("video");
+        this.video.autoplay = true;
         this.video.srcObject = provider;
+        this.canvasStreamTrack = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
 
         this.recorder = createMediaRecorder(stream);
         this.recorder.ondataavailable = (ev) => this.handleRecorderData(ev);
@@ -95,8 +98,8 @@ export class TimelapseVideoSession {
         this.canvas.width = this.video.videoWidth;
         this.canvas.height = this.video.videoHeight;
         this.canvasCtx.drawImage(this.video, 0, 0);
+        this.canvasStreamTrack.requestFrame();
 
-        // If we trigger any of these cases, something went wrong!
         if (this.recorder.state == "inactive") {
             console.warn("(timelapseVideoSession.ts) MediaRecorder became inactive!", this.recorder);
             this.recorder.start();
@@ -119,7 +122,7 @@ export class TimelapseVideoSession {
     }
 
     /**
-     * Stops the internal `MedaiRecorder`, waiting for all data to be flushed.
+     * Stops the internal `MediaRecorder`, waiting for all data to be flushed.
      */
     stop(): Promise<void> {
         return new Promise<void>(resolve => {

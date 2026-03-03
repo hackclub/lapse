@@ -13,11 +13,11 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
     try {
         video.autoplay = true;
         video.muted = true;
-        video.src = objectUrl;
 
         await new Promise<void>((resolve, reject) => {
             video.onloadeddata = () => resolve();
             video.onerror = (err) => reject(err);
+            video.src = objectUrl;
         });
 
         const dimension = (d1: number, d2: number) => d1 > d2
@@ -33,6 +33,12 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
         const ctx = canvas.getContext("2d");
         if (!ctx)
             throw new Error("Could not get 2D context from canvas");
+        
+        await new Promise<void>((resolve, reject) => {
+            video.onseeked = () => resolve();
+            video.onerror = (err) => reject(err);
+            video.currentTime = video.duration / 2;
+        });
 
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         video.pause();

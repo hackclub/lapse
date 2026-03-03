@@ -1,22 +1,15 @@
 import { useEffect, useState, useRef } from "react";
 
-export function TimeSince({ active, startTime, showUnknown, initialElapsedSeconds = 0 }: {
+export function TimeSince({ active, startTime, showUnknown }: {
   active: boolean;
-  startTime?: Date;
+  startTime: Date;
   showUnknown: boolean;
-  initialElapsedSeconds?: number;
 }) {
-  const [elapsedSeconds, setElapsedSeconds] = useState(() => startTime ? Math.floor((Date.now() - startTime.getTime()) / 1000) : initialElapsedSeconds);
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => Math.floor((Date.now() - startTime.getTime()) / 1000));
 
-  // Recalculate elapsed seconds when startTime or initialElapsedSeconds changes
   useEffect(() => {
-    if (startTime) {
-      setElapsedSeconds(Math.floor((Date.now() - startTime.getTime()) / 1000));
-    }
-    else {
-      setElapsedSeconds(initialElapsedSeconds);
-    }
-  }, [startTime, initialElapsedSeconds]);
+    setElapsedSeconds(Math.floor((Date.now() - startTime.getTime()) / 1000));
+  }, [startTime]);
 
   const [formattedTime, setFormattedTime] = useState("--:--");
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -24,7 +17,7 @@ export function TimeSince({ active, startTime, showUnknown, initialElapsedSecond
   useEffect(() => {
     if (active) {
       intervalRef.current = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
+        setElapsedSeconds(prev => prev + 1);
       }, 1000);
     }
     else {

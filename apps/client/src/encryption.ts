@@ -205,7 +205,7 @@ export async function decryptData(
     timelapseId: string,
     passkey: string
 ): Promise<ArrayBuffer> {
-    const { key, iv } = await deriveKeyIvPair(timelapseId, passkey);
+    const { key, iv } = await deriveKeyIvPair("", passkey);
     
     const inputBuffer = encryptedData instanceof Uint8Array 
         ? encryptedData.slice().buffer
