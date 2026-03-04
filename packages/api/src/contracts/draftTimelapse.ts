@@ -66,7 +66,7 @@ export const DraftTimelapseSchema = DraftTimelapsePayloadSchema.extend({
 });
 
 export const draftTimelapseRouterContract = {
-    query: contract("GET", "/draftTimelapse/query")
+    findByUser: contract("GET", "/draftTimelapse/findByUser")
         .route({ summary: "Gets all draft timelapses created by the given user." })
         .input(z.object({
             user: LapseId
@@ -75,6 +75,18 @@ export const draftTimelapseRouterContract = {
         .output(
             apiResult({
                 timelapses: z.array(DraftTimelapseSchema)
+            })
+        ),
+
+    query: contract("GET", "/draftTimelapse/query")
+        .route({ summary: "Finds a draft timelapse by its ID. If the caller is not the owner of the draft or an admin, this endpoint will report that the timelapse doesn't exist." })
+        .input(z.object({
+            id: LapseId
+                .describe("The ID of the draft timelapse.")
+        }))
+        .output(
+            apiResult({
+                timelapse: DraftTimelapseSchema
             })
         ),
 

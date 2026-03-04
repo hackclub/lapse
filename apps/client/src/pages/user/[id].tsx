@@ -72,7 +72,7 @@ export default function Page() {
       setTimelapses(timelapsesRes.data.timelapses);
 
       if (userRes.data.user.id === currentUser?.id) {
-        const draftsRes = await api.draftTimelapse.query({ user: userRes.data.user.id });
+        const draftsRes = await api.draftTimelapse.findByUser({ user: userRes.data.user.id });
         if (!draftsRes.ok) {
           setError(draftsRes.message);
           return;

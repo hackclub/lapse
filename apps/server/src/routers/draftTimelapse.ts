@@ -83,17 +83,31 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
+            const draft = await database().draftTimelapse.findFirst({
+                include: { owner: true },
+                where: { id: req.input.id }
+            });
+
+            if (!draft || !actorEntitledTo(draft, caller))
+                return apiErr("NOT_FOUND", "The requested draft timelapse doesn't exist.");
+
+            return apiOk({ timelapse: dtoDraftTimelapse(draft) });
+        }),
+
+    findByUser: os.findByUser
+        .use(requiredAuth())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
             if (caller.id != req.input.user && !(caller.permissionLevel in oneOf("ADMIN", "ROOT")))
                 return apiErr("NO_PERMISSION", "You may only query draft timelapses for yourself.");
 
-            const timelapses = await database().draftTimelapse.findMany({
+            const drafts = await database().draftTimelapse.findMany({
                 include: { owner: true },
-                where: {
-                    ownerId: req.context.user.id
-                }
+                where: { ownerId: req.context.user.id }
             });
 
-            return apiOk({ timelapses: timelapses.map(x => dtoDraftTimelapse(x)) });
+            return apiOk({ timelapses: drafts.map(x => dtoDraftTimelapse(x)) });
         }),
 
     create: os.create

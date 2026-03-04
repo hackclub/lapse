@@ -54,16 +54,6 @@ export default function Page() {
   
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  function setCriticalError(message: string) {
-    setError(message);
-    setErrorIsCritical(true);
-  }
-
-  function setRegularError(message: string) {
-    setError(message);
-    setErrorIsCritical(false);
-  }
-
   useAsyncEffect(async () => {
     if (!router.isReady)
       return;
@@ -72,7 +62,8 @@ export default function Page() {
       const { id } = router.query;
 
       if (typeof id !== "string") {
-        setCriticalError("Invalid timelapse ID provided");
+        setError("Invalid timelapse ID provided");
+        setErrorIsCritical(true);
         return;
       }
 
@@ -80,7 +71,8 @@ export default function Page() {
       const res = await api.timelapse.query({ id });
       if (!res.ok) {
         console.error("([id].tsx) couldn't fetch that timelapse!", res);
-        setCriticalError(res.message);
+        setError(res.message);
+        setErrorIsCritical(true);
         return;
       }
 
@@ -99,12 +91,8 @@ export default function Page() {
     }
     catch (apiErr) {
       console.error("([id].tsx) error loading timelapse:", apiErr);
-
-      setCriticalError(
-        apiErr instanceof Error
-          ? apiErr.message
-          : "An unknown error occurred while loading the timelapse"
-        );
+      setError(apiErr instanceof Error ? apiErr.message : "An unknown error occurred while loading the timelapse");
+      setErrorIsCritical(true);
     }
   }, [router, router.isReady]);
 
@@ -139,12 +127,12 @@ export default function Page() {
         setEditModalOpen(false);
       } 
       else {
-        setRegularError(`Failed to update: ${result.error}`);
+        setError(`Failed to update: ${result.error}`);
       }
     } 
     catch (error) {
       console.error("([id].tsx) error updating timelapse:", error);
-      setRegularError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
+      setError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
     } 
     finally {
       setIsUpdating(false);
@@ -169,16 +157,12 @@ export default function Page() {
         router.push(`/user/@${timelapse.owner.handle}`);
       }
       else {
-        setRegularError(`Failed to delete: ${result.error}`);
+        setError(`Failed to delete: ${result.error}`);
       }
     }
     catch (error) {
       console.error("([id].tsx) error deleting timelapse:", error);
-      setRegularError(
-        error instanceof Error
-          ? error.message
-          : "An error occurred while deleting the timelapse."
-      );
+      setError(error instanceof Error ? error.message : "An error occurred while deleting the timelapse.");
     }
     finally {
       setIsDeleting(false);

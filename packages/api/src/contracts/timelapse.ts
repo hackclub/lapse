@@ -115,13 +115,7 @@ export const TimelapseSchema = OwnedTimelapseSchema.partial({ private: true }).e
 
 export const timelapseRouterContract = {
     query: contract("GET", "/timelapse/query")
-        .route({
-            summary: `
-                Finds a timelapse by its ID. If the timelapse is not yet published, and the user does
-                not own the timelapse, the endpoint will report that the timelapse does not exist.
-                This endpoint will return a different view if the user owns the timelapse.
-            `
-        })
+        .route({ summary: "Finds a timelapse by its ID. This endpoint will return a different view if the user owns the timelapse." })
         .input(
             z.object({
                 id: LapseId
