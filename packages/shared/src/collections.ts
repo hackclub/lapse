@@ -74,3 +74,10 @@ export function range(n: number) {
 
     return arr;
 }
+
+/**
+ * Gets the last element of the specified array.
+ */
+export function last<T>(arr: T[]) {
+    return arr[arr.length - 1] as T;
+}

@@ -110,7 +110,6 @@ export class DeviceStorage {
         const file = await fileHandle.getFile();
         const data = v.parse(StoreSchema, JSON.parse(await file.text()));
 
-        console.log("(deviceStorage.ts) deviceStorage data store read!", data);
         return data;
     }
 

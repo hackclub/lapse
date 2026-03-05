@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { realizeJobWorker } from "@/workers/realize.js";
 
 async function main() {

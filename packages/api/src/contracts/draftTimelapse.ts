@@ -12,11 +12,11 @@ import { PublicUserSchema } from "@/contracts/user";
  */
 export type EditListEntry = z.infer<typeof EditListEntrySchema>;
 export const EditListEntrySchema = z.object({
-    begin: z.int().nonnegative()
-        .describe("The start frame of the region this entry describes."),
+    begin: z.number().nonnegative()
+        .describe("The start time (in seconds) of the region this entry describes."),
 
-    end: z.int().nonnegative()
-        .describe("The end frame of the region this entry describes. This field has to be greater than `begin`."),
+    end: z.number().nonnegative()
+        .describe("The end time (in seconds) of the region this entry describes. This field has to be greater than `begin`."),
 
     kind: z.enum(["CUT"])
         .describe("The kind of edit to apply.")

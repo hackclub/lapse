@@ -84,7 +84,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             let decryptedBuffer: Buffer;
 
             try {
-                decryptedBuffer = decryptVideo(encryptedBuffer, timelapseId, input.passkey);
+                decryptedBuffer = decryptVideo(encryptedBuffer, "", input.passkey);
             }
             catch (err) {
                 throw log.echo(
@@ -131,11 +131,13 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 .filter(x => Number.isFinite(x.begin) && Number.isFinite(x.end))
                 .filter(x => x.end > x.begin)
                 .map(x => ({
-                    // Make sure we don't end up with any fractional frames
-                    begin: Math.floor(x.begin),
-                    end: Math.floor(x.end),
+                    begin: Math.floor(x.begin * 1000) / 1000,
+                    end: Math.ceil(x.end * 1000) / 1000,
                     kind: x.kind
                 }));
+
+            if (normalized.length === 0)
+                return [];
 
             // We sort all regions, so that we begin with the earliest ones first. If two regions have the same begin point, we
             // use the end point as the tiebreaker.
@@ -169,7 +171,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
 
         // This removes the regions of frames that the edit list specifies to remove.
         const cuts = cutList
-            .map(x => `between(t\\,${x.begin / TIMELAPSE_FPS}\\,${x.end / TIMELAPSE_FPS})`)
+            .map(x => `between(t\\,${x.begin}\\,${x.end})`)
             .join("+");
 
         const editAndSpeedFilter = cuts.length > 0
@@ -196,7 +198,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             "-preset", "medium", // (this might need tweaking depending on benchmarks)
             "-crf", "24",
             "-profile:v", "high",
-            "-pixfmt", "yuv420p", // 4:2:0 chroma subsampling, this might be the default, but we set it just in case. yuvj420p would be best but might have incompatibilities
+            "-pix_fmt", "yuv420p", // 4:2:0 chroma subsampling, this might be the default, but we set it just in case. yuvj420p would be best but might have incompatibilities
             "-movflags", "+faststart",
 
             "-an", // make sure no audio creeps its way through

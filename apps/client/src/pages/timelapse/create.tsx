@@ -5,7 +5,7 @@ import clsx from "clsx";
 import prettyBytes from "pretty-bytes";
 import { assert, match } from "@hackclub/lapse-shared";
 
-import { videoGenerateThumbnail } from "@/videoProcessing";
+import { videoGenerateThumbnail } from "@/video";
 import { encryptData, getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
 import { api, apiUpload } from "@/api";
@@ -425,19 +425,14 @@ export default function Page() {
         snapshots: timelapse.snapshots,
         thumbnailSize: thumbnail.size,
         deviceId: device.id,
-        sessions: sessions.map(x => ({ fileSize: x.size }))
+        sessions: sessions.map(x => ({ fileSize: x.size + 8192 })) // we add an 8KiB margin, because encryption adds some marginal overhead, and we don't want to force the user to store every session in memory
       });
 
       console.log("(create.tsx) draftTimelapse.create response:", res);
 
       if (!res.ok)
         throw new Error(res.message);
-
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(sessions[0]);
-      a.download = "session.webm";
-      a.click();
-
+      
       // ------------------------------------------------------- //
       for (const [i, session] of sessions.entries()) {
         setUploadProgress(0);
@@ -447,7 +442,7 @@ export default function Page() {
         console.log(`(create.tsx) encrypted session #${i + 1}:`, encrypted);
 
         setUploadStage("Uploading video session...");
-        await apiUpload(res.data.sessionUploadTokens[i], session, bytesProgressCallback);
+        await apiUpload(res.data.sessionUploadTokens[i], new Blob([encrypted.data], { type: "video/webm" }), bytesProgressCallback);
       }
 
       console.log("(create.tsx) all sessions uploaded successfully!");

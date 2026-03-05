@@ -1,4 +1,5 @@
 import { THUMBNAIL_SIZE } from "@hackclub/lapse-api";
+import { last } from "@hackclub/lapse-shared";
 
 /**
  * Generates a preview thumbnail for a given video.
@@ -58,4 +59,29 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
         video.remove();
         canvas.remove();
     }
+}
+
+/**
+ * Gets the target video (and the value to subtract from `t` in order to get the timestamp inside said video) from a
+ * logically sequential collection of videos.
+ */
+export function getVideoAtSequenceTime(t: number, videos: { url: string, duration: number }[]) {
+    let base = 0;
+    for (const session of videos) {
+        const prevBase = base;
+        base += session.duration;
+
+        if (base >= t) {
+            return {
+                url: session.url,
+                timeBase: prevBase
+            };
+        }
+    }
+
+    console.warn(`([id].tsx) time ${t} is outside the bounds of all sessions, returning the last one`);
+    return {
+        url: last(videos).url,
+        timeBase: base
+    };
 }

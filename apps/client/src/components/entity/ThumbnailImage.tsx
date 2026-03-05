@@ -4,6 +4,7 @@ import Icon from "@hackclub/icons";
 
 import { decryptData, getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
+import { sfetch } from "@/safety";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -30,7 +31,7 @@ async function decryptThumbnail(
       return null;
     }
 
-    const response = await fetch(encryptedThumbnailUrl);
+    const response = await sfetch(encryptedThumbnailUrl);
     if (!response.ok)
       throw new Error(`Failed to fetch encrypted thumbnail for ${timelapseId}: ${response.statusText}`);
 

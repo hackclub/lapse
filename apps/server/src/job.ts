@@ -35,7 +35,7 @@ export async function enqueueRealizeJob(timelapseId: string, sessionUrls: string
 realizeEvents.waitUntilReady()
     .then(() => {
         realizeEvents.on("completed", async ({ jobId, returnvalue }) => {
-            const result = RealizeJobOutputsSchema.parse(JSON.parse(returnvalue));
+            const result = RealizeJobOutputsSchema.parse(typeof returnvalue === "object" ? returnvalue : JSON.parse(returnvalue));
             const { videoKey, thumbnailKey, timelapseId } = result;
 
             logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey });
@@ -77,6 +77,9 @@ realizeEvents.waitUntilReady()
             }
 
             logError(`Realize job for ${job.data.timelapseId} failed: ${failedReason}`);
+
+            if (job.attemptsMade < (job.opts.attempts ?? 1))
+                return;
 
             // We keep the draft timelapse, mark the associated timelapse as failed processing, and unlink the two so that
             // the publishing of the draft can be retried by the user at a later time.

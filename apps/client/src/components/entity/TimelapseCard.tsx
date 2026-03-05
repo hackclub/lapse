@@ -4,7 +4,7 @@ import type { DraftTimelapse, Timelapse } from "@hackclub/lapse-api"
 
 import { deviceStorage } from "@/deviceStorage";
 import { decryptData } from "@/encryption";
-import { retryable } from "@/safety";
+import { retryable, sfetch } from "@/safety";
 
 import { ProfilePicture } from "@/components/entity/ProfilePicture"
 import { Bullet } from "@/components/ui/Bullet";
@@ -29,7 +29,7 @@ export function TimelapseCard({ timelapse }: {
           return;
         }
 
-        const res = await fetch(timelapse.previewThumbnail);
+        const res = await sfetch(timelapse.previewThumbnail);
         if (!res.ok)
           throw new Error(`HTTP ${res.status}: ${await res.text()}`);
 

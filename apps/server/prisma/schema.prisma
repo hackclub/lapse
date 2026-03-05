@@ -96,8 +96,8 @@ model DraftTimelapse {
   ///
   /// ```ts
   ///   interface EditListEntry {
-  ///       begin: number; // start frame of the edit
-  ///       end: number; // end frame of the edit
+  ///       begin: number; // start time (in seconds) of the edit
+  ///       end: number; // end time (in seconds) of the edit
   ///       kind: "CUT"; // "CUT" = remove region
   ///   }
   /// ```

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 
 import { useAuth } from "@/hooks/useAuth";
 import Icon from "@hackclub/icons";
+import { sfetch } from "@/safety";
 
 type ServiceInfo = {
   id: string;
@@ -67,7 +68,7 @@ export default function OAuthAuthorize() {
 
     async function loadService() {
       try {
-        const response = await fetch("/api/oauth/authorize", {
+        const response = await sfetch("/api/oauth/authorize", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -148,7 +149,7 @@ export default function OAuthAuthorize() {
 
     setIsLoading(true);
 
-    const response = await fetch("/api/oauth/authorize", {
+    const response = await sfetch("/api/oauth/authorize", {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",

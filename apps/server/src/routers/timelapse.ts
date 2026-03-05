@@ -18,7 +18,7 @@ import { enqueueRealizeJob } from "@/job.js";
 
 const s3 = new S3Client({
     region: "auto",
-    endpoint: `https://${env.S3_ENDPOINT}`,
+    endpoint: env.S3_ENDPOINT,
     credentials: {
         accessKeyId: env.S3_ACCESS_KEY_ID,
         secretAccessKey: env.S3_SECRET_ACCESS_KEY,
@@ -233,21 +233,6 @@ export default os.router({
                 return apiErr("ERROR", "A session of the given draft timelapse hasn't been uploaded or otherwise cannot be accessed.");
 
             const id = lapseId();
-            
-            // We associate the newly created Timelapse entity with the draft. When a draft has an associated timelapse, that means it is currently being processed, and thus will be hidden
-            // from any API queries.
-            await database().draftTimelapse.update({
-                where: { id: draft.id },
-                data: {
-                    associatedTimelapseId: id
-                }
-            })
-
-            // After this job finishes, we'll get a callback on the server-side. When that happens, we'll assign the ready video to the timelapse we just created, and mark it as processed!
-            const realizeJob = await enqueueRealizeJob(id, draft.sessions, req.input.passkey, draft.editList.map(x => EditListEntrySchema.parse(x)));
-            if (!realizeJob.id) {
-                logWarning("We enqueued a realize job, but it does not have an ID! Something went very wrong!", { realizeJob });
-            }
 
             // We purposefully omit `s3Key` and `s3ThumbnailKey` here.
             const timelapse = await database().timelapse.create({
@@ -260,12 +245,41 @@ export default os.router({
                     description: draft.description,
                     visibility: req.input.visibility,
                     snapshots: draft.snapshots,
-                    duration: durationBySnapshots(draft.snapshots),
+                    duration: durationBySnapshots(draft.snapshots)
+                }
+            });
+
+            // We associate the newly created Timelapse entity with the draft. When a draft has an associated timelapse, that means it is currently being processed, and thus will be hidden
+            // from any API queries.
+            await database().draftTimelapse.update({
+                where: { id: draft.id },
+                data: {
+                    associatedTimelapseId: id
+                }
+            });
+
+            // After this job finishes, we'll get a callback on the server-side. When that happens, we'll assign the ready video to the timelapse we just created, and mark it as processed!
+            const realizeJob = await enqueueRealizeJob(
+                id,
+                draft.sessions.map(x => `${env.S3_PUBLIC_URL_ENCRYPTED}/${x}`),
+                req.input.passkey,
+                draft.editList.map(x => EditListEntrySchema.parse(x))
+            );
+
+            if (!realizeJob.id) {
+                logWarning("We enqueued a realize job, but it does not have an ID! Something went very wrong!", { realizeJob });
+            }
+
+            // Update the timelapse with the job ID
+            const updatedTimelapse = await database().timelapse.update({
+                include: TIMELAPSE_INCLUDES,
+                where: { id },
+                data: {
                     associatedJobId: realizeJob.id
                 }
             });
 
-            return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
+            return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
         }),
 
     update: os.update

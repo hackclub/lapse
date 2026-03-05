@@ -4,6 +4,7 @@ import { createORPCClient, onError } from "@orpc/client";
 import { OpenAPILink } from "@orpc/openapi-client/fetch";
 import { compositeRouterContract } from "@hackclub/lapse-api";
 import * as tus from "tus-js-client";
+import { sfetch } from "@/safety";
 
 /**
  * The absolute URL at which the API is hosted at.
@@ -20,7 +21,7 @@ const link = new OpenAPILink(compositeRouterContract, {
     };
   },
   fetch: (request, init) => {
-    return globalThis.fetch(request, {
+    return sfetch(request, {
       ...init,
       credentials: "include", // Include cookies for cross-origin requests
     });

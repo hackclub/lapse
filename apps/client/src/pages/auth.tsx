@@ -6,6 +6,7 @@ import type { OAuthErrorCode } from "@hackclub/lapse-api";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { useAuthContext } from "@/context/AuthContext";
+import { sfetch } from "@/safety";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com/api";
 const OAUTH_CLIENT_ID = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID!;
@@ -92,7 +93,7 @@ export default function Auth() {
     sessionStorage.removeItem("lapse:oauth_code_verifier");
 
     try {
-      const response = await fetch(`${API_URL}/auth/token`, {
+      const response = await sfetch(`${API_URL}/auth/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

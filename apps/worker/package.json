@@ -18,7 +18,9 @@
   "scripts": {
     "build": "pnpm tsc && tsc-alias",
     "watch": "tsc -w",
-    "start": "pnpm build && node ./dist/app.js"
+    "start": "pnpm build && node ./dist/app.js",
+    "dev": "pnpm run build && pnpm run dev:start",
+    "dev:start": "pnpm exec node ./dist/app.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.994.0",
