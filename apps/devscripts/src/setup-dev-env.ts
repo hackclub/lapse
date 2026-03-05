@@ -444,7 +444,7 @@ async function runSetup() {
 		console.log(chalk.bgGreen.black.bold(" SUCCESS ") + chalk.green.bold(" Development environment is ready! 🎉"));
 		console.log();
 		console.log(chalk.white("  Next steps:"));
-		console.log(chalk.gray("  1. Run ") + chalk.cyan("pnpm turbo run dev") + chalk.gray(" to start the development server"));
+		console.log(chalk.gray("  1. Run ") + chalk.cyan("pnpm dev") + chalk.gray(" to start all services"));
 		console.log(chalk.gray("  2. The client will be available at ") + chalk.cyan("http://localhost:3000"));
 		console.log(chalk.gray("  3. The API server will be available at ") + chalk.cyan(`http://localhost:${serverPort}`));
 		divider();
