@@ -19,7 +19,7 @@ type AdminApp = {
     id: string
     handle: string
     displayName: string
-  }
+  } | null
   createdAt: string
 };
 
@@ -103,7 +103,7 @@ export default function AdminApps() {
                 <span className="text-lg font-semibold">{app.name}</span>
                 <span className="text-xs text-muted">Client ID: {app.clientId}</span>
                 <span className="text-xs text-muted">Trust: {app.trustLevel}</span>
-                <span className="text-xs text-muted">Owner: @{app.createdBy.handle}</span>
+                <span className="text-xs text-muted">Owner: {app.createdBy ? `@${app.createdBy.handle}` : "(system)"}</span>
               </div>
 
               <div className="flex gap-3">
