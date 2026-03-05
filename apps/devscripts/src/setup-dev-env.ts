@@ -30,7 +30,7 @@ function getRedisUrl() {
     return `redis://localhost:${redisPort}`;
 }
 
-let S3_ENDPOINT = "s3.localhost.localstack.cloud:4566";
+let S3_ENDPOINT = "http://s3.localhost.localstack.cloud:4566";
 let S3_PUBLIC_URL_PUBLIC = "http://lapse-public.s3.localhost.localstack.cloud:4566";
 let S3_PUBLIC_URL_ENCRYPTED = "http://lapse-encrypted.s3.localhost.localstack.cloud:4566";
 let S3_ACCESS_KEY_ID = "test";
@@ -421,7 +421,6 @@ async function runSetup() {
 				"DATABASE_URL": getDatabaseUrl(),
 				"REDIS_URL": getRedisUrl(),
 				"PORT": serverPort.toString(),
-				"HACKATIME_REDIRECT_URI": `http://localhost:${serverPort}/api/auth-hackatime`,
 				"SLACK_BOT_TOKEN": SLACK_BOT_TOKEN,
 				"S3_ENDPOINT": S3_ENDPOINT,
 				"S3_ACCESS_KEY_ID": S3_ACCESS_KEY_ID,
