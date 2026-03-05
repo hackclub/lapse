@@ -20,7 +20,7 @@ COPY packages/jobs/package.json ./packages/jobs/
 COPY packages/shared/package.json ./packages/shared/
 
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --ignore-scripts
 
 ############################  builder  ###########################
 FROM deps AS builder

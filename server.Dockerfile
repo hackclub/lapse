@@ -19,13 +19,8 @@ COPY packages/api/package.json ./packages/api/
 COPY packages/jobs/package.json ./packages/jobs/
 COPY packages/shared/package.json ./packages/shared/
 
-# Copy prisma schema before install so postinstall can generate the client
-COPY apps/server/prisma ./apps/server/prisma
-COPY apps/server/prisma.config.ts ./apps/server/prisma.config.ts
-
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
-    --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --ignore-scripts
 
 ############################  builder  ###########################
 FROM deps AS builder
