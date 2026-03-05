@@ -235,7 +235,7 @@ export default os.router({
             const id = lapseId();
 
             // We purposefully omit `s3Key` and `s3ThumbnailKey` here.
-            const timelapse = await database().timelapse.create({
+            await database().timelapse.create({
                 include: TIMELAPSE_INCLUDES,
                 data: {
                     id,
