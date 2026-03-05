@@ -6,9 +6,12 @@ async function main() {
     console.log("⧗  Lapse (Background Worker) v2.0.0");
     console.log(`*  started on ${new Date().toUTCString()}`);
 
-    await realizeJobWorker.run();
+    const workers = [
+        realizeJobWorker.run()
+    ];
 
-    console.log("*  all workers running!");
+    console.log(`*  all ${workers.length} workers running!`);
+    await Promise.all(workers);
 }
 
 main();
