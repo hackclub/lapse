@@ -113,6 +113,11 @@ export const env = {
     get REDIS_URL() { return required("REDIS_URL") },
 
     /**
+     * The host address the HTTP web-server will bind to.
+     */
+    get HOST() { return optional("HOST") ?? "127.0.0.1" },
+
+    /**
      * The port the HTTP web-server will listen on.
      */
     get PORT() { return optional("PORT") ?? "3123" },

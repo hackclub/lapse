@@ -69,6 +69,7 @@ COPY --from=builder /app/apps/server/src/generated ./apps/server/src/generated
 USER lapse
 
 ENV NODE_ENV=production
+ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 

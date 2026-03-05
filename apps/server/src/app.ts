@@ -170,7 +170,7 @@ server.all("/api/*", async (req, reply) => {
 
 attachUploadServer(server);
 
-server.listen({ port: parseInt(env.PORT) })
+server.listen({ port: parseInt(env.PORT), host: env.HOST })
     .then(address => {
         if (process.env["NODE_ENV"] === "development") {
             chalk.level = 3;
