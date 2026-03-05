@@ -59,12 +59,6 @@ export const env = {
     get HACKATIME_URL() { return required("HACKATIME_URL") },
 
     /**
-     * The secret key used for JWT token generation and verification.
-     */
-    // Generate one using [openssl rand -hex 32]!
-    get JWT_SECRET() { return required("JWT_SECRET") },
-
-    /**
      * The secret key used for creating JWT tokens for OAuth2 access codes.
      */
     // Generate one using [openssl rand -hex 32]!
