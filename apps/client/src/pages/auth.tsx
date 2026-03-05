@@ -8,7 +8,7 @@ import RootLayout from "@/components/layout/RootLayout";
 import { useAuthContext } from "@/context/AuthContext";
 import { sfetch } from "@/safety";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com";
 const OAUTH_CLIENT_ID = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID!;
 
 function generateRandomString(length: number): string {
@@ -67,7 +67,7 @@ export default function Auth() {
 
     const redirectUri = `${window.location.origin}/auth`;
 
-    const url = new URL(`${API_URL}/auth/authorize`);
+    const url = new URL(`${API_URL}/api/auth/authorize`);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("client_id", OAUTH_CLIENT_ID);
     url.searchParams.set("redirect_uri", redirectUri);
