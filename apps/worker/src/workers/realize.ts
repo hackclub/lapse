@@ -26,6 +26,14 @@ const s3 = new S3Client({
 });
 
 /**
+ * Flags that should be included at the beginning of each `ffmpeg` invocation.
+ */
+const COMMON_FFMPEG_FLAGS = [
+    "-hide_banner",
+    "-nostats"
+];
+
+/**
  * Equivalent to `execFile`, but also logs everything through the given `JobLogger` and returns an `Error` if the invocation failed.
  */
 async function execAndLog(log: JobLogger, name: string, args: string[]) {
@@ -33,14 +41,14 @@ async function execAndLog(log: JobLogger, name: string, args: string[]) {
 
     return await new Promise<void>((resolve, reject) => {
         execFile(name, args, (error, stdout, stderr) => {
-            log.error("stdout:");
+            log.info("stdout:");
             for (const line of stdout.split("\n")) {
-                log.error(`  ${line}`);
+                log.info(`  ${line}`);
             }
 
-            log.error("stderr:");
+            log.info("stderr:");
             for (const line of stderr.split("\n")) {
-                log.error(`  ${line}`);
+                log.info(`  ${line}`);
             }
 
             if (error) {
@@ -182,6 +190,8 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
         const thumbOutputPath = path.join(tmp, "thumbnail.avif");
 
         await execAndLog(log, "ffmpeg", [
+            ...COMMON_FFMPEG_FLAGS,
+
             // input definitions
             ...sessions.flatMap(x => [
                 "-fflags", "+discardcorrupt", // discard corrupted packets (as opposed to failing)
@@ -223,6 +233,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
 
         try {
             await execAndLog(log, "ffmpeg", [
+                ...COMMON_FFMPEG_FLAGS,
                 ...baseThumbnailArgs,
                 "-c:v", "libaom-av1", // we use AVIF for our thumbnails as it's Baseline 2024
                 "-still-picture", "1",
@@ -242,6 +253,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
 
             try {
                 await execAndLog(log, "ffmpeg", [
+                    ...COMMON_FFMPEG_FLAGS,
                     ...baseThumbnailArgs,
                     "-c:v", "mjpeg",
                     "-q:v", "5",
