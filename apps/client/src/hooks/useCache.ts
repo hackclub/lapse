@@ -7,7 +7,7 @@ export function useCache<T>(key: string) {
     const [value, setValue] = useState<T | null>(null);
 
     useEffect(() => {
-        const raw = localStorage.getItem(`lapse.cache.${key}`);
+        const raw = localStorage.getItem(`lapse:cache.${key}`);
         if (!raw)
             return;
 
@@ -28,10 +28,10 @@ export function useCache<T>(key: string) {
             setValue(obj);
 
             if (obj) {
-                localStorage.setItem(`lapse.cache.${key}`, JSON.stringify(obj));
+                localStorage.setItem(`lapse:cache.${key}`, JSON.stringify(obj));
             }
             else {
-                localStorage.removeItem(`lapse.cache.${key}`);
+                localStorage.removeItem(`lapse:cache.${key}`);
             }
         }
     ] as const;
