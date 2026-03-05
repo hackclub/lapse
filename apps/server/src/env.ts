@@ -141,7 +141,27 @@ export const env = {
      * The ID of the canonical OAuth client, which will be allowed to handle consent screens, request the `elevated` scope, and bypass
      * consent modals when authorizing. In production, this is the main `lapse.hackclub.com` client.
      */
-    get CANONICAL_OAUTH_CLIENT_ID() { return required("CANONICAL_OAUTH_CLIENT_ID") }
+    get CANONICAL_OAUTH_CLIENT_ID() { return required("CANONICAL_OAUTH_CLIENT_ID") },
+
+    /**
+     * The user-facing name of the canonical OAuth client.
+     */
+    get CANONICAL_OAUTH_CLIENT_NAME() { return required("CANONICAL_OAUTH_CLIENT_NAME") },
+
+    /**
+     * A description of the canonical OAuth client.
+     */
+    get CANONICAL_OAUTH_CLIENT_DESCRIPTION() { return required("CANONICAL_OAUTH_CLIENT_DESCRIPTION") },
+
+    /**
+     * The homepage URL of the canonical OAuth client.
+     */
+    get CANONICAL_OAUTH_CLIENT_HOMEPAGE_URL() { return required("CANONICAL_OAUTH_CLIENT_HOMEPAGE_URL") },
+
+    /**
+     * Comma-separated list of allowed redirect URIs for the canonical OAuth client.
+     */
+    get CANONICAL_OAUTH_CLIENT_REDIRECT_URIS() { return required("CANONICAL_OAUTH_CLIENT_REDIRECT_URIS") }
 };
 
 function required(name: string) {

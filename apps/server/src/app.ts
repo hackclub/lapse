@@ -11,7 +11,7 @@ import chalk from "chalk";
 import dedent from "dedent";
 import { compositeRouterContract } from "@hackclub/lapse-api";
 
-import { getAuthenticatedUser } from "@/oauth.js"
+import { ensureCanonicalClient, getAuthenticatedUser } from "@/oauth.js"
 import { apiErr } from "@/common.js"
 import type { Context } from "@/router.js"
 import { database, initDatabase } from "@/db.js";
@@ -171,7 +171,7 @@ server.all("/api/*", async (req, reply) => {
 attachUploadServer(server);
 
 server.listen({ port: parseInt(env.PORT), host: env.HOST })
-    .then(address => {
+    .then(async (address) => {
         if (process.env["NODE_ENV"] === "development") {
             chalk.level = 3;
 
@@ -212,4 +212,5 @@ server.listen({ port: parseInt(env.PORT), host: env.HOST })
         }
 
         initDatabase();
+        await ensureCanonicalClient();
     });

@@ -8,7 +8,7 @@ import * as db from "@/generated/prisma/client.js";
 
 import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
-import { logWarning } from "@/logging.js";
+import { logInfo, logWarning } from "@/logging.js";
 import type { FastifyRequest } from "fastify";
 import { getAllOAuthScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
 
@@ -165,6 +165,55 @@ const AccessTokenJwtSchema = AccessTokenPayloadSchema.extend({
      */
     exp: z.number()
 })
+
+/**
+ * Ensures the canonical OAuth client exists.
+ */
+export async function ensureCanonicalClient() {
+    const clientId = env.CANONICAL_OAUTH_CLIENT_ID;
+    const redirectUris = env.CANONICAL_OAUTH_CLIENT_REDIRECT_URIS
+        .split(",")
+        .map(u => u.trim())
+        .filter(Boolean);
+
+    const data = {
+        name: env.CANONICAL_OAUTH_CLIENT_NAME,
+        description: env.CANONICAL_OAUTH_CLIENT_DESCRIPTION,
+        homepageUrl: env.CANONICAL_OAUTH_CLIENT_HOMEPAGE_URL,
+        redirectUris,
+        scopes: ["elevated"],
+        trustLevel: "TRUSTED" as const,
+    };
+
+    const existing = await database().serviceClient.findUnique({
+        where: { clientId }
+    });
+
+    if (existing) {
+        await database().serviceClient.update({
+            where: { clientId },
+            data
+        });
+
+        logInfo(`Updated canonical OAuth client (${clientId}).`);
+    }
+    else {
+        const clientSecret = generateServiceClientSecret();
+        const clientSecretHash = hashServiceSecret(clientSecret);
+
+        await database().serviceClient.create({
+            data: {
+                ...data,
+                clientId,
+                clientSecretHash,
+            }
+        });
+
+        logInfo(`Created canonical OAuth client (${clientId}).`);
+        logInfo(`Client secret: ${clientSecret}`);
+        logInfo(`Save this secret - it will not be shown again!`);
+    }
+}
 
 // reference: https://github.com/14gasher/oauth-example/blob/master/auth/oauth/model.js
 
