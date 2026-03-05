@@ -52,7 +52,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
     if (!auth.currentUser)
       return;
 
-    const res = await api.draftTimelapse.query({ user: auth.currentUser.id });
+    const res = await api.draftTimelapse.findByUser({ user: auth.currentUser.id });
     if (!res.ok) {
       console.error("(SettingsView.tsx) timelapse.findByUser failed when trying to remove a device!", res);
       setError(res.message);
