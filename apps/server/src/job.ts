@@ -5,6 +5,7 @@ import { REALIZE_JOB_QUEUE_NAME, RealizeJobOutputsSchema, type RealizeJobInputs,
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { database, redis } from "@/db.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
+import { syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
 // This file handles enqueuing jobs on the worker, as well as listening for completion/failed events.
 // Callers are expected to queue jobs and disregard what happens after the completion (we handle that here!),
@@ -69,7 +70,7 @@ realizeEvents.waitUntilReady()
             }
 
             // This basically marks the timelapse as having its processing finished (we assume any timelapse with an associated job ID is still being processed).
-            await database().timelapse.update({
+            const completedTimelapse = await database().timelapse.update({
                 where: {
                     id: timelapseId
                 },
@@ -77,10 +78,21 @@ realizeEvents.waitUntilReady()
                     associatedJobId: null,
                     s3Key: videoKey,
                     thumbnailS3Key: thumbnailKey
-                }
+                },
+                include: { owner: true }
             });
 
             logInfo(`Successfully updated timelapse ${timelapseId} with transcoded data.`);
+
+            if (completedTimelapse.hackatimeProject) {
+                try {
+                    await syncTimelapseWithHackatime(completedTimelapse, completedTimelapse.owner);
+                    logInfo(`Hackatime sync completed for timelapse ${timelapseId}, project ${completedTimelapse.hackatimeProject}.`);
+                }
+                catch (err) {
+                    logError(`Hackatime sync failed for timelapse ${timelapseId}.`, { err });
+                }
+            }
         });
 
         realizeEvents.on("failed", async ({ jobId, failedReason }) => {

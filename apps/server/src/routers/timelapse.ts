@@ -80,6 +80,50 @@ export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Acto
 }
 
 /**
+ * Performs the Hackatime sync for a timelapse that already has `hackatimeProject` set.
+ * This pushes all snapshots as heartbeats to the user's Hackatime account.
+ */
+export async function syncTimelapseWithHackatime(timelapse: db.Timelapse & { owner: db.User }, owner: db.User) {
+    if (!timelapse.hackatimeProject)
+        throw new Error(`Timelapse ${timelapse.id} has no hackatimeProject set.`);
+
+    if (!owner.hackatimeId || !owner.hackatimeAccessToken)
+        throw new Error(`User ${owner.id} does not have a linked Hackatime account.`);
+
+    let userApiKey: string | null;
+
+    if (process.env["NODE_ENV"] !== "production" && env.DEV_HACKATIME_FALLBACK_KEY) {
+        userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
+    }
+    else {
+        const oauthApi = new HackatimeOAuthApi(owner.hackatimeAccessToken);
+        userApiKey = await oauthApi.apiKey();
+    }
+
+    if (!userApiKey)
+        throw new Error(`User ${owner.id} does not have a Hackatime API key.`);
+
+    const hackatime = new HackatimeUserApi(userApiKey);
+
+    const heartbeats: WakaTimeHeartbeat[] = timelapse.snapshots.map(x => ({
+        entity: `${timelapse.name} (${timelapse.id})`,
+        time: x.getTime() / 1000,
+        category: "timelapsing",
+        type: "timelapse",
+        user_agent: "wakatime/lapse (lapse) lapse/2.0.0 lapse/2.0.0",
+        project: timelapse.hackatimeProject!
+    }));
+
+    const assignedHeartbeats = await hackatime.pushHeartbeats(heartbeats);
+    const failedHeartbeat = assignedHeartbeats.responses.find(x => x[1] < 200 || x[1] > 299);
+    if (failedHeartbeat) {
+        throw new Error(`Hackatime returned HTTP ${failedHeartbeat[1]} for heartbeat at ${failedHeartbeat[0]?.time}`);
+    }
+
+    logInfo(`All heartbeats synchronized with snapshots for ${owner.handle}'s project ${timelapse.hackatimeProject}!`);
+}
+
+/**
  * Permanently deletes a timelapse, including all its snapshots and S3 files.
  */
 export async function deleteTimelapse(timelapseId: string, actor: Actor): Promise<Result<void>> {
@@ -246,7 +290,8 @@ export default os.router({
                     visibility: req.input.visibility,
                     snapshots: draft.snapshots,
                     duration: durationBySnapshots(draft.snapshots),
-                    sourceDraftId: draft.id
+                    sourceDraftId: draft.id,
+                    hackatimeProject: req.input.hackatimeProject ?? null
                 }
             });
 
@@ -380,38 +425,15 @@ export default os.router({
             if (!timelapse.owner.hackatimeId || !timelapse.owner.hackatimeAccessToken)
                 return apiErr("ERROR", "You must have a linked Hackatime account to sync with Hackatime!");
 
-            let userApiKey: string | null;
+            const timelapseWithProject = { ...timelapse, hackatimeProject: req.input.hackatimeProject };
 
-            if (process.env["NODE_ENV"] !== "production" && env.DEV_HACKATIME_FALLBACK_KEY) {
-                userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
+            try {
+                await syncTimelapseWithHackatime(timelapseWithProject, timelapse.owner);
             }
-            else {
-                const oauthApi = new HackatimeOAuthApi(timelapse.owner.hackatimeAccessToken);
-                userApiKey = await oauthApi.apiKey();
+            catch (err) {
+                logError("Couldn't sync heartbeat!", { err, snapshots: timelapse.snapshots });
+                return apiErr("HACKATIME_ERROR", `${err instanceof Error ? err.message : err}! Report this at https://github.com/hackclub/lapse.`);
             }
-
-            if (!userApiKey)
-                return apiErr("ERROR", "You don't have a Hackatime account! Create one at https://hackatime.hackclub.com.");
-
-            const hackatime = new HackatimeUserApi(userApiKey);
-
-            const heartbeats: WakaTimeHeartbeat[] = timelapse.snapshots.map(x => ({
-                entity: `${timelapse.name} (${timelapse.id})`,
-                time: x.getTime() / 1000,
-                category: "timelapsing",
-                type: "timelapse",
-                user_agent: "wakatime/lapse (lapse) lapse/2.0.0 lapse/2.0.0",
-                project: req.input.hackatimeProject
-            }));
-
-            const assignedHeartbeats = await hackatime.pushHeartbeats(heartbeats);
-            const failedHeartbeat = assignedHeartbeats.responses.find(x => x[1] < 200 || x[1] > 299);
-            if (failedHeartbeat) {
-                logError("Couldn't sync heartbeat!", { failedHeartbeat, heartbeats, snapshots: timelapse.snapshots });
-                return apiErr("HACKATIME_ERROR", `Hackatime returned HTTP ${failedHeartbeat[1]} for heartbeat at ${failedHeartbeat[0]?.time}! Report this at https://github.com/hackclub/lapse.`);
-            }
-
-            logInfo(`All heartbeats synchronized with snapshots for ${timelapse.owner.handle}'s project ${req.input.hackatimeProject}!`);
 
             const updatedTimelapse = await database().timelapse.update({
                 where: { id: req.input.id, ownerId: caller.id },

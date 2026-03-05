@@ -237,7 +237,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 ...baseThumbnailArgs,
                 "-c:v", "libaom-av1", // we use AVIF for our thumbnails as it's Baseline 2024
                 "-still-picture", "1",
-                "-crf", "30", // higher = smaller file
+                "-crf", "26", // higher = smaller file
                 "-b:v", "0", // required for CRF-only mode
                 "-cpu-used", "4", // effort to put into the encode, lower = higher quality but slower
                 "-row-mt", "1",

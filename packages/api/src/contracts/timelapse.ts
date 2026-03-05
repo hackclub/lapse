@@ -146,6 +146,9 @@ export const timelapseRouterContract = {
 
                 passkey: z.string().length(6)
                     .describe("The device passkey used to decrypt the video sessions in the draft timelapse."),
+
+                hackatimeProject: z.string().min(1).max(128).optional()
+                    .describe("If provided, the timelapse snapshots will be synced to this Hackatime project after processing completes."),
             })
         )
         .output(

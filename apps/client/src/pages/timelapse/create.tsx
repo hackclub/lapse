@@ -216,7 +216,7 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt, vide
             ] : [
               // In this case, we didn't get permission to enumerate the user's cameras, so we'll display a generic "Camera"
               // option, that when clicked, will prompt them for permission.
-              { label: "Camera", value: "CAMERA:" }
+              { label: "Camera", value: "CAMERA:", icon: "instagram" as const }
             ])
         ]}
       />

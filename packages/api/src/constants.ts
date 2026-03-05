@@ -24,7 +24,7 @@ export const MAX_VIDEO_FRAME_COUNT = 86400;
  * The number of pixels that a single extent of generated thumbnails should span. For example, if a 16:9 thumbnail would be generated,
  * it would have a resolution of `w=THUMBNAIL_SIZE, h=THUMBNAIL_SIZE / (16 / 9)`.
  */
-export const THUMBNAIL_SIZE = 640;
+export const THUMBNAIL_SIZE = 1280;
 
 /**
  * The combined maximum size of video chunks that the client can upload, in bytes. This is only used for

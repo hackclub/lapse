@@ -73,6 +73,7 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
 
         await sleep(250);
         if (!video.seeking) {
+          console.log("(EditorTimeline.tsx) video hasn't been seeking - assuming it already has finished");
           resolve();
         }
       });
@@ -388,9 +389,10 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
             className="flex flex-1 min-h-0 bg-darker relative border border-slate rounded-2xl overflow-hidden"
           >
           {
-            thumbnails.map(x => (
+            thumbnails.map((x, i) => (
               <img
                 src={x}
+                key={i}
                 alt=""
                 draggable={false}
                 className={clsx(

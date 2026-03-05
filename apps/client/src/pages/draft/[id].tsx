@@ -242,6 +242,7 @@ export default function Page() {
       id: draft.id,
       visibility: pendingVisibility,
       passkey: device.passkey,
+      hackatimeProject: hackatimeProjectName ?? undefined,
     });
 
     if (!res.ok) {
@@ -249,22 +250,7 @@ export default function Page() {
       return;
     }
 
-    const timelapseId = res.data.timelapse.id;
-
-    if (hackatimeProjectName) {
-      const syncRes = await api.timelapse.syncWithHackatime({
-        id: timelapseId,
-        hackatimeProject: hackatimeProjectName
-      });
-
-      if (!syncRes.ok) {
-        setError(`Published, but failed to sync with Hackatime: ${syncRes.error}`);
-        router.push(`/timelapse/${timelapseId}`);
-        return;
-      }
-    }
-
-    router.push(`/timelapse/${timelapseId}`);
+    router.push(`/timelapse/${res.data.timelapse.id}`);
   }
 
   function handleTimeUpdate(ev: SyntheticEvent<HTMLVideoElement>) {
@@ -363,11 +349,12 @@ export default function Page() {
               />
 
               <div className="flex gap-3">
-                <Button onClick={() => publish(null)} className="w-full">
-                  Sync later
-                </Button>
                 <Button onClick={() => publish(hackatimeProject.trim())} disabled={!hackatimeProject.trim()} kind="primary" className="w-full">
                   Sync with Hackatime
+                </Button>
+
+                <Button onClick={() => publish(null)} className="w-full">
+                  Sync later
                 </Button>
               </div>
             </>
