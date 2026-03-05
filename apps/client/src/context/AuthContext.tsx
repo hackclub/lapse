@@ -10,6 +10,7 @@ interface AuthContextValue {
     currentUser: User | null;
     isLoading: boolean;
     signOut: () => Promise<void>;
+    refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,6 +43,22 @@ export function AuthProvider({ children }: {
         setIsLoading(false);
     });
 
+    const refreshUser = useCallback(async () => {
+        setIsLoading(true);
+        const req = await api.user.myself({});
+
+        if (!req.ok || req.data.user === null) {
+            setUserCache(null);
+            setCurrentUser(null);
+            setIsLoading(false);
+            return;
+        }
+
+        setUserCache(req.data.user);
+        setCurrentUser(req.data.user);
+        setIsLoading(false);
+    }, [setUserCache]);
+
     const signOut = useCallback(async () => {
         console.log("(AuthContext.tsx) signing out...");
         await api.user.signOut({});
@@ -56,7 +73,8 @@ export function AuthProvider({ children }: {
     const value: AuthContextValue = {
         currentUser: effectiveUser,
         isLoading,
-        signOut
+        signOut,
+        refreshUser
     };
 
     return (

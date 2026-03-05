@@ -27,7 +27,7 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 
 export default function Auth() {
   const router = useRouter();
-  const { currentUser, isLoading } = useAuthContext();
+  const { currentUser, isLoading, refreshUser } = useAuthContext();
   const [status, setStatus] = useState<"loading" | "error">("loading");
   const oauthInitiated = useRef(false);
 
@@ -117,6 +117,7 @@ export default function Auth() {
 
       const data = await response.json();
       localStorage.setItem("lapse:token", data.access_token);
+      await refreshUser();
       router.push("/");
     }
     catch (err) {
