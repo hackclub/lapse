@@ -54,6 +54,7 @@ export function issueUploadToken(key: string, maxSize: number) {
 export function attachUploadServer(app: FastifyInstance) {
     const tusServer = new tus.Server({
         path: "/upload",
+        respectForwardedHeaders: true,
         datastore: new S3Store({
             // R2 requires that all non-trailing parts are exactly the same size. 
             partSize: 8 * 1024 * 1024,
