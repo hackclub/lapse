@@ -93,7 +93,7 @@ export default function Auth() {
     sessionStorage.removeItem("lapse:oauth_code_verifier");
 
     try {
-      const response = await sfetch(`${API_URL}/auth/token`, {
+      const response = await sfetch(`${API_URL}/api/auth/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
