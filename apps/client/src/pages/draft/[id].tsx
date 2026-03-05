@@ -1,14 +1,20 @@
+import Icon from "@hackclub/icons";
+
 import { api } from "@/api";
 import { EditorTimeline } from "@/components/editor/EditorTimeline";
 import { ErrorModal } from "@/components/layout/ErrorModal";
+import { PublishModal } from "@/components/layout/PublishModal";
+import { WindowedModal } from "@/components/layout/WindowedModal";
 import RootLayout from "@/components/layout/RootLayout";
+import { DropdownInput } from "@/components/ui/DropdownInput";
+import { Button } from "@/components/ui/Button";
 import { deviceStorage } from "@/deviceStorage";
 import { decryptData, encryptData } from "@/encryption";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 import { sfetch } from "@/safety";
-import { getVideoAtSequenceTime } from "@/video";
-import { DraftTimelapse, EditListEntry, TIMELAPSE_FACTOR } from "@hackclub/lapse-api";
-import { last } from "@hackclub/lapse-shared";
+import { getVideoAtSequenceTime, waitForVideoEvent } from "@/video";
+import { DraftTimelapse, EditListEntry, HackatimeProject, TIMELAPSE_FACTOR, TimelapseVisibility } from "@hackclub/lapse-api";
+import { formatDuration, last } from "@hackclub/lapse-shared";
 import { clsx } from "clsx";
 import { useRouter } from "next/router";
 import { SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,6 +35,13 @@ export default function Page() {
   const [draft, setDraft] = useState<DraftTimelapse | null>(null);
   const [decryptedSessions, setDecryptedSessions] = useState<{ url: string, duration: number }[] | null>(null);
   const [sessionTotalTime, setSessionTotalTime] = useState(0);
+
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
+  const [pendingVisibility, setPendingVisibility] = useState<TimelapseVisibility | null>(null);
+  const [hackatimeProject, setHackatimeProject] = useState("");
+  const [hackatimeProjects, setHackatimeProjects] = useState<HackatimeProject[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [errorIsCritical, setErrorIsCritical] = useState(false);
@@ -102,12 +115,16 @@ export default function Page() {
           const video = document.createElement("video");
           const url = URL.createObjectURL(data);
           video.src = url;
-          video.load();
 
-          await new Promise<void>((resolve, reject) => {
-            video.onerror = (err) => reject(err);
-            video.onloadedmetadata = () => resolve();
-          });
+          // With unfinalized data, we want to force the browser to seek the entire file.
+          await waitForVideoEvent(video, "onloadeddata", () => video.load());
+          await waitForVideoEvent(video, "onseeked", () => video.currentTime = Number.MAX_SAFE_INTEGER);
+          await waitForVideoEvent(video, "onseeked", () => video.currentTime = 0.1);
+
+          if (!isFinite(video.duration)) {
+            console.error("([id.tsx]) video duration is not finite - despite our best efforts! we're assuming here, bad bad bad!", video);
+            return { url, duration: 120 }; // this is, like, horrible. but should never happen
+          }
 
           return { url, duration: video.duration };
         })
@@ -174,8 +191,29 @@ export default function Page() {
     router.push(`/user/@${draft.owner.handle}`);
   }
 
-  async function publish() {
-    if (!draft)
+  async function handleVisibilitySelected(visibility: TimelapseVisibility) {
+    setPublishModalOpen(false);
+    setPendingVisibility(visibility);
+    setHackatimeProject("");
+    setHackatimeModalOpen(true);
+    setIsLoadingProjects(true);
+
+    try {
+      const res = await api.hackatime.allProjects({});
+      setHackatimeProjects(res.ok ? res.data.projects : []);
+    }
+    catch {
+      setHackatimeProjects([]);
+    }
+    finally {
+      setIsLoadingProjects(false);
+    }
+  }
+
+  async function publish(hackatimeProjectName: string | null) {
+    setHackatimeModalOpen(false);
+
+    if (!draft || !pendingVisibility)
       return;
 
     const allDevices = await deviceStorage.getAllDevices();
@@ -202,7 +240,7 @@ export default function Page() {
 
     const res = await api.timelapse.publish({
       id: draft.id,
-      visibility: "UNLISTED",
+      visibility: pendingVisibility,
       passkey: device.passkey,
     });
 
@@ -211,7 +249,22 @@ export default function Page() {
       return;
     }
 
-    router.push(`/timelapse/${res.data.timelapse.id}`);
+    const timelapseId = res.data.timelapse.id;
+
+    if (hackatimeProjectName) {
+      const syncRes = await api.timelapse.syncWithHackatime({
+        id: timelapseId,
+        hackatimeProject: hackatimeProjectName
+      });
+
+      if (!syncRes.ok) {
+        setError(`Published, but failed to sync with Hackatime: ${syncRes.error}`);
+        router.push(`/timelapse/${timelapseId}`);
+        return;
+      }
+    }
+
+    router.push(`/timelapse/${timelapseId}`);
   }
 
   function handleTimeUpdate(ev: SyntheticEvent<HTMLVideoElement>) {
@@ -259,11 +312,68 @@ export default function Page() {
 
         <div className="flex w-full">
           {decryptedSessions &&
-            <EditorTimeline editList={editList} setEditList={setEditList} sessions={decryptedSessions} time={time} setTime={x => seekTo(x)} playing={playing} setPlaying={setPlaying} videoRef={videoRef} onSaveAndExit={saveAndExit} onPublish={publish} />
+            <EditorTimeline editList={editList} setEditList={setEditList} sessions={decryptedSessions} time={time} setTime={x => seekTo(x)} playing={playing} setPlaying={setPlaying} videoRef={videoRef} onSaveAndExit={saveAndExit} onPublish={() => setPublishModalOpen(true)} />
           }
         </div>
 
       </main>
+
+      <PublishModal
+        isOpen={publishModalOpen}
+        setIsOpen={setPublishModalOpen}
+        onSelect={handleVisibilitySelected}
+      />
+
+      <WindowedModal
+        icon="history"
+        title="Sync with Hackatime"
+        description="Import your timelapse snapshots to Hackatime as heartbeats. This can only be done once per timelapse."
+        isOpen={hackatimeModalOpen}
+        setIsOpen={setHackatimeModalOpen}
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
+            <Icon glyph="important" size={24} className="text-yellow shrink-0" />
+            <div>
+              <p className="font-bold text-yellow">One-time sync</p>
+              <p className="text-smoke">You can only sync a timelapse with Hackatime once. Make sure you choose the correct project name.</p>
+            </div>
+          </div>
+
+          {isLoadingProjects ? (
+            <div className="text-secondary text-center">Loading projects...</div>
+          ) : hackatimeModalOpen && (
+            <>
+              <DropdownInput
+                label="Project Name"
+                description="Select an existing Hackatime project or type to create a new one."
+                value={hackatimeProject}
+                onChange={setHackatimeProject}
+                options={hackatimeProjects.map(project => ({
+                  value: project.name,
+                  searchLabel: project.name,
+                  label: (
+                    <div className="flex justify-between w-full">
+                      <span>{project.name}</span>
+                      <span className="text-secondary">{formatDuration(project.totalSeconds)}</span>
+                    </div>
+                  )
+                }))}
+                allowUserCustom
+              />
+
+              <div className="flex gap-3">
+                <Button onClick={() => publish(null)} className="w-full">
+                  Sync later
+                </Button>
+                <Button onClick={() => publish(hackatimeProject.trim())} disabled={!hackatimeProject.trim()} kind="primary" className="w-full">
+                  Sync with Hackatime
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </WindowedModal>
 
       <ErrorModal
         isOpen={!!error}

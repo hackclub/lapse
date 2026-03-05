@@ -166,6 +166,10 @@ model Timelapse {
   /// (e.g. encoding). The state of the job can be queried via BullMQ.
   associatedJobId       String?
 
+  /// The ID of the draft timelapse that this timelapse was originally published from. This persists even after
+  /// the draft is deleted or unlinked, allowing failed processing timelapses to link back to the original draft.
+  sourceDraftId         String?
+
   ownerId               String
   owner                 User                @relation(fields: [ownerId], references: [id])
 

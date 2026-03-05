@@ -307,16 +307,13 @@ export default function Page() {
    * This function MAY be called when the user *changes* their media source, thus creating a new session for an existing timelapse.
    * @param shouldDiscard If `true`, if a timelapse already is stored in the user's device storage, it should be discarded. This is a **destructive operation**.
    */
-  async function onSessionBegin(shouldDiscard: boolean, stream: MediaStream) {
-    mainPreviewRef.current!.srcObject = stream;
-    setSetupModalOpen(false); // when the session begins, the setup modal closes
-
+  async function onSessionBegin(shouldDiscard: boolean, newStream: MediaStream) {
     let existing = await deviceStorage.getTimelapse();
 
     if (shouldDiscard) {
       // It's a bit illogical for the following assertion to fail - discarding ONLY can happen when we open the setup modal at the beginning
       // (i.e. INIT/INIT_CONTINUE/INIT_DISCARD). This realistically only fails for UPDATE, which can't really discard.
-      assert(stream == null && videoSession == null, "Discarding a timelapse, but we already had a stream/video session running");
+      assert(videoSession == null, "Discarding a timelapse, but we already had a stream/video session running");
 
       if (existing != null) {
         if (!window.confirm("Are you sure you want to overwrite your existing timelapse? It will be lost forever! (A long time!)"))
@@ -326,8 +323,6 @@ export default function Page() {
           console.log("(create.tsx) ⚠️ discarding previous timelapse!", existing);
           await deviceStorage.deleteTimelapse();
           existing = null;
-
-          router.push("/");
         }
         catch (err) {
           console.error("(create.tsx) failed to discard timelapse:", err);
@@ -339,13 +334,16 @@ export default function Page() {
       }
     }
 
+    mainPreviewRef.current!.srcObject = newStream;
+    setSetupModalOpen(false); // when the session begins, the setup modal closes
+
     if (!existing) {
       // No timelapse has been stored before - we need to create one.
       existing = await deviceStorage.createTimelapse();
       setStartedAt(new Date());
     }
     else {
-      console.log("(create.tsx) resuming existing timelapse!");
+      console.log("(create.tsx) resuming existing timelapse!", existing);
 
       const TOLERANCE = 2 * 60 * 1000;
       let totalMs = 0;
@@ -360,7 +358,7 @@ export default function Page() {
     }
 
     // ...and we're off!
-    setVideoSession(new TimelapseVideoSession(stream));
+    setVideoSession(new TimelapseVideoSession(newStream));
   }
 
   function setPause(shouldBePaused: boolean) {

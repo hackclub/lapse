@@ -9,38 +9,15 @@ function createMediaRecorder(stream: MediaStream) {
 
     const metadata = tracks[0].getSettings();
 
-    // Sorted by preference. Note that VP8 has shown to cause decoding errors with WebCodecs.
-    let mime = [
-        "video/mp4;codecs=avc1",
-        "video/x-matroska;codecs=avc1",
-        "video/x-matroska;codecs=av1",
-        "video/webm;codecs=av1",
-        "video/x-matroska;codecs=vp9",
-        "video/webm;codecs=vp9",
-        "video/mp4;codecs=hvc1",
-        "video/mp4;codecs=hev1",
-        "video/x-matroska;codecs=hvc1",
-        "video/x-matroska;codecs=hev1",
-        "video/mp4",
-        "video/x-matroska",
-        "video/webm"
-    ].find(x => MediaRecorder.isTypeSupported(x));
-
-    if (!mime) {
-        console.warn("(videoProcessing.ts) no video codecs are supported for MediaRecorder...?!");
-        mime = "video/webm";
-    }
-
     const w = metadata.width ?? 1920;
     const h = metadata.height ?? 1080;
     const bitrate = w * h * BITS_PER_PIXEL;
 
-    console.log(`(videoProcessing.ts) bitrate=${bitrate} (${Math.floor(bitrate / 1000)}kbit/s, ${Math.floor(bitrate / 1000 / 1000)}mbit/s), format=${mime}`);
+    console.log(`(videoProcessing.ts) bitrate=${bitrate} (${Math.floor(bitrate / 1000)}kbit/s, ${Math.floor(bitrate / 1000 / 1000)}mbit/s)`);
 
     return new MediaRecorder(stream, {
         videoBitsPerSecond: bitrate,
-        audioBitsPerSecond: 0,
-        mimeType: mime
+        audioBitsPerSecond: 0
     });
 }
 
@@ -77,7 +54,7 @@ export class TimelapseVideoSession {
 
         this.recorder = createMediaRecorder(stream);
         this.recorder.ondataavailable = (ev) => this.handleRecorderData(ev);
-        this.recorder.start(); // we will extract data via requestData()
+        this.recorder.start(1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS);
     
         this.intervalId = this.setFrameInterval();
     }
@@ -115,8 +92,10 @@ export class TimelapseVideoSession {
     }
 
     private async handleRecorderData(ev: BlobEvent) {
-        if (ev.data.size <= 0)
+        if (ev.data.size <= 0) {
+            console.warn("(timelapseVideoSession.ts) ignoring empty video chunk", ev);
             return;
+        }
 
         await deviceStorage.appendChunk(this.sessionId, ev.data);
     }

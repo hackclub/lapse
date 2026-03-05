@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
 import Icon from "@hackclub/icons";
 import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-api";
-import { assert } from "@hackclub/lapse-shared";
 
 import { api } from "@/api";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
@@ -15,7 +14,9 @@ import { ErrorModal } from "@/components/layout/ErrorModal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ProfilePicture } from "@/components/entity/ProfilePicture";
 import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 import { WindowedModal } from "@/components/layout/WindowedModal";
+import { HackatimeSelectModal } from "@/components/layout/HackatimeSelectModal";
 import { TextInput } from "@/components/ui/TextInput";
 import { TextareaInput } from "@/components/ui/TextareaInput";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
@@ -39,6 +40,7 @@ export default function Page() {
   const [editVisibility, setEditVisibility] = useState<TimelapseVisibility>("PUBLIC");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
   const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
 
@@ -61,32 +63,45 @@ export default function Page() {
     try {
       const { id } = router.query;
 
-      if (typeof id !== "string") {
+      if (!id || typeof id !== "string") {
         setError("Invalid timelapse ID provided");
         setErrorIsCritical(true);
         return;
       }
 
       console.log("([id].tsx) querying timelapse...");
-      const res = await api.timelapse.query({ id });
-      if (!res.ok) {
-        console.error("([id].tsx) couldn't fetch that timelapse!", res);
-        setError(res.message);
-        setErrorIsCritical(true);
-        return;
-      }
 
-      const timelapse = res.data.timelapse;
+      let timelapse: Timelapse | null = null;
 
-      console.log("([id].tsx) timelapse fetched!", timelapse);
-      setTimelapse(timelapse);
+      while (true) {
+        const res = await api.timelapse.query({ id });
+        if (!res.ok) {
+          if (!timelapse) {
+            console.error("([id].tsx) couldn't fetch that timelapse!", res);
+            setError(res.message);
+            setErrorIsCritical(true);
+            break;
+          }
 
-      const video = videoRef.current;
-      assert(video != null, "<video> element ref should've been loaded by now");
+          continue;
+        }
 
-      // The playback URL might be null if the video has failed processing.
-      if (timelapse.playbackUrl) {
-        video.src = timelapse.playbackUrl;
+        timelapse = res.data.timelapse;
+        console.log("([id].tsx) timelapse fetched!", timelapse);
+        setTimelapse(timelapse);
+
+        if (timelapse.playbackUrl) {
+          const video = videoRef.current;
+          if (video)
+            video.src = timelapse.playbackUrl;
+
+          break;
+        }
+
+        if (timelapse.visibility === "FAILED_PROCESSING")
+          break;
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     }
     catch (apiErr) {
@@ -141,6 +156,24 @@ export default function Page() {
 
   const isUpdateDisabled = !editName.trim() || isUpdating;
 
+  async function handleReturnToDraft() {
+    if (!timelapse?.private?.sourceDraftId)
+      return;
+
+    const draftId = timelapse.private.sourceDraftId;
+
+    try {
+      setIsDeleting(true);
+      await api.timelapse.delete({ id: timelapse.id });
+      router.push(`/draft/${draftId}`);
+    }
+    catch (error) {
+      console.error("([id].tsx) error deleting failed timelapse:", error);
+      setError(error instanceof Error ? error.message : "An error occurred while deleting the timelapse.");
+      setIsDeleting(false);
+    }
+  }
+
   async function handleDeleteTimelapse() {
     if (!timelapse || !isOwned)
       return;
@@ -173,12 +206,22 @@ export default function Page() {
     <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
       <div className="flex flex-col md:flex-row h-full pb-48 gap-8 md:gap-12 md:px-16 md:pb-16">
         <div className="flex flex-col gap-4 w-full md:w-2/3 h-min">
-          <video 
-            ref={videoRef} 
-            controls
-            poster={timelapse?.thumbnailUrl ?? undefined}
-            className="aspect-video w-full h-min md:rounded-2xl bg-[#000]"
-          />
+          { timelapse && !timelapse.playbackUrl ? (
+            <div className="aspect-video w-full h-min md:rounded-2xl bg-[#000] flex items-center justify-center">
+              <p className="text-secondary text-xl">
+                { timelapse.visibility === "FAILED_PROCESSING"
+                  ? "This timelapse could not be processed."
+                  : "This timelapse is processing - please hold on!" }
+              </p>
+            </div>
+          ) : (
+            <video 
+              ref={videoRef} 
+              controls
+              poster={timelapse?.thumbnailUrl ?? undefined}
+              className="aspect-video w-full h-min md:rounded-2xl bg-[#000]"
+            />
+          ) }
 
           <div className="flex gap-3 w-full px-6 md:px-0">
             {
@@ -188,6 +231,12 @@ export default function Page() {
                     <Icon glyph="edit" size={24} />
                     Edit details
                   </Button>
+                  { timelapse.playbackUrl && !timelapse.private?.hackatimeProject && (
+                    <Button className="gap-2 w-full" onClick={() => setHackatimeModalOpen(true)}>
+                      <Icon glyph="history" size={24} />
+                      Sync with Hackatime
+                    </Button>
+                  ) }
                 </>
               ) : (
                 <>
@@ -230,6 +279,13 @@ export default function Page() {
                 <span className="flex gap-1 sm:gap-2">
                   { !timelapse ? <Skeleton /> : <><TimeAgo date={timelapse.createdAt} /> <Bullet/><Duration seconds={timelapse.duration}/> </>}
                 </span>
+
+                { timelapse && timelapse.private?.hackatimeProject && (
+                  <>
+                    <Bullet />
+                    <code className="text-secondary font-mono text-lg">{timelapse.private.hackatimeProject}</code>
+                  </>
+                ) }
               </div>
             </div>
 
@@ -239,13 +295,35 @@ export default function Page() {
           </div>
           
           { timelapse && timelapse.visibility === "UNLISTED" && isOwned && (
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
-              <Icon glyph="private-fill" size={32} className="text-yellow shrink-0" />
-              <p className="text-yellow">
+            <Alert variant="warning" icon="private-fill">
+              <p>
                 This timelapse is unlisted and can only be viewed via the link or by staff. Click on
                 "Edit details" to change this.
               </p>
-            </div>
+            </Alert>
+          )}
+
+          { timelapse && timelapse.visibility === "FAILED_PROCESSING" && isOwned && (
+            <Alert variant="error" icon="important">
+              <div className="flex items-center gap-16">
+                <p>
+                  Something went wrong on our end when processing this timelapse. You can delete this placeholder go back to your draft
+                  to try again.
+                </p>
+                
+                { timelapse.private?.sourceDraftId && (
+                  <Button onClick={handleReturnToDraft} disabled={isDeleting} kind="error">
+                    {isDeleting ? "Deleting..." : "Return to draft"}
+                  </Button>
+                ) }
+              </div>
+            </Alert>
+          )}
+
+          { timelapse && !timelapse.playbackUrl && timelapse.visibility !== "FAILED_PROCESSING" && (
+            <Alert variant="info" icon="clock">
+              <p>This timelapse is processing - hold on! We'll refresh when it's ready.</p>
+            </Alert>
           )}
 
           { timelapse && (
@@ -301,6 +379,22 @@ export default function Page() {
           </div>
         </div>
       </WindowedModal>
+
+      { timelapse && (
+        <HackatimeSelectModal
+          isOpen={hackatimeModalOpen}
+          setIsOpen={setHackatimeModalOpen}
+          timelapseId={timelapse.id}
+          onSynced={() => {
+            api.timelapse.query({ id: timelapse.id }).then(res => {
+              if (res.ok) {
+                setTimelapse(res.data.timelapse);
+              }
+            });
+          }}
+          onError={setError}
+        />
+      ) }
 
       <ErrorModal
         isOpen={!!error}

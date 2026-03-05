@@ -8,7 +8,8 @@ import { useRouter } from "next/router";
 export type ButtonKind =
   "primary" |
   "regular" |
-  "destructive";
+  "destructive" |
+  "error";
 
 export function Button({ children, kind, disabled, onClick, href, className, icon }: PropsWithChildren<
   {
@@ -39,7 +40,9 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
         (kind == "primary") && "bg-red text-white",
         (kind == "regular") && "bg-dark border-slate border shadow text-white",
         (kind == "destructive") && "bg-dark border-red border shadow text-red",
-        (disabled) && "bg-darkless!",
+        (kind == "error") && "border-red border shadow text-red",
+        (kind == "error" && disabled) && "border-slate",
+        (kind != "error" && disabled) && "bg-darkless!",
         (!disabled) && "hover:scale-[102%] active:scale-[98%]",
         className
       )}

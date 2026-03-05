@@ -1,9 +1,6 @@
-import * as fsp from "node:fs/promises";
-import * as os from "node:os";
-import * as path from "node:path";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
-import { assert } from "@hackclub/lapse-shared";
+import type { JobLogger } from "@/log.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,28 +11,58 @@ export interface ProbedVideo {
 }
 
 /**
- * Retrieves the duration and dimensions of a video.
+ * Retrieves the dimensions of a video using ffprobe, and the duration by
+ * fully decoding it through ffmpeg (as unfinalized WebM chunks report N/A).
  */
-export async function probeVideo(file: string): Promise<ProbedVideo> {
-    const { stdout } = await execFileAsync("ffprobe", [
+export async function probeVideo(file: string, log: JobLogger): Promise<ProbedVideo> {
+    // Resolution: ffprobe reads stream headers reliably even for unfinalized WebMs.
+    const { stdout: resOutput } = await execFileAsync("ffprobe", [
         "-v", "error",
         "-select_streams", "v:0",
-        "-show_entries", "stream=width,height:format=duration",
-        "-of", "json",
+        "-show_entries", "stream=width,height",
+        "-of", "csv=s=x:p=0",
         file
     ]);
 
-    const parsed = JSON.parse(stdout);
-    const stream = parsed.streams[0];
+    const resParts = resOutput.trim().split("x");
+    const width = parseInt(resParts[0], 10);
+    const height = parseInt(resParts[1], 10);
 
-    const width = parseFloat(stream.width);
-    const height = parseFloat(stream.height);
-    const duration = parseFloat(parsed.format.duration);
+    if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+        log.error(`could not determine resolution for ${file}; ffprobe output: ${resOutput}`);
+        throw new Error(`could not determine resolution for ${file}`);
+    }
 
-    assert(!isNaN(width), "stream.width wasn't a number");
-    assert(!isNaN(height), "stream.height wasn't a number");
+    // Duration: decode the entire file through ffmpeg and parse the last reported time.
+    let duration = NaN;
+
+    try {
+        const result = await execFileAsync("ffmpeg", [
+            "-hide_banner",
+            "-i", file,
+            "-f", "null",
+            "-"
+        ]);
+        duration = parseLastFfmpegTime(result.stderr);
+    }
+    catch (err) {
+        const stderr = (err as { stderr?: string }).stderr ?? "";
+        duration = parseLastFfmpegTime(stderr);
+
+        if (isNaN(duration))
+            log.error(`could not determine duration for ${file}; ffmpeg stderr: ${stderr}`);
+    }
 
     return { width, height, duration };
+}
+
+function parseLastFfmpegTime(stderr: string): number {
+    const matches = [...stderr.matchAll(/time=(\d+):(\d+):(\d+\.\d+)/g)];
+    if (matches.length === 0)
+        return NaN;
+
+    const last = matches[matches.length - 1];
+    return parseInt(last[1]) * 3600 + parseInt(last[2]) * 60 + parseFloat(last[3]);
 }
 
 /**

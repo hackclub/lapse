@@ -92,7 +92,8 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
 
   function togglePlayback() {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video)
+      return;
 
     if (playing) {
       video.pause();
@@ -113,6 +114,29 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
   }
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onEnded = () => {
+      const currentSrc = video.src;
+      const idx = sessions.findIndex(s => s.url === currentSrc);
+      if (idx >= 0 && idx < sessions.length - 1) {
+        const next = sessions[idx + 1];
+        video.src = next.url;
+        video.currentTime = 0;
+        video.playbackRate = Math.min(PLAYBACK_RATE, 16);
+        video.play();
+      }
+      else {
+        setPlaying(false);
+      }
+    };
+
+    video.addEventListener("ended", onEnded);
+    return () => video.removeEventListener("ended", onEnded);
+  }, [sessions, videoRef, totalTime, setPlaying, setTime]);
+
+  useEffect(() => {
     let rafId: number;
     let catchScrollTarget: number | null = null;
     let catchScrollStart: number | null = null;
@@ -123,7 +147,8 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
       const container = timelineRef.current;
       const head = playheadRef.current;
       const stem = playingStemRef.current;
-      if (!container || !head || !stem || totalTime <= 0) return;
+      if (!container || !head || !stem || totalTime <= 0)
+        return;
 
       const video = videoRef.current;
       let currentTime = time;
@@ -131,11 +156,15 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
         const baseForCurrentSrc = (() => {
           let base = 0;
           for (const s of sessions) {
-            if (s.url === video.src) return base;
+            if (s.url === video.src)
+              return base;
+
             base += s.duration;
           }
+
           return 0;
         })();
+
         currentTime = baseForCurrentSrc + video.currentTime;
       }
 
@@ -417,12 +446,18 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
         </div>
 
         <div className="flex items-center gap-3">
+          {
+            process.env["NODE_ENV"] === "development" &&
+              <span className="font-mono text-xs">session={videoRef.current?.src}</span>
+          }
+
           <div className="flex items-center gap-2 text-white mr-6">
             <Icon glyph="clock-fill" size={16} />
             <span className="text-base">
               <b>{formatDuration(Math.round(durationAfterCuts))}</b> after cuts
             </span>
           </div>
+
           <div className="flex gap-2">
             <Button icon="post-fill" onClick={onSaveAndExit}>Save and exit</Button>
             <Button icon="send-fill" onClick={onPublish} kind="primary">Publish</Button>

@@ -61,7 +61,8 @@ export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
         ...dtoPublicTimelapse(entity),
         isDraft: false,
         private: {
-            hackatimeProject: entity.hackatimeProject
+            hackatimeProject: entity.hackatimeProject,
+            sourceDraftId: entity.sourceDraftId
         }
     };
 }
@@ -71,8 +72,7 @@ export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
  * `actor` is entitled to said fields.
  */
 export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Actor): Timelapse | OwnedTimelapse {
-    if (actorEntitledTo(entity, actor) && "device" in entity) {
-        // This timelapse should be considered owned.
+    if (actorEntitledTo(entity, actor)) {
         return dtoOwnedTimelapse(entity);
     }
 
@@ -245,7 +245,8 @@ export default os.router({
                     description: draft.description,
                     visibility: req.input.visibility,
                     snapshots: draft.snapshots,
-                    duration: durationBySnapshots(draft.snapshots)
+                    duration: durationBySnapshots(draft.snapshots),
+                    sourceDraftId: draft.id
                 }
             });
 

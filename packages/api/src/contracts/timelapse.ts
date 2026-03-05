@@ -100,7 +100,13 @@ export const OwnedTimelapseSchema = TimelapsePayloadSchema.extend({
          * The Hackatime project that has been associated with the timelapse. If `null`, the timelapse
          * hasn't yet been synchronized with Hackatime.
          */
-        hackatimeProject: z.string().nullable()
+        hackatimeProject: z.string().nullable(),
+
+        /**
+         * The ID of the draft timelapse that this timelapse was originally published from.
+         * If `null`, the source draft is unknown.
+         */
+        sourceDraftId: z.string().nullable()
     })
 });
 

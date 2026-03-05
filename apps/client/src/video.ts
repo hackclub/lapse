@@ -1,5 +1,5 @@
 import { THUMBNAIL_SIZE } from "@hackclub/lapse-api";
-import { last } from "@hackclub/lapse-shared";
+import { KeyOfType, last } from "@hackclub/lapse-shared";
 
 /**
  * Generates a preview thumbnail for a given video.
@@ -84,4 +84,12 @@ export function getVideoAtSequenceTime(t: number, videos: { url: string, duratio
         url: last(videos).url,
         timeBase: base
     };
+}
+
+export async function waitForVideoEvent(video: HTMLVideoElement, event: "onload" | "onseeked" | "onloadedmetadata" | "onloadeddata", procedure?: () => void) {
+    await new Promise<void>((resolve, reject) => {
+        video.onerror = (err) => reject(typeof err === "string" ? err : err.target instanceof HTMLVideoElement ? err.target.error : err);
+        video[event] = () => resolve();
+        procedure?.();
+    });
 }

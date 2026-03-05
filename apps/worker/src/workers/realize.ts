@@ -113,7 +113,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
         // Now that we have all of the sessions, we can proceed with combining them into one video file. All uploaded timelapses are required to be in real-time,
         // so we need to speed them up here.
 
-        const sessionProbes = await Promise.all(sessions.map(x => probeVideo(x)));
+        const sessionProbes = await Promise.all(sessions.map(x => probeVideo(x, log)));
         const resolution = selectDominantResolution(sessionProbes);
 
         log.info(`all sessions probed; dominant resolution is ${resolution.width}x${resolution.height}`);
@@ -122,9 +122,9 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
         const normalizeFilters = sessions
             .map((_, i) => (
                 `[${i}:v]` + // input i, access video stream
-                `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=increase,` +
+                `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=decrease,` +
                 `pad=${resolution.width}:${resolution.height}:(ow-iw)/2:(oh-ih)/2,` +
-                `fps=${TIMELAPSE_FPS},format=yuv420p[v${i}]` // output goes to "v${i}"
+                `fps=${TIMELAPSE_FPS},format=yuv420p,setsar=1[v${i}]` // output goes to "v${i}"
             ))
             .join(";");
 
@@ -183,7 +183,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             .join("+");
 
         const editAndSpeedFilter = cuts.length > 0
-            ? `[vcat]select='not(${cuts})',setpts=PTS/${TIMELAPSE_FACTOR}[vout]`
+            ? `[vcat]select='not(${cuts})',setpts=N/FRAME_RATE/${TIMELAPSE_FACTOR}/TB[vout]`
             : `[vcat]setpts=PTS/${TIMELAPSE_FACTOR}[vout]`;
 
         const outputPath = path.join(tmp, "video.mp4");
@@ -237,7 +237,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 ...baseThumbnailArgs,
                 "-c:v", "libaom-av1", // we use AVIF for our thumbnails as it's Baseline 2024
                 "-still-picture", "1",
-                "-crf", "35", // higher = smaller file
+                "-crf", "30", // higher = smaller file
                 "-b:v", "0", // required for CRF-only mode
                 "-cpu-used", "4", // effort to put into the encode, lower = higher quality but slower
                 "-row-mt", "1",

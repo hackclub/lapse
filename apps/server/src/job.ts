@@ -54,6 +54,20 @@ realizeEvents.waitUntilReady()
                 logWarning(`No corresponding draft found for timelapse ${timelapseId}.`);
             }
 
+            const currentTimelapse = await database().timelapse.findFirst({
+                where: { id: timelapseId }
+            });
+
+            if (currentTimelapse?.sourceDraftId) {
+                await database().timelapse.deleteMany({
+                    where: {
+                        sourceDraftId: currentTimelapse.sourceDraftId,
+                        visibility: "FAILED_PROCESSING",
+                        id: { not: timelapseId }
+                    }
+                });
+            }
+
             // This basically marks the timelapse as having its processing finished (we assume any timelapse with an associated job ID is still being processed).
             await database().timelapse.update({
                 where: {
