@@ -64,7 +64,7 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 
 # Copy the generated Prisma client
-COPY --from=deps /app/apps/server/src/generated ./apps/server/src/generated
+COPY --from=builder /app/apps/server/src/generated ./apps/server/src/generated
 
 USER lapse
 
