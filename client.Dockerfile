@@ -50,9 +50,10 @@ COPY --from=builder --chown=nextjs:nextjs /app/apps/client/public ./apps/client/
 USER nextjs
 
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV NEXT_TELEMETRY_DISABLED=1
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "HOSTNAME=0.0.0.0 node apps/client/server.js"]
+CMD ["node", "apps/client/server.js"]
