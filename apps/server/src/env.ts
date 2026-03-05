@@ -77,12 +77,6 @@ export const env = {
     get JWT_UPLOAD_TOKEN() { return required("JWT_UPLOAD_TOKEN") },
 
     /**
-     * The 16-byte IV used to generate encrypted upload tokens, represented as a 32 character hex string.
-     */
-    // Generate one using [openssl rand -hex 16]!
-    get UPLOAD_TOKEN_IV() { return required("UPLOAD_TOKEN_IV") },
-
-    /**
      * Passed to `Sentry.init`.
      */
     get SENTRY_DSN() { return required("NEXT_PUBLIC_SENTRY_DSN") },
