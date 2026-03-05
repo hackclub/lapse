@@ -22,7 +22,7 @@ const os = implement(authRouterContract)
     .use(logMiddleware);
 
 const OAUTH_COOKIE_NAME = "lapse_oauthdata";
-const HKT_REDIRECT_URI = `${env.BASE_URL}/auth/hackatimeCallback`; // should point to an actual endpoint we have defined below!
+const HKT_REDIRECT_URI = `${env.BASE_URL}/api/auth/hackatimeCallback`; // should point to an actual endpoint we have defined below!
 
 type OAuthCookie = z.infer<typeof OAuthCookieSchema>;
 const OAuthCookieSchema = z.object({
@@ -369,7 +369,7 @@ export default os.router({
             
             // If this is our canonical client, we go straight to the point, just giving them the code. Consent is implicit here.
             if (oauthData.cid == env.CANONICAL_OAUTH_CLIENT_ID) {
-                const url = new URL(`${env.BASE_URL}/auth/continue`);
+                const url = new URL(`${env.BASE_URL}/api/auth/continue`);
                 url.searchParams.set("consentToken", createConsentToken({
                     cid: oauthData.cid,
                     scp: oauthData.scp,
