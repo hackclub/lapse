@@ -1,37 +1,10 @@
+import React, { useCallback } from "react";
+import clsx from "clsx";
 import { EditListEntry } from "@hackclub/lapse-api";
 import { formatDuration } from "@hackclub/lapse-shared";
-import clsx from "clsx";
-import React, { useCallback } from "react";
 
-function usePointerDrag(onDragStart: () => void, onDrag: (deltaX: number) => void) {
-  return useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+import { usePointerDrag } from "@/hooks/usePointerDrag";
 
-    const target = e.currentTarget;
-    if (!(target instanceof HTMLElement))
-      return;
-
-    onDragStart();
-
-    const startX = e.clientX;
-    const pointerId = e.pointerId;
-    target.setPointerCapture(pointerId);
-
-    const onPointerMove = (ev: PointerEvent) => {
-      onDrag(ev.clientX - startX);
-    };
-
-    const onPointerUp = () => {
-      target.releasePointerCapture(pointerId);
-      target.removeEventListener("pointermove", onPointerMove);
-      target.removeEventListener("pointerup", onPointerUp);
-    };
-
-    target.addEventListener("pointermove", onPointerMove);
-    target.addEventListener("pointerup", onPointerUp);
-  }, [onDragStart, onDrag]);
-}
 
 function EditorEditRegionHandle({ side, onDragStart, onDrag }: {
   side: "IN" | "OUT",
