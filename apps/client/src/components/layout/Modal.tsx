@@ -57,11 +57,11 @@ export function ModalHeader({ icon, title, description, shortDescription, childr
         }
 
         <div className="flex flex-col flex-1">
-          { title && <h1 className="font-bold text-lg m-0">{title}</h1> }
-          { description && <h2 className="hidden sm:block">{description}</h2> }
-          { shortDescription && <h2 className="sm:hidden block">{shortDescription}</h2> }
-          { children }
-        </div>
+           { title && <h1 className="font-bold text-lg m-0 break-words">{title}</h1> }
+           { description && <h2 className="hidden sm:block">{description}</h2> }
+           { shortDescription && <h2 className="sm:hidden block">{shortDescription}</h2> }
+           { children }
+         </div>
       </div>
 
       {

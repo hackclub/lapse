@@ -82,7 +82,7 @@ export function TimelapseCard({ timelapse }: {
         { !timelapse.isDraft && <ProfilePicture user={timelapse.owner} size="sm" className="" /> }
 
         <div className="flex flex-col w-full">
-          <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl line-clamp-1">{timelapse.name ?? "(untitled)"}</h1>
+           <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl break-words">{timelapse.name ?? "(untitled)"}</h1>
           <h2 className={clsx(
             "text-md sm:text-xl text-secondary",
             !timelapse.isDraft && "flex gap-1 sm:gap-2"

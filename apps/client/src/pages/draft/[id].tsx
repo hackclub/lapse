@@ -224,7 +224,7 @@ export default function Page() {
             <textarea
               maxLength={60}
               className={clsx(
-                "overflow-y-hidden rounded-lg border border-black border-dashed text-white placeholder:text-secondary p-4 resize-none w-full outline-none font-bold text-4xl h-18 flex items-center",
+                "overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-lg border border-black border-dashed text-white placeholder:text-secondary p-4 resize-none w-full outline-none font-bold text-4xl h-18 flex items-center",
                 "transition-colors hover:border-slate focus:border-red"
               )}
               value={name ?? undefined}

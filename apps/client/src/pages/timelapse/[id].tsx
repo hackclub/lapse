@@ -252,14 +252,16 @@ export default function Page() {
 
         <div className="w-full md:w-1/3 pl-3 flex flex-col gap-4 md:h-[70vh]">
           <div className="flex flex-col gap-2 px-4 md:px-0">
-            <div className="flex items-center gap-3">
-              <h1 className="text-4xl font-bold text-smoke leading-tight">
-                { timelapse?.name || <Skeleton /> }
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-4xl font-bold text-smoke leading-tight break-words min-w-0">
+                  { timelapse?.name || <Skeleton /> }
+                </h1>
 
                 { timelapse && timelapse.visibility === "UNLISTED" && (
-                  <Badge variant="default" className="ml-4">UNLISTED</Badge>
+                  <Badge variant="default">UNLISTED</Badge>
                 ) }
-              </h1>
+              </div>
             </div>
             
             <div className="flex items-center gap-3 mb-4">

@@ -6,7 +6,7 @@ export function InputField({ label, description, children }: PropsWithChildren<{
 }>) {
   return (
     <div className="flex flex-col w-full">
-      <label className="font-bold">{label}</label>
+      <label className="font-bold break-words">{label}</label>
       <p className="text-muted mb-2">{description}</p>
       
       {children}
