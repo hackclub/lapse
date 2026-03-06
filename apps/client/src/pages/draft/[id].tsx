@@ -207,9 +207,9 @@ export default function Page() {
   }
 
   return (
-    <RootLayout showHeader={false}>
-      <main className="px-16 py-4 flex w-full h-full flex-col items-center justify-center gap-8">
-        <div className="flex gap-8 w-full h-1/2">
+    <RootLayout showHeader={true}>
+      <main className="px-16 py-4 flex w-full h-full flex-col items-center justify-center gap-8 -mt-6 overflow-hidden">
+        <div className="flex gap-8 w-full h-3/5">
           <video
             className={clsx(
               "w-1/2 h-full rounded-2xl object-contain bg-[#000]",
