@@ -9,32 +9,27 @@ import RootLayout from "@/components/layout/RootLayout";
 import { DropdownInput } from "@/components/ui/DropdownInput";
 import { Button } from "@/components/ui/Button";
 import { deviceStorage } from "@/deviceStorage";
-import { decryptData, encryptData } from "@/encryption";
+import { decryptData } from "@/encryption";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
+import { useVideoPlayback } from "@/hooks/useVideoPlayback";
 import { sfetch } from "@/safety";
-import { getVideoAtSequenceTime, waitForVideoEvent } from "@/video";
-import { DraftTimelapse, EditListEntry, HackatimeProject, TIMELAPSE_FACTOR, TimelapseVisibility } from "@hackclub/lapse-api";
-import { formatDuration, last } from "@hackclub/lapse-shared";
+import { waitForVideoEvent } from "@/video";
+import { DraftTimelapse, EditListEntry, HackatimeProject, TimelapseVisibility } from "@hackclub/lapse-api";
+import { formatDuration } from "@hackclub/lapse-shared";
 import { clsx } from "clsx";
 import { useRouter } from "next/router";
-import { SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function Page() {
   const router = useRouter();
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-
   const [name, setName] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [editList, setEditList] = useState<EditListEntry[]>([]);
-  const [playing, setPlaying] = useState(false);
-
-  const [time, setTime] = useState(0); // The current time in the resulting timelapse.
-  const [timeBase, setTimeBase] = useState(0); // The timestamp at which the currently displayed session begins at.
 
   const [draft, setDraft] = useState<DraftTimelapse | null>(null);
   const [decryptedSessions, setDecryptedSessions] = useState<{ url: string, duration: number }[] | null>(null);
-  const [sessionTotalTime, setSessionTotalTime] = useState(0);
 
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
@@ -46,26 +41,7 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const [errorIsCritical, setErrorIsCritical] = useState(false);
 
-  const getVideoAtTime = useCallback((t: number) => {
-    if (!decryptedSessions)
-      throw new Error("Attempted to call getVideoAtTime without a draft being loaded.");
-
-    return getVideoAtSequenceTime(t, decryptedSessions);
-  }, [decryptedSessions]);
-
-  const seekTo = useCallback((newTime: number) => {
-    if (videoRef.current) {
-      const session = getVideoAtTime(newTime);
-      if (session.url != videoRef.current.src) {
-        videoRef.current.src = session.url;
-      }
-
-      videoRef.current.currentTime = newTime - session.timeBase;
-      setTimeBase(session.timeBase);
-    }
-
-    setTime(newTime);
-  }, [getVideoAtTime, videoRef]);
+  const playback = useVideoPlayback(decryptedSessions);
 
   useAsyncEffect(async () => {
     if (!router.isReady)
@@ -131,7 +107,6 @@ export default function Page() {
       );
 
       setDecryptedSessions(sessions);
-      setSessionTotalTime(sessions.reduce((a, x) => a + x.duration, 0));
     }
     catch (apiErr) {
       console.error("([id].tsx) error loading timelapse:", apiErr);
@@ -140,35 +115,9 @@ export default function Page() {
     }
   }, [router, router.isReady]);
 
-  // Every single time we load in a new batch of decrypted sessions, we should seek to the beginning. This will also initialize the video display.
-  useEffect(() => {
-    if (decryptedSessions) {
-      seekTo(0);
-    }
-  }, [decryptedSessions, seekTo]);
-
-  function handleDisplayEnded() {
-    const nextTime = timeBase + (videoRef.current?.duration ?? 0);
-
-    if (nextTime < sessionTotalTime) {
-      const session = getVideoAtTime(nextTime);
-      const video = videoRef.current!;
-      video.src = session.url;
-      video.currentTime = 0;
-      setTimeBase(session.timeBase);
-      setTime(nextTime);
-      video.playbackRate = Math.min(TIMELAPSE_FACTOR, 16);
-      video.play();
-    }
-    else {
-      setTime(sessionTotalTime);
-      setPlaying(false);
-    }
-  }
-
   const isInCutRegion = useMemo(() => {
-    return editList.some(e => e.kind === "CUT" && time >= e.begin && time <= e.end);
-  }, [editList, time]);
+    return editList.some(e => e.kind === "CUT" && playback.time >= e.begin && playback.time <= e.end);
+  }, [editList, playback.time]);
 
   async function saveAndExit() {
     if (!draft)
@@ -253,10 +202,6 @@ export default function Page() {
     router.push(`/timelapse/${res.data.timelapse.id}`);
   }
 
-  function handleTimeUpdate(ev: SyntheticEvent<HTMLVideoElement>) {
-    setTime(timeBase + ev.currentTarget.currentTime);
-  }
-
   return (
     <RootLayout showHeader={false}>
       <main className="px-16 py-4 flex w-full h-full flex-col items-center justify-center gap-8">
@@ -266,9 +211,9 @@ export default function Page() {
               "w-1/2 h-full rounded-2xl object-contain bg-[#000]",
               isInCutRegion && "grayscale brightness-75"
             )}
-            ref={videoRef}
-            onEnded={handleDisplayEnded}
-            onTimeUpdate={handleTimeUpdate}
+            ref={playback.videoRef}
+            onEnded={playback.handleEnded}
+            onTimeUpdate={playback.handleTimeUpdate}
           />
 
           <div className="flex flex-col gap-2 h-full w-1/2">
@@ -297,8 +242,19 @@ export default function Page() {
         </div>
 
         <div className="flex w-full">
-          {decryptedSessions &&
-            <EditorTimeline editList={editList} setEditList={setEditList} sessions={decryptedSessions} time={time} setTime={x => seekTo(x)} playing={playing} setPlaying={setPlaying} videoRef={videoRef} onSaveAndExit={saveAndExit} onPublish={() => setPublishModalOpen(true)} />
+          {decryptedSessions
+            ? (
+              <EditorTimeline
+                editList={editList} setEditList={setEditList}
+                sessions={decryptedSessions}
+                playback={playback}
+                onSaveAndExit={saveAndExit}
+                onPublish={() => setPublishModalOpen(true)}
+              />
+            )
+            : (
+              <Skeleton className="w-full h-50" />
+            )
           }
         </div>
 

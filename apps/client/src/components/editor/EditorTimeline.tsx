@@ -1,8 +1,8 @@
-import { sleep } from "@/common";
 import { Button } from "@/components/ui/Button";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
-import { getVideoAtSequenceTime } from "@/video";
-import { EditListEntry, TIMELAPSE_FACTOR } from "@hackclub/lapse-api";
+import { VideoPlayback } from "@/hooks/useVideoPlayback";
+import { makeFilmstrip } from "@/video";
+import { EditListEntry } from "@hackclub/lapse-api";
 import { formatDuration } from "@hackclub/lapse-shared";
 import clsx from "clsx";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -14,128 +14,51 @@ import PauseIcon from "@/assets/icons/pause.svg";
 import PlayheadIcon from "@/assets/playhead.svg";
 import { EditorEditRegion } from "@/components/editor/EditorEditRegion";
 
-const THUMBNAIL_COUNT = 80;
-const THUMBNAIL_WIDTH = 300;
-const THUMBNAIL_HEIGHT = 200;
 
-const PLAYBACK_RATE = TIMELAPSE_FACTOR;
+const FILMSTRIP_COUNT = 90;
 
-export function EditorTimeline({ sessions, editList, setEditList, time, setTime, playing, setPlaying, videoRef, onSaveAndExit, onPublish }: {
+
+export function EditorTimeline({ sessions, editList, setEditList, playback, onSaveAndExit, onPublish }: {
   sessions: { url: string; duration: number }[],
   editList: EditListEntry[],
   setEditList: (x: EditListEntry[]) => void,
-  time: number,
-  setTime: (x: number) => void,
-  playing: boolean,
-  setPlaying: (x: boolean) => void,
-  videoRef: React.RefObject<HTMLVideoElement | null>,
+  playback: VideoPlayback,
   onSaveAndExit: () => void,
   onPublish: () => void,
 }) {
-  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  const { time, playing, totalTime, seekTo: setTime, togglePlayback, getCurrentTime, videoRef } = playback;
+  const [filmstrip, setFilmstrip] = useState<string[]>([]);
   const [zoomFactor, setZoomFactor] = useState(1);
-  const [totalTime, setTotalTime] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [selectedEditRegionIdx, setSelectedIndex] = useState<number | null>(null);
+
   const timelineRef = React.useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const playingStemRef = useRef<HTMLDivElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
   const playingRef = useRef(playing);
+  const filmstripStaleToken = useRef(0);
+
   playingRef.current = playing;
 
   // Thumbnail regeneration - this usually happens just once, unless `sessions` updates for some reason.
   useAsyncEffect(async () => {
-    const totalTime = sessions.reduce((a, x) => a + x.duration, 0);
-    setTotalTime(totalTime);
+    const startedAt = Date.now();
+    filmstripStaleToken.current = startedAt;
 
-    const video = document.createElement("video");
-    const canvas = document.createElement("canvas");
-    canvas.width = THUMBNAIL_WIDTH;
-    canvas.height = THUMBNAIL_HEIGHT;
+    const placeholder = "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+    const generated: string[] = Array(FILMSTRIP_COUNT).fill(placeholder);
 
-    const ctx = canvas.getContext("2d")!;
+    for await (const part of makeFilmstrip(FILMSTRIP_COUNT, sessions)) {
+      if (filmstripStaleToken.current != startedAt)
+        return;
 
-    const generated: string[] = Array(THUMBNAIL_COUNT).fill("data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==");
-
-    for (let i = 0; i < THUMBNAIL_COUNT; i++) {
-      const t = totalTime * (i / THUMBNAIL_COUNT);
-      const data = getVideoAtSequenceTime(t, sessions);
-
-      if (video.src != data.url) {
-        video.src = data.url;
-      }
-
-      await new Promise<void>(async (resolve, reject) => {
-        video.onseeked = () => resolve();
-        video.onerror = (err) => reject(err);
-        video.currentTime = Math.max(0.01, t - data.timeBase);
-
-        await sleep(250);
-        if (!video.seeking) {
-          console.log("(EditorTimeline.tsx) video hasn't been seeking - assuming it already has finished");
-          resolve();
-        }
-      });
-
-      ctx.drawImage(video, 0, 0, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
-      
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", 0.25));
-      if (blob) {
-        generated[i] = URL.createObjectURL(blob);
-        setThumbnails(generated);
-      }
+      generated[part.idx] = part.url;
+      setFilmstrip([...generated]);
     }
 
-    console.log(`(EditorTimeline.tsx) generated ${generated.length} thumbnails!`, generated);
-    setThumbnails(generated);
+    console.log(`(EditorTimeline.tsx) generated ${generated.length} filmstrip parts!`);
   }, [sessions]);
-
-  function togglePlayback() {
-    const video = videoRef.current;
-    if (!video)
-      return;
-
-    if (playing) {
-      video.pause();
-      setPlaying(false);
-    }
-    else {
-      if (time >= totalTime) {
-        setTime(0);
-        const session = getVideoAtSequenceTime(0, sessions);
-        video.src = session.url;
-        video.currentTime = 0;
-      }
-
-      video.playbackRate = Math.min(PLAYBACK_RATE, 16);
-      video.play();
-      setPlaying(true);
-    }
-  }
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onEnded = () => {
-      const currentSrc = video.src;
-      const idx = sessions.findIndex(s => s.url === currentSrc);
-      if (idx >= 0 && idx < sessions.length - 1) {
-        const next = sessions[idx + 1];
-        video.src = next.url;
-        video.currentTime = 0;
-        video.playbackRate = Math.min(PLAYBACK_RATE, 16);
-        video.play();
-      }
-      else {
-        setPlaying(false);
-      }
-    };
-
-    video.addEventListener("ended", onEnded);
-    return () => video.removeEventListener("ended", onEnded);
-  }, [sessions, videoRef, totalTime, setPlaying, setTime]);
 
   useEffect(() => {
     let rafId: number;
@@ -151,23 +74,7 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
       if (!container || !head || !stem || totalTime <= 0)
         return;
 
-      const video = videoRef.current;
-      let currentTime = time;
-      if (video && playingRef.current) {
-        const baseForCurrentSrc = (() => {
-          let base = 0;
-          for (const s of sessions) {
-            if (s.url === video.src)
-              return base;
-
-            base += s.duration;
-          }
-
-          return 0;
-        })();
-
-        currentTime = baseForCurrentSrc + video.currentTime;
-      }
+      const currentTime = getCurrentTime();
 
       const percent = `${(currentTime / totalTime) * 100}%`;
       head.style.left = percent;
@@ -205,17 +112,23 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [playing, time, totalTime, sessions, videoRef]);
+  }, [playing, time, totalTime, getCurrentTime]);
 
   function zoom(newFactor: number) {
     const container = timelineRef.current;
     if (!container) return;
 
-    const centerRatio = (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth;
+    // Calculate playhead position on screen before zoom
+    const playheadPxBefore = (time / totalTime) * container.scrollWidth;
+    const playheadScreenX = playheadPxBefore - container.scrollLeft;
+
     setZoomFactor(newFactor);
 
     requestAnimationFrame(() => {
-      container.scrollLeft = centerRatio * container.scrollWidth - container.clientWidth / 2;
+      // Calculate new playhead position after zoom
+      const newScrollWidth = container.scrollWidth;
+      const playheadPxAfter = (time / totalTime) * newScrollWidth;
+      container.scrollLeft = playheadPxAfter - playheadScreenX;
     });
   }
 
@@ -389,7 +302,7 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
             className="flex flex-1 min-h-0 bg-darker relative border border-slate rounded-2xl overflow-hidden"
           >
           {
-            thumbnails.map((x, i) => (
+            filmstrip.map((x, i) => (
               <img
                 src={x}
                 key={i}
@@ -397,9 +310,9 @@ export function EditorTimeline({ sessions, editList, setEditList, time, setTime,
                 draggable={false}
                 className={clsx(
                   "h-full object-left select-none pointer-events-none",
-                  zoomFactor > 3 ? "object-contain" : "object-cover"
+                  zoomFactor > 6 ? "object-contain" : "object-cover"
                 )}
-                style={{ width: `${((1 / THUMBNAIL_COUNT) * 100)}%` }}
+                style={{ width: `${((1 / FILMSTRIP_COUNT) * 100)}%` }}
               />
             ))
           }
