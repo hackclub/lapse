@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "dev:setup-env": "pnpm tsx ./src/setup-dev-env.ts --init",
-    "dev:start-env": "pnpm tsx scripts/setup-dev-env --only-docker",
-    "dev:stop-env": "pnpm tsx scripts/setup-dev-env --stop-docker",
-    "dev:remove-env": "pnpm tsx scripts/setup-dev-env --down-docker"
+    "dev:start-env": "pnpm tsx ./src/setup-dev-env.ts --only-docker",
+    "dev:stop-env": "pnpm tsx ./src/setup-dev-env.ts --stop-docker",
+    "dev:remove-env": "pnpm tsx ./src/setup-dev-env.ts --down-docker"
   },
   "keywords": [],
   "author": "",

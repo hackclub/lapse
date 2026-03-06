@@ -5,6 +5,9 @@
 		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
 		"dev:watch-all": "pnpm --parallel run watch",
 		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env",
+		"dev:start-env": "pnpm run --filter @hackclub/lapse-devscripts dev:start-env",
+		"dev:stop-env": "pnpm run --filter @hackclub/lapse-devscripts dev:stop-env",
+		"dev:remove-env": "pnpm run --filter @hackclub/lapse-devscripts dev:remove-env",
 		"console": "pnpm tsx ./apps/server/etc/scripts/console.ts"
 	}
 }
