@@ -1,7 +1,8 @@
 {
 	"packageManager": "pnpm@10.25.0",
 	"scripts": {
-		"dev": "pnpm --parallel run dev",
+		"build": "pnpm --parallel run build",
+		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
 		"dev:watch-all": "pnpm --parallel run watch",
 		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env",
 		"console": "pnpm tsx ./apps/server/etc/scripts/console.ts"
