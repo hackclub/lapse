@@ -67,7 +67,7 @@ export const DraftTimelapseSchema = DraftTimelapsePayloadSchema.extend({
 
 export const draftTimelapseRouterContract = {
     findByUser: contract("GET", "/draftTimelapse/findByUser")
-        .route({ summary: "Gets all draft timelapses created by the given user." })
+        .route({ description: "Gets all draft timelapses created by the given user." })
         .input(z.object({
             user: LapseId
                 .describe("The ID of the user to fetch the draft timelapses for. For regular users, this must be the ID of the authenticated user.")
@@ -79,7 +79,7 @@ export const draftTimelapseRouterContract = {
         ),
 
     query: contract("GET", "/draftTimelapse/query")
-        .route({ summary: "Finds a draft timelapse by its ID. If the caller is not the owner of the draft or an admin, this endpoint will report that the timelapse doesn't exist." })
+        .route({ description: "Finds a draft timelapse by its ID. If the caller is not the owner of the draft or an admin, this endpoint will report that the timelapse doesn't exist." })
         .input(z.object({
             id: LapseId
                 .describe("The ID of the draft timelapse.")
@@ -91,7 +91,7 @@ export const draftTimelapseRouterContract = {
         ),
 
     create: contract("POST", "/draftTimelapse/create")
-        .route({ summary: `Creates a draft timelapse. Draft timelapses can be published and turned into regular timelapses by calling "timelapse.publish".` })
+        .route({ description: `Creates a draft timelapse. Draft timelapses can be published and turned into regular timelapses by calling "timelapse.publish".` })
         .input(z.object({
             name: TimelapseName.optional()
                 .describe("The name to assign to the created timelapse draft."),
@@ -136,7 +136,7 @@ export const draftTimelapseRouterContract = {
         ),
 
     update: contract("PATCH", "/draftTimelapse/update")
-        .route({ summary: "Updates a draft timelapse." })
+        .route({ description: "Updates a draft timelapse." })
         .input(
             z.object({
                 id: LapseId
@@ -154,7 +154,7 @@ export const draftTimelapseRouterContract = {
         ),
 
     delete: contract("DELETE", "/draftTimelapse/delete")
-        .route({ summary: "Permanently deletes a draft timelapse owned by the user." })
+        .route({ description: "Permanently deletes a draft timelapse owned by the user." })
         .input(
             z.object({
                 id: LapseId

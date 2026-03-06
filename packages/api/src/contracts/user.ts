@@ -135,7 +135,7 @@ export const UserSchema = PublicUserSchema.safeExtend({
 
 export const userRouterContract = {
     myself: contract("GET", "/user/myself")
-        .route({ summary: "Gets the information about the calling user. If the caller is not authenticated, returns `null` as the `user`." })
+        .route({ description: "Gets the information about the calling user. If the caller is not authenticated, returns `null` as the `user`." })
         .input(NO_INPUT)
         .output(
             apiResult({
@@ -144,7 +144,7 @@ export const userRouterContract = {
         ),
 
     query: contract("GET", "/user/query")
-        .route({ summary: "Finds a profile by its handle, ID, or Hackatime ID." })
+        .route({ description: "Finds a profile by its handle, ID, or Hackatime ID." })
         .input(
             z.object({
                 id: LapseId.optional()
@@ -164,7 +164,7 @@ export const userRouterContract = {
         ),
 
     update: contract("PATCH", "/user/update")
-        .route({ summary: "Updates user profile information." })
+        .route({ description: "Updates user profile information." })
         .input(
             z.object({
                 id: LapseId
@@ -187,7 +187,7 @@ export const userRouterContract = {
         ),
 
     getDevices: contract("GET", "/user/getDevices")
-        .route({ summary: "Gets all devices registered by the currently authenticated user." })
+        .route({ description: "Gets all devices registered by the currently authenticated user." })
         .input(NO_INPUT)
         .output(
             apiResult({
@@ -196,7 +196,7 @@ export const userRouterContract = {
         ),
 
     registerDevice: contract("POST", "/user/registerDevice")
-        .route({ summary: "Creates a new device owned by a user, allocating a new, unique ID." })
+        .route({ description: "Creates a new device owned by a user, allocating a new, unique ID." })
         .input(
             z.object({
                 name: z.string()
@@ -210,7 +210,7 @@ export const userRouterContract = {
         ),
 
     removeDevice: contract("DELETE", "/user/removeDevice")
-        .route({ summary: "Removes a device owned by a user." })
+        .route({ description: "Removes a device owned by a user." })
         .input(
             z.object({
                 id: LapseId
@@ -220,12 +220,12 @@ export const userRouterContract = {
         .output(NO_OUTPUT),
 
     signOut: contract("POST", "/user/signOut")
-        .route({ summary: "Signs out the current user by clearing the authentication cookie." })
+        .route({ description: "Signs out the current user by clearing the authentication cookie." })
         .input(NO_INPUT)
         .output(NO_OUTPUT),
 
     hackatimeProjects: contract("GET", "/user/hackatimeProjects")
-        .route({ summary: "Gets a list of Hackatime projects that have been associated with the user's timelapses, including the total hour counts." })
+        .route({ description: "Gets a list of Hackatime projects that have been associated with the user's timelapses, including the total hour counts." })
         .input(NO_INPUT)
         .output(
             apiResult({
@@ -243,7 +243,7 @@ export const userRouterContract = {
         ),
 
     getTotalTimelapseTime: contract("GET", "/user/getTotalTimelapseTime")
-        .route({ summary: "Queries the aggregate duration of all timelapses of a given user." })
+        .route({ description: "Queries the aggregate duration of all timelapses of a given user." })
         .input(
             z.object({
                 id: LapseId.nullable()
@@ -258,7 +258,7 @@ export const userRouterContract = {
         ),
 
     emitHeartbeat: contract("POST", "/user/emitHeartbeat")
-        .route({ summary: "Updates the last heartbeat time of the calling user to the current date. This is used to detect active users." })
+        .route({ description: "Updates the last heartbeat time of the calling user to the current date. This is used to detect active users." })
         .input(NO_INPUT)
         .output(NO_OUTPUT)
 };

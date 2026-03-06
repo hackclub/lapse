@@ -68,8 +68,51 @@ export function logTracing(data: Record<string, unknown> = {}) {
 }
 
 function getScope() {
-    const callSite = getCallSites().find(x => x.scriptName.trim() != "" && !x.scriptName.includes("logging") && x.functionName.trim() != "");
-    return callSite ? `${path.basename(callSite.scriptName, path.extname(callSite.scriptName))}::${callSite.functionName}` : "";
+    const callSites = getCallSites();
+    
+    // First, try to find a call site with both script and function name, not internal.
+    let callSite = callSites.find(x => {
+        const scriptName = x.scriptName.trim();
+        const functionName = x.functionName.trim();
+        if (scriptName === "" || functionName === "")
+            return false;
+
+        const basename = path.basename(scriptName, path.extname(scriptName));
+        const isInternal = basename === "logging" || basename === "task_queues" || basename === "index";
+        return !isInternal;
+    });
+
+    // Second, try to find a call site with either script or function name, not internal.
+    if (!callSite) {
+        callSite = callSites.find(x => {
+            const scriptName = x.scriptName.trim();
+            const functionName = x.functionName.trim();
+            if (scriptName === "" && functionName === "")
+                return false;
+
+            const basename = path.basename(scriptName, path.extname(scriptName));
+            const isInternal = basename === "logging" || basename === "task_queues" || basename === "index";
+            return !isInternal;
+        });
+    }
+
+    // Third, use the 3rd call site.
+    if (!callSite) {
+        callSite = callSites[2];
+    }
+
+    if (!callSite)
+        return ""; // nothing worked!
+
+    const scriptName = path.basename(callSite.scriptName, path.extname(callSite.scriptName)).trim();
+    const functionName = callSite.functionName.trim();
+
+    return (
+        (scriptName && functionName) ? `${scriptName}::${functionName}`
+        : (scriptName) ? scriptName
+        : (functionName) ? functionName
+        : ""
+    );
 }
 
 export function logInfo(message: string, data: Record<string, unknown> = {}) {
@@ -93,7 +136,7 @@ export function logError(message: string, data: Record<string, unknown> = {}) {
 
 export function logRequest(endpoint: string, input: unknown, user: db.User | null) {
     Sentry.logger.info(`(request) ${endpoint}`, { input, user });
-    console.log(getPlain("info", "request", `${endpoint}(${inlineStringify(input)}) from ${user?.handle ?? "<anon>"}`, {}));
+    console.log(getPlain("info", "request", `${endpoint}(${inlineStringify(input)}) from ${user ? `@${user.handle}` : "<anon>"}`, {}));
 }
 
 export function logFastifyRequest(endpoint: string, req: FastifyRequest) {

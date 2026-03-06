@@ -36,7 +36,7 @@ export const authRouterContract = {
             successStatus: 307,
             inputStructure: "detailed",
             outputStructure: "detailed",
-            summary: `
+            description: `
                 Initiates the regular OAuth2 flow for Lapse authentication, possibly asking the user to log in via Hackatime, and, for non-canonical
                 (third-party) clients, asking for consent.
 
@@ -45,6 +45,9 @@ export const authRouterContract = {
             `
         })
         .input(z.object({
+            params: z.object({}),
+            body: z.object({}),
+            headers: z.object({}),
             query: z.object({
                 // This is not in our usual naming convention, as we're following OAuth's spec.
                 response_type: z.literal("code"),
@@ -55,10 +58,15 @@ export const authRouterContract = {
                 code_challenge: z.string(),
                 code_challenge_method: z.literal("S256") // we don't allow plain!
             })
+        }))
+        .output(z.object({
+            status: z.literal(307).optional(),
+            headers: z.record(z.string(), z.string()).optional(),
+            body: z.any().optional(),
         })),
 
     grantConsent: contract("POST", "/auth/grantConsent")
-        .route({ summary: "Generates a token that represents approved consent to a pending OAuth2 request. **This can only be called when authenticated with the `elevated` scope, which is only available to the canonical app.**" })
+        .route({ description: "Generates a token that represents approved consent to a pending OAuth2 request. **This can only be called when authenticated with the `elevated` scope, which is only available to the canonical app.**" })
         .input(z.object({
             clientId: z.string()
                 .describe("The client ID to issue the consent token for."),
@@ -76,11 +84,15 @@ export const authRouterContract = {
 
     token: contract("POST", "/auth/token")
         .route({
-            summary: "Exchanges an authorization code for an access token.",
+            description: "Exchanges an authorization code for an access token.",
             inputStructure: "detailed",
             outputStructure: "detailed"
         })
         .input(z.object({
+            params: z.object({}),
+            query: z.object({}),
+            headers: z.object({}),
+
             // We expect this to be application/x-www-form-urlencoded - oRPC should handle that here:
             //      https://github.com/middleapi/orpc/blob/819ed2e0897b18a5d6a4ca85ba68568f055004a1/packages/openapi-client/src/adapters/standard/openapi-serializer.ts#L72-L74
             body: z.object({
@@ -89,6 +101,17 @@ export const authRouterContract = {
                 redirect_uri: z.url(),
                 client_id: z.string().optional(),
                 code_verifier: z.string().optional()
+            })
+        }))
+        .output(z.object({
+            status: z.literal(200),
+            headers: z.record(z.string(), z.string()).optional(),
+            body: z.object({
+                access_token: z.string(),
+                expires_in: z.number().gt(0),
+                refresh_token: z.string(),
+                token_type: z.literal("Bearer"),
+                scope: z.string()
             })
         })),
 
@@ -101,11 +124,18 @@ export const authRouterContract = {
             successStatus: 307
         })
         .input(z.object({
+            params: z.object({}),
+            body: z.object({}),
+            headers: z.object({}),
             query: z.object({
                 code: z.string().optional(),
                 state: z.string().optional(),
                 error: z.string().optional()
             })
+        }))
+        .output(z.object({
+            status: z.literal(307),
+            headers: z.record(z.string(), z.string())
         })),
 
     continue: contract()
@@ -117,8 +147,16 @@ export const authRouterContract = {
             successStatus: 307
         })
         .input(z.object({
+            params: z.object({}),
+            body: z.object({}),
+            headers: z.object({}),
             query: z.object({
                 consentToken: z.jwt()
             })
+        }))
+        .output(z.object({
+            status: z.literal(200),
+            headers: z.record(z.string(), z.string()).optional(),
+            body: z.any().optional()
         }))
 };

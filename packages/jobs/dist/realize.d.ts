@@ -8,8 +8,8 @@ export declare const RealizeJobInputsSchema: z.ZodObject<{
     sessionUrls: z.ZodArray<z.ZodURL>;
     passkey: z.ZodString;
     editList: z.ZodArray<z.ZodObject<{
-        begin: z.ZodInt;
-        end: z.ZodInt;
+        begin: z.ZodNumber;
+        end: z.ZodNumber;
         kind: z.ZodEnum<{
             CUT: "CUT";
         }>;

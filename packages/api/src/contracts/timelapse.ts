@@ -121,7 +121,7 @@ export const TimelapseSchema = OwnedTimelapseSchema.partial({ private: true }).e
 
 export const timelapseRouterContract = {
     query: contract("GET", "/timelapse/query")
-        .route({ summary: "Finds a timelapse by its ID. This endpoint will return a different view if the user owns the timelapse." })
+        .route({ description: "Finds a timelapse by its ID. This endpoint will return a different view if the user owns the timelapse." })
         .input(
             z.object({
                 id: LapseId
@@ -135,7 +135,7 @@ export const timelapseRouterContract = {
         ),
 
     publish: contract("POST", "/timelapse/publish")
-        .route({ summary: "Publishes a draft timelapse. This will delete the draft timelapse." })
+        .route({ description: "Publishes a draft timelapse. This will delete the draft timelapse." })
         .input(
             z.object({
                 id: LapseId
@@ -158,7 +158,7 @@ export const timelapseRouterContract = {
         ),
 
     update: contract("PATCH", "/timelapse/update")
-        .route({ summary: "Updates the metadata of a timelapse." })
+        .route({ description: "Updates the metadata of a timelapse." })
         .input(
             z.object({
                 id: LapseId
@@ -176,7 +176,7 @@ export const timelapseRouterContract = {
         ),
 
     delete: contract("DELETE", "/timelapse/delete")
-        .route({ summary: "Permanently deletes a timelapse owned by the user." })
+        .route({ description: "Permanently deletes a timelapse owned by the user." })
         .input(
             z.object({
                 id: LapseId
@@ -185,7 +185,7 @@ export const timelapseRouterContract = {
         .output(NO_OUTPUT),
 
     findByUser: contract("GET", "/timelapse/findByUser")
-        .route({ summary: "Finds all timelapses created by a given user." })
+        .route({ description: "Finds all timelapses created by a given user." })
         .input(
             z.object({
                 user: LapseId,
@@ -199,7 +199,7 @@ export const timelapseRouterContract = {
         ),
 
     syncWithHackatime: contract("POST", "/timelapse/syncWithHackatime")
-        .route({ summary: "Synchronizes a timelapse with a Hackatime project, converting all snapshots into heartbeats. This procedure can only be called once for a timelapse." })
+        .route({ description: "Synchronizes a timelapse with a Hackatime project, converting all snapshots into heartbeats. This procedure can only be called once for a timelapse." })
         .input(
             z.object({
                 id: LapseId,

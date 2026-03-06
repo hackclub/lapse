@@ -45,7 +45,7 @@ export type OAuthGrant = {
 
 export const developerRouterContract = {
     rotateAppSecret: contract()
-        .route({ summary: "Rotates the secret for an OAuth app owned by the calling user." })
+        .route({ description: "Rotates the secret for an OAuth app owned by the calling user." })
         .input(z.object({
             id: OAuthAppIdSchema
                 .describe("The app ID to rotate the secret for.")
@@ -56,7 +56,7 @@ export const developerRouterContract = {
         })),
 
     updateApp: contract()
-        .route({ summary: "Updates data associated with an OAuth app owned by the calling user by its ID." })
+        .route({ description: "Updates data associated with an OAuth app owned by the calling user by its ID." })
         .input(
             z.object({
                 id: OAuthAppIdSchema
@@ -75,7 +75,7 @@ export const developerRouterContract = {
         })),
 
     revokeApp: contract()
-        .route({ summary: "Revokes an OAuth app owned by the calling user, permanently disallowing any user from authenticating through it." })
+        .route({ description: "Revokes an OAuth app owned by the calling user, permanently disallowing any user from authenticating through it." })
         .input(z.object({
             id: z.string()
                 .describe("The ID of the app to revoke.")
@@ -83,14 +83,14 @@ export const developerRouterContract = {
         .output(NO_OUTPUT),
 
     getAllOwnedApps: contract()
-        .route({ summary: "Gets all OAuth apps owned by the calling user." })
+        .route({ description: "Gets all OAuth apps owned by the calling user." })
         .input(NO_INPUT)
         .output(apiResult({
             apps: OAuthAppSchema.array()
         })),
 
     createApp: contract()
-        .route({ summary: "Creates a new OAuth app." })
+        .route({ description: "Creates a new OAuth app." })
         .input(z.object({
             name: OAuthAppSchema.shape.name,
             description: OAuthAppSchema.shape.description.default(""),
@@ -108,14 +108,14 @@ export const developerRouterContract = {
         })),
 
     getAllApps: contract()
-        .route({ summary: "Gets all OAuth apps created by any user. This procedure requires administrator access." })
+        .route({ description: "Gets all OAuth apps created by any user. This procedure requires administrator access." })
         .input(NO_INPUT)
         .output(apiResult({
             apps: z.array(OAuthAppSchema)
         })),
 
     updateAppTrustLevel: contract()
-        .route({ summary: "Updates the trust level of an OAuth app. This procedure requires administrator access." })
+        .route({ description: "Updates the trust level of an OAuth app. This procedure requires administrator access." })
         .input(z.object({
             id: OAuthAppIdSchema
                 .describe("The app ID to update."),
@@ -128,7 +128,7 @@ export const developerRouterContract = {
         })),
 
     getOwnedOAuthGrants: contract()
-        .route({ summary: "Gets all OAuth grants for the authenticated user." })
+        .route({ description: "Gets all OAuth grants for the authenticated user." })
         .input(NO_INPUT)
         .output(apiResult({
             grants: z.array(z.object({
@@ -142,7 +142,7 @@ export const developerRouterContract = {
         })),
 
     revokeOAuthGrant: contract()
-        .route({ summary: "Revokes an OAuth grant for the authenticated user." })
+        .route({ description: "Revokes an OAuth grant for the authenticated user." })
         .input(z.object({
             grantId: z.string()
                 .describe("The ID of the grant to revoke.")

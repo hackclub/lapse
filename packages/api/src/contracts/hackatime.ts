@@ -15,14 +15,14 @@ export const HackatimeProjectSchema = z.object({
 
 export const hackatimeRouterContract = {
     allProjects: contract()
-        .route({ summary: "Gets all Hackatime projects from the user's Hackatime account." })
+        .route({ description: "Gets all Hackatime projects from the user's Hackatime account." })
         .input(NO_INPUT)
         .output(apiResult({
             projects: z.array(HackatimeProjectSchema)
         })),
 
      timelapsesForProject: contract("GET", "/hackatime/timelapsesForProject")
-        .route({ summary: "Gets the timelapses of a given Hackatime user associated with the given Hackatime project key." })
+        .route({ description: "Gets the timelapses of a given Hackatime user associated with the given Hackatime project key." })
         .input(z.object({
             hackatimeUserId: z.number().min(1)
                 .describe("The Hackatime user ID of the Lapse user that should be the subject of this API call."),

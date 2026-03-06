@@ -20,21 +20,21 @@ export const LeaderboardUserEntrySchema = z.object({
 
 export const globalRouterContract = {
     weeklyLeaderboard: contract("GET", "/global/weeklyLeaderboard")
-        .route({ summary: "Returns the users that have the most Lapse time logged in the past 7 days." })
+        .route({ description: "Returns the users that have the most Lapse time logged in the past 7 days." })
         .input(NO_INPUT)
         .output(apiResult({
             leaderboard: z.array(LeaderboardUserEntrySchema)
         })),
 
     recentTimelapses: contract("GET", "/global/recentTimelapses")
-        .route({ summary: "Returns the most recent public timelapses at the time of the API call." })
+        .route({ description: "Returns the most recent public timelapses at the time of the API call." })
         .input(NO_INPUT)
         .output(apiResult({
             timelapses: z.array(TimelapseSchema)
         })),
 
     activeUsers: contract("GET", "/global/activeUsers")
-        .route({ summary: "Returns the number of active users that have sent a heartbeat in the last 60s." })
+        .route({ description: "Returns the number of active users that have sent a heartbeat in the last 60s." })
         .input(NO_INPUT)
         .output(apiResult({
             count: z.number().nonnegative()

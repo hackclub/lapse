@@ -29,7 +29,7 @@ export const CommentSchema = z.object({
 
 export const commentRouterContract = {
     create: contract("POST", "/comment/create")
-        .route({ summary: "Creates a new comment for the given timelapse." })
+        .route({ description: "Creates a new comment for the given timelapse." })
         .input(
             z.object({
                 id: LapseId
@@ -46,7 +46,7 @@ export const commentRouterContract = {
         ),
 
     delete: contract("DELETE", "/comment/delete")
-        .route({ summary: "Deletes a comment owned by the calling user." })
+        .route({ description: "Deletes a comment owned by the calling user." })
         .input(
             z.object({
                 commentId: LapseId
