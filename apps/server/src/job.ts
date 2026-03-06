@@ -49,14 +49,18 @@ realizeEvents.waitUntilReady()
 
             if (draft) {
                 // We're doing a complete delete of the draft timelapse - alongside the now consumed encrypted S3 objects.
-                await deleteDraftTimelapse(timelapseId, "SERVER");
+                const err = await deleteDraftTimelapse(draft.id, "SERVER");
+                if (err) {
+                    logWarning(`Could not delete draft timelapse ${draft.id} when publishing ${timelapseId}! ${err.message}`);
+                }
             }
             else {
                 logWarning(`No corresponding draft found for timelapse ${timelapseId}.`);
             }
 
             const currentTimelapse = await database().timelapse.findFirst({
-                where: { id: timelapseId }
+                where: { id: timelapseId },
+                include: { associatedDraft: true }
             });
 
             if (currentTimelapse?.sourceDraftId) {

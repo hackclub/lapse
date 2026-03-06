@@ -48,3 +48,10 @@ export function actorEntitledTo(entity: OwnedObject, actor: Actor) {
             )
     );
 }
+
+/**
+ * Converts the `actor` into a human-readable string.
+ */
+export function stringifyActor(actor: Actor) {
+    return actorIsUser(actor) ? `@${actor.handle} (ID ${actor.id})` : actor || "null";
+}

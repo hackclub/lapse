@@ -13,7 +13,7 @@ import { database } from "@/db.js";
 import { apiOk, apiErr, lapseId, Err } from "@/common.js";
 import { logInfo } from "@/logging.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { actorEntitledTo, type Actor } from "@/ownership.js";
+import { actorEntitledTo, stringifyActor, type Actor } from "@/ownership.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { issueUploadToken } from "@/upload.js";
 
@@ -49,6 +49,7 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }
  * Deletes a draft timelapse alongside all of its associated S3 resources. Does *not* delete any other database object.
  */
 export async function deleteDraftTimelapse(id: string, actor: Actor): Promise<Err | void> {
+    logInfo(`Deleting draft timelapse ${id} (action triggered by ${stringifyActor(actor)})`);
     const draft = await database().draftTimelapse.findFirst({
         where: { id }
     });
