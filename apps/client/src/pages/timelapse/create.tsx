@@ -67,7 +67,8 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt, vide
   });
 
   async function onVideoSourceChange(value: string) {
-    if (value == videoSourceKind)
+    // For SCREEN sources, we allow re-selection to pick a different screen.
+    if (value === videoSourceKind && !(value === "SCREEN" && videoSourceKind === "SCREEN"))
       return; // no change
 
     if (changingSource) {
@@ -162,10 +163,11 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt, vide
         return;
       }
 
-      console.log("(create.tsx) screen stream retrieved!", stream);
+      console.log("(create.tsx) screen stream retrieved!", newStream);
 
       // We *may* be able to extract a nice label for the window on some user agents. If not, we'll just display "Screen".
       let screenLabel: string | null = newStream.getVideoTracks()[0].label;
+      console.log(screenLabel);
       if (screenLabel.includes("://") || screenLabel.includes("window:")) {
         screenLabel = null;
       }
@@ -480,7 +482,7 @@ export default function Page() {
   }
 
   function onSetupModalClose() {
-    if (setupState != "UPDATE") {
+    if (setupState !== "UPDATE" && videoSession === null) {
       router.back();
     }
 
@@ -601,7 +603,10 @@ export default function Page() {
             <StopIcon className="p-3" width={48} height={48} />
           </PillControlButton>
 
-          <PillControlButton onClick={() => setSetupModalOpen(true)}>
+          <PillControlButton onClick={() => {
+            setSetupState("UPDATE");
+            setSetupModalOpen(true);
+          }}>
             <Icon glyph="settings" width={48} height={48} />
           </PillControlButton>
         </div>
