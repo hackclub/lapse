@@ -308,7 +308,8 @@ export default os.router({
             const realizeJob = await enqueueRealizeJob(
                 id,
                 draft.sessions.map(x => `${env.S3_PUBLIC_URL_ENCRYPTED}/${x}`),
-                req.input.passkey,
+                req.input.deviceKey,
+                draft.iv,
                 draft.editList.map(x => EditListEntrySchema.parse(x))
             );
 

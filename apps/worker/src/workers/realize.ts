@@ -3,6 +3,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { THUMBNAIL_SIZE, TIMELAPSE_FACTOR, TIMELAPSE_FPS, type EditListEntry } from "@hackclub/lapse-api";
 import { REALIZE_JOB_QUEUE_NAME, RealizeJobInputsSchema, type RealizeJobInputs, type RealizeJobOutputs } from "@hackclub/lapse-jobs";
+import { decryptData, fromHex } from "@hackclub/lapse-shared";
 
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
@@ -11,7 +12,6 @@ import * as path from "node:path";
 import { execFile } from "node:child_process";
 
 import { redis } from "@/redis.js";
-import { decryptVideo } from "@/encrypted.js";
 import { measureVideoDuration, probeVideo, selectDominantResolution } from "@/video.js";
 import { env } from "@/env.js";
 import { JobLogger } from "@/log.js";
@@ -77,11 +77,11 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
 
         const sessions: string[] = [];
         for (const [i, sessionUrl] of input.sessionUrls.entries()) {
-            let encryptedBuffer: Buffer;
+            let encryptedBuffer: ArrayBuffer;
 
             try {
                 const res = await fetch(sessionUrl);
-                encryptedBuffer = Buffer.from(await res.arrayBuffer());
+                encryptedBuffer = await res.arrayBuffer();
             }
             catch (err) {
                 throw log.echo(
@@ -89,10 +89,14 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 );
             }
 
-            let decryptedBuffer: Buffer;
+            let decryptedBuffer: ArrayBuffer;
 
             try {
-                decryptedBuffer = decryptVideo(encryptedBuffer, "", input.passkey);
+                decryptedBuffer = await decryptData(
+                    fromHex(input.passkey).buffer,
+                    fromHex(input.iv).buffer,
+                    encryptedBuffer
+                );
             }
             catch (err) {
                 throw log.echo(
@@ -101,7 +105,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             }
 
             const sessionPath = path.join(tmp, `session-${i}.webm`); // assuming webm here - but ffmpeg should be able to figure that out from the file headers
-            await fsp.writeFile(sessionPath, decryptedBuffer);
+            await fsp.writeFile(sessionPath, Buffer.from(decryptedBuffer));
 
             sessions.push(sessionPath);
         }

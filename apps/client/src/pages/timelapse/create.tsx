@@ -3,14 +3,14 @@ import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import clsx from "clsx";
 import prettyBytes from "pretty-bytes";
-import { assert, match } from "@hackclub/lapse-shared";
+import { assert, encryptData, match, fromHex } from "@hackclub/lapse-shared";
 
 import { videoGenerateThumbnail } from "@/video";
-import { encryptData, getCurrentDevice } from "@/encryption";
+import { getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
 import { api, apiUpload } from "@/api";
 import { TimelapseVideoSession } from "@/timelapseVideoSession";
-import { SteppedProgress } from "@/common";
+import {  SteppedProgress } from "@/common";
 
 import { useOnce } from "@/hooks/useOnce";
 import { useAuth } from "@/hooks/useAuth";
@@ -437,24 +437,33 @@ export default function Page() {
       for (const [i, session] of sessions.entries()) {
         setUploadProgress(0);
         setUploadStage(`Encrypting session #${i + 1}...`);
-        const encrypted = await encryptData(session);
+        const encrypted = await encryptData(
+          fromHex(device.passkey).buffer,
+          fromHex(res.data.draftTimelapse.iv).buffer,
+          session
+        );
 
         console.log(`(create.tsx) encrypted session #${i + 1}:`, encrypted);
 
         setUploadStage("Uploading video session...");
-        await apiUpload(res.data.sessionUploadTokens[i], new Blob([encrypted.data], { type: "video/webm" }), bytesProgressCallback);
+        await apiUpload(res.data.sessionUploadTokens[i], new Blob([encrypted], { type: "video/webm" }), bytesProgressCallback);
       }
 
       console.log("(create.tsx) all sessions uploaded successfully!");
       // ------------------------------------------------------- //
 
       progress.advance(3, "Encrypting thumbnail...");
-      const encryptedThumb = await encryptData(thumbnail);
+      const encryptedThumb = await encryptData(
+        fromHex(device.passkey).buffer,
+        fromHex(res.data.draftTimelapse.iv).buffer,
+        thumbnail
+      );
+
       console.log("(create.tsx) - encrypted thumbnail:", encryptedThumb);
 
       await apiUpload(
         res.data.thumbnailUploadToken,
-        new Blob([encryptedThumb.data], { type: "image/webp" }),
+        new Blob([encryptedThumb], { type: "image/webp" }),
         bytesProgressCallback
       );
       

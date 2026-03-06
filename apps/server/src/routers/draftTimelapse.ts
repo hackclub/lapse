@@ -2,7 +2,7 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { oneOf, range } from "@hackclub/lapse-shared";
+import { oneOf, range, toHex } from "@hackclub/lapse-shared";
 
 import * as db from "@/generated/prisma/client.js";
 import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse } from "@hackclub/lapse-api";
@@ -41,7 +41,8 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }
         previewThumbnail: `${env.S3_PUBLIC_URL_ENCRYPTED}/${entity.thumbnailKey}`,
         deviceId: entity.deviceId,
         owner: dtoPublicUser(entity.owner),
-        isDraft: true
+        isDraft: true,
+        iv: entity.iv
     };
 }
 
@@ -138,6 +139,9 @@ export default os.router({
             const thumbnailKey = `timelapses/${caller.id}/${id}-thumbnail.webp`;
             const thumbnailUploadToken = issueUploadToken(thumbnailKey, MAX_THUMBNAIL_UPLOAD_SIZE);
 
+            const iv = new Uint8Array(128 / 8);
+            crypto.getRandomValues(iv);
+
             const draft = await database().draftTimelapse.create({
                 include: { owner: true },
                 data: {
@@ -149,7 +153,8 @@ export default os.router({
                     thumbnailKey,
                     snapshots: req.input.snapshots.map(x => new Date(x)),
                     deviceId: req.input.deviceId,
-                    ownerId: caller.id
+                    ownerId: caller.id,
+                    iv: toHex(iv)
                 }
             });
 

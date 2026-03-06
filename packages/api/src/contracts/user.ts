@@ -260,5 +260,37 @@ export const userRouterContract = {
     emitHeartbeat: contract("POST", "/user/emitHeartbeat")
         .route({ description: "Updates the last heartbeat time of the calling user to the current date. This is used to detect active users." })
         .input(NO_INPUT)
-        .output(NO_OUTPUT)
+        .output(NO_OUTPUT),
+
+    // provideKeyRelay: contract("POST", "/user/provideKeyRelay")
+    //     .route({ description: "Provides a device key for relay transfer to another device. The key is stored in-memory with a short TTL." })
+    //     .input(
+    //         z.object({
+    //             deviceId: z.uuid()
+    //                 .describe("The ID of the source device whose key is being relayed."),
+
+    //             deviceKey: z.string().regex(/^[0-9a-f]{32}$/)
+    //                 .describe("The 128-bit device key in lowercase hex.")
+    //         })
+    //     )
+    //     .output(
+    //         apiResult({
+    //             expiresAt: LapseDate
+    //                 .describe("The timestamp (ms since epoch) when the relay entry expires.")
+    //         })
+    //     ),
+
+    // receiveKeyRelay: contract("POST", "/user/receiveKeyRelay")
+    //     .route({ description: "Receives a relayed device key. Consumes the relay entry on success." })
+    //     .input(NO_INPUT)
+    //     .output(
+    //         apiResult({
+    //             relay: z.object({
+    //                 deviceId: z.uuid(),
+    //                 deviceKey: z.string().regex(/^[0-9a-f]{32}$/),
+    //                 expiresAt: LapseDate
+    //             }).nullable()
+    //                 .describe("The relayed device key, or null if no relay is pending.")
+    //         })
+    //     ),
 };

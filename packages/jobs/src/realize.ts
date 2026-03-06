@@ -24,7 +24,12 @@ export const RealizeJobInputsSchema = z.object({
     /**
      * An array of edits to perform while encoding the video.
      */
-    editList: EditListEntrySchema.array()
+    editList: EditListEntrySchema.array(),
+
+    /**
+     * The IV associated with the source draft timelapse.
+     */
+    iv: z.hex()
 });
 
 /**
