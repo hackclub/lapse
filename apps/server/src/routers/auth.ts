@@ -132,50 +132,51 @@ function readOAuthCookie(reqHeaders?: Headers) {
 
 export default os.router({
     authorize: os.authorize // note: user-agent endpoint
-        .handler(async (req) => {
-            const state = randomBytes(16).toString("base64url");
-            const codeVerifier = randomBytes(32).toString("base64url");
-            const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+         .handler(async (req) => {
+             const state = randomBytes(16).toString("base64url");
+             const codeVerifier = randomBytes(32).toString("base64url");
+             const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
 
-            setCookie(
-                req.context.resHeaders,
-                OAUTH_COOKIE_NAME,
-                Buffer.from(JSON.stringify(
-                    {
-                        hst: state,
-                        hcv: codeVerifier,
-                        uri: req.input.query.redirect_uri,
-                        cid: req.input.query.client_id,
-                        scp: req.input.query.scope.split(" "),
-                        stt: req.input.query.state,
-                        ccv: req.input.query.code_challenge
-                    } satisfies OAuthCookie
-                )).toString("base64url"),
-                {
-                    path: "/",
-                    httpOnly: true,
-                    sameSite: "lax",
-                    maxAge: 600,
-                    secure: process.env["NODE_ENV"] === "production"
-                }
-            );
+             setCookie(
+                 req.context.resHeaders,
+                 OAUTH_COOKIE_NAME,
+                 Buffer.from(JSON.stringify(
+                     {
+                         hst: state,
+                         hcv: codeVerifier,
+                         uri: req.input.query.redirect_uri,
+                         cid: req.input.query.client_id,
+                         scp: req.input.query.scope.split(" "),
+                         stt: req.input.query.state,
+                         ccv: req.input.query.code_challenge
+                     } satisfies OAuthCookie
+                 )).toString("base64url"),
+                 {
+                     path: "/",
+                     httpOnly: true,
+                     sameSite: "lax",
+                     maxAge: 600,
+                     secure: process.env["NODE_ENV"] === "production"
+                 }
+             );
 
-            const url = new URL(`${env.HACKATIME_URL}/oauth/authorize`);
-            url.searchParams.set("client_id", env.HACKATIME_CLIENT_ID);
-            url.searchParams.set("response_type", "code");
-            url.searchParams.set("scope", "profile");
-            url.searchParams.set("redirect_uri", HKT_REDIRECT_URI);
-            url.searchParams.set("state", state);
-            url.searchParams.set("code_challenge", codeChallenge);
-            url.searchParams.set("code_challenge_method", "S256");
+             const url = new URL(`${env.HACKATIME_URL}/oauth/authorize`);
+             url.searchParams.set("client_id", env.HACKATIME_CLIENT_ID);
+             url.searchParams.set("response_type", "code");
+             url.searchParams.set("scope", "profile");
+             url.searchParams.set("redirect_uri", HKT_REDIRECT_URI);
+             url.searchParams.set("state", state);
+             url.searchParams.set("code_challenge", codeChallenge);
+             url.searchParams.set("code_challenge_method", "S256");
 
-            // The user authenticates, and then we go to /auth/hackatimeCallback.
-            return {
-                headers: {
-                    location: url.href
-                }
-            };
-        }),
+             // The user authenticates, and then we go to /auth/hackatimeCallback.
+             return {
+                 status: 307,
+                 headers: {
+                     location: url.href
+                 }
+             };
+         }),
 
     grantConsent: os.grantConsent
         .use(requiredAuth())
@@ -200,10 +201,10 @@ export default os.router({
         .handler(async (req) => {
             const oauthData = readOAuthCookie(req.context.reqHeaders);
 
-            function errorRedirect(error: OAuthErrorCode) {
+            function errorRedirect(error: OAuthErrorCode): { status: 307; headers: Record<string, string> } {
                 const url = new URL(oauthData.uri);
                 url.searchParams.set("error", error);
-                return { headers: { location: url.href } };
+                return { status: 307, headers: { location: url.href } };
             }
             
             if (req.input.query.error) {
@@ -376,7 +377,7 @@ export default os.router({
                     sub: dbUser.id
                 }));
 
-                return { headers: { location: url.href } };
+                return { status: 307, headers: { location: url.href } };
             }
 
             // Otherwise, consent must be explicit (this is a third-party app), so we redirect the user to our canonical client to confirm.
@@ -384,68 +385,68 @@ export default os.router({
             const url = new URL(env.CONSENT_URL);
             url.searchParams.set("clientId", oauthData.cid);
             url.searchParams.set("scopes", oauthData.scp.join(" "));
-            return { headers: { location: url.href } };
-        }),
+            return { status: 307, headers: { location: url.href } };
+            }),
 
     // This endpoint is called after the user gives the requesting app consent to get a token to their account. For canonical apps, as no consent modal has to be displayed, the user
     // is immidiately redirected to /auth/continue.
     continue: os.continue
-        .handler(async (req) => {
-            let consent: ConsentJwt;
+       .handler(async (req) => {
+           let consent: ConsentJwt;
 
-            try {
-                consent = ConsentJwtSchema.parse(
-                    jwt.verify(req.input.query.consentToken, env.JWT_CONSENT_TOKENS)
-                );
-            }
-            catch (err) {
-                logWarning(`/auth/continue was called with an invalid/malformed access token; error ${err}`, { token: req.input.query.consentToken, err });
-                throw new ORPCError("BAD_REQUEST", {
-                    message: "Consent token was malformed or invalid."
-                });
-            }
+           try {
+               consent = ConsentJwtSchema.parse(
+                   jwt.verify(req.input.query.consentToken, env.JWT_CONSENT_TOKENS)
+               );
+           }
+           catch (err) {
+               logWarning(`/auth/continue was called with an invalid/malformed access token; error ${err}`, { token: req.input.query.consentToken, err });
+               throw new ORPCError("BAD_REQUEST", {
+                   message: "Consent token was malformed or invalid."
+               });
+           }
 
-            const oauthData = readOAuthCookie(req.context.reqHeaders);
-            
-            if (
-                consent.cid !== oauthData.cid ||
-                !arraysEqual(consent.scp, oauthData.scp)
-            ) {
-                logWarning(`Provided consent token (${consent.cid}, ${consent.scp.join(" ")}) doesn't match OAuth cookie (${oauthData.cid}, ${oauthData.scp.join(" ")})`, { oauthData, consent });
-                throw new ORPCError("BAD_REQUEST", {
-                    message: "Consent token does not match cookie data."
-                });
-            }
+           const oauthData = readOAuthCookie(req.context.reqHeaders);
+           
+           if (
+               consent.cid !== oauthData.cid ||
+               !arraysEqual(consent.scp, oauthData.scp)
+           ) {
+               logWarning(`Provided consent token (${consent.cid}, ${consent.scp.join(" ")}) doesn't match OAuth cookie (${oauthData.cid}, ${oauthData.scp.join(" ")})`, { oauthData, consent });
+               throw new ORPCError("BAD_REQUEST", {
+                   message: "Consent token does not match cookie data."
+               });
+           }
 
-            const oauthResponse = new OAuth2Server.Response();
-            await oauthSrv.authorize(
-                new OAuth2Server.Request({
-                    method: "GET",
-                    headers: {},
-                    query: {
-                        "response_type": "code",
-                        "client_id": oauthData.cid,
-                        "redirect_uri": oauthData.uri,
-                        "scope": oauthData.scp.join(" "),
-                        "state": oauthData.stt,
-                        "code_challenge": oauthData.ccv,
-                        "code_challenge_method": "S256"
-                    }
-                }),
-                oauthResponse,
-                {
-                    authenticateHandler: {
-                        handle: () => ({ id: consent.sub }),
-                    },
-                }
-            );
+           const oauthResponse = new OAuth2Server.Response();
+           await oauthSrv.authorize(
+               new OAuth2Server.Request({
+                   method: "GET",
+                   headers: {},
+                   query: {
+                       "response_type": "code",
+                       "client_id": oauthData.cid,
+                       "redirect_uri": oauthData.uri,
+                       "scope": oauthData.scp.join(" "),
+                       "state": oauthData.stt,
+                       "code_challenge": oauthData.ccv,
+                       "code_challenge_method": "S256"
+                   }
+               }),
+               oauthResponse,
+               {
+                   authenticateHandler: {
+                       handle: () => ({ id: consent.sub }),
+                   },
+               }
+           );
 
-            return {
-                status: oauthResponse.status,
-                headers: oauthResponse.headers,
-                body: oauthResponse.body
-            };
-        }),
+           return {
+               status: 307 as const,
+               headers: oauthResponse.headers ?? {},
+               body: oauthResponse.body
+           };
+       }),
 
     token: os.token
         .handler(async (req) => {
@@ -464,10 +465,12 @@ export default os.router({
             );
         
             return {
+                status: 200,
+                headers: {},
                 body: {
                     access_token: token.accessToken,
                     expires_in: token.accessTokenExpiresAt!.getTime() / 1000,
-                    refresh_token: token.refreshToken,
+                    refresh_token: token.refreshToken!,
                     token_type: "Bearer",
                     scope: token.scope?.join(" ") ?? ""
                 }

@@ -6,7 +6,7 @@ import { implement, onError, ORPCError, ValidationError } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { RequestHeadersPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins"
-import { ZodToJsonSchemaConverter } from "@orpc/zod";
+import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import chalk from "chalk";
 import dedent from "dedent";
 import { compositeRouterContract } from "@hackclub/lapse-api";
@@ -85,87 +85,82 @@ server.addContentTypeParser("*", (request, payload, done) => {
 server.all("/api/*", async (req, reply) => {
     const { user, scopes } = await getAuthenticatedUser(req);
 
-    if (req.url === "/health") {
-        try {
-            database().user.findFirst();
-        }
-        catch (err) {
-            logError("Health check failed - couldn't query the database!", { err });
-            reply.status(500).send("NO_DATABASE");
-            return;
-        }
-
-        reply.status(200).send("OK");
-    }
-
     const { matched } = await handler.handle(req, reply, {
         prefix: "/api",
         context: { req, user, scopes }
     });
 
     if (!matched) {
-        // No API route matched - but the user might be accessing either the OpenAPI spec or the
-        // Scalar frontend.
-        if (req.url == "/openapi.json") {
-            const spec = await openApiGenerator.generate(router, {
-                info: {
-                    title: "Lapse API",
-                    version: "2.0.0"
-                },
-                servers: [
-                    { url: process.env["NODE_ENV"] === "production" ? `${env.BASE_URL}/api` : "/api" }
-                ],
-                security: [
-                    { bearerAuth: [] }
-                ],
-                components: {
-                    securitySchemes: {
-                        bearerAuth: {
-                            type: "http",
-                            scheme: "bearer"
-                        }
-                    }
-                }
-            });
-
-            reply.status(200).header("content-type", "application/json").send(JSON.stringify(spec));
-            return;
-        }
-
-        if (req.url === "/docs") {
-            reply.status(200).header("content-type", "text/html").send(
-                dedent/*html*/`
-                <!doctype html>
-                <html>
-                    <head>
-                        <title>Lapse API Docs</title>
-                        <meta charset="utf-8" />
-                        <meta name="viewport" content="width=device-width, initial-scale=1" />
-                    </head>
-                    <body>
-                        <div id="app"></div>
-
-                        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-                        <script>
-                            Scalar.createApiReference("#app", {
-                                url: "/openapi.json",
-                                authentication: {
-                                    securitySchemes: {
-                                        bearerAuth: { token: "default-token" }
-                                    }
-                                }
-                            });
-                        </script>
-                    </body>
-                </html>
-                `
-            );
-
-            return;
-        }
-
         reply.status(404).send(JSON.stringify(apiErr("NOT_FOUND", "No API route found")));
     }
+});
+
+server.all("/openapi.json", async (req, reply) => {
+    const spec = await openApiGenerator.generate(router, {
+        info: {
+            title: "Lapse API",
+            version: "2.0.0"
+        },
+        servers: [
+            { url: process.env["NODE_ENV"] === "production" ? `${env.BASE_URL}/api` : "/api" }
+        ],
+        security: [
+            { bearerAuth: [] }
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: "http",
+                    scheme: "bearer"
+                }
+            }
+        }
+    });
+
+    reply.status(200).header("content-type", "application/json").send(JSON.stringify(spec));
+});
+
+server.all("/health", async (req, reply) => {
+    try {
+        database().user.findFirst();
+    }
+    catch (err) {
+        logError("Health check failed - couldn't query the database!", { err });
+        reply.status(500).send("NO_DATABASE");
+        return;
+    }
+
+    reply.status(200).send("OK");
+});
+
+server.all("/docs", async (req, reply) => {
+    reply.status(200).header("content-type", "text/html").send(
+        dedent/*html*/`
+        <!doctype html>
+        <html>
+            <head>
+                <title>Lapse API Docs</title>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+            </head>
+            <body>
+                <div id="app"></div>
+
+                <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+                <script>
+                    Scalar.createApiReference("#app", {
+                        url: "/openapi.json",
+                        authentication: {
+                            securitySchemes: {
+                                bearerAuth: { token: "default-token" }
+                            }
+                        }
+                    });
+                </script>
+            </body>
+        </html>
+        `
+    );
 });
 
 attachUploadServer(server);

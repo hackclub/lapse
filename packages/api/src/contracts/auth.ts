@@ -45,9 +45,6 @@ export const authRouterContract = {
             `
         })
         .input(z.object({
-            params: z.object({}),
-            body: z.object({}),
-            headers: z.object({}),
             query: z.object({
                 // This is not in our usual naming convention, as we're following OAuth's spec.
                 response_type: z.literal("code"),
@@ -89,10 +86,6 @@ export const authRouterContract = {
             outputStructure: "detailed"
         })
         .input(z.object({
-            params: z.object({}),
-            query: z.object({}),
-            headers: z.object({}),
-
             // We expect this to be application/x-www-form-urlencoded - oRPC should handle that here:
             //      https://github.com/middleapi/orpc/blob/819ed2e0897b18a5d6a4ca85ba68568f055004a1/packages/openapi-client/src/adapters/standard/openapi-serializer.ts#L72-L74
             body: z.object({
@@ -109,7 +102,7 @@ export const authRouterContract = {
             body: z.object({
                 access_token: z.string(),
                 expires_in: z.number().gt(0),
-                refresh_token: z.string(),
+                refresh_token: z.string().optional(),
                 token_type: z.literal("Bearer"),
                 scope: z.string()
             })
@@ -124,9 +117,6 @@ export const authRouterContract = {
             successStatus: 307
         })
         .input(z.object({
-            params: z.object({}),
-            body: z.object({}),
-            headers: z.object({}),
             query: z.object({
                 code: z.string().optional(),
                 state: z.string().optional(),
@@ -147,15 +137,12 @@ export const authRouterContract = {
             successStatus: 307
         })
         .input(z.object({
-            params: z.object({}),
-            body: z.object({}),
-            headers: z.object({}),
             query: z.object({
                 consentToken: z.jwt()
             })
         }))
         .output(z.object({
-            status: z.literal(200),
+            status: z.literal(307),
             headers: z.record(z.string(), z.string()).optional(),
             body: z.any().optional()
         }))
