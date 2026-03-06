@@ -142,8 +142,17 @@ function* spreadIndices(max: number): Generator<number> {
 
 export async function* makeFilmstrip(count: number, sessions: { url: string; duration: number; }[]): AsyncGenerator<{ idx: number, url: string }> {
     try {
+        let generatedCount = 0;
+
         for await (const x of makeFilmstripFast(count, sessions)) {
             yield x;
+            generatedCount++;
+        }
+
+        if (generatedCount != count) {
+            // This usually happens when the timelapse is REALLY short. Like, less than 5 minutes. This isn't that big of a concern
+            // to us, so the user will see the timeline fill up from the left, and then gradually get filled in via the safe procedure.
+            throw new Error(`Generated only ${generatedCount} parts out of ${count}`);
         }
     }
     catch (err) {
