@@ -238,7 +238,7 @@ export default function Page() {
 
         {
           (drafts && drafts.length > 0) && (
-            <div className="py-16 px-0 sm:px-16">
+            <div className="pb-8 pt-12 px-0 sm:px-16">
               <div className="border-dashed border-black border rounded-xl p-12 flex flex-col gap-8">
                 <div className="flex gap-4">
                   <NextImage
