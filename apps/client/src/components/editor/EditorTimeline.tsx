@@ -363,11 +363,6 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
         </div>
 
         <div className="flex items-center gap-3">
-          {
-            process.env["NODE_ENV"] === "development" &&
-              <span className="font-mono text-xs">session={videoRef.current?.src}</span>
-          }
-
           <div className="flex items-center gap-2 text-white mr-6">
             <Icon glyph="clock-fill" size={16} />
             <span className="text-base">

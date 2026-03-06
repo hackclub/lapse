@@ -27,6 +27,8 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
             video.src = objectUrl;
         });
 
+        const duration = await videoDuration(video) ?? 1;
+
         const dimension = (d1: number, d2: number) => d1 > d2
             ? THUMBNAIL_SIZE
             : Math.floor(THUMBNAIL_SIZE * d1 / d2);
@@ -44,7 +46,7 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
         await new Promise<void>((resolve, reject) => {
             video.onseeked = () => resolve();
             video.onerror = (err) => reject(err);
-            video.currentTime = video.duration / 2;
+            video.currentTime = duration / 2;
         });
 
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -330,4 +332,28 @@ export async function changeVideoRate(videoUrl: string, rate: number) {
     return bufTarget.buffer
         ? URL.createObjectURL(new Blob([bufTarget.buffer], { type: "video/webm" }))
         : null;
+}
+
+/**
+ * Gets the duration of a video, also supporting videos without duration in their metadata. If an existing `<video>` element
+ * is provided, it will be loaded and re-seeked to get the duration.
+ */
+export async function videoDuration(srcOrVideo: string | HTMLVideoElement) {
+    const video = srcOrVideo instanceof HTMLVideoElement ? srcOrVideo : document.createElement("video");
+    if (typeof srcOrVideo === "string") {
+        video.src = srcOrVideo;
+    }
+
+    if (isFinite(video.duration))
+        return video.duration;
+
+    // With unfinalized data, we want to force the browser to seek the entire file.
+    await waitForVideoEvent(video, "onloadeddata", () => video.load());
+    await waitForVideoEvent(video, "onseeked", () => video.currentTime = Number.MAX_SAFE_INTEGER);
+    await waitForVideoEvent(video, "onseeked", () => video.currentTime = 0.1);
+
+    if (!isFinite(video.duration))
+        return null;
+
+    return video.duration;
 }

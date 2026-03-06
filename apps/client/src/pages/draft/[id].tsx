@@ -13,7 +13,7 @@ import { decryptData } from "@/encryption";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 import { useVideoPlayback } from "@/hooks/useVideoPlayback";
 import { sfetch } from "@/safety";
-import { waitForVideoEvent } from "@/video";
+import { videoDuration, waitForVideoEvent } from "@/video";
 import { DraftTimelapse, EditListEntry, HackatimeProject, TimelapseVisibility } from "@hackclub/lapse-api";
 import { formatDuration } from "@hackclub/lapse-shared";
 import { clsx } from "clsx";
@@ -88,21 +88,8 @@ export default function Page() {
           const data = new Blob([await decryptData(await res.arrayBuffer(), "", device.passkey)], { type: "video/webm" });
           console.log(`([id].tsx) decrypted session @ ${x}!`, data);
 
-          const video = document.createElement("video");
           const url = URL.createObjectURL(data);
-          video.src = url;
-
-          // With unfinalized data, we want to force the browser to seek the entire file.
-          await waitForVideoEvent(video, "onloadeddata", () => video.load());
-          await waitForVideoEvent(video, "onseeked", () => video.currentTime = Number.MAX_SAFE_INTEGER);
-          await waitForVideoEvent(video, "onseeked", () => video.currentTime = 0.1);
-
-          if (!isFinite(video.duration)) {
-            console.error("([id.tsx]) video duration is not finite - despite our best efforts! we're assuming here, bad bad bad!", video);
-            return { url, duration: 120 }; // this is, like, horrible. but should never happen
-          }
-
-          return { url, duration: video.duration };
+          return { url, duration: (await videoDuration(url)) ?? 120 };
         })
       );
 
