@@ -21,6 +21,8 @@ function createMediaRecorder(stream: MediaStream) {
     });
 }
 
+const CAPTURE_INTERVAL_MS = 1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS;
+
 /**
  * Represents a client-side video session belonging to a `Timelapse`. A session is defined as a
  * continous stream of video that has consistent parameters (e.g. resolution) across its lifespan.
@@ -33,8 +35,8 @@ export class TimelapseVideoSession {
     private canvas: HTMLCanvasElement;
     private video: HTMLVideoElement;
     private canvasCtx: CanvasRenderingContext2D;
-    private canvasStreamTrack: CanvasCaptureMediaStreamTrack;
     private intervalId: ReturnType<typeof setInterval>;
+    private canvasTrack: { synced: true, stream: CanvasCaptureMediaStreamTrack } | { synced: false, stream: MediaStreamVideoTrack };
 
     /**
      * Creates a new `TimelapseVideoSession`, immediately capturing new chunks.
@@ -45,16 +47,31 @@ export class TimelapseVideoSession {
         this.canvas = document.createElement("canvas");
         this.canvasCtx = this.canvas.getContext("2d")!;
 
-        const stream = this.canvas.captureStream(0); // 0 = capture frames only when we call requestFrame()
+        let stream: MediaStream;
+
+        if ("CanvasCaptureMediaStreamTrack" in window) {
+            stream = this.canvas.captureStream(0) // 0 = capture frames only when we call requestFrame()
+            this.canvasTrack = {
+                synced: true,
+                stream: stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack
+            };
+        }
+        else {
+            // This is the case with Firefox. This means we can get some desync or duplicate frames...
+            stream = this.canvas.captureStream(TIMELAPSE_FPS / TIMELAPSE_FACTOR);
+            this.canvasTrack = {
+                synced: false,
+                stream: stream.getVideoTracks()[0]
+            };
+        }
 
         this.video = document.createElement("video");
         this.video.autoplay = true;
         this.video.srcObject = provider;
-        this.canvasStreamTrack = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
 
         this.recorder = createMediaRecorder(stream);
         this.recorder.ondataavailable = (ev) => this.handleRecorderData(ev);
-        this.recorder.start(1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS);
+        this.recorder.start(CAPTURE_INTERVAL_MS);
     
         this.intervalId = this.setFrameInterval();
     }
@@ -63,7 +80,7 @@ export class TimelapseVideoSession {
     private setFrameInterval() {
         return setInterval(() => {
             this.captureFrame();
-        }, 1000 * TIMELAPSE_FACTOR / TIMELAPSE_FPS);
+        }, CAPTURE_INTERVAL_MS);
     }
 
     // Captures a single frame (not a chunk!)
@@ -75,7 +92,10 @@ export class TimelapseVideoSession {
         this.canvas.width = this.video.videoWidth;
         this.canvas.height = this.video.videoHeight;
         this.canvasCtx.drawImage(this.video, 0, 0);
-        this.canvasStreamTrack.requestFrame();
+
+        if (this.canvasTrack.synced) {
+            this.canvasTrack.stream.requestFrame();
+        }
 
         if (this.recorder.state == "inactive") {
             console.warn("(timelapseVideoSession.ts) MediaRecorder became inactive!", this.recorder);
@@ -113,11 +133,13 @@ export class TimelapseVideoSession {
     }
 
     pause() {
+        this.isPaused = true;
         this.recorder.pause();
         clearInterval(this.intervalId);
     }
 
     resume() {
+        this.isPaused = false;
         this.recorder.resume();
         this.intervalId = this.setFrameInterval();
     }
