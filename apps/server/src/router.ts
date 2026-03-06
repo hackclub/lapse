@@ -32,6 +32,13 @@ export interface ProtectedContext extends Context {
 export const logMiddleware = os
     .$context<Context>()
     .middleware(async ({ context, next }, input) => {
+        if (
+            typeof input === "object" && input != null &&
+            ("body" in input && "headers" in input)
+        ) {
+            input = input["body"];
+        }
+
         logRequest(context.req.url.split("?")[0], input, context.user);
         return next({ context });
     });
