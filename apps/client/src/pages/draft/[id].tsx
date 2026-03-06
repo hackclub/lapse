@@ -140,6 +140,23 @@ export default function Page() {
     router.push(`/user/@${draft.owner.handle}`);
   }
 
+  async function onDeleteClick() {
+    if (!draft)
+      return;
+
+    if (!window.confirm("Are you sure you want to delete this draft? This cannot be undone!"))
+      return;
+
+    const res = await api.draftTimelapse.delete({ id: draft.id });
+
+    if (!res.ok) {
+      setError(res.message);
+      return;
+    }
+
+    router.push(`/user/@${draft.owner.handle}`);
+  }
+
   async function handleVisibilitySelected(visibility: TimelapseVisibility) {
     setPublishModalOpen(false);
     setPendingVisibility(visibility);
@@ -250,6 +267,7 @@ export default function Page() {
                 playback={playback}
                 onSaveAndExit={saveAndExit}
                 onPublish={() => setPublishModalOpen(true)}
+                onDeleteDraft={onDeleteClick}
               />
             )
             : (

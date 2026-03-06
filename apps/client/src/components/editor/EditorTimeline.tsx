@@ -18,19 +18,21 @@ import { EditorEditRegion } from "@/components/editor/EditorEditRegion";
 const FILMSTRIP_COUNT = 90;
 
 
-export function EditorTimeline({ sessions, editList, setEditList, playback, onSaveAndExit, onPublish }: {
+export function EditorTimeline({ sessions, editList, setEditList, playback, onSaveAndExit, onPublish, onDeleteDraft }: {
   sessions: { url: string; duration: number }[],
   editList: EditListEntry[],
   setEditList: (x: EditListEntry[]) => void,
   playback: VideoPlayback,
   onSaveAndExit: () => void,
   onPublish: () => void,
+  onDeleteDraft: () => void,
 }) {
   const { time, playing, totalTime, seekTo: setTime, togglePlayback, getCurrentTime, videoRef } = playback;
   const [filmstrip, setFilmstrip] = useState<string[]>([]);
   const [zoomFactor, setZoomFactor] = useState(1);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [selectedEditRegionIdx, setSelectedIndex] = useState<number | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const timelineRef = React.useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
@@ -374,6 +376,7 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
           </div>
 
           <div className="flex gap-2">
+            <Button icon="delete" onClick={onDeleteDraft}>Delete</Button>
             <Button icon="post-fill" onClick={onSaveAndExit}>Save and exit</Button>
             <Button icon="send-fill" onClick={onPublish} kind="primary">Publish</Button>
           </div>
