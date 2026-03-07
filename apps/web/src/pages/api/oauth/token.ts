@@ -25,7 +25,7 @@ const ClientCredentialsSchema = z.object({
   client_secret: z.string(),
 });
 
-const TOKEN_TTL_SECONDS = 900;
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 180; // 6 months
 
 function parseBasicAuth(authorization: string | undefined) {
   if (!authorization)
