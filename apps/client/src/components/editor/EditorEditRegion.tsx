@@ -5,7 +5,6 @@ import { formatDuration } from "@hackclub/lapse-shared";
 
 import { usePointerDrag } from "@/hooks/usePointerDrag";
 
-
 function EditorEditRegionHandle({ side, onDragStart, onDrag }: {
   side: "IN" | "OUT",
   onDragStart: () => void,
@@ -37,41 +36,56 @@ export function EditorEditRegion({ edit, setEdit, totalDuration, selected, onSel
   const areaDuration = edit.end - edit.begin;
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  const getTimelineWidth = useCallback(() => {
+  function getTimelineWidth() {
     return containerRef.current?.parentElement?.getBoundingClientRect().width ?? 1;
-  }, []);
+  }
 
   const dragOriginRef = React.useRef(edit);
   const editRef = React.useRef(edit);
   editRef.current = edit;
 
-  const handleDragStart = useCallback(() => {
-    dragOriginRef.current = editRef.current;
-    onSelect();
-  }, [onSelect]);
+  const handleDragStart = useCallback(
+    () => {
+      dragOriginRef.current = editRef.current;
+      onSelect();
+    },
+    [onSelect]
+  );
 
-  const getDragTimeDelta = useCallback((deltaX: number) => {
-    return deltaX / (getTimelineWidth() / totalDuration);
-  }, [getTimelineWidth, totalDuration]);
+  const getDragTimeDelta = useCallback(
+    (deltaX: number) => {
+      return deltaX / (getTimelineWidth() / totalDuration);
+    },
+    [getTimelineWidth, totalDuration]
+  );
 
-  const handleInDrag = useCallback((deltaX: number) => {
-    const origin = dragOriginRef.current;
-    const newBegin = Math.max(0, Math.min(origin.begin + getDragTimeDelta(deltaX), origin.end - 0.1));
-    setEdit({ ...origin, begin: newBegin });
-  }, [getDragTimeDelta, setEdit]);
+  const handleInDrag = useCallback(
+    (deltaX: number) => {
+      const origin = dragOriginRef.current;
+      const newBegin = Math.max(0, Math.min(origin.begin + getDragTimeDelta(deltaX), origin.end - 0.1));
+      setEdit({ ...origin, begin: newBegin });
+    },
+    [getDragTimeDelta, setEdit]
+  );
 
-  const handleOutDrag = useCallback((deltaX: number) => {
-    const origin = dragOriginRef.current;
-    const newEnd = Math.max(origin.begin + 0.1, Math.min(origin.end + getDragTimeDelta(deltaX), totalDuration));
-    setEdit({ ...origin, end: newEnd });
-  }, [getDragTimeDelta, totalDuration, setEdit]);
+  const handleOutDrag = useCallback(
+    (deltaX: number) => {
+      const origin = dragOriginRef.current;
+      const newEnd = Math.max(origin.begin + 0.1, Math.min(origin.end + getDragTimeDelta(deltaX), totalDuration));
+      setEdit({ ...origin, end: newEnd });
+    },
+    [getDragTimeDelta, totalDuration, setEdit]
+  );
 
-  const handleMoveDrag = useCallback((deltaX: number) => {
-    const origin = dragOriginRef.current;
-    const duration = origin.end - origin.begin;
-    const newBegin = Math.max(0, Math.min(origin.begin + getDragTimeDelta(deltaX), totalDuration - duration));
-    setEdit({ ...origin, begin: newBegin, end: newBegin + duration });
-  }, [getDragTimeDelta, totalDuration, setEdit]);
+  const handleMoveDrag = useCallback(
+    (deltaX: number) => {
+      const origin = dragOriginRef.current;
+      const duration = origin.end - origin.begin;
+      const newBegin = Math.max(0, Math.min(origin.begin + getDragTimeDelta(deltaX), totalDuration - duration));
+      setEdit({ ...origin, begin: newBegin, end: newBegin + duration });
+    },
+    [getDragTimeDelta, totalDuration, setEdit]
+  );
 
   const handleAreaPointerDown = usePointerDrag(handleDragStart, handleMoveDrag);
 

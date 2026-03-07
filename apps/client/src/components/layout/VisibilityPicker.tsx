@@ -30,10 +30,7 @@ function VisibilityOption({ icon, title, description, selected, onClick, positio
   );
 }
 
-export function VisibilityPicker({
-  value,
-  onChange
-}: {
+export function VisibilityPicker({ value, onChange }: {
   value: TimelapseVisibility | null;
   onChange: (visibility: TimelapseVisibility) => void;
 }) {
@@ -47,6 +44,7 @@ export function VisibilityPicker({
         onClick={() => onChange("PUBLIC")}
         position="first"
       />
+      
       <VisibilityOption
         icon="private-fill"
         title="Unlisted"

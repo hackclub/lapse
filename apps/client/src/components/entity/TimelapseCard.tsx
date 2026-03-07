@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import type { DraftTimelapse, Timelapse } from "@hackclub/lapse-api"
 import { decryptData, fromHex } from "@hackclub/lapse-shared";
+import clsx from "clsx";
 
 import { deviceStorage } from "@/deviceStorage";
 import { retryable, sfetch } from "@/safety";
@@ -11,7 +12,6 @@ import { ProfilePicture } from "@/components/entity/ProfilePicture"
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { Duration } from "@/components/Duration";
-import clsx from "clsx";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -96,7 +96,7 @@ export function TimelapseCard({ timelapse }: {
         { !timelapse.isDraft && <ProfilePicture user={timelapse.owner} size="sm" className="" /> }
 
         <div className="flex flex-col w-full">
-           <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl break-words">{timelapse.name ?? "(untitled)"}</h1>
+           <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl wrap-break-word">{timelapse.name ?? "(untitled)"}</h1>
           <h2 className={clsx(
             "text-md sm:text-xl text-secondary",
             !timelapse.isDraft && "flex gap-1 sm:gap-2"

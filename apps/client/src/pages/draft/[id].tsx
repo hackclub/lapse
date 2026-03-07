@@ -1,15 +1,13 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { clsx } from "clsx";
-import Icon from "@hackclub/icons";
-import { formatDuration, decryptData, fromHex } from "@hackclub/lapse-shared";
-import { DraftTimelapse, EditListEntry, HackatimeProject, TimelapseVisibility } from "@hackclub/lapse-api";
+import { decryptData, fromHex } from "@hackclub/lapse-shared";
+import { DraftTimelapse, EditListEntry, TimelapseVisibility } from "@hackclub/lapse-api";
 
 import { EditorTimeline } from "@/components/editor/EditorTimeline";
 import { ErrorModal } from "@/components/layout/ErrorModal";
 import { PublishModal } from "@/components/layout/PublishModal";
 import RootLayout from "@/components/layout/RootLayout";
-import { Button } from "@/components/ui/Button";
 import { PasskeyModal } from "@/components/layout/PasskeyModal";
 import { HackatimeSelectModal } from "@/components/layout/HackatimeSelectModal";
 import { Skeleton } from "@/components/ui/Skeleton";

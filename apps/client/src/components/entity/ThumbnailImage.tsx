@@ -9,25 +9,13 @@ import { sfetch } from "@/safety";
 
 const thumbnailCache = new Map<string, string>();
 
-async function decryptThumbnail(
-  timelapseId: string,
-  encryptedThumbnailUrl: string,
-  iv: string,
-  deviceId?: string
-): Promise<string | null> {
+async function decryptThumbnail(timelapseId: string, encryptedThumbnailUrl: string, iv: string, deviceId?: string): Promise<string | null> {
   const cacheKey = `${timelapseId}${encryptedThumbnailUrl}`;
   if (thumbnailCache.has(cacheKey))
     return thumbnailCache.get(cacheKey)!;
 
   try {
-    let device;
-    if (deviceId) {
-      device = await deviceStorage.getDevice(deviceId);
-    }
-    else {
-      device = await getCurrentDevice();
-    }
-
+    const device = deviceId ? await deviceStorage.getDevice(deviceId) : await getCurrentDevice();
     if (!device) {
       console.warn(`(ThumbnailImage.tsx) no device found for timelapse ${timelapseId}!`);
       return null;
@@ -56,16 +44,7 @@ async function decryptThumbnail(
   }
 }
 
-export function ThumbnailImage({
-  timelapseId,
-  thumbnailUrl,
-  isPublished,
-  iv,
-  deviceId,
-  alt,
-  className,
-  onError
-}: {
+export function ThumbnailImage({ timelapseId, thumbnailUrl, isPublished, iv, deviceId, alt, className, onError }: {
   timelapseId: string;
   thumbnailUrl: string | null;
   isPublished: boolean;
@@ -133,6 +112,7 @@ export function ThumbnailImage({
           onError?.(e);
         }}
       />
+      
       <div
         className={`absolute inset-0 bg-linear-to-br from-purple-400 to-pink-400 flex items-center justify-center ${className}`}
         style={{ display: "none" }}

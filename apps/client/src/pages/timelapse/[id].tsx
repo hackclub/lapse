@@ -11,7 +11,6 @@ import { markdownToJsx } from "@/markdown";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { ErrorModal } from "@/components/layout/ErrorModal";
-import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ProfilePicture } from "@/components/entity/ProfilePicture";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -254,7 +253,7 @@ export default function Page() {
           <div className="flex flex-col gap-2 px-4 md:px-0">
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-4xl font-bold text-smoke leading-tight break-words min-w-0">
+                <h1 className="text-4xl font-bold text-smoke leading-tight wrap-break-word min-w-0">
                   { timelapse?.name || <Skeleton /> }
                 </h1>
 

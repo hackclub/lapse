@@ -1,12 +1,11 @@
 import { useCallback, useState, type ReactNode } from "react";
+import type { KnownDevice } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
 import { deviceStorage } from "@/deviceStorage";
 import { useAuthContext } from "@/context/AuthContext";
 import { useInterval } from "@/hooks/useInterval";
 import { KeyRelayApprovalModal } from "@/components/layout/KeyRelayApprovalModal";
-
-import type { KnownDevice } from "@hackclub/lapse-api";
 
 export function KeyRelayProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuthContext();
@@ -36,6 +35,7 @@ export function KeyRelayProvider({ children }: { children: ReactNode }) {
         exchangeId: res.data.request.exchangeId,
         callingDevice: res.data.request.callingDevice
       });
+      
       setRelayApprovalOpen(true);
     }
   }, [currentUser, relayApprovalOpen]);

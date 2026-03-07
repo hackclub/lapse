@@ -100,5 +100,5 @@ export function CommentSection({ comments, setComments, timelapseId }: {
         }
       </div>
     </div>
-  )
+  );
 }

@@ -2,13 +2,7 @@ import Icon from "@hackclub/icons";
 
 import { Modal, ModalHeader } from "@/components/layout/Modal";
 
-export function LoadingModal({
-  isOpen,
-  title = "Processing...",
-  message,
-  progress,
-  className
-}: {
+export function LoadingModal({ isOpen, title = "Processing...", message, progress, className }: {
   isOpen: boolean;
   title?: string;
   message?: string;
@@ -19,21 +13,21 @@ export function LoadingModal({
     <Modal isOpen={isOpen} className={className}>
       <ModalHeader icon="clock-fill" title={title}>
         <div className="flex flex-col gap-4 w-full">
-          {message && (
+          { message && (
             <p className="text-sm text-muted">{message}</p>
-          )}
+          ) }
 
           <div className="flex items-center gap-2 mb-4 w-full">
             <div className="animate-spin">
               <Icon glyph="clock" size={20} />
             </div>
 
-            {progress !== undefined && (
+            { progress !== undefined && (
               <span className="text-xs text-muted">{Math.round(progress)}%</span>
-            )}
+            ) }
 
             <div className="w-full bg-darkless rounded-full h-2 overflow-hidden">
-              {progress !== undefined ? (
+              { progress !== undefined ? (
                 <div
                   className="bg-red h-2 rounded-full transition-all duration-300"
                   style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}

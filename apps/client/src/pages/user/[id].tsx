@@ -169,7 +169,7 @@ export default function Page() {
             />
 
             <div className="flex flex-col">
-              <h1 className="text-4xl font-bold break-words">{ user ? user.displayName : <Skeleton className="w-48" /> }</h1>
+              <h1 className="text-4xl font-bold wrap-break-word">{ user ? user.displayName : <Skeleton className="w-48" /> }</h1>
               <p className="text-secondary text-lg m-0">{ user ? `@${user.handle}` : <Skeleton className="w-32 h-3!" /> }</p>
 
               { user?.bio && user.bio.trim().length > 0 && (

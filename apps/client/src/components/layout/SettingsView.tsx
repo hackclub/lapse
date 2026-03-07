@@ -146,188 +146,190 @@ export function SettingsView({ isOpen, setIsOpen }: {
   const deviceWords = getDeviceWords();
   const callingDeviceId = getCurrentDeviceId();
 
-  return (<div>
-    <WindowedModal
-      icon="settings"
-      title="Settings"
-      description="Some of these settings will be synchronized"
-      isOpen={isOpen}
-      setIsOpen={setIsOpen}
-    >
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col">
-            <h3 className="font-bold">Device Key</h3>
-            <p className="text-muted">{"Click to show! You'll need these words to access unpublished timelapses on other devices."}</p>
-          </div>
-
-          <div className="w-full flex justify-center">
-            <button
-              type="button"
-              className="border border-slate w-full flex justify-center rounded-md p-3 px-8 cursor-pointer hover:bg-darker transition-colors shadow"
-              onClick={() => setWordsVisible(!wordsVisible)}
-            >
-              <span className={`font-mono text-sm leading-relaxed select-none transition-all text-center ${wordsVisible ? "" : "blur-xs"}`}>
-                {deviceWords || "no key found"}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col">
-            <h3 className="text-lg font-semibold">Known Devices</h3>
-            <p className="text-muted">{"In order to access unpublished timelapses from another device, you'll need its key."}</p>
-          </div>
-
-          {devices.length === 0 ? (
-            <p className="text-muted text-sm">No devices found</p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {devices.map(device => (
-                <div key={device.id} className="flex items-center justify-between p-3 border-l-8 border-primary rounded-md">
-                  <div className="flex flex-col">
-                    <span className="font-medium">{device.name}</span>
-                    <span className="text-sm text-muted">{device.id}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    {
-                      isDeviceLocal(device.id)
-                        ? <span>(this device)</span>
-                        : (
-                          <>
-                            {
-                              hasPasskeyForDevice(device.id) ? (
-                                <Button
-                                  kind="regular"
-                                  onClick={() => handleRemovePasskey(device.id)}
-                                  className="p-2"
-                                >
-                                  <Icon glyph="private" size={16} />
-                                  <span>Remove key</span>
-                                </Button>
-                              ) : (
-                                <Button
-                                  kind="regular"
-                                  onClick={() => handleAddPasskey(device.id)}
-                                  className="p-2"
-                                >
-                                  <Icon glyph="private" size={16} />
-                                  <span>Add key</span>
-                                </Button>
-                              )
-                            }
-
-                            <Button
-                              kind="regular"
-                              onClick={() => handleRemoveDevice(device.id)}
-                              className="px-5!"
-                            >
-                              <Icon glyph="delete" size={20} />
-                            </Button>
-                          </>
-                        )
-                    }
-                  </div>
-                </div>
-              ))}
+  return (
+    <div>
+      <WindowedModal
+        icon="settings"
+        title="Settings"
+        description="Some of these settings will be synchronized"
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col">
+              <h3 className="font-bold">Device Key</h3>
+              <p className="text-muted">{ "Click to show! You'll need these words to access unpublished timelapses on other devices." }</p>
             </div>
-          )}
-        </div>
 
-        <div className="flex gap-4 pt-4">
-          <Button
-            kind="regular"
-            onClick={() => setConnectedServicesOpen(true)}
-            className="flex-1"
-          >
-            Connected Services
-          </Button>
+            <div className="w-full flex justify-center">
+              <button
+                type="button"
+                className="border border-slate w-full flex justify-center rounded-md p-3 px-8 cursor-pointer hover:bg-darker transition-colors shadow"
+                onClick={() => setWordsVisible(!wordsVisible)}
+              >
+                <span className={`font-mono text-sm leading-relaxed select-none transition-all text-center ${wordsVisible ? "" : "blur-xs"}`}>
+                  { deviceWords || "no key found" }
+                </span>
+              </button>
+            </div>
+          </div>
 
-          <Button
-            kind="regular"
-            onClick={() => window.location.assign("/developer/apps")}
-            className="flex-1"
-          >
-            Developer Apps
-          </Button>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col">
+              <h3 className="text-lg font-semibold">Known Devices</h3>
+              <p className="text-muted">{"In order to access unpublished timelapses from another device, you'll need its key."}</p>
+            </div>
 
-          <Button
-            kind="primary"
-            onClick={() => setIsOpen(false)}
-            className="flex-1"
-          >
-            Close
-          </Button>
-        </div>
-      </div>
-    </WindowedModal>
+            {devices.length === 0 ? (
+              <p className="text-muted text-sm">No devices found</p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {devices.map(device => (
+                  <div key={device.id} className="flex items-center justify-between p-3 border-l-8 border-primary rounded-md">
+                    <div className="flex flex-col">
+                      <span className="font-medium">{device.name}</span>
+                      <span className="text-sm text-muted">{device.id}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {
+                        isDeviceLocal(device.id)
+                          ? <span>(this device)</span>
+                          : (
+                            <>
+                              {
+                                hasPasskeyForDevice(device.id) ? (
+                                  <Button
+                                    kind="regular"
+                                    onClick={() => handleRemovePasskey(device.id)}
+                                    className="p-2"
+                                  >
+                                    <Icon glyph="private" size={16} />
+                                    <span>Remove key</span>
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    kind="regular"
+                                    onClick={() => handleAddPasskey(device.id)}
+                                    className="p-2"
+                                  >
+                                    <Icon glyph="private" size={16} />
+                                    <span>Add key</span>
+                                  </Button>
+                                )
+                              }
 
-    {currentDeviceForPin && callingDeviceId && (
-      <PasskeyModal
-        isOpen={pinModalOpen}
-        setIsOpen={setPinModalOpen}
-        description={`Transfer the key for ${devices.find(d => d.id === currentDeviceForPin)?.name || "Unknown Device"}`}
-        targetDeviceId={currentDeviceForPin}
-        callingDeviceId={callingDeviceId}
-        onPasskeySubmit={handlePinSubmit}
-      />
-    )}
-
-    <ErrorModal
-      isOpen={!!error}
-      setIsOpen={(open) => !open && setError(null)}
-      message={error!}
-    />
-
-    <OAuthGrantsView
-      isOpen={connectedServicesOpen}
-      setIsOpen={setConnectedServicesOpen}
-    />
-
-    <WindowedModal
-      icon="delete"
-      title="Remove Device"
-      description="This action cannot be undone"
-      isOpen={removeDeviceModalOpen}
-      setIsOpen={setRemoveDeviceModalOpen}
-    >
-      <div className="flex flex-col gap-4">
-        <p>
-          This device has {timelapsesToRemove.length} unpublished timelapse{timelapsesToRemove.length !== 1 ? "s" : ""} that will be permanently deleted:
-        </p>
-
-        <div className="bg-darkless rounded-md p-3 px-4 max-h-32 overflow-y-auto">
-          {timelapsesToRemove.map(timelapse => (
-            <div key={timelapse.id} className="flex justify-between items-center py-1">
-              <div className="flex flex-col">
-                <span className="font-bold truncate">{timelapse.name}</span>
-                <span className="truncate text-muted">{timelapse.description}</span>
+                              <Button
+                                kind="regular"
+                                onClick={() => handleRemoveDevice(device.id)}
+                                className="px-5!"
+                              >
+                                <Icon glyph="delete" size={20} />
+                              </Button>
+                            </>
+                          )
+                      }
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
+          </div>
 
-              <span className="text-sm text-muted ml-2">{timelapse.id.slice(0, 8)}...</span>
-            </div>
-          ))}
+          <div className="flex gap-4 pt-4">
+            <Button
+              kind="regular"
+              onClick={() => setConnectedServicesOpen(true)}
+              className="flex-1"
+            >
+              Connected Services
+            </Button>
+
+            <Button
+              kind="regular"
+              onClick={() => window.location.assign("/developer/apps")}
+              className="flex-1"
+            >
+              Developer Apps
+            </Button>
+
+            <Button
+              kind="primary"
+              onClick={() => setIsOpen(false)}
+              className="flex-1"
+            >
+              Close
+            </Button>
+          </div>
         </div>
+      </WindowedModal>
 
-        <div className="flex gap-4">
-          <Button
-            kind="primary"
-            onClick={() => deviceToRemove && confirmRemoveDevice(deviceToRemove)}
-            className="flex-1"
-          >
-            Remove Device
-          </Button>
+      { currentDeviceForPin && callingDeviceId && (
+        <PasskeyModal
+          isOpen={pinModalOpen}
+          setIsOpen={setPinModalOpen}
+          description={`Transfer the key for ${devices.find(d => d.id === currentDeviceForPin)?.name || "Unknown Device"}`}
+          targetDeviceId={currentDeviceForPin}
+          callingDeviceId={callingDeviceId}
+          onPasskeySubmit={handlePinSubmit}
+        />
+      ) }
 
-          <Button
-            kind="regular"
-            onClick={cancelRemoveDevice}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
+      <ErrorModal
+        isOpen={!!error}
+        setIsOpen={(open) => !open && setError(null)}
+        message={error!}
+      />
+
+      <OAuthGrantsView
+        isOpen={connectedServicesOpen}
+        setIsOpen={setConnectedServicesOpen}
+      />
+
+      <WindowedModal
+        icon="delete"
+        title="Remove Device"
+        description="This action cannot be undone"
+        isOpen={removeDeviceModalOpen}
+        setIsOpen={setRemoveDeviceModalOpen}
+      >
+        <div className="flex flex-col gap-4">
+          <p>
+            This device has {timelapsesToRemove.length} unpublished timelapse{timelapsesToRemove.length !== 1 ? "s" : ""} that will be permanently deleted:
+          </p>
+
+          <div className="bg-darkless rounded-md p-3 px-4 max-h-32 overflow-y-auto">
+            {timelapsesToRemove.map(timelapse => (
+              <div key={timelapse.id} className="flex justify-between items-center py-1">
+                <div className="flex flex-col">
+                  <span className="font-bold truncate">{timelapse.name}</span>
+                  <span className="truncate text-muted">{timelapse.description}</span>
+                </div>
+
+                <span className="text-sm text-muted ml-2">{timelapse.id.slice(0, 8)}...</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-4">
+            <Button
+              kind="primary"
+              onClick={() => deviceToRemove && confirmRemoveDevice(deviceToRemove)}
+              className="flex-1"
+            >
+              Remove Device
+            </Button>
+
+            <Button
+              kind="regular"
+              onClick={cancelRemoveDevice}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
-      </div>
-    </WindowedModal>
-  </div>);
+      </WindowedModal>
+    </div>
+  );
 }

@@ -18,7 +18,7 @@ type ServiceInfo = {
   trustLevel?: "TRUSTED" | "UNTRUSTED";
 };
 
-const EXTRA_IMPORTANT_SCOPES = [
+const SILLY_SCOPES = [
   "Order a thousand pizzas",
   "Summon evil ascpixi",
   "Post in #meta",
@@ -39,11 +39,7 @@ export default function OAuthAuthorize() {
   const [typedName, setTypedName] = useState("");
   const [requestedScopes, setRequestedScopes] = useState<string[]>([]);
   const [trustLevel, setTrustLevel] = useState<"TRUSTED" | "UNTRUSTED" | null>(null);
-  const [extraScope, setExtraScope] = useState(
-    EXTRA_IMPORTANT_SCOPES[
-      Math.floor(Math.random() * EXTRA_IMPORTANT_SCOPES.length)
-    ],
-  );
+  const [sillyScope] = useState(SILLY_SCOPES[Math.floor(Math.random() * SILLY_SCOPES.length)],);
 
   const { client_id, scope, redirect_uri, state } = router.query;
   const resolvedRedirectUri = typeof redirect_uri === "string" ? redirect_uri : undefined;
@@ -131,10 +127,10 @@ export default function OAuthAuthorize() {
       }
     }
 
-    active["Extra"] = [{ scope: "extra", description: extraScope }];
+    active["Extra"] = [{ scope: "extra", description: sillyScope }];
 
     return active;
-  }, [scopes, extraScope]);
+  }, [scopes, sillyScope]);
 
   const hasWriteScopes = requestedScopes.some(x => x.endsWith(":write"),);
 

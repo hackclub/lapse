@@ -13,18 +13,7 @@ export interface ErrorModalButton {
   kind?: "primary" | "regular";
 }
 
-export function ErrorModal({
-  isOpen,
-  setIsOpen,
-  title = "Woops!",
-  message,
-  icon = "important",
-  buttons,
-  onRetry,
-  onClose,
-  retryLabel = "Try Again",
-  className
-}: {
+export function ErrorModal({ isOpen, setIsOpen, title = "Woops!", message, icon = "important", buttons, onRetry, onClose, retryLabel = "Try Again", className }: {
   isOpen: boolean;
   setIsOpen: (x: boolean) => void;
   title?: string;

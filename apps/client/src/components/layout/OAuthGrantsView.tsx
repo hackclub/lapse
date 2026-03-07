@@ -3,12 +3,11 @@ import clsx from "clsx";
 import { OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
 
 import { Button } from "@/components/ui/Button";
+import { WindowedModal } from "@/components/layout/WindowedModal";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/api";
 
-import { WindowedModal } from "@/components/layout/WindowedModal";
-
-const groupOrder = ["Timelapses", "Comments", "Profile", "Insights"];
+const GROUP_ORDER = ["Timelapses", "Comments", "Profile", "Insights"];
 
 type ServiceGrant = {
   id: string
@@ -22,7 +21,7 @@ type ServiceGrant = {
 function groupScopes(scopes: string[]) {
   const grouped: Record<string, string[]> = {};
 
-  for (const groupName of groupOrder) {
+  for (const groupName of GROUP_ORDER) {
     const groupScopes = OAUTH_SCOPE_GROUPS[groupName as keyof typeof OAUTH_SCOPE_GROUPS] as Record<string, string>;
     const entries = Object.keys(groupScopes).filter(scope => scopes.includes(scope));
     if (entries.length > 0)
@@ -101,19 +100,19 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
       setIsOpen={setIsOpen}
     >
       <div className="flex flex-col gap-4">
-        {isLoading && (
+        { isLoading && (
           <p className="text-muted">Loading connected services...</p>
-        )}
+        ) }
 
-        {!isLoading && error && (
+        { !isLoading && error && (
           <p className="text-red-400">{error}</p>
-        )}
+        ) }
 
-        {!isLoading && !error && grants.length === 0 && (
+        { !isLoading && !error && grants.length === 0 && (
           <p className="text-muted text-sm">No connected services yet.</p>
-        )}
+        ) }
 
-        {!isLoading && !error && grants.length > 0 && (
+        { !isLoading && !error && grants.length > 0 && (
           <div className="flex flex-col gap-4">
             {grants.map(grant => {
               const grouped = groupScopes(grant.scopes);
@@ -155,7 +154,7 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
               );
             })}
           </div>
-        )}
+        ) }
       </div>
     </WindowedModal>
   );

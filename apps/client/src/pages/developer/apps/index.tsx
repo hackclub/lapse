@@ -485,21 +485,8 @@ export default function DeveloperApps() {
             </p>
 
             <div className="flex gap-2">
-              <Button
-                kind="regular"
-                onClick={() => setDeleteConfirmId(null)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-
-              <Button
-                kind="destructive"
-                onClick={() => deleteConfirmId && deleteApp(deleteConfirmId)}
-                className="flex-1"
-              >
-                Delete App
-              </Button>
+              <Button kind="regular" onClick={() => setDeleteConfirmId(null)} className="flex-1">Cancel</Button>
+              <Button kind="destructive" onClick={() => deleteConfirmId && deleteApp(deleteConfirmId)} className="flex-1">Delete App</Button>
             </div>
           </div>
         </WindowedModal>
@@ -513,26 +500,12 @@ export default function DeveloperApps() {
         >
           <div className="flex flex-col gap-4">
             <p className="text-muted text-sm">
-              Rotating the secret will invalidate the existing secret
-              immediately.
+              Rotating the secret will invalidate the existing secret immediately.
             </p>
 
             <div className="flex gap-2">
-              <Button
-                kind="regular"
-                onClick={() => setRotateSecretId(null)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              
-              <Button
-                kind="primary"
-                onClick={() => rotateSecretId && rotateSecret(rotateSecretId)}
-                className="flex-1"
-              >
-                Rotate Secret
-              </Button>
+              <Button kind="regular" onClick={() => setRotateSecretId(null)} className="flex-1">Cancel</Button>
+              <Button kind="primary" onClick={() => rotateSecretId && rotateSecret(rotateSecretId)} className="flex-1">Rotate Secret</Button>
             </div>
           </div>
         </WindowedModal>

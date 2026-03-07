@@ -4,16 +4,15 @@ import Icon from "@hackclub/icons";
 import { useState } from "react";
 import clsx from "clsx";
 
-import LapseLogo from "@/assets/icon.svg";
-
-import { useAuth } from "@/hooks/useAuth";
-
 import { Button } from "@/components/ui/Button";
 import { ProfilePicture } from "@/components/entity/ProfilePicture";
 import { SettingsView } from "@/components/layout/SettingsView";
 import { useCachedState } from "@/hooks/useCachedState";
 import { useInterval } from "@/hooks/useInterval";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/api";
+
+import LapseLogo from "@/assets/icon.svg";
 
 export function Header() {
   const auth = useAuth(false);

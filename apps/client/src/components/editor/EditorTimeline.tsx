@@ -1,22 +1,21 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import Icon from "@hackclub/icons";
+import clsx from "clsx";
+import { EditListEntry } from "@hackclub/lapse-api";
+import { assert, formatDuration } from "@hackclub/lapse-shared";
+
+import { EditorEditRegion } from "@/components/editor/EditorEditRegion";
 import { Button } from "@/components/ui/Button";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 import { VideoPlayback } from "@/hooks/useVideoPlayback";
 import { makeFilmstrip } from "@/video";
-import { EditListEntry } from "@hackclub/lapse-api";
-import { formatDuration } from "@hackclub/lapse-shared";
-import clsx from "clsx";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import Icon from "@hackclub/icons";
 
 import CutIcon from "@/assets/icons/cut.svg";
 import PlayIcon from "@/assets/icons/play.svg";
 import PauseIcon from "@/assets/icons/pause.svg";
 import PlayheadIcon from "@/assets/playhead.svg";
-import { EditorEditRegion } from "@/components/editor/EditorEditRegion";
-
 
 const FILMSTRIP_COUNT = 90;
-
 
 export function EditorTimeline({ sessions, editList, setEditList, playback, onSaveAndExit, onPublish, onDeleteDraft }: {
   sessions: { url: string; duration: number }[],
@@ -32,7 +31,6 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
   const [zoomFactor, setZoomFactor] = useState(1);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [selectedEditRegionIdx, setSelectedIndex] = useState<number | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const timelineRef = React.useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
@@ -118,16 +116,15 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
 
   function zoom(newFactor: number) {
     const container = timelineRef.current;
-    if (!container) return;
+    if (!container)
+      return;
 
-    // Calculate playhead position on screen before zoom
     const playheadPxBefore = (time / totalTime) * container.scrollWidth;
     const playheadScreenX = playheadPxBefore - container.scrollLeft;
 
     setZoomFactor(newFactor);
 
     requestAnimationFrame(() => {
-      // Calculate new playhead position after zoom
       const newScrollWidth = container.scrollWidth;
       const playheadPxAfter = (time / totalTime) * newScrollWidth;
       container.scrollLeft = playheadPxAfter - playheadScreenX;
@@ -144,7 +141,8 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
 
   const seekToPointerPosition = useCallback((clientX: number) => {
     const container = timelineRef.current;
-    if (!container || totalTime <= 0) return;
+    if (!container || totalTime <= 0)
+      return;
 
     const rect = container.getBoundingClientRect();
     const posInContainer = clientX - rect.left + container.scrollLeft;
@@ -152,28 +150,35 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
     setTime(ratio * totalTime);
   }, [totalTime, setTime]);
 
-  const handlePlayheadPointerDown = useCallback((e: React.PointerEvent) => {
+  const handlePlayheadPointerDown = useCallback((ev: React.PointerEvent) => {
     const container = timelineRef.current;
-    if (!container) return;
+    if (!container)
+      return;
 
-    e.preventDefault();
-    e.stopPropagation();
+    ev.preventDefault();
+    ev.stopPropagation();
 
-    const pointerId = e.pointerId;
-    (e.currentTarget as HTMLElement).setPointerCapture(pointerId);
+    if (!(ev.currentTarget instanceof HTMLElement))
+      return;
 
-    const onPointerMove = (ev: PointerEvent) => {
-      seekToPointerPosition(ev.clientX);
+    const pointerId = ev.pointerId;
+    ev.currentTarget.setPointerCapture(pointerId);
+
+    const onPointerMove = (ptrMoveEv: PointerEvent) => {
+      seekToPointerPosition(ptrMoveEv.clientX);
     };
 
-    const onPointerUp = (ev: PointerEvent) => {
-      (ev.target as HTMLElement).releasePointerCapture(pointerId);
-      (ev.target as HTMLElement).removeEventListener("pointermove", onPointerMove);
-      (ev.target as HTMLElement).removeEventListener("pointerup", onPointerUp);
+    const onPointerUp = (ptrUpEv: PointerEvent) => {
+      if (!(ptrUpEv.target instanceof HTMLElement))
+        return;
+
+      ptrUpEv.target.releasePointerCapture(pointerId);
+      ptrUpEv.target.removeEventListener("pointermove", onPointerMove);
+      ptrUpEv.target.removeEventListener("pointerup", onPointerUp);
     };
 
-    (e.currentTarget as HTMLElement).addEventListener("pointermove", onPointerMove);
-    (e.currentTarget as HTMLElement).addEventListener("pointerup", onPointerUp);
+    ev.currentTarget.addEventListener("pointermove", onPointerMove);
+    ev.currentTarget.addEventListener("pointerup", onPointerUp);
   }, [seekToPointerPosition]);
 
   const handleTimelinePointerDown = useCallback((e: React.PointerEvent) => {
@@ -183,10 +188,14 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
 
     e.preventDefault();
     setSelectedIndex(null);
+
     const startX = e.clientX;
     const startScroll = container.scrollLeft;
-    const pointerId = e.pointerId;
+    
     let didDrag = false;
+
+    const pointerId = e.pointerId;
+
     container.setPointerCapture(pointerId);
 
     const onPointerMove = (ev: PointerEvent) => {
@@ -224,26 +233,28 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
     const begin = Math.max(0, centerVisibleTime - cutDuration / 2);
     const end = Math.min(totalTime, begin + cutDuration);
 
-    setEditList([...editList, {
-      begin,
-      end,
-      kind: "CUT"
-    }]);
+    setEditList(
+      [ ...editList, { begin, end, kind: "CUT" } ]
+    );
   }
 
-  const removeSelectedEditRegion = useCallback(() => {
-    setEditList(editList.filter((_, j) => j !== selectedEditRegionIdx));
-    setSelectedIndex(null);
-  }, [editList]);
+  const removeSelectedEditRegion = useCallback(
+    () => {
+      setEditList(editList.filter((_, i) => i !== selectedEditRegionIdx));
+      setSelectedIndex(null);
+    },
+    [editList]
+  );
 
   const durationAfterCuts = (() => {
-      let duration = totalTime;
-      for (const edit of editList) {
-          if (edit.kind === "CUT") {
-              duration -= (edit.end - edit.begin);
-          }
+    let duration = totalTime;
+    for (const edit of editList) {
+      if (edit.kind === "CUT") {
+        duration -= (edit.end - edit.begin);
       }
-      return Math.max(0, duration);
+    }
+
+    return Math.max(0, duration);
   })();
 
   return (
@@ -258,81 +269,82 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
           className="flex flex-col h-full relative"
           style={{ width: `${zoomFactor * 100}%` }}
         >
-          {totalTime > 0 && (() => {
-            const timestampCount = Math.max(2, Math.round(5 * zoomFactor));
-            const rulerLineCount = Math.max(20, Math.round(150 * zoomFactor));
-            const playheadPercent = (time / totalTime) * 100;
-
-            return (
-              <div ref={rulerRef} className="flex flex-col px-1 shrink-0 relative">
-                <div className="flex justify-between">
-                  {Array.from({ length: timestampCount }, (_, i) => {
-                    const t = totalTime * (i / (timestampCount - 1));
-                    return (
-                      <span key={i} className="text-secondary select-none" style={{ fontSize: 16 }}>
-                        {formatDuration(Math.round(t))}
-                      </span>
-                    );
-                  })}
-                </div>
-                <div className="flex justify-between items-end h-3">
-                  {Array.from({ length: rulerLineCount }, (_, i) => (
-                    <div
-                      key={i}
-                      className="bg-secondary"
-                      style={{
-                        width: 1,
-                        height: i % 5 === 0 ? 12 : 6,
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <div
-                  ref={playheadRef}
-                  className="absolute bottom-0 -translate-x-1/2 z-10 cursor-ew-resize drop-shadow"
-                  style={{ left: `${playheadPercent}%`, marginBottom: -1 }}
-                  onPointerDown={handlePlayheadPointerDown}
-                >
-                  <PlayheadIcon />
-                </div>
-              </div>
-            );
-          })()}
-
-          <div
-            className="flex flex-1 min-h-0 bg-darker relative border border-slate rounded-2xl overflow-hidden"
-          >
           {
-            filmstrip.map((x, i) => (
-              <img
-                src={x}
-                key={i}
-                alt=""
-                draggable={false}
-                className={clsx(
-                  "h-full object-left select-none pointer-events-none",
-                  zoomFactor > 6 ? "object-contain" : "object-cover"
-                )}
-                style={{ width: `${((1 / FILMSTRIP_COUNT) * 100)}%` }}
-              />
-            ))
+            totalTime > 0 && (() => {
+              const timestampCount = Math.max(2, Math.round(5 * zoomFactor));
+              const rulerLineCount = Math.max(20, Math.round(150 * zoomFactor));
+              const playheadPercent = (time / totalTime) * 100;
+
+              return (
+                <div ref={rulerRef} className="flex flex-col px-1 shrink-0 relative">
+                  <div className="flex justify-between">
+                    {Array.from({ length: timestampCount }, (_, i) => {
+                      const t = totalTime * (i / (timestampCount - 1));
+                      return (
+                        <span key={i} className="text-secondary select-none" style={{ fontSize: 16 }}>
+                          {formatDuration(Math.round(t))}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex justify-between items-end h-3">
+                    {Array.from({ length: rulerLineCount }, (_, i) => (
+                      <div
+                        key={i}
+                        className="bg-secondary"
+                        style={{
+                          width: 1,
+                          height: i % 5 === 0 ? 12 : 6,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div
+                    ref={playheadRef}
+                    className="absolute bottom-0 -translate-x-1/2 z-10 cursor-ew-resize drop-shadow"
+                    style={{ left: `${playheadPercent}%`, marginBottom: -1 }}
+                    onPointerDown={handlePlayheadPointerDown}
+                  >
+                    <PlayheadIcon />
+                  </div>
+                </div>
+              );
+            })()
           }
 
-          {
-            editList.map((x, i) => (
-              <EditorEditRegion
-                edit={x}
-                setEdit={(updated) => setEditList(editList.map((e, j) => j === i ? updated : e))}
-                totalDuration={totalTime}
-                selected={selectedEditRegionIdx === i}
-                onSelect={() => setSelectedIndex(i)}
-              />
-            ))
-          }
+          <div className="flex flex-1 min-h-0 bg-darker relative border border-slate rounded-2xl overflow-hidden">
+            {
+              filmstrip.map((x, i) => (
+                <img
+                  src={x}
+                  key={i}
+                  alt=""
+                  draggable={false}
+                  className={clsx(
+                    "h-full object-left select-none pointer-events-none",
+                    zoomFactor > 6 ? "object-contain" : "object-cover"
+                  )}
+                  style={{ width: `${((1 / FILMSTRIP_COUNT) * 100)}%` }}
+                />
+              ))
+            }
+
+            {
+              editList.map((x, i) => (
+                <EditorEditRegion
+                  edit={x}
+                  setEdit={(updated) => setEditList(editList.map((e, j) => j === i ? updated : e))}
+                  totalDuration={totalTime}
+                  selected={selectedEditRegionIdx === i}
+                  onSelect={() => setSelectedIndex(i)}
+                />
+              ))
+            }
           </div>
 
-          {totalTime > 0 && (
+          { totalTime > 0 && (
             <div
               ref={playingStemRef}
               className="absolute pointer-events-none z-10 shadow-2xl"
@@ -346,7 +358,7 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
                 borderRadius: "0 0 1px 1px",
               }}
             />
-          )}
+          ) }
         </div>
       </div>
 
@@ -378,5 +390,5 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,5 +1,6 @@
 import { TimeAgo } from "@/components/TimeAgo";
 import { Link } from "@/components/ui/Link";
+
 import buildInfoJson from "@/generated/build-info.json";
 
 const BUILD_INFO = buildInfoJson as {

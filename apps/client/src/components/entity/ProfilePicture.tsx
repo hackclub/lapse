@@ -5,19 +5,12 @@ import { type PublicUser } from "@hackclub/lapse-api";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 
-export function ProfilePicture({
-  user,
-  size = "md",
-  className = "",
-  isSkeleton
-}: {
+export function ProfilePicture({ user, size = "md", className = "", isSkeleton = false }: {
   user: PublicUser | null,
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   className?: string;
   isSkeleton?: boolean;
 }) {
-  isSkeleton ??= false;
-
   const sizeClass = match(size, {
     "xs": "w-6 h-6 text-xs",
     "sm": "w-8 h-8 text-xs",
@@ -26,9 +19,8 @@ export function ProfilePicture({
     "xl": "w-16 h-16 text-lg"
   });
 
-  if (isSkeleton || !user) {
+  if (isSkeleton || !user)
     return <Skeleton circular className={sizeClass} />;
-  }
   
   return (
     <NextLink href={user && `/user/@${user.handle}`}>

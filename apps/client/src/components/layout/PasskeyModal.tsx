@@ -121,38 +121,38 @@ export function PasskeyModal({ isOpen, setIsOpen, description, targetDeviceId, c
             <p className="text-muted text-sm">Request the key from the other device. The owner of that device will be asked to approve the transfer.</p>
           </div>
 
-          {relay.stage === "idle" && (
+          { relay.stage === "idle" && (
             <Button kind="primary" onClick={startRelay}>
               Request Key Transfer
             </Button>
-          )}
+          ) }
 
-          {relay.stage === "requesting" && (
+          { relay.stage === "requesting" && (
             <div className="flex items-center justify-center gap-2 p-3 bg-darkless rounded-md text-muted">
               <span className="animate-pulse">Requesting...</span>
             </div>
-          )}
+          ) }
 
-          {relay.stage === "polling" && (
+          { relay.stage === "polling" && (
             <div className="flex items-center justify-center gap-2 p-3 bg-darkless rounded-md text-muted">
               <span className="animate-pulse">Waiting for approval from the other device...</span>
             </div>
-          )}
+          ) }
 
-          {relay.stage === "error" && (
+          { relay.stage === "error" && (
             <div className="flex flex-col gap-2">
               <p className="text-red text-sm">{relay.message}</p>
               <Button kind="regular" onClick={() => setRelay({ stage: "idle" })}>
                 Try Again
               </Button>
             </div>
-          )}
+          ) }
 
-          {relay.stage === "success" && (
+          { relay.stage === "success" && (
             <div className="flex items-center justify-center gap-2 p-3 bg-darkless rounded-md text-green-400">
               Key received!
             </div>
-          )}
+          ) }
         </div>
 
         <div className="flex items-center gap-4">
@@ -185,7 +185,7 @@ export function PasskeyModal({ isOpen, setIsOpen, description, targetDeviceId, c
           Add Key
         </Button>
 
-        {onDelete && (
+        { onDelete && (
           <div className="flex flex-col gap-4 pt-4 border-t border-slate text-center">
             <p className="text-muted text-sm">Lost access to the other device? You can delete this unpublished timelapse instead.</p>
             <Button
@@ -195,7 +195,7 @@ export function PasskeyModal({ isOpen, setIsOpen, description, targetDeviceId, c
               Delete Timelapse
             </Button>
           </div>
-        )}
+        ) }
       </div>
     </WindowedModal>
   );

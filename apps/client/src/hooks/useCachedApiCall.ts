@@ -5,15 +5,15 @@ import { useApiCall } from "@/hooks/useApiCall";
 import { useCache } from "@/hooks/useCache";
 
 export function useCachedApiCall<TRes>(caller: () => Promise<LapseResult<TRes>>, cacheKey: string) {
-    const res = useApiCall(caller);
-    const [cache, setCache] = useCache<TRes>(cacheKey);
-    
-    useEffect(() => {
-        if (!res)
-            return;
+  const res = useApiCall(caller);
+  const [cache, setCache] = useCache<TRes>(cacheKey);
 
-        setCache(res);
-    }, [res]);
+  useEffect(() => {
+    if (!res)
+      return;
 
-    return res ?? cache;
-}
+    setCache(res);
+  }, [res]);
+
+  return res ?? cache;
+} 2

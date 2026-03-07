@@ -5,12 +5,7 @@ import clsx from "clsx";
 import { Header } from "@/components/layout/Header";
 import { jetBrainsMono, phantomSans } from "@/fonts";
 
-export default function RootLayout({
-  children,
-  title = "Lapse",
-  description = "Track time with timelapses",
-  showHeader = false,
-}: PropsWithChildren<{
+export default function RootLayout({ children, title = "Lapse", description = "Track time with timelapses", showHeader = false }: PropsWithChildren<{
   title?: string;
   description?: string;
   showHeader?: boolean;
