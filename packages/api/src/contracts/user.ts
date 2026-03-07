@@ -52,7 +52,12 @@ export const MAX_HANDLE_LENGTH = 16;
 export const UserHandle = z.string().min(MIN_HANDLE_LENGTH).max(MAX_HANDLE_LENGTH);
 export const UserDisplayName = z.string().min(1).max(24);
 export const UserBio = z.string().max(160).default("");
-export const UserUrlList = z.array(z.url().max(64).min(1)).max(4); 
+export const UserUrlList = z.array(z.url().max(64).min(1)).max(4);
+
+/**
+ * The cooldown period in milliseconds for changing a handle (24 hours).
+ */
+export const HANDLE_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000; 
 
 /**
  * Data associated with a user model that should be exposed only to the represented user or

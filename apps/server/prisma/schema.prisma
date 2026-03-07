@@ -63,6 +63,7 @@ model User {
   hackatimeRefreshToken     String?
   slackId                   String?
   lastHeartbeat             DateTime          @default(now())
+  lastHandleChangeAt        DateTime?
 
   timelapses            Timelapse[]
   devices               KnownDevice[]

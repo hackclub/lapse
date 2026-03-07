@@ -32,6 +32,7 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
 
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editHandle, setEditHandle] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editUrls, setEditUrls] = useState<string[]>([]);
@@ -91,6 +92,7 @@ export default function Page() {
     if (!user || !isMyself)
       return;
 
+    setEditHandle(user.handle);
     setEditDisplayName(user.displayName);
     setEditBio(user.bio);
     setEditUrls([...user.urls]);
@@ -112,13 +114,19 @@ export default function Page() {
     try {
       setIsUpdating(true);
 
+      const changes: Record<string, any> = {
+        displayName: editDisplayName.trim(),
+        bio: editBio.trim(),
+        urls: validUrls
+      };
+
+      if (editHandle.trim() !== user.handle) {
+        changes.handle = editHandle.trim();
+      }
+
       const result = await api.user.update({
         id: user.id,
-        changes: {
-          displayName: editDisplayName.trim(),
-          bio: editBio.trim(),
-          urls: validUrls
-        }
+        changes
       });
 
       if (result.ok) {
@@ -270,6 +278,16 @@ export default function Page() {
         setIsOpen={setEditModalOpen}
       >
         <div className="flex flex-col gap-6">
+          <TextInput
+            field={{
+              label: "Handle",
+              description: "Your unique username. You can change this once per day."
+            }}
+            value={editHandle}
+            onChange={setEditHandle}
+            maxLength={16}
+          />
+
           <TextInput
             field={{
               label: "Display Name",

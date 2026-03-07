@@ -1,6 +1,6 @@
 import { implement } from "@orpc/server"
 import { deleteCookie } from "@orpc/server/helpers"
-import { userRouterContract, type KnownDevice, type PublicUser, type User } from "@hackclub/lapse-api"
+import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS } from "@hackclub/lapse-api"
 import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
 import { type Context, logMiddleware, requiredAuth } from "@/router.js";
@@ -142,11 +142,24 @@ export default os.router({
             if (caller.permissionLevel === "USER" && caller.id !== req.input.id)
                 return apiErr("NO_PERMISSION", "You can only edit your own profile");
 
+            // Check handle change cooldown
+            if (req.input.changes.handle !== undefined) {
+                const user = await database().user.findFirst({
+                    where: { id: req.input.id }
+                });
+
+                if (user && user.lastHandleChangeAt) {
+                    const timeSinceLastChange = Date.now() - user.lastHandleChangeAt.getTime();
+                    if (timeSinceLastChange < HANDLE_CHANGE_COOLDOWN_MS)
+                        return apiErr("HANDLE_COOLDOWN", `You can change your handle again in ${Math.ceil((HANDLE_CHANGE_COOLDOWN_MS - timeSinceLastChange) / (60 * 60 * 1000))} hours`);
+                }
+            }
+
             const changes = req.input.changes;
             const updateData: Partial<db.User> = {
                 ...when(changes.displayName !== undefined, { displayName: changes.displayName! }),
                 ...when(changes.bio !== undefined, { bio: changes.bio! }),
-                ...when(changes.handle !== undefined, { handle: changes.handle! }),
+                ...when(changes.handle !== undefined, { handle: changes.handle!, lastHandleChangeAt: new Date() }),
                 ...when(changes.urls !== undefined, { urls: changes.urls! })
             };
 
