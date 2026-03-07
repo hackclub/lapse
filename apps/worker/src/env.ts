@@ -26,7 +26,16 @@ export const env = {
      * The URL for the Redis database, used for job management via BullMQ.
      */
     get REDIS_URL() { return required("REDIS_URL") },
+
+    /**
+     * Passed to `Sentry.init`.
+     */
+    get SENTRY_DSN() { return optional("SENTRY_DSN") },
 };
+
+function optional(name: string) {
+    return process.env[name];
+}
 
 function required(name: string) {
     if (process.env[name] === undefined)

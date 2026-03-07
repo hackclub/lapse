@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import * as Sentry from "@sentry/node";
 import Fastify from "fastify"
 import fastifyCors from "@fastify/cors"
 import { implement, onError, ORPCError, ValidationError } from "@orpc/server"
@@ -28,6 +29,14 @@ import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
 import auth from "@/routers/auth.js"
 import z from "zod";
+
+if (env.SENTRY_DSN) {
+    Sentry.init({
+        dsn: env.SENTRY_DSN,
+        tracesSampleRate: 1,
+        enableLogs: true
+    });
+}
 
 const router = implement(compositeRouterContract)
     .$context<Context>()

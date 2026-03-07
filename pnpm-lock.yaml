@@ -325,6 +325,9 @@ importers:
       '@hackclub/lapse-shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@sentry/node':
+        specifier: ^10.39.0
+        version: 10.39.0
       bullmq:
         specifier: ^5.69.3
         version: 5.69.3

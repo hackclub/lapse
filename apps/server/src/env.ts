@@ -79,7 +79,7 @@ export const env = {
     /**
      * Passed to `Sentry.init`.
      */
-    get SENTRY_DSN() { return required("NEXT_PUBLIC_SENTRY_DSN") },
+    get SENTRY_DSN() { return optional("SENTRY_DSN") },
 
     /**
      * The organization name for Sentry monitoring.
