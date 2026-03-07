@@ -10,6 +10,7 @@
   - You are about to drop the `UploadToken` table. If the table is not empty, all the data it contains will be lost.
   - A unique constraint covering the columns `[associatedTimelapseId]` on the table `DraftTimelapse` will be added. If there are existing duplicate values, this will fail.
   - Added the required column `deviceId` to the `DraftTimelapse` table without a default value. This is not possible if the table is not empty.
+  - Added the required column `iv` to the `DraftTimelapse` table without a default value. This is not possible if the table is not empty.
   - Added the required column `thumbnailKey` to the `DraftTimelapse` table without a default value. This is not possible if the table is not empty.
 
 */
@@ -47,6 +48,7 @@ ADD COLUMN     "associatedTimelapseId" TEXT,
 ADD COLUMN     "description" TEXT NOT NULL DEFAULT '',
 ADD COLUMN     "deviceId" TEXT NOT NULL,
 ADD COLUMN     "editList" JSONB[],
+ADD COLUMN     "iv" TEXT NOT NULL,
 ADD COLUMN     "name" TEXT,
 ADD COLUMN     "sessions" TEXT[],
 ADD COLUMN     "snapshots" TIMESTAMP(3)[],
@@ -61,6 +63,7 @@ DROP COLUMN "deviceId",
 DROP COLUMN "isPublished",
 ADD COLUMN     "associatedJobId" TEXT,
 ADD COLUMN     "snapshots" TIMESTAMP(3)[],
+ADD COLUMN     "sourceDraftId" TEXT,
 ALTER COLUMN "s3Key" DROP NOT NULL;
 
 -- DropTable
