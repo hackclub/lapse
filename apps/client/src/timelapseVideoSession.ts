@@ -99,10 +99,10 @@ export class TimelapseVideoSession {
 
     if (this.recorder.state == "inactive") {
       console.warn("(timelapseVideoSession.ts) MediaRecorder became inactive!", this.recorder);
-      this.recorder.start();
+      this.recorder.start(CAPTURE_INTERVAL_MS);
     }
     else if (this.recorder.state == "paused") {
-      console.warn("(timelapseVideoSession.ts) MediaRecorder becamse paused!", this.recorder);
+      console.warn("(timelapseVideoSession.ts) MediaRecorder became paused!", this.recorder);
       this.recorder.resume();
     }
 
