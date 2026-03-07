@@ -27,8 +27,13 @@ const link = new OpenAPILink(compositeRouterContract, {
     });
   },
   interceptors: [
-    onError((error) => {
-      console.error(error)
+    onError((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "UNAUTHORIZED") {
+        location.href = "/auth";
+      }
+      else {
+        console.error(error);
+      }
     })
   ],
 });
