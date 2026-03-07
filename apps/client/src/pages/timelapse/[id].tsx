@@ -382,19 +382,27 @@ export default function Page() {
         </div>
       </WindowedModal>
 
-      { timelapse && (
+      { timelapse && timelapse.private && !timelapse.private.hackatimeProject && (
         <HackatimeSelectModal
           isOpen={hackatimeModalOpen}
           setIsOpen={setHackatimeModalOpen}
-          timelapseId={timelapse.id}
-          onSynced={() => {
-            api.timelapse.query({ id: timelapse.id }).then(res => {
-              if (res.ok) {
-                setTimelapse(res.data.timelapse);
-              }
-            });
-          }}
           onError={setError}
+          onAccept={async (key) => {
+            if (!key)
+              return;
+
+            const syncRes = await api.timelapse.syncWithHackatime({ id: timelapse.id, hackatimeProject: key });
+            if (!syncRes.ok) {
+              console.error("([id].tsx) could not synchronize timelapse with Hackatime!", syncRes);
+              setError(syncRes.message);
+              return;
+            }
+
+            const res = await api.timelapse.query({ id: timelapse.id });
+            if (res.ok) {
+              setTimelapse(res.data.timelapse);
+            }
+          }}
         />
       ) }
 

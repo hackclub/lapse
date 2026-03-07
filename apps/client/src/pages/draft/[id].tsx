@@ -8,11 +8,10 @@ import { DraftTimelapse, EditListEntry, HackatimeProject, TimelapseVisibility } 
 import { EditorTimeline } from "@/components/editor/EditorTimeline";
 import { ErrorModal } from "@/components/layout/ErrorModal";
 import { PublishModal } from "@/components/layout/PublishModal";
-import { WindowedModal } from "@/components/layout/WindowedModal";
 import RootLayout from "@/components/layout/RootLayout";
-import { DropdownInput } from "@/components/ui/DropdownInput";
 import { Button } from "@/components/ui/Button";
 import { PasskeyModal } from "@/components/layout/PasskeyModal";
+import { HackatimeSelectModal } from "@/components/layout/HackatimeSelectModal";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
@@ -36,9 +35,6 @@ export default function Page() {
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
   const [pendingVisibility, setPendingVisibility] = useState<TimelapseVisibility | null>(null);
-  const [hackatimeProject, setHackatimeProject] = useState("");
-  const [hackatimeProjects, setHackatimeProjects] = useState<HackatimeProject[]>([]);
-  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [errorIsCritical, setErrorIsCritical] = useState(false);
@@ -228,20 +224,7 @@ export default function Page() {
   async function handleVisibilitySelected(visibility: TimelapseVisibility) {
     setPublishModalOpen(false);
     setPendingVisibility(visibility);
-    setHackatimeProject("");
     setHackatimeModalOpen(true);
-    setIsLoadingProjects(true);
-
-    try {
-      const res = await api.hackatime.allProjects({});
-      setHackatimeProjects(res.ok ? res.data.projects : []);
-    }
-    catch {
-      setHackatimeProjects([]);
-    }
-    finally {
-      setIsLoadingProjects(false);
-    }
   }
 
   async function publish(hackatimeProjectName: string | null) {
@@ -352,57 +335,12 @@ export default function Page() {
         onSelect={handleVisibilitySelected}
       />
 
-      <WindowedModal
-        icon="history"
-        title="Sync with Hackatime"
-        description="Import your timelapse snapshots to Hackatime as heartbeats. This can only be done once per timelapse."
+      <HackatimeSelectModal
         isOpen={hackatimeModalOpen}
         setIsOpen={setHackatimeModalOpen}
-      >
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
-            <Icon glyph="important" size={24} className="text-yellow shrink-0" />
-            <div>
-              <p className="font-bold text-yellow">One-time sync</p>
-              <p className="text-smoke">You can only sync a timelapse with Hackatime once. Make sure you choose the correct project name.</p>
-            </div>
-          </div>
-
-          {isLoadingProjects ? (
-            <div className="text-secondary text-center">Loading projects...</div>
-          ) : hackatimeModalOpen && (
-            <>
-              <DropdownInput
-                label="Project Name"
-                description="Select an existing Hackatime project or type to create a new one."
-                value={hackatimeProject}
-                onChange={setHackatimeProject}
-                options={hackatimeProjects.map(project => ({
-                  value: project.name,
-                  searchLabel: project.name,
-                  label: (
-                    <div className="flex justify-between w-full">
-                      <span>{project.name}</span>
-                      <span className="text-secondary">{formatDuration(project.totalSeconds)}</span>
-                    </div>
-                  )
-                }))}
-                allowUserCustom
-              />
-
-              <div className="flex gap-3">
-                <Button onClick={() => publish(hackatimeProject.trim())} disabled={!hackatimeProject.trim()} kind="primary" className="w-full">
-                  Sync with Hackatime
-                </Button>
-
-                <Button onClick={() => publish(null)} className="w-full">
-                  Sync later
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
-      </WindowedModal>
+        onAccept={publish}
+        onError={setError}
+      />
 
       {pendingDraftForDecrypt && thisDeviceId && (
         <PasskeyModal
