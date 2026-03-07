@@ -30,7 +30,7 @@ export const env = {
     /**
      * Passed to `Sentry.init`.
      */
-    get SENTRY_DSN() { return optional("SENTRY_DSN") },
+    get SENTRY_DSN() { return optional("SENTRY_DSN") }
 };
 
 function optional(name: string) {

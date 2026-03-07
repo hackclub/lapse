@@ -82,16 +82,6 @@ export const env = {
     get SENTRY_DSN() { return optional("SENTRY_DSN") },
 
     /**
-     * The organization name for Sentry monitoring.
-     */
-    get SENTRY_ORG() { return required("SENTRY_ORG") },
-
-    /**
-     * The name of the Sentry project.
-     */
-    get SENTRY_PROJECT() { return required("SENTRY_PROJECT") },
-
-    /**
      * A fallback Hackatime API key used in development when OAuth is unavailable.
      * Only considered when `NODE_ENV` is not `"production"`.
      */
