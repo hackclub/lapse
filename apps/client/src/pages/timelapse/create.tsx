@@ -491,7 +491,7 @@ export default function Page() {
   }
 
   function onSetupModalClose() {
-    if (setupState !== "UPDATE" && videoSession === null) {
+    if (setupState !== "UPDATE") {
       router.back();
     }
 
