@@ -138,11 +138,9 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            // Check if user can edit this profile
             if (caller.permissionLevel === "USER" && caller.id !== req.input.id)
                 return apiErr("NO_PERMISSION", "You can only edit your own profile");
 
-            // Check handle change cooldown
             if (req.input.changes.handle !== undefined) {
                 const user = await database().user.findFirst({
                     where: { id: req.input.id }
@@ -150,8 +148,9 @@ export default os.router({
 
                 if (user && user.lastHandleChangeAt) {
                     const timeSinceLastChange = Date.now() - user.lastHandleChangeAt.getTime();
-                    if (timeSinceLastChange < HANDLE_CHANGE_COOLDOWN_MS)
-                        return apiErr("HANDLE_COOLDOWN", `You can change your handle again in ${Math.ceil((HANDLE_CHANGE_COOLDOWN_MS - timeSinceLastChange) / (60 * 60 * 1000))} hours`);
+                    if (timeSinceLastChange < HANDLE_CHANGE_COOLDOWN_MS) {
+                        return apiErr("ERROR", `You can change your handle again in ${Math.ceil((HANDLE_CHANGE_COOLDOWN_MS - timeSinceLastChange) / (60 * 60 * 1000))} hours`);
+                    }
                 }
             }
 
