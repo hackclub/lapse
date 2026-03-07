@@ -57,12 +57,15 @@ export const DraftTimelapseSchema = DraftTimelapsePayloadSchema.extend({
 
     deviceId: z.uuid()
         .describe("The UUID of the known device that has encrypted this draft."),
-
+        
     owner: PublicUserSchema
         .describe("The user that has created this draft timelapse."),
 
     isDraft: z.literal(true)
         .describe("Always `true`. This field is provided for convenience when using strongly-typed clients."),
+
+    iv: z.hex()
+        .describe("The IV to use when encrypting and decrypting binary data associated with the timelapse.")
 });
 
 export const draftTimelapseRouterContract = {

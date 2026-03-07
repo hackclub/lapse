@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Icon from "@hackclub/icons";
 import type { DraftTimelapse, Timelapse } from "@hackclub/lapse-api"
+import { decryptData, fromHex } from "@hackclub/lapse-shared";
 
 import { deviceStorage } from "@/deviceStorage";
-import { decryptData } from "@/encryption";
 import { retryable, sfetch } from "@/safety";
 
 import { ProfilePicture } from "@/components/entity/ProfilePicture"
@@ -19,6 +20,7 @@ export function TimelapseCard({ timelapse }: {
 }) {
   const router = useRouter();
   const [thumb, setThumb] = useState<string | null>(null);
+  const [missingKey, setMissingKey] = useState(false);
 
   useEffect(() => {
     if (timelapse.isDraft) {
@@ -29,18 +31,26 @@ export function TimelapseCard({ timelapse }: {
           return;
         }
 
+        const device = await deviceStorage.getDevice(timelapse.deviceId);
+        if (!device) {
+          setMissingKey(true);
+          return;
+        }
+
         const res = await sfetch(timelapse.previewThumbnail);
         if (!res.ok)
           throw new Error(`HTTP ${res.status}: ${await res.text()}`);
 
         const encryptedThumb = await res.arrayBuffer();
-        
-        const device = await deviceStorage.getDevice(timelapse.deviceId);
-        if (!device)
-          throw new Error(`No device found for timelapse ${timelapse.id}`);
 
         const url = URL.createObjectURL(
-          new Blob([await decryptData(encryptedThumb, timelapse.id, device.passkey)], { type: "image/webp" })
+          new Blob([
+            await decryptData(
+              fromHex(device.passkey).buffer,
+              fromHex(timelapse.iv).buffer,
+              encryptedThumb
+            )
+          ], { type: "image/webp" })
         );
 
         thumbnailCache.set(timelapse.previewThumbnail, url);
@@ -67,7 +77,11 @@ export function TimelapseCard({ timelapse }: {
       <div role="img" className="relative w-full aspect-video rounded-lg sm:rounded-2xl overflow-hidden">
         {
           !thumb
-            ? <div className="bg-slate w-full h-full" />
+            ? (
+              <div className="bg-slate w-full h-full flex items-center justify-center">
+                {missingKey && <Icon glyph="private" size={32} className="text-muted" />}
+              </div>
+            )
             : <img src={thumb} alt="" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
         }
 

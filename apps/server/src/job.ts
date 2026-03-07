@@ -20,13 +20,15 @@ const realizeEvents = new QueueEvents(REALIZE_JOB_QUEUE_NAME, { connection: redi
  * @param timelapseId The ID of the timelapse to assign the realized files to.
  * @param sessionUrls The S3 URLs to the encrypted sessions.
  * @param passkey The passkey used to encrypt the sessions.
+ * @param iv The IV associated with the draft.
  * @param editList The edits to apply while encoding.
  */
-export async function enqueueRealizeJob(timelapseId: string, sessionUrls: string[], passkey: string, editList: EditListEntry[]) {
+export async function enqueueRealizeJob(timelapseId: string, sessionUrls: string[], passkey: string, iv: string, editList: EditListEntry[]) {
     return await realizeQueue.add(`realize-${timelapseId}`, {
         timelapseId,
         sessionUrls,
         passkey,
+        iv,
         editList
     }, {
         attempts: 3

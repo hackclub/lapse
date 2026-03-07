@@ -81,3 +81,16 @@ export function range(n: number) {
 export function last<T>(arr: T[]) {
     return arr[arr.length - 1] as T;
 }
+
+/**
+ * Removes the first item in `array` that meets the given `predicate`.
+ * @returns `true` if the item was removed, `false` if it couldn't be found.
+ */
+export function removeFromArray<T>(array: T[], predicate: (x: T) => boolean) {
+    const idx = array.findIndex(predicate);
+    if (!idx)
+        return false;
+
+    array.splice(idx, 1);
+    return true;
+}

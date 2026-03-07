@@ -1,8 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
+import { decryptData, fromHex } from "@hackclub/lapse-shared";
 
-import { decryptData, getCurrentDevice } from "@/encryption";
+import { getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
 import { sfetch } from "@/safety";
 
@@ -11,6 +12,7 @@ const thumbnailCache = new Map<string, string>();
 async function decryptThumbnail(
   timelapseId: string,
   encryptedThumbnailUrl: string,
+  iv: string,
   deviceId?: string
 ): Promise<string | null> {
   const cacheKey = `${timelapseId}${encryptedThumbnailUrl}`;
@@ -38,9 +40,9 @@ async function decryptThumbnail(
     const url = URL.createObjectURL(
       new Blob([
         await decryptData(
-          await response.arrayBuffer(),
-          timelapseId,
-          device.passkey
+          fromHex(device.passkey).buffer,
+          fromHex(iv).buffer,
+          await response.arrayBuffer()
         )
       ], { type: "image/jpeg" })
     );
@@ -58,6 +60,7 @@ export function ThumbnailImage({
   timelapseId,
   thumbnailUrl,
   isPublished,
+  iv,
   deviceId,
   alt,
   className,
@@ -66,6 +69,7 @@ export function ThumbnailImage({
   timelapseId: string;
   thumbnailUrl: string | null;
   isPublished: boolean;
+  iv: string;
   deviceId?: string;
   alt: string;
   className?: string;
@@ -81,7 +85,7 @@ export function ThumbnailImage({
     }
 
     setIsLoading(true);
-    decryptThumbnail(timelapseId, thumbnailUrl, deviceId)
+    decryptThumbnail(timelapseId, thumbnailUrl, iv, deviceId)
       .then(setDecryptedThumbnail)
       .finally(() => setIsLoading(false));
 
@@ -91,7 +95,7 @@ export function ThumbnailImage({
         URL.revokeObjectURL(decryptedThumbnail);
       }
     };
-  }, [timelapseId, thumbnailUrl, isPublished, deviceId, decryptedThumbnail]);
+  }, [timelapseId, thumbnailUrl, isPublished, iv, deviceId, decryptedThumbnail]);
 
   if (isLoading) {
     return (

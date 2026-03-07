@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
-import type { DraftTimelapse, KnownDevice, Timelapse } from "@hackclub/lapse-api";
+import type { DraftTimelapse, KnownDevice } from "@hackclub/lapse-api";
+import * as bip39 from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
+import { fromHex } from "@hackclub/lapse-shared";
 
 import { api } from "@/api";
 import { deviceStorage, LocalDevice } from "@/deviceStorage";
 import { useAuth } from "@/hooks/useAuth";
-
 import { WindowedModal } from "@/components/layout/WindowedModal";
 import { Button } from "@/components/ui/Button";
 import { PasskeyModal } from "@/components/layout/PasskeyModal";
@@ -18,7 +20,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
 }) {
   const auth = useAuth(false);
 
-  const [passkeyVisible, setPasskeyVisible] = useState(false);
+  const [wordsVisible, setWordsVisible] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
 
   const [currentDeviceForPin, setCurrentDeviceForPin] = useState<string | null>(null);
@@ -116,6 +118,23 @@ export function SettingsView({ isOpen, setIsOpen }: {
     return localDevices.find(d => d.thisDevice)?.passkey || null;
   }
 
+  function getCurrentDeviceId(): string | null {
+    return localDevices.find(d => d.thisDevice)?.id || null;
+  }
+
+  function getDeviceWords(): string | null {
+    const passkey = getCurrentDevicePasskey();
+    if (!passkey)
+      return null;
+
+    try {
+      return bip39.entropyToMnemonic(fromHex(passkey), wordlist);
+    }
+    catch {
+      return null;
+    }
+  }
+
   function isDeviceLocal(deviceId: string): boolean {
     return localDevices.some(d => d.id === deviceId && d.thisDevice);
   }
@@ -123,6 +142,9 @@ export function SettingsView({ isOpen, setIsOpen }: {
   function hasPasskeyForDevice(id: string) {
     return localDevices.some(x => x.id === id);
   }
+
+  const deviceWords = getDeviceWords();
+  const callingDeviceId = getCurrentDeviceId();
 
   return (<div>
     <WindowedModal
@@ -135,27 +157,27 @@ export function SettingsView({ isOpen, setIsOpen }: {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
           <div className="flex flex-col">
-            <h3 className="font-bold">Device Passkey</h3>
-            <p className="text-muted">{"Click to show! You'll need this to access unpublished timelapses on other devices."}</p>
+            <h3 className="font-bold">Device Key</h3>
+            <p className="text-muted">{"Click to show! You'll need these words to access unpublished timelapses on other devices."}</p>
           </div>
 
           <div className="w-full flex justify-center">
             <button
               type="button"
               className="border border-slate w-full flex justify-center rounded-md p-3 px-8 cursor-pointer hover:bg-darker transition-colors shadow"
-              onClick={() => setPasskeyVisible(!passkeyVisible)}
+              onClick={() => setWordsVisible(!wordsVisible)}
             >
-              <span className={`font-mono text-lg tracking-widest select-none transition-all ${passkeyVisible ? "" : "blur-xs"}`}>
-                { getCurrentDevicePasskey() || "000000" }
+              <span className={`font-mono text-sm leading-relaxed select-none transition-all text-center ${wordsVisible ? "" : "blur-xs"}`}>
+                {deviceWords || "no key found"}
               </span>
             </button>
           </div>
         </div>
-        
+
         <div className="flex flex-col gap-4">
           <div className="flex flex-col">
             <h3 className="text-lg font-semibold">Known Devices</h3>
-            <p className="text-muted">{"In order to access unpublished timelapses from another device, you'll need its passkey."}</p>
+            <p className="text-muted">{"In order to access unpublished timelapses from another device, you'll need its key."}</p>
           </div>
 
           {devices.length === 0 ? (
@@ -171,40 +193,40 @@ export function SettingsView({ isOpen, setIsOpen }: {
                   <div className="flex gap-2">
                     {
                       isDeviceLocal(device.id)
-                      ? <span>(this device)</span>
-                      : (
-                        <>
-                          {
-                            hasPasskeyForDevice(device.id) ? (
-                              <Button
-                                kind="regular"
-                                onClick={() => handleRemovePasskey(device.id)}
-                                className="p-2"
-                              >
-                                <Icon glyph="private" size={16} />
-                                <span>Remove passkey</span>
-                              </Button>
-                            ) : (
-                              <Button
-                                kind="regular"
-                                onClick={() => handleAddPasskey(device.id)}
-                                className="p-2"
-                              >
-                                <Icon glyph="private" size={16} />
-                                <span>Add passkey</span>
-                              </Button>
-                            )
-                          }
+                        ? <span>(this device)</span>
+                        : (
+                          <>
+                            {
+                              hasPasskeyForDevice(device.id) ? (
+                                <Button
+                                  kind="regular"
+                                  onClick={() => handleRemovePasskey(device.id)}
+                                  className="p-2"
+                                >
+                                  <Icon glyph="private" size={16} />
+                                  <span>Remove key</span>
+                                </Button>
+                              ) : (
+                                <Button
+                                  kind="regular"
+                                  onClick={() => handleAddPasskey(device.id)}
+                                  className="p-2"
+                                >
+                                  <Icon glyph="private" size={16} />
+                                  <span>Add key</span>
+                                </Button>
+                              )
+                            }
 
-                          <Button
-                            kind="regular"
-                            onClick={() => handleRemoveDevice(device.id)}
-                            className="px-5!"
-                          >
-                            <Icon glyph="delete" size={20} />
-                          </Button>
-                        </>
-                      )
+                            <Button
+                              kind="regular"
+                              onClick={() => handleRemoveDevice(device.id)}
+                              className="px-5!"
+                            >
+                              <Icon glyph="delete" size={20} />
+                            </Button>
+                          </>
+                        )
                     }
                   </div>
                 </div>
@@ -229,7 +251,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
           >
             Developer Apps
           </Button>
-          
+
           <Button
             kind="primary"
             onClick={() => setIsOpen(false)}
@@ -241,15 +263,19 @@ export function SettingsView({ isOpen, setIsOpen }: {
       </div>
     </WindowedModal>
 
-    <PasskeyModal
-      isOpen={pinModalOpen}
-      setIsOpen={setPinModalOpen}
-      description={`Enter the 6-digit PIN for ${devices.find(d => d.id === currentDeviceForPin)?.name || "Unknown Device"}`}
-      onPasskeySubmit={handlePinSubmit}
-    />
+    {currentDeviceForPin && callingDeviceId && (
+      <PasskeyModal
+        isOpen={pinModalOpen}
+        setIsOpen={setPinModalOpen}
+        description={`Transfer the key for ${devices.find(d => d.id === currentDeviceForPin)?.name || "Unknown Device"}`}
+        targetDeviceId={currentDeviceForPin}
+        callingDeviceId={callingDeviceId}
+        onPasskeySubmit={handlePinSubmit}
+      />
+    )}
 
     <ErrorModal
-      isOpen={!!error} 
+      isOpen={!!error}
       setIsOpen={(open) => !open && setError(null)}
       message={error!}
     />
@@ -270,7 +296,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
         <p>
           This device has {timelapsesToRemove.length} unpublished timelapse{timelapsesToRemove.length !== 1 ? "s" : ""} that will be permanently deleted:
         </p>
-        
+
         <div className="bg-darkless rounded-md p-3 px-4 max-h-32 overflow-y-auto">
           {timelapsesToRemove.map(timelapse => (
             <div key={timelapse.id} className="flex justify-between items-center py-1">
@@ -283,7 +309,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
             </div>
           ))}
         </div>
-        
+
         <div className="flex gap-4">
           <Button
             kind="primary"
@@ -292,7 +318,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
           >
             Remove Device
           </Button>
-          
+
           <Button
             kind="regular"
             onClick={cancelRemoveDevice}

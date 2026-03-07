@@ -144,8 +144,8 @@ export const timelapseRouterContract = {
                 visibility: TimelapseVisibilitySchema
                     .describe("The visibility the published timelapse should have. This can be changed later."),
 
-                passkey: z.string().length(6)
-                    .describe("The device passkey used to decrypt the video sessions in the draft timelapse."),
+                deviceKey: z.string().regex(/^[0-9a-f]{32}$/)
+                    .describe("The 128-bit device key (lowercase hex) used to decrypt the video sessions in the draft timelapse."),
 
                 hackatimeProject: z.string().min(1).max(128).optional()
                     .describe("If provided, the timelapse snapshots will be synced to this Hackatime project after processing completes."),
