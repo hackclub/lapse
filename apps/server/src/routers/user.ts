@@ -1,7 +1,7 @@
 import { implement } from "@orpc/server"
 import { deleteCookie } from "@orpc/server/helpers"
 import { userRouterContract, type KnownDevice, type PublicUser, type User } from "@hackclub/lapse-api"
-import { assert, when, descending } from "@hackclub/lapse-shared"
+import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
 import { type Context, logMiddleware, requiredAuth } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
@@ -9,8 +9,21 @@ import { database } from "@/db.js";
 import { logError } from "@/logging.js";
 
 import * as db from "@/generated/prisma/client.js";
-import { deleteTimelapse } from "@/routers/timelapse.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
+
+/**
+ * The TTL for keys being stored in `keysPendingRelay`, in milliseconds. After this time, keys will be automatically removed.
+ */
+const KEY_RELAY_TTL_MS = 5 * 60 * 1000; // 5min
+
+const keyExchanges: KeyExchange[] = [];
+interface KeyExchange {
+    id: string; // unique ID for this exchange
+    key: string | null;
+    targetDevice: string; // the device that requestingDevice wants the key from
+    requestingDevice: string; // the device that initiated this exchange
+    userId: string; // the user that this exchange concerns
+};
 
 const os = implement(userRouterContract)
     .$context<Context>()
@@ -286,5 +299,117 @@ export default os.router({
             });
 
             return apiOk({});
+        }),
+
+    requestKeyRelay: os.requestKeyRelay
+        .use(requiredAuth())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const callingDevice = await database().knownDevice.findFirst({
+                where: { id: req.input.callingDevice }
+            });
+
+            if (!callingDevice || callingDevice.ownerId != caller.id)
+                return apiErr("DEVICE_NOT_FOUND", "The calling device hasn't been registered or doesn't exist.");
+
+            const targetDevice = await database().knownDevice.findFirst({
+                where: { id: req.input.targetDevice }
+            });
+
+            if (!targetDevice || targetDevice.ownerId != caller.id)
+                return apiErr("DEVICE_NOT_FOUND", "Could not find a registered device with that ID.");
+
+            const id = crypto.randomUUID();
+
+            keyExchanges.push({
+                id,
+                key: null,
+                requestingDevice: req.input.callingDevice,
+                targetDevice: req.input.targetDevice,
+                userId: caller.id
+            });
+
+            setTimeout(
+                () => removeFromArray(keyExchanges, x => x.id == id),
+                KEY_RELAY_TTL_MS
+            );
+
+            return apiOk({ exchangeId: id });
+        }),
+
+    queryKeyRelayRequest: os.queryKeyRelayRequest
+        .use(requiredAuth())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const device = await database().knownDevice.findFirst({
+                where: { id: req.input.callingDevice }
+            });
+
+            if (!device || device.ownerId != caller.id)
+                return apiErr("DEVICE_NOT_FOUND", "The calling device hasn't been registered or doesn't exist.");
+
+            const exchange = keyExchanges.find(x => x.targetDevice == req.input.callingDevice && !x.key && x.userId == caller.id);
+            if (exchange) {
+                return apiOk({
+                    request: {
+                        exchangeId: exchange.id,
+                        callingDevice: exchange.requestingDevice
+                    }
+                });
+            }
+
+            return apiOk({ request: null });
+        }),
+
+    provideKeyRelay: os.provideKeyRelay
+        .use(requiredAuth())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const idx = keyExchanges.findIndex(x => x.id == req.input.exchangeId);
+            if (idx === -1)
+                return apiErr("ERROR", `Could not find key relay exchange with ID ${req.input.exchangeId}.`);
+
+            if (keyExchanges[idx].userId != caller.id)
+                return apiErr("ERROR", `Key exchange with ID ${req.input.exchangeId} does not concern the caller.`);
+
+            keyExchanges[idx].key = req.input.deviceKey;
+            return apiOk({});
+        }),
+
+    denyKeyRelay: os.denyKeyRelay
+        .use(requiredAuth())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const exchange = keyExchanges.find(x => x.id == req.input.exchangeId);
+            if (!exchange || exchange.userId != caller.id)
+                return apiErr("ERROR", `Could not find the key relay exchange with ID ${req.input.exchangeId}.`);
+
+            removeFromArray(keyExchanges, x => x.id == exchange.id);
+            return apiOk({});
+        }),
+
+    receiveKeyRelay: os.receiveKeyRelay
+        .use(requiredAuth())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const exchange = keyExchanges.find(x => x.id == req.input.exchangeId);
+            if (!exchange || exchange.userId != caller.id)
+                return apiErr("ERROR", `Could not find the key relay exchange with ID ${req.input.exchangeId}.`);
+
+            if (!exchange.key)
+                return apiOk({ relay: null }); // the key has not yet been relayed - the caller will probably wait and call this endpoint again after some short period of time
+
+            removeFromArray(keyExchanges, x => x.id == exchange.id);
+            return apiOk({
+                relay: {
+                    deviceId: exchange.targetDevice,
+                    deviceKey: exchange.key
+                }
+            });
         })
 });

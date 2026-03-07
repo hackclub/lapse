@@ -156,7 +156,7 @@ export async function* makeFilmstrip(count: number, sessions: { url: string; dur
         }
     }
     catch (err) {
-        console.warn("(video.ts) mediabunny filmstrip generation failed, falling back to video element method", err);
+        console.warn("(video.ts) mediabunny filmstrip generation failed, falling back to video element method. this is fine, but slow.", err);
         for await (const x of makeFilmstripSafe(count, sessions)) {
             yield x;
         }

@@ -2,6 +2,7 @@ import { PropsWithChildren, ReactNode } from "react";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 
+import { phantomSans } from "@/fonts";
 import type { IconGlyph } from "@/common";
 
 export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
@@ -26,7 +27,8 @@ export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
         !isOpen && "scale-0",
         size == "SMALL"   && "sm:w-1/3 sm:min-w-25",
         size == "REGULAR" && "sm:w-1/2 sm:min-w-150",
-        size == "FULL"    && "w-full"
+        size == "FULL"    && "w-full",
+        phantomSans.className
       )}>
         {children}
       </section>

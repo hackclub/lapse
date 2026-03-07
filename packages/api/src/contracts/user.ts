@@ -262,35 +262,85 @@ export const userRouterContract = {
         .input(NO_INPUT)
         .output(NO_OUTPUT),
 
-    // provideKeyRelay: contract("POST", "/user/provideKeyRelay")
-    //     .route({ description: "Provides a device key for relay transfer to another device. The key is stored in-memory with a short TTL." })
-    //     .input(
-    //         z.object({
-    //             deviceId: z.uuid()
-    //                 .describe("The ID of the source device whose key is being relayed."),
+    // Do note: as device UUIDs can be queried globally by all devices, all device keys are NOT used for security purposes. They are purely to prevent the case of two devices "colliding" when
+    // exchanging keys, and to show the user which device the request came from. We trust all devices that have been authenticated.
 
-    //             deviceKey: z.string().regex(/^[0-9a-f]{32}$/)
-    //                 .describe("The 128-bit device key in lowercase hex.")
-    //         })
-    //     )
-    //     .output(
-    //         apiResult({
-    //             expiresAt: LapseDate
-    //                 .describe("The timestamp (ms since epoch) when the relay entry expires.")
-    //         })
-    //     ),
+    requestKeyRelay: contract("POST", "/user/requestKeyRelay")
+        .route({ description: "Creates a request for a specific device to relay its key to the calling device. Only one key relay request can exist at one time." })
+        .input(
+            z.object({
+                targetDevice: z.uuid()
+                    .describe("The device ID the client is interested in receiving the key for."),
 
-    // receiveKeyRelay: contract("POST", "/user/receiveKeyRelay")
-    //     .route({ description: "Receives a relayed device key. Consumes the relay entry on success." })
-    //     .input(NO_INPUT)
-    //     .output(
-    //         apiResult({
-    //             relay: z.object({
-    //                 deviceId: z.uuid(),
-    //                 deviceKey: z.string().regex(/^[0-9a-f]{32}$/),
-    //                 expiresAt: LapseDate
-    //             }).nullable()
-    //                 .describe("The relayed device key, or null if no relay is pending.")
-    //         })
-    //     ),
+                callingDevice: z.uuid()
+                    .describe("The device ID that is calling this endpoint.")
+            })
+        )
+        .output(
+            apiResult({
+                exchangeId: z.uuid()
+                    .describe("The exchange request UUID. This should be used to poll the status of the exchange with `receiveKeyRelay`. If `null`, another key exchange is in progress with the target device.")
+            })
+        ),
+
+    queryKeyRelayRequest: contract("GET", "/user/queryKeyRelayRequest")
+        .route({ description: "Queries the current key relay request to the calling device, if one exists." })
+        .input(
+            z.object({
+                callingDevice: z.uuid()
+                    .describe("The device to fetch the current requests for.")
+            })
+        )
+        .output(
+            apiResult({
+                request: z.object({
+                    exchangeId: z.uuid()
+                        .describe("The exchange request UUID to use with `provideKeyRelay` or `denyKeyRelay`."),
+                    callingDevice: z.uuid()
+                        .describe("The device ID that requests the exchange.")
+                })
+                    .nullable()
+                    .describe("The current request. If `null`, no request is pending currently.")
+            })
+        ),
+
+    provideKeyRelay: contract("POST", "/user/provideKeyRelay")
+        .route({ description: "Provides a device key for relay transfer to another device. The key is stored in-memory with a short TTL, and can only be retrieved once via `receiveKeyRelay`." })
+        .input(
+            z.object({
+                exchangeId: z.uuid()
+                    .describe("The exchange request UUID to fulfill."),
+
+                deviceKey: z.hex()
+                    .describe("The 128-bit device key in lowercase hex.")
+            })
+        )
+        .output(NO_OUTPUT),
+
+    denyKeyRelay: contract("POST", "/user/denyKeyRelay")
+        .route({ description: "Denies a request for relay transfer to another device." })
+        .input(
+            z.object({
+                exchangeId: z.uuid()
+            })
+        )
+        .output(NO_OUTPUT),
+
+    receiveKeyRelay: contract("POST", "/user/receiveKeyRelay")
+        .route({ description: "Receives a device key previously relayed with `provideKeyRelay`. Consumes the relay entry on success." })
+        .input(
+            z.object({
+                exchangeId: z.uuid()
+                    .describe("The exchange request UUID, received from `requestKeyRelay`.")
+            })
+        )
+        .output(
+            apiResult({
+                relay: z.object({
+                    deviceId: z.uuid(),
+                    deviceKey: z.hex()
+                }).nullable()
+                    .describe("The relayed device key, or `null` if no relay is pending.")
+            })
+        )
 };

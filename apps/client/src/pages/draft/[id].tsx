@@ -1,6 +1,10 @@
+import { useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import { clsx } from "clsx";
 import Icon from "@hackclub/icons";
+import { formatDuration, decryptData, fromHex } from "@hackclub/lapse-shared";
+import { DraftTimelapse, EditListEntry, HackatimeProject, TimelapseVisibility } from "@hackclub/lapse-api";
 
-import { api } from "@/api";
 import { EditorTimeline } from "@/components/editor/EditorTimeline";
 import { ErrorModal } from "@/components/layout/ErrorModal";
 import { PublishModal } from "@/components/layout/PublishModal";
@@ -8,18 +12,16 @@ import { WindowedModal } from "@/components/layout/WindowedModal";
 import RootLayout from "@/components/layout/RootLayout";
 import { DropdownInput } from "@/components/ui/DropdownInput";
 import { Button } from "@/components/ui/Button";
-import { deviceStorage } from "@/deviceStorage";
-import { decryptData } from "@/encryption";
+import { PasskeyModal } from "@/components/layout/PasskeyModal";
+import { Skeleton } from "@/components/ui/Skeleton";
+
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 import { useVideoPlayback } from "@/hooks/useVideoPlayback";
+import { api } from "@/api";
+import { deviceStorage } from "@/deviceStorage";
+import { getCurrentDevice } from "@/encryption";
 import { sfetch } from "@/safety";
-import { videoDuration, waitForVideoEvent } from "@/video";
-import { DraftTimelapse, EditListEntry, HackatimeProject, TimelapseVisibility } from "@hackclub/lapse-api";
-import { formatDuration } from "@hackclub/lapse-shared";
-import { clsx } from "clsx";
-import { useRouter } from "next/router";
-import { useMemo, useState } from "react";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { videoDuration } from "@/video";
 
 export default function Page() {
   const router = useRouter();
@@ -40,6 +42,9 @@ export default function Page() {
 
   const [error, setError] = useState<string | null>(null);
   const [errorIsCritical, setErrorIsCritical] = useState(false);
+
+  const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
+  const [pendingDraftForDecrypt, setPendingDraftForDecrypt] = useState<DraftTimelapse | null>(null);
 
   const playback = useVideoPlayback(decryptedSessions);
 
@@ -75,17 +80,25 @@ export default function Page() {
       const device = allDevices.find(x => x.id == res.data.timelapse.deviceId);
 
       if (!device) {
-        // TODO: Open passkey modal
-        throw new Error("Device not registered");
+        setPendingDraftForDecrypt(res.data.timelapse);
+        setPasskeyModalOpen(true);
+        return;
       }
 
       const sessions = await Promise.all(
         res.data.timelapse.sessions.map(async (x) => {
-          const res = await sfetch(x);
-          if (!res.ok)
+          const sessionRes = await sfetch(x);
+          if (!sessionRes.ok)
             throw new Error(`Could not fetch timelapse session @ ${x}`);
 
-          const data = new Blob([await decryptData(await res.arrayBuffer(), "", device.passkey)], { type: "video/webm" });
+          const data = new Blob([
+            await decryptData(
+              fromHex(device.passkey).buffer,
+              fromHex(res.data.timelapse.iv).buffer,
+              await sessionRes.arrayBuffer()
+            )
+          ], { type: "video/webm" });
+
           console.log(`([id].tsx) decrypted session @ ${x}!`, data);
 
           const url = URL.createObjectURL(data);
@@ -101,6 +114,74 @@ export default function Page() {
       setErrorIsCritical(true);
     }
   }, [router, router.isReady]);
+
+  async function handlePasskeySubmit(passkey: string) {
+    if (!pendingDraftForDecrypt)
+      return;
+
+    const timelapse = pendingDraftForDecrypt;
+
+    await deviceStorage.saveDevice({
+      id: timelapse.deviceId,
+      passkey,
+      thisDevice: false
+    });
+
+    setDraft(timelapse);
+    setName(timelapse.name || null);
+    setDescription(timelapse.description);
+    setEditList(timelapse.editList);
+
+    try {
+      const sessions = await Promise.all(
+        timelapse.sessions.map(async (x) => {
+          const sessionRes = await sfetch(x);
+          if (!sessionRes.ok)
+            throw new Error(`Could not fetch timelapse session @ ${x}`);
+
+          const data = new Blob([
+            await decryptData(
+              fromHex(passkey).buffer,
+              fromHex(timelapse.iv).buffer,
+              await sessionRes.arrayBuffer()
+            )
+          ], { type: "video/webm" });
+
+          const url = URL.createObjectURL(data);
+          return { url, duration: (await videoDuration(url)) ?? 120 };
+        })
+      );
+
+      setDecryptedSessions(sessions);
+      setPendingDraftForDecrypt(null);
+    }
+    catch (err) {
+      console.error("([id].tsx) error decrypting with provided key:", err);
+      setError("Failed to decrypt. The key may be incorrect.");
+      await deviceStorage.deleteDevice(timelapse.deviceId);
+    }
+  }
+
+  async function handleDeleteDraftFromModal() {
+    if (!pendingDraftForDecrypt)
+      return;
+
+    const res = await api.draftTimelapse.delete({ id: pendingDraftForDecrypt.id });
+    if (!res.ok) {
+      setError(res.message);
+      return;
+    }
+
+    setPasskeyModalOpen(false);
+    router.back();
+  }
+
+  const [thisDeviceId, setThisDeviceId] = useState<string | null>(null);
+
+  useAsyncEffect(async () => {
+    const device = await getCurrentDevice();
+    setThisDeviceId(device.id);
+  }, []);
 
   const isInCutRegion = useMemo(() => {
     return editList.some(e => e.kind === "CUT" && playback.time >= e.begin && playback.time <= e.end);
@@ -194,7 +275,7 @@ export default function Page() {
     const res = await api.timelapse.publish({
       id: draft.id,
       visibility: pendingVisibility,
-      passkey: device.passkey,
+      deviceKey: device.passkey,
       hackatimeProject: hackatimeProjectName ?? undefined,
     });
 
@@ -322,6 +403,18 @@ export default function Page() {
           )}
         </div>
       </WindowedModal>
+
+      {pendingDraftForDecrypt && thisDeviceId && (
+        <PasskeyModal
+          isOpen={passkeyModalOpen}
+          setIsOpen={setPasskeyModalOpen}
+          description="Enter the key for the device that recorded this timelapse"
+          targetDeviceId={pendingDraftForDecrypt.deviceId}
+          callingDeviceId={thisDeviceId}
+          onPasskeySubmit={handlePasskeySubmit}
+          onDelete={handleDeleteDraftFromModal}
+        />
+      )}
 
       <ErrorModal
         isOpen={!!error}
