@@ -147,5 +147,21 @@ export const developerRouterContract = {
             grantId: z.string()
                 .describe("The ID of the grant to revoke.")
         }))
-        .output(NO_OUTPUT)
+        .output(NO_OUTPUT),
+
+    getAppByClientId: contract("GET", "/developer/appByClientId")
+        .route({ description: "Looks up a public summary of an OAuth app by its OAuth2 client ID. This is used by the consent screen and does not require authentication." })
+        .input(z.object({
+            clientId: z.string()
+                .describe("The OAuth2 client ID to look up.")
+        }))
+        .output(apiResult({
+            app: z.object({
+                name: z.string(),
+                description: z.string(),
+                iconUrl: z.string(),
+                trustLevel: OAuthTrustLevelSchema,
+                scopes: z.array(z.string())
+            })
+        }))
 };

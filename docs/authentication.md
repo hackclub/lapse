@@ -25,7 +25,7 @@ This is what you're looking for if you're developing a custom client for Lapse! 
 1. Redirect the user to the `/auth/authorize` route of the API.
     - This will make the user log in via Hackatime (our OIDC provider) internally if not previously authenticated.
     - If needed, this opens a consent modal via the canonical (first-party, `lapse.hackclub.com`) client.
-    - The canonical client, upon receiving consent, redirects to `/auth/continue`, with an `Authorization` header. As this endpoint requires authentication, it is not possible to redirect to this endpoint without going through the consent modal.
+    - The canonical client, upon receiving consent, redirects to `/auth/continue`, with an `consentToken` provided. As this endpoint requires said token, it is not possible to redirect to this endpoint without going through the consent modal.
 2. Receive the authorization code by handling the redirect from the API to `<CALLBACK URL>?code=AUTH_CODE&state=xyz`.
 3. Exchange the short-lived authorization code for an access and refresh token by calling `/auth/token`.
 

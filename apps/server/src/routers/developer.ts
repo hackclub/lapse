@@ -167,7 +167,7 @@ export default os.router({
 
             const validScopes = new Set<string>(getAllOAuthScopes());
             const requestedScopes = normalizeScopes(req.input.scopes);
-            const invalidScopes = requestedScopes.filter(scope => !validScopes.has(scope));
+            const invalidScopes = requestedScopes.filter(scope => scope == "elevated" || !validScopes.has(scope));
             if (invalidScopes.length > 0)
                 return apiErr("ERROR", `Unknown scopes: ${invalidScopes.join(", ")}`);
 
@@ -268,5 +268,25 @@ export default os.router({
             });
 
             return apiOk({});
+        }),
+
+    getAppByClientId: os.getAppByClientId
+        .handler(async (req) => {
+            const app = await database().serviceClient.findFirst({
+                where: { clientId: req.input.clientId, revokedAt: null }
+            });
+
+            if (!app)
+                return apiErr("NOT_FOUND", `No app found with client ID ${req.input.clientId}.`);
+
+            return apiOk({
+                app: {
+                    name: app.name,
+                    description: app.description,
+                    iconUrl: app.iconUrl,
+                    trustLevel: app.trustLevel,
+                    scopes: app.scopes
+                }
+            });
         })
 });

@@ -75,7 +75,7 @@ export const authRouterContract = {
                 .describe("The scopes to grant access to.")
         }))
         .output(z.object({
-            token: z.base64url()
+            token: z.jwt()
                 .describe("The token that should be passed to /auth/continue in order to continue the OAuth2 authorization flow.")
         })),
 

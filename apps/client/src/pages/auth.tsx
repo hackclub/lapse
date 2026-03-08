@@ -36,7 +36,8 @@ export default function Auth() {
       return;
 
     if (currentUser && !currentUser.private.needsReauth) {
-      router.push("/");
+      const redirect = typeof router.query.redirect === "string" ? router.query.redirect : "/";
+      router.push(redirect);
       return;
     }
 
@@ -64,6 +65,10 @@ export default function Auth() {
 
     sessionStorage.setItem("lapse:oauth_state", state);
     sessionStorage.setItem("lapse:oauth_code_verifier", codeVerifier);
+
+    const redirectParam = typeof router.query.redirect === "string" ? router.query.redirect : null;
+    if (redirectParam)
+      sessionStorage.setItem("lapse:oauth_redirect", redirectParam);
 
     const redirectUri = `${window.location.origin}/auth`;
 
@@ -118,7 +123,10 @@ export default function Auth() {
       const data = await response.json();
       localStorage.setItem("lapse:token", data.access_token);
       await refreshUser();
-      router.push("/");
+
+      const redirect = sessionStorage.getItem("lapse:oauth_redirect");
+      sessionStorage.removeItem("lapse:oauth_redirect");
+      router.push(redirect ?? "/");
     }
     catch (err) {
       console.error("(auth.tsx) error during token exchange!", err);

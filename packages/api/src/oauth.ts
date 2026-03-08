@@ -16,22 +16,24 @@ export const OAUTH_SCOPE_GROUPS = {
     Profile: {
         "user:read": "Read your profile",
         "user:write": "Update your profile",
-    },
-    Internal: {
-        "elevated": "Read, write, and update all data on behalf of you"
     }
 } as const;
 
 /**
  * Represents a supported Lapse OAuth scope.
  */
-export type LapseOAuthScope = keyof FlattenUnion<(typeof OAUTH_SCOPE_GROUPS)[keyof typeof OAUTH_SCOPE_GROUPS]>;
+export type LapseOAuthScope =
+    keyof FlattenUnion<(typeof OAUTH_SCOPE_GROUPS)[keyof typeof OAUTH_SCOPE_GROUPS]> // regular scopes
+    | "elevated"; // internal scopes
 
 /**
  * Gets all possible `LapseOAuthScope` values.
  */
 export function getAllOAuthScopes(): LapseOAuthScope[] {
-    return Object.values(OAUTH_SCOPE_GROUPS).flatMap(x => Object.keys(x) as LapseOAuthScope[]);
+    return [
+        ...Object.values(OAUTH_SCOPE_GROUPS).flatMap(x => Object.keys(x) as LapseOAuthScope[]),
+        "elevated"
+    ];
 }
 
 /**

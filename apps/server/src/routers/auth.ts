@@ -10,7 +10,7 @@ import * as db from "@/generated/prisma/client.js";
 import { logMiddleware, requiredAuth, type Context } from "@/router.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
-import { getCookie, setCookie } from "@orpc/server/helpers";
+import { deleteCookie, getCookie, setCookie } from "@orpc/server/helpers";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { arraysEqual } from "@hackclub/lapse-shared";
 import { HackatimeOAuthApi } from "@/hackatime.js";
@@ -133,49 +133,48 @@ function readOAuthCookie(reqHeaders?: Headers) {
 export default os.router({
     authorize: os.authorize // note: user-agent endpoint
          .handler(async (req) => {
-             const state = randomBytes(16).toString("base64url");
-             const codeVerifier = randomBytes(32).toString("base64url");
-             const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+            if (!req.context.resHeaders)
+                throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Couldn't access response headers." });
 
-             setCookie(
-                 req.context.resHeaders,
-                 OAUTH_COOKIE_NAME,
-                 Buffer.from(JSON.stringify(
-                     {
-                         hst: state,
-                         hcv: codeVerifier,
-                         uri: req.input.query.redirect_uri,
-                         cid: req.input.query.client_id,
-                         scp: req.input.query.scope.split(" "),
-                         stt: req.input.query.state,
-                         ccv: req.input.query.code_challenge
-                     } satisfies OAuthCookie
-                 )).toString("base64url"),
-                 {
-                     path: "/",
-                     httpOnly: true,
-                     sameSite: "lax",
-                     maxAge: 600,
-                     secure: process.env["NODE_ENV"] === "production"
-                 }
-             );
+            const state = randomBytes(16).toString("base64url");
+            const codeVerifier = randomBytes(32).toString("base64url");
+            const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
 
-             const url = new URL(`${env.HACKATIME_URL}/oauth/authorize`);
-             url.searchParams.set("client_id", env.HACKATIME_CLIENT_ID);
-             url.searchParams.set("response_type", "code");
-             url.searchParams.set("scope", "profile");
-             url.searchParams.set("redirect_uri", HKT_REDIRECT_URI);
-             url.searchParams.set("state", state);
-             url.searchParams.set("code_challenge", codeChallenge);
-             url.searchParams.set("code_challenge_method", "S256");
+            setCookie(
+                req.context.resHeaders,
+                OAUTH_COOKIE_NAME,
+                Buffer.from(
+                    JSON.stringify({
+                        hst: state,
+                        hcv: codeVerifier,
+                        uri: req.input.query.redirect_uri,
+                        cid: req.input.query.client_id,
+                        scp: req.input.query.scope.split(" "),
+                        stt: req.input.query.state,
+                        ccv: req.input.query.code_challenge
+                    } satisfies OAuthCookie)
+                ).toString("base64url"),
+                {
+                    path: "/",
+                    httpOnly: true,
+                    sameSite: "lax",
+                    maxAge: 600,
+                    secure: process.env["NODE_ENV"] === "production"
+                }
+            );
 
-             // The user authenticates, and then we go to /auth/hackatimeCallback.
-             return {
-                 status: 307,
-                 headers: {
-                     location: url.href
-                 }
-             };
+            const url = new URL(`${env.HACKATIME_URL}/oauth/authorize`);
+            url.searchParams.set("client_id", env.HACKATIME_CLIENT_ID);
+            url.searchParams.set("response_type", "code");
+            url.searchParams.set("scope", "profile");
+            url.searchParams.set("redirect_uri", HKT_REDIRECT_URI);
+            url.searchParams.set("state", state);
+            url.searchParams.set("code_challenge", codeChallenge);
+            url.searchParams.set("code_challenge_method", "S256");
+
+            // The user authenticates, and then we go to /auth/hackatimeCallback.
+            req.context.resHeaders.append("location", url.href);
+            return { status: 307 };
          }),
 
     grantConsent: os.grantConsent
@@ -202,6 +201,8 @@ export default os.router({
             const oauthData = readOAuthCookie(req.context.reqHeaders);
 
             function errorRedirect(error: OAuthErrorCode): { status: 307; headers: Record<string, string> } {
+                deleteCookie(req.context.resHeaders, OAUTH_COOKIE_NAME);
+
                 const url = new URL(oauthData.uri);
                 url.searchParams.set("error", error);
                 return { status: 307, headers: { location: url.href } };
