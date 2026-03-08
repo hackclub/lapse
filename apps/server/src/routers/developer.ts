@@ -5,6 +5,7 @@ import { type Context, logMiddleware, requiredAuth } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { createServiceClient, normalizeRedirectUris, normalizeScopes, rotateServiceClientSecret } from "@/oauth.js";
+import { env } from "@/env.js";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -62,8 +63,11 @@ export default os.router({
             const app = await database().serviceClient.findFirst({
                 where: {
                     id: req.input.id,
-                    createdByUserId: caller.permissionLevel === "ROOT" ? undefined : caller.id,
-                    revokedAt: null
+                    revokedAt: null,
+                    OR: [
+                        { createdByUserId: caller.id },
+                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
+                    ]
                 }
             });
 
@@ -80,7 +84,14 @@ export default os.router({
             const caller = req.context.user;
 
             const app = await database().serviceClient.findFirst({
-                where: { id: req.input.id, createdByUserId: caller.permissionLevel === "ROOT" ? undefined : caller.id, revokedAt: null }
+                where: {
+                    id: req.input.id,
+                    revokedAt: null,
+                    OR: [
+                        { createdByUserId: caller.id },
+                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
+                    ]
+                }
             });
         
             if (!app)
@@ -132,7 +143,14 @@ export default os.router({
             const caller = req.context.user;
             
             const app = await database().serviceClient.findFirst({
-                where: { id: req.input.id, createdByUserId: caller.permissionLevel === "ROOT" ? undefined : caller.id, revokedAt: null }
+                where: {
+                    id: req.input.id,
+                    revokedAt: null,
+                    OR: [
+                        { createdByUserId: caller.id },
+                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
+                    ]
+                }
             });
         
             if (!app)
@@ -152,7 +170,13 @@ export default os.router({
             const caller = req.context.user;
 
             const apps = await database().serviceClient.findMany({
-                where: { createdByUserId: caller.id, revokedAt: null },
+                where: {
+                    revokedAt: null,
+                    OR: [
+                        { createdByUserId: caller.id },
+                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
+                    ]
+                },
                 orderBy: { createdAt: "desc" },
                 include: { createdByUser: true },
             });
