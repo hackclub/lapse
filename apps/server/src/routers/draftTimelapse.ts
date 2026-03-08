@@ -6,7 +6,7 @@ import { oneOf, range, toHex } from "@hackclub/lapse-shared";
 
 import * as db from "@/generated/prisma/client.js";
 import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse } from "@hackclub/lapse-api";
-import { logMiddleware, requiredAuth, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
 
@@ -82,6 +82,7 @@ export async function deleteDraftTimelapse(id: string, actor: Actor): Promise<Er
 export default os.router({
     query: os.query
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -98,6 +99,7 @@ export default os.router({
 
     findByUser: os.findByUser
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -114,6 +116,7 @@ export default os.router({
 
     create: os.create
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
             const caller = req.context.user;
             const id = lapseId();
@@ -167,6 +170,7 @@ export default os.router({
 
     update: os.update
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -195,6 +199,7 @@ export default os.router({
 
     delete: os.delete
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 

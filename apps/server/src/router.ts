@@ -71,6 +71,19 @@ export function requiredAuth(minimumLevel?: PermissionLevel) {
  * An oRPC middleware that specifies that an authenticated user has to posess the scopes in `scopes`. This middleware is
  * intended to be used after invoking `requiredAuth`.
  */
-export function requiredScopes(scopes: LapseOAuthScope[]) {
-    
+export function requiredScopes(...scopes: LapseOAuthScope[]) {
+    return os
+        .$context<ProtectedContext>()
+        .middleware(async ({ context, next }) => {
+            if (!context.scopes.includes("elevated")) {
+                for (const scope of scopes) {
+                    if (!context.scopes.includes(scope))
+                        throw new ORPCError("UNAUTHORIZED", {
+                            message: `Missing required scope "${scope}".`
+                        });
+                }
+            }
+
+            return next({ context });
+        });
 }

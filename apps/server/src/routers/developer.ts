@@ -1,7 +1,7 @@
 import { implement } from "@orpc/server"
 import { developerRouterContract, getAllOAuthScopes, type LapseOAuthScope, type OAuthApp, type OAuthGrant } from "@hackclub/lapse-api"
 
-import { type Context, logMiddleware, requiredAuth } from "@/router.js";
+import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { createServiceClient, normalizeRedirectUris, normalizeScopes, rotateServiceClientSecret } from "@/oauth.js";
@@ -57,6 +57,7 @@ export function dtoOAuthGrant(entity: DbOAuthGrant): OAuthGrant {
 export default os.router({
     rotateAppSecret: os.rotateAppSecret
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -80,6 +81,7 @@ export default os.router({
 
     updateApp: os.updateApp
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -139,6 +141,7 @@ export default os.router({
 
     revokeApp: os.revokeApp
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -166,6 +169,7 @@ export default os.router({
 
     getAllOwnedApps: os.getAllOwnedApps
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -186,6 +190,7 @@ export default os.router({
 
     createApp: os.createApp
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -216,6 +221,7 @@ export default os.router({
 
     getAllApps: os.getAllApps
         .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const apps = await database().serviceClient.findMany({
                 include: { createdByUser: true },
@@ -229,6 +235,7 @@ export default os.router({
 
     updateAppTrustLevel: os.updateAppTrustLevel
         .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -257,6 +264,7 @@ export default os.router({
 
     getOwnedOAuthGrants: os.getOwnedOAuthGrants
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -273,6 +281,7 @@ export default os.router({
 
     revokeOAuthGrant: os.revokeOAuthGrant
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
 

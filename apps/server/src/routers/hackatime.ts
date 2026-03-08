@@ -2,7 +2,7 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { hackatimeRouterContract } from "@hackclub/lapse-api";
 
-import { logMiddleware, requiredAuth, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
 import { dtoTimelapse, TIMELAPSE_INCLUDES } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
@@ -17,6 +17,7 @@ const os = implement(hackatimeRouterContract)
 export default os.router({
     allProjects: os.allProjects
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -57,6 +58,7 @@ export default os.router({
 
     timelapsesForProject: os.timelapsesForProject
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
             const caller = req.context.user;
 

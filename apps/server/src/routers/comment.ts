@@ -4,7 +4,7 @@ import { commentRouterContract, type Comment } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
 
-import { logMiddleware, requiredAuth, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { getTimelapseById } from "@/routers/timelapse.js";
 import { apiErr, apiOk, Err } from "@/common.js";
@@ -34,6 +34,7 @@ export function dtoComment(comment: DbComment): Comment {
 export default os.router({
     create: os.create
         .use(requiredAuth())
+        .use(requiredScopes("comment:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -55,6 +56,7 @@ export default os.router({
 
     delete: os.delete
         .use(requiredAuth())
+        .use(requiredScopes("comment:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 

@@ -5,7 +5,7 @@ import { oneOf } from "@hackclub/lapse-shared";
 import { EditListEntrySchema, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
-import { logMiddleware, requiredAuth, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
@@ -241,6 +241,7 @@ export default os.router({
 
     publish: os.publish
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -331,6 +332,7 @@ export default os.router({
 
     update: os.update
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -375,6 +377,7 @@ export default os.router({
 
     delete: os.delete
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -409,6 +412,7 @@ export default os.router({
 
     syncWithHackatime: os.syncWithHackatime
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 

@@ -7,7 +7,7 @@ import OAuth2Server from "@node-oauth/oauth2-server";
 
 import * as db from "@/generated/prisma/client.js";
 
-import { logMiddleware, requiredAuth, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { deleteCookie, getCookie, setCookie } from "@orpc/server/helpers";
@@ -179,13 +179,8 @@ export default os.router({
 
     grantConsent: os.grantConsent
         .use(requiredAuth())
+        .use(requiredScopes("elevated"))
         .handler(async (req) => {
-            if (!req.context.scopes.includes("elevated")) {
-                throw new ORPCError("UNAUTHORIZED", {
-                    message: `Only apps that have been authorized with the "elevated" scope may grant consent tokens.`
-                });
-            }
-
             return {
                 token: createConsentToken({
                     sub: req.context.user.id,

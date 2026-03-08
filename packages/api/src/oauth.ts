@@ -16,6 +16,7 @@ export const OAUTH_SCOPE_GROUPS = {
     Profile: {
         "user:read": "Read your profile",
         "user:write": "Update your profile",
+        "user:keyrelay": "Exchange encryption keys between devices",
     }
 } as const;
 

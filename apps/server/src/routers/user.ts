@@ -3,7 +3,7 @@ import { deleteCookie } from "@orpc/server/helpers"
 import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS } from "@hackclub/lapse-api"
 import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
-import { type Context, logMiddleware, requiredAuth } from "@/router.js";
+import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
@@ -135,6 +135,7 @@ export default os.router({
 
     update: os.update
         .use(requiredAuth())
+        .use(requiredScopes("user:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -173,6 +174,7 @@ export default os.router({
 
     getDevices: os.getDevices
         .use(requiredAuth())
+        .use(requiredScopes("user:read"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -185,6 +187,7 @@ export default os.router({
 
     registerDevice: os.registerDevice
         .use(requiredAuth())
+        .use(requiredScopes("user:write"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -200,6 +203,7 @@ export default os.router({
 
     removeDevice: os.removeDevice
         .use(requiredAuth())
+        .use(requiredScopes("user:write"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -248,6 +252,7 @@ export default os.router({
 
     hackatimeProjects: os.hackatimeProjects
         .use(requiredAuth())
+        .use(requiredScopes("user:read"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -286,6 +291,7 @@ export default os.router({
 
     getTotalTimelapseTime: os.getTotalTimelapseTime
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -302,6 +308,7 @@ export default os.router({
 
     emitHeartbeat: os.emitHeartbeat
         .use(requiredAuth())
+        .use(requiredScopes("user:write"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -315,6 +322,7 @@ export default os.router({
 
     requestKeyRelay: os.requestKeyRelay
         .use(requiredAuth())
+        .use(requiredScopes("user:keyrelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -352,6 +360,7 @@ export default os.router({
 
     queryKeyRelayRequest: os.queryKeyRelayRequest
         .use(requiredAuth())
+        .use(requiredScopes("user:keyrelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -377,6 +386,7 @@ export default os.router({
 
     provideKeyRelay: os.provideKeyRelay
         .use(requiredAuth())
+        .use(requiredScopes("user:keyrelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -393,6 +403,7 @@ export default os.router({
 
     denyKeyRelay: os.denyKeyRelay
         .use(requiredAuth())
+        .use(requiredScopes("user:keyrelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -406,6 +417,7 @@ export default os.router({
 
     receiveKeyRelay: os.receiveKeyRelay
         .use(requiredAuth())
+        .use(requiredScopes("user:keyrelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
