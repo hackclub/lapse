@@ -1,7 +1,7 @@
 # Developing a Lapse custom client
 The Lapse API and backend are both **client-agnostic**. This means that no special treatment is given to the **first-party** (lapse.hackclub.com) Lapse client (except when establishing an authentication authority - more on that later!)
 
-You'll first need to register an **OAuth app** for users to authenticate to your application. You can do this by heading over to the [Developer Apps](https://lapse.hackclub.com/developer/apps) section of Lapse. We closely follow the OAuth2 specification, so you should be able to use a pre-made OAuth2 provider implementation to get access to user accounts. If you want juicy details about how we handle authentication/authorization, see [`/docs/authentication.md`](/docs/authentication.md)!
+You'll first need to register an **OAuth app** for users to authenticate to your application. You can do this by heading over to the [Developer Apps](https://lapse.hackclub.com/developer/apps) section of Lapse. We closely follow the OAuth2 specification, so you should be able to use a pre-made OAuth2 provider implementation to get access to user accounts. You can find an example in [`/etc/examples/custom-client/index.mjs`](/etc/examples/custom-client/index.mjs). If you want juicy details about how we handle authentication/authorization, see [`/docs/authentication.md`](/docs/authentication.md)!
 
 Once you're authenticated, the general timelapse creation flow looks like this:
 - record a video locally, creating seperate sessions when the user changes windows or stops the stream
