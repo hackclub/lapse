@@ -1,7 +1,7 @@
 import NextLink from "next/link";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import clsx from "clsx";
 
 import { Button } from "@/components/ui/Button";
@@ -21,7 +21,7 @@ export function Header() {
   const [areSettingsOpen, setAreSettingsOpen] = useState(false);
   const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
 
-  useInterval(async () => {
+  const fetchActiveUsers = useCallback(async () => {
     const res = await api.global.activeUsers({});
     if (!res.ok) {
       console.error("(Header.tsx) could not query active users!", res);
@@ -29,7 +29,9 @@ export function Header() {
     }
 
     setUsersActive(res.data.count);
-  }, 30 * 1000);
+  }, []);
+
+  useInterval(fetchActiveUsers, 30 * 1000);
 
   return (
     <>
