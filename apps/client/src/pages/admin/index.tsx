@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import clsx from "clsx";
@@ -47,6 +47,18 @@ type AdminAppFormState = {
   trustLevel: OAuthTrustLevel;
 };
 
+type AdminFieldKind = "string" | "number" | "date" | "enum" | "boolean";
+
+type AdminFieldDef = {
+  label: string;
+  kind: AdminFieldKind;
+  sortable?: boolean;
+  editable?: boolean;
+  enumValues?: readonly string[];
+};
+
+type AdminRecord = Record<string, unknown>;
+
 const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "app"] as const;
 
 type AdminPanelEntity = typeof ENTITIES[number];
@@ -67,18 +79,45 @@ const ENTITY_ICONS: Record<AdminPanelEntity, IconGlyph> = {
   app: "code"
 };
 
+const ADMIN_FIELD_OPERATORS: Record<AdminFieldKind, Array<{ value: AdminFilter["operator"]; label: string }>> = {
+  string: [
+    { value: "eq", label: "equals" },
+    { value: "neq", label: "not equals" },
+    { value: "contains", label: "contains" }
+  ],
+  number: [
+    { value: "eq", label: "equals" },
+    { value: "neq", label: "not equals" },
+    { value: "gt", label: "greater than" },
+    { value: "lt", label: "less than" },
+    { value: "gte", label: "≥" },
+    { value: "lte", label: "≤" }
+  ],
+  date: [
+    { value: "eq", label: "equals" },
+    { value: "neq", label: "not equals" },
+    { value: "gt", label: "greater than" },
+    { value: "lt", label: "less than" },
+    { value: "gte", label: "≥" },
+    { value: "lte", label: "≤" }
+  ],
+  enum: [
+    { value: "eq", label: "equals" },
+    { value: "neq", label: "not equals" }
+  ],
+  boolean: [
+    { value: "eq", label: "equals" },
+    { value: "neq", label: "not equals" }
+  ]
+};
+
+const FALLBACK_IMAGE_DATA_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect fill='%23333' width='48' height='48'/%3E%3C/svg%3E";
+
+const APP_TABLE_COLUMNS = ["App", "Client ID", "Trust", "Owner", "Created", "Redirect URIs", "Scopes"] as const;
+
 function isAdminPanelEntity(value: string): value is AdminPanelEntity {
   return ENTITIES.includes(value as AdminPanelEntity);
 }
-
-const oauthScopeEntries = Object.entries(OAUTH_SCOPE_GROUPS).flatMap(
-  ([group, scopes]) =>
-    Object.entries(scopes).map(([key, description]) => ({
-      group,
-      key,
-      description,
-    })),
-);
 
 function defaultQuery(): QueryState {
   return { filters: [], page: 1, pageSize: 25 };
@@ -95,6 +134,69 @@ function formatCellValue(value: unknown, kind: string): string {
     return value.toLocaleString();
 
   return String(value);
+}
+
+function AdminFieldRow({ label, align = "center", children }: {
+  label: string;
+  align?: "center" | "start";
+  children: ReactNode;
+}) {
+  return (
+    <div className={clsx("flex gap-4", align === "start" ? "items-start" : "items-center")}>
+      <label className={clsx("font-medium w-40 shrink-0", align === "start" && "pt-2")}>{label}</label>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+function ModalError({ error, size = "base" }: { error: string | null; size?: "sm" | "base" }) {
+  if (!error)
+    return null;
+
+  return (
+    <div className={clsx(
+      "rounded-lg border border-red/20 bg-red/10 text-red",
+      size === "sm" ? "p-3 text-sm" : "p-3 text-base"
+    )}>
+      {error}
+    </div>
+  );
+}
+
+function ModalActions({ isSaving, isSaveDisabled, onClose, onSave }: {
+  isSaving: boolean;
+  isSaveDisabled?: boolean;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="flex gap-3 justify-end pt-4">
+      <Button kind="regular" onClick={onClose} disabled={isSaving}>Cancel</Button>
+      <Button kind="primary" onClick={onSave} disabled={isSaving || isSaveDisabled}>
+        {isSaving ? "Saving..." : "Save Changes"}
+      </Button>
+    </div>
+  );
+}
+
+function TableStatusRow({ colSpan, children }: { colSpan: number; children: ReactNode }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="px-3 py-8 text-center text-muted text-base">
+        {children}
+      </td>
+    </tr>
+  );
+}
+
+function PreviewImage({ src, alt, className }: { src: unknown; alt: string; className: string }) {
+  return (
+    <img
+      src={String(src || FALLBACK_IMAGE_DATA_URL)}
+      alt={alt}
+      className={className}
+    />
+  );
 }
 
 function StatCard({ label, value, icon }: { label: string; value: string | null; icon: IconGlyph }) {
@@ -116,12 +218,13 @@ function StatCard({ label, value, icon }: { label: string; value: string | null;
 
 function FilterRow({ filter, fields, onUpdate, onRemove }: {
   filter: AdminFilter;
-  fields: Record<string, { label: string; kind: string }>;
+  fields: Record<string, AdminFieldDef>;
   onUpdate: (f: AdminFilter) => void;
   onRemove: () => void;
 }) {
   const fieldOptions = Object.entries(fields);
   const currentField = fields[filter.field];
+  const operatorOptions = ADMIN_FIELD_OPERATORS[currentField?.kind ?? "string"];
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -140,31 +243,9 @@ function FilterRow({ filter, fields, onUpdate, onRemove }: {
         onChange={(e) => onUpdate({ ...filter, operator: e.target.value as AdminFilter["operator"] })}
         className="bg-darkless border border-slate rounded-lg px-3 py-1.5 text-sm text-white outline-none"
       >
-        {currentField?.kind === "string" && (
-          <>
-            <option value="eq">equals</option>
-            <option value="neq">not equals</option>
-            <option value="contains">contains</option>
-          </>
-        )}
-
-        {(currentField?.kind === "number" || currentField?.kind === "date") && (
-          <>
-            <option value="eq">equals</option>
-            <option value="neq">not equals</option>
-            <option value="gt">greater than</option>
-            <option value="lt">less than</option>
-            <option value="gte">≥</option>
-            <option value="lte">≤</option>
-          </>
-        )}
-
-        {currentField?.kind === "enum" && (
-          <>
-            <option value="eq">equals</option>
-            <option value="neq">not equals</option>
-          </>
-        )}
+        {operatorOptions.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
       </select>
 
       <input
@@ -189,40 +270,22 @@ function TableCell({ value, field, entity, fieldDef, onEditClick }: {
   value: unknown;
   field: string;
   entity: AdminEntity;
-  fieldDef: { label: string; kind: string; editable?: boolean; enumValues?: readonly string[] };
+  fieldDef: AdminFieldDef;
   onEditClick: () => void;
 }) {
   const cellContentClass = "block w-full overflow-hidden text-ellipsis whitespace-nowrap";
-
-  if (entity === "timelapse" && field === "name" && typeof value === "string") {
-    return (
-      <div
-        className="max-w-full cursor-pointer transition-opacity hover:opacity-80"
-        onClick={onEditClick}
-        title="Click to edit"
-      >
-        <span className={cellContentClass}>{value}</span>
-      </div>
-    );
-  }
-
-  if (entity === "user" && field === "displayName") {
-    return (
-      <div
-        className="max-w-full cursor-pointer transition-opacity hover:opacity-80"
-        onClick={onEditClick}
-        title="Click to edit"
-      >
-        <span className={cellContentClass}>{formatCellValue(value, fieldDef.kind)}</span>
-      </div>
-    );
-  }
+  const usesSoftHover = (entity === "timelapse" && field === "name" && typeof value === "string")
+    || (entity === "user" && field === "displayName");
 
   return (
     <span
-      className={`${cellContentClass} cursor-pointer transition-colors hover:text-red`}
+      className={clsx(
+        cellContentClass,
+        "cursor-pointer transition-colors",
+        usesSoftHover ? "hover:opacity-80" : "hover:text-red"
+      )}
       onClick={onEditClick}
-      title="Click to edit record"
+      title={usesSoftHover ? "Click to edit" : "Click to edit record"}
     >
       {formatCellValue(value, fieldDef.kind)}
     </span>
@@ -232,13 +295,13 @@ function TableCell({ value, field, entity, fieldDef, onEditClick }: {
 function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSaving }: {
   isOpen: boolean;
   entity: AdminEntity;
-  record: Record<string, unknown> | null;
-  fields: Record<string, { label: string; kind: string; sortable?: boolean; editable?: boolean; enumValues?: readonly string[] }>;
+  record: AdminRecord | null;
+  fields: Record<string, AdminFieldDef>;
   onClose: () => void;
-  onSave: (changes: Record<string, unknown>) => Promise<void>;
+  onSave: (changes: AdminRecord) => Promise<void>;
   isSaving: boolean;
 }) {
-  const [changes, setChanges] = useState<Record<string, unknown>>({});
+  const [changes, setChanges] = useState<AdminRecord>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -250,6 +313,12 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
     return null;
 
   const fieldEntries = Object.entries(fields);
+  const recordName = record["name"] ?? record["displayName"] ?? record["id"];
+  const entityName = entity === "user" ? "User" : entity === "timelapse" ? "Timelapse" : entity === "draftTimelapse" ? "Draft Timelapse" : "Comment";
+
+  function setChange(key: string, value: unknown) {
+    setChanges(prev => ({ ...prev, [key]: value }));
+  }
 
   async function handleSave() {
     try {
@@ -262,13 +331,11 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
     }
   }
 
-  const entityName = entity === "user" ? "User" : entity === "timelapse" ? "Timelapse" : entity === "draftTimelapse" ? "Draft Timelapse" : "Comment";
-
   return (
     <Modal isOpen={isOpen} size="REGULAR">
       <ModalHeader
         title={`Edit ${entityName}`}
-        description={`Applying edits to ${record?.["name"] ?? record?.["displayName"] ?? record?.["id"]}`}
+        description={`Applying edits to ${recordName}`}
         showCloseButton
         onClose={onClose}
         icon={match(entity, {
@@ -281,73 +348,56 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
 
       <ModalContent className="gap-4 text-base">
         {fieldEntries.map(([key, fieldDef]) => {
-          const currentValue = changes.hasOwnProperty(key) ? changes[key] : record[key];
+          const currentValue = Object.prototype.hasOwnProperty.call(changes, key) ? changes[key] : record[key];
           const displayValue = String(currentValue ?? "");
 
           if (fieldDef.kind === "enum" && fieldDef.enumValues) {
             return (
-              <div key={key} className="flex items-center gap-4">
-                <label className="font-medium w-40 shrink-0">{fieldDef.label}</label>
+              <AdminFieldRow key={key} label={fieldDef.label}>
                 <select
                   value={displayValue}
-                  onChange={(e) => setChanges({ ...changes, [key]: e.target.value })}
+                  onChange={(e) => setChange(key, e.target.value)}
                   className="bg-darkless border border-slate rounded-lg px-3 py-2 text-white outline-none flex-1"
                 >
                   {fieldDef.enumValues.map(v => (
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </select>
-              </div>
+              </AdminFieldRow>
             );
           }
 
           if (fieldDef.kind === "date") {
             return (
-              <div key={key} className="flex items-center gap-4">
-                <label className="font-medium w-40 shrink-0">{fieldDef.label}</label>
+              <AdminFieldRow key={key} label={fieldDef.label}>
                 <input
                   type="text"
                   value={typeof currentValue === "number" ? new Date(currentValue).toISOString() : displayValue}
                   readOnly
                   className="border border-slate outline-red focus:outline-2 rounded-xl p-2 px-4 bg-dark text-muted flex-1"
                 />
-              </div>
+              </AdminFieldRow>
             );
           }
 
           return (
-            <div key={key} className="flex items-center gap-4">
-              <label className="font-medium w-40 shrink-0">{fieldDef.label}</label>
-              <div className="flex-1">
-                <TextInput
-                  type={fieldDef.kind === "number" ? "text" : "text"}
-                  value={displayValue}
-                  onChange={(v) => {
-                      if (fieldDef.kind === "number") {
-                        setChanges({ ...changes, [key]: v ? Number(v) : null });
-                      }
-                      else {
-                        setChanges({ ...changes, [key]: v });
-                      }
-                    }}
-                />
-              </div>
-            </div>
+            <AdminFieldRow key={key} label={fieldDef.label}>
+              <TextInput
+                type="text"
+                value={displayValue}
+                onChange={(value) => setChange(key, fieldDef.kind === "number" ? (value ? Number(value) : null) : value)}
+              />
+            </AdminFieldRow>
           );
         })}
 
-        { error && (
-          <div className="text-red text-base p-3 rounded-lg bg-red/10 border border-red/20">
-            {error}
-          </div>
-        ) }
-
-        <div className="flex gap-3 justify-end pt-4">
-          <Button kind="regular" onClick={onClose} disabled={isSaving}>Cancel</Button>
-          <Button kind="primary" onClick={handleSave} disabled={isSaving || Object.keys(changes).length === 0}>
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
+        <ModalError error={error} />
+        <ModalActions
+          isSaving={isSaving}
+          isSaveDisabled={Object.keys(changes).length === 0}
+          onClose={onClose}
+          onSave={handleSave}
+        />
       </ModalContent>
     </Modal>
   );
@@ -382,7 +432,14 @@ function AdminAppEditModal({ app, isSaving, onClose, onSave }: {
   if (!app || !formState)
     return null;
 
+  function setFormValue<K extends keyof AdminAppFormState>(key: K, value: AdminAppFormState[K]) {
+    setFormState(prev => prev ? { ...prev, [key]: value } : prev);
+  }
+
   async function handleSave() {
+    if (!formState)
+      return;
+
     try {
       setError(null);
       await onSave(formState);
@@ -418,62 +475,49 @@ function AdminAppEditModal({ app, isSaving, onClose, onSave }: {
       />
 
       <ModalContent className="gap-4 text-base">
-        <div className="flex items-center gap-4">
-          <label className="font-medium w-40 shrink-0">Name</label>
-          <div className="flex-1">
-            <TextInput value={formState.name} onChange={(value) => setFormState({ ...formState, name: value })} />
-          </div>
-        </div>
+        <AdminFieldRow label="Name">
+          <TextInput value={formState.name} onChange={(value) => setFormValue("name", value)} />
+        </AdminFieldRow>
 
-        <div className="flex items-start gap-4">
-          <label className="font-medium w-40 shrink-0 pt-2">Description</label>
+        <AdminFieldRow label="Description" align="start">
           <textarea
             value={formState.description}
-            onChange={(e) => setFormState({ ...formState, description: e.target.value })}
+            onChange={(e) => setFormValue("description", e.target.value)}
             rows={4}
             className="flex-1 rounded-xl border border-slate bg-dark px-4 py-2 text-white outline-red focus:outline-2 resize-y"
           />
-        </div>
+        </AdminFieldRow>
 
-        <div className="flex items-center gap-4">
-          <label className="font-medium w-40 shrink-0">Homepage URL</label>
-          <div className="flex-1">
-            <TextInput value={formState.homepageUrl} onChange={(value) => setFormState({ ...formState, homepageUrl: value })} />
-          </div>
-        </div>
+        <AdminFieldRow label="Homepage URL">
+          <TextInput value={formState.homepageUrl} onChange={(value) => setFormValue("homepageUrl", value)} />
+        </AdminFieldRow>
 
-        <div className="flex items-center gap-4">
-          <label className="font-medium w-40 shrink-0">Icon URL</label>
-          <div className="flex-1">
-            <TextInput value={formState.iconUrl} onChange={(value) => setFormState({ ...formState, iconUrl: value })} />
-          </div>
-        </div>
+        <AdminFieldRow label="Icon URL">
+          <TextInput value={formState.iconUrl} onChange={(value) => setFormValue("iconUrl", value)} />
+        </AdminFieldRow>
 
-        <div className="flex items-center gap-4">
-          <label className="font-medium w-40 shrink-0">Trust</label>
+        <AdminFieldRow label="Trust">
           <select
             value={formState.trustLevel}
-            onChange={(e) => setFormState({ ...formState, trustLevel: e.target.value as OAuthTrustLevel })}
+            onChange={(e) => setFormValue("trustLevel", e.target.value as OAuthTrustLevel)}
             className="bg-darkless border border-slate rounded-lg px-3 py-2 text-white outline-none flex-1"
           >
             <option value="UNTRUSTED">UNTRUSTED</option>
             <option value="TRUSTED">TRUSTED</option>
           </select>
-        </div>
+        </AdminFieldRow>
 
-        <div className="flex items-start gap-4">
-          <label className="font-medium w-40 shrink-0 pt-2">Redirect URIs</label>
+        <AdminFieldRow label="Redirect URIs" align="start">
           <textarea
             value={formState.redirectUris}
-            onChange={(e) => setFormState({ ...formState, redirectUris: e.target.value })}
+            onChange={(e) => setFormValue("redirectUris", e.target.value)}
             rows={4}
             className="flex-1 rounded-xl border border-slate bg-dark px-4 py-2 text-white outline-red focus:outline-2 resize-y"
           />
-        </div>
+        </AdminFieldRow>
 
-        <div className="flex items-start gap-4">
-          <label className="font-medium w-40 shrink-0 pt-1">Scopes</label>
-          <div className="flex-1 rounded-xl border border-slate bg-dark p-4">
+        <AdminFieldRow label="Scopes" align="start">
+          <div className="rounded-xl border border-slate bg-dark p-4">
             <div className="grid gap-4">
               {Object.entries(OAUTH_SCOPE_GROUPS).map(([group, scopes]) => (
                 <div key={group} className="grid gap-2">
@@ -500,20 +544,10 @@ function AdminAppEditModal({ app, isSaving, onClose, onSave }: {
               ))}
             </div>
           </div>
-        </div>
+        </AdminFieldRow>
 
-        {error && (
-          <div className="text-red text-base p-3 rounded-lg bg-red/10 border border-red/20">
-            {error}
-          </div>
-        )}
-
-        <div className="flex gap-3 justify-end pt-4">
-          <Button kind="regular" onClick={onClose} disabled={isSaving}>Cancel</Button>
-          <Button kind="primary" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
+        <ModalError error={error} />
+        <ModalActions isSaving={isSaving} onClose={onClose} onSave={handleSave} />
       </ModalContent>
     </Modal>
   );
@@ -615,45 +649,33 @@ function AdminAppsTable() {
       />
 
       <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button kind="regular" onClick={fetchApps} icon="view-reload" disabled={isLoading}>
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button kind="regular" onClick={fetchApps} icon="view-reload" disabled={isLoading}>
+            Refresh
+          </Button>
 
-        <span className="text-base text-muted ml-auto">
-          {apps.length} total apps
-        </span>
-      </div>
-
-      {error && (
-        <div className="text-red text-sm p-3 rounded-lg bg-red/10 border border-red/20">
-          {error}
+          <span className="text-base text-muted ml-auto">
+            {apps.length} total apps
+          </span>
         </div>
-      )}
 
-      <div className="w-full overflow-x-auto rounded-xl border border-slate">
-        <table className="min-w-275 w-full table-fixed text-base">
-          <thead>
-            <tr className="border-b border-slate bg-darkless">
-              <th className="px-3 py-2 text-left text-sm font-medium text-muted">App</th>
-              <th className="px-3 py-2 text-left text-sm font-medium text-muted">Client ID</th>
-              <th className="px-3 py-2 text-left text-sm font-medium text-muted">Trust</th>
-              <th className="px-3 py-2 text-left text-sm font-medium text-muted">Owner</th>
-              <th className="px-3 py-2 text-left text-sm font-medium text-muted">Created</th>
-              <th className="px-3 py-2 text-left text-sm font-medium text-muted">Redirect URIs</th>
-              <th className="px-3 py-2 text-left text-sm font-medium text-muted">Scopes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && apps.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted text-base">
-                  Loading apps...
-                </td>
+        <ModalError error={error} size="sm" />
+
+        <div className="w-full overflow-x-auto rounded-xl border border-slate">
+          <table className="min-w-275 w-full table-fixed text-base">
+            <thead>
+              <tr className="border-b border-slate bg-darkless">
+                {APP_TABLE_COLUMNS.map((column) => (
+                  <th key={column} className="px-3 py-2 text-left text-sm font-medium text-muted">{column}</th>
+                ))}
               </tr>
-            )}
+            </thead>
+            <tbody>
+              {isLoading && apps.length === 0 && (
+                <TableStatusRow colSpan={APP_TABLE_COLUMNS.length}>Loading apps...</TableStatusRow>
+              )}
 
-            {apps.map((app) => (
+              {apps.map((app) => (
                 <tr key={app.id} className="border-b border-slate/50 hover:bg-darkless/50 transition-colors cursor-pointer" onClick={() => setEditingApp(app)}>
                   <td className="px-3 py-2 align-top">
                     <div className="flex flex-col gap-1">
@@ -701,18 +723,14 @@ function AdminAppsTable() {
                     </div>
                   </td>
                 </tr>
-            ))}
+              ))}
 
-            {!isLoading && apps.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted text-base">
-                  No apps found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              {!isLoading && apps.length === 0 && (
+                <TableStatusRow colSpan={APP_TABLE_COLUMNS.length}>No apps found.</TableStatusRow>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -727,10 +745,10 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   const [result, setResult] = useState<ListResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editingRecord, setEditingRecord] = useState<Record<string, unknown> | null>(null);
+  const [editingRecord, setEditingRecord] = useState<AdminRecord | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const fields = ADMIN_ENTITY_FIELDS[entity] as Record<string, { label: string; kind: string; sortable?: boolean; editable?: boolean; enumValues?: readonly string[] }>;
+  const fields = ADMIN_ENTITY_FIELDS[entity] as Record<string, AdminFieldDef>;
   const fieldKeys = Object.keys(fields);
   const tableColumnKeys = [
     ...(entity === "timelapse" ? ["__thumbnail"] : []),
@@ -800,7 +818,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
     onQueryChange({ ...query, filters: newFilters, page: 1 });
   }
 
-  async function handleSaveRecord(changes: Record<string, unknown>) {
+  async function handleSaveRecord(changes: AdminRecord) {
     if (!editingRecord)
       return;
 
@@ -875,9 +893,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         </div>
 
         {error && (
-          <div className="text-red text-sm p-3 rounded-lg bg-red/10 border border-red/20">
-            {error}
-          </div>
+          <ModalError error={error} size="sm" />
         )}
 
       <div className="w-full overflow-x-auto rounded-xl border border-slate">
@@ -918,11 +934,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
           </thead>
           <tbody>
             {isLoading && !result && (
-              <tr>
-                <td colSpan={tableColumnKeys.length} className="px-3 py-8 text-center text-muted text-base">
-                  Loading...
-                </td>
-              </tr>
+              <TableStatusRow colSpan={tableColumnKeys.length}>Loading...</TableStatusRow>
             )}
 
             {result?.rows.map((row, i) => (
@@ -941,11 +953,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
                   if (key === "__thumbnail") {
                     return (
                       <td key={key} className="px-3 py-2 align-top">
-                        <img
-                          src={String(row["thumbnailUrl"] || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect fill='%23333' width='48' height='48'/%3E%3C/svg%3E")}
-                          alt="Thumbnail"
-                          className="h-12 w-auto max-w-none rounded object-cover"
-                        />
+                        <PreviewImage src={row["thumbnailUrl"]} alt="Thumbnail" className="h-12 w-auto max-w-none rounded object-cover" />
                       </td>
                     );
                   }
@@ -953,11 +961,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
                   if (key === "__profilePicture") {
                     return (
                       <td key={key} className="w-20 px-3 py-2 align-top">
-                        <img
-                          src={String(row["profilePictureUrl"] || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect fill='%23333' width='48' height='48'/%3E%3C/svg%3E")}
-                          alt="Profile"
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
+                        <PreviewImage src={row["profilePictureUrl"]} alt="Profile" className="w-12 h-12 rounded-full object-cover" />
                       </td>
                     );
                   }
@@ -981,11 +985,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
             ))}
 
             {result && result.rows.length === 0 && (
-              <tr>
-                <td colSpan={tableColumnKeys.length} className="px-3 py-8 text-center text-muted text-base">
-                  No records found.
-                </td>
-              </tr>
+              <TableStatusRow colSpan={tableColumnKeys.length}>No records found.</TableStatusRow>
             )}
           </tbody>
         </table>

@@ -1,5 +1,6 @@
 import { implement } from "@orpc/server";
 import { adminRouterContract, ADMIN_ENTITY_FIELDS, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow } from "@hackclub/lapse-api";
+import { match } from "@hackclub/lapse-shared";
 
 import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
@@ -27,44 +28,24 @@ function getFieldDefs(entity: AdminEntity): FieldDefs {
     return ADMIN_ENTITY_FIELDS[entity] as FieldDefs;
 }
 
+function buildOperatorCondition(field: string, operator: AdminFilterOperator, value: unknown, containsValue: unknown = value): Record<string, unknown> {
+    return match(operator, {
+        "eq": { [field]: value },
+        "neq": { [field]: { not: value } },
+        "contains": { [field]: containsValue },
+        "gt": { [field]: { gt: value } },
+        "lt": { [field]: { lt: value } },
+        "gte": { [field]: { gte: value } },
+        "lte": { [field]: { lte: value } }
+    });
+}
+
 function buildFilterCondition(field: string, operator: AdminFilterOperator, value: string, kind: FieldKind): Record<string, unknown> {
-    if (kind === "date") {
-        const dateValue = new Date(parseInt(value));
-
-        switch (operator) {
-            case "eq": return { [field]: dateValue };
-            case "neq": return { [field]: { not: dateValue } };
-            case "gt": return { [field]: { gt: dateValue } };
-            case "lt": return { [field]: { lt: dateValue } };
-            case "gte": return { [field]: { gte: dateValue } };
-            case "lte": return { [field]: { lte: dateValue } };
-            case "contains": return { [field]: dateValue };
-        }
-    }
-
-    if (kind === "number") {
-        const numValue = parseFloat(value);
-
-        switch (operator) {
-            case "eq": return { [field]: numValue };
-            case "neq": return { [field]: { not: numValue } };
-            case "gt": return { [field]: { gt: numValue } };
-            case "lt": return { [field]: { lt: numValue } };
-            case "gte": return { [field]: { gte: numValue } };
-            case "lte": return { [field]: { lte: numValue } };
-            case "contains": return { [field]: numValue };
-        }
-    }
-
-    switch (operator) {
-        case "eq": return { [field]: value };
-        case "neq": return { [field]: { not: value } };
-        case "contains": return { [field]: { contains: value, mode: "insensitive" } };
-        case "gt": return { [field]: { gt: value } };
-        case "lt": return { [field]: { lt: value } };
-        case "gte": return { [field]: { gte: value } };
-        case "lte": return { [field]: { lte: value } };
-    }
+    return (
+        kind === "date" ? buildOperatorCondition(field, operator, new Date(Number.parseInt(value, 10))) :
+        kind === "number" ? buildOperatorCondition(field, operator, Number.parseFloat(value)) :
+        buildOperatorCondition(field, operator, value, { contains: value, mode: "insensitive" })
+    );
 }
 
 const JOIN_FIELD_MAP: Record<string, { relation: string; field: string }> = {
@@ -107,7 +88,8 @@ function buildOrderBy(sort: AdminSort | undefined, fieldDefs: FieldDefs): Record
         return undefined;
 
     const def = fieldDefs[sort.field];
-    if (!def || !def.sortable) return undefined;
+    if (!def || !def.sortable)
+        return undefined;
 
     if (sort.field === "sessionsCount" || sort.field === "snapshotsCount")
         return undefined;
@@ -370,6 +352,23 @@ function identifierMatch(query: string, value: string): boolean {
     return value.toLowerCase().includes(query.toLowerCase());
 }
 
+type SearchResultRow = { entity: AdminEntity; id: string; displayText: string };
+
+type SearchDescriptor = SearchResultRow & {
+    exactValues?: string[];
+    fuzzyValues?: string[];
+};
+
+
+function pushSearchDescriptor(results: SearchResultRow[], query: string, descriptor: SearchDescriptor) {
+    const { exactValues = [], fuzzyValues = [], ...result } = descriptor;
+    const matches = [descriptor.id, ...exactValues].some(value => identifierMatch(query, value)) || fuzzyValues.some(value => fuzzyMatch(query, value));
+
+    if (matches) {
+        results.push(result);
+    }
+}
+
 export default os.router({
     stats: os.stats
         .use(requiredAuth("ADMIN"))
@@ -451,74 +450,86 @@ export default os.router({
         .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const query = req.input.query.trim();
-            if (!query)
-            return {
-                ok: true as const,
-                data: { results: [] }
-            };
+            if (!query) {
+                return {
+                    ok: true as const,
+                    data: { results: [] }
+                };
+            }
 
-            const results = [];
+            const results: SearchResultRow[] = [];
 
-            const users = await database().user.findMany({
-                select: { id: true, handle: true, displayName: true, slackId: true }
-            });
+            const [users, timelapses, comments, drafts] = await Promise.all([
+                database().user.findMany({
+                    select: { id: true, handle: true, displayName: true, slackId: true }
+                }),
+
+                database().timelapse.findMany({
+                    select: { id: true, name: true, owner: { select: { handle: true } } }
+                }),
+
+                database().comment.findMany({
+                    select: { id: true, content: true, author: { select: { handle: true } } }
+                }),
+                
+                database().draftTimelapse.findMany({
+                    select: { id: true, name: true, owner: { select: { handle: true } } }
+                })
+            ]);
 
             for (const user of users) {
-                const matchScore = identifierMatch(query, user.id)
-                    || (user.slackId !== null && identifierMatch(query, user.slackId))
-                    || fuzzyMatch(query, user.handle)
-                    || fuzzyMatch(query, user.displayName);
-
-                if (matchScore)
-                    results.push({
+                pushSearchDescriptor(
+                    results,
+                    query,
+                    {
                         entity: "user" as const,
                         id: user.id,
-                        displayText: `${user.displayName} (@${user.handle})`
-                    });
+                        displayText: `${user.displayName} (@${user.handle})`,
+                        exactValues: user.slackId === null ? [] : [user.slackId],
+                        fuzzyValues: [user.handle, user.displayName]
+                    }
+                );
             }
-
-            const timelapses = await database().timelapse.findMany({
-                select: { id: true, name: true, owner: { select: { handle: true } } }
-            });
 
             for (const timelapse of timelapses) {
-                if (identifierMatch(query, timelapse.id) || fuzzyMatch(query, timelapse.name) || fuzzyMatch(query, timelapse.owner.handle)) {
-                    results.push({
+                pushSearchDescriptor(
+                    results,
+                    query,
+                    {
                         entity: "timelapse" as const,
                         id: timelapse.id,
-                        displayText: `${timelapse.name} by @${timelapse.owner.handle}`
-                    });
-                }
+                        displayText: `${timelapse.name} by @${timelapse.owner.handle}`,
+                        fuzzyValues: [timelapse.name, timelapse.owner.handle]
+                    }
+                );
             }
-
-            const comments = await database().comment.findMany({
-                select: { id: true, content: true, author: { select: { handle: true } } }
-            });
 
             for (const comment of comments) {
                 const preview = comment.content.substring(0, 50) + (comment.content.length > 50 ? "..." : "");
-                if (identifierMatch(query, comment.id) || fuzzyMatch(query, preview) || fuzzyMatch(query, comment.author.handle)) {
-                    results.push({
+                pushSearchDescriptor(
+                    results,
+                    query,
+                    {
                         entity: "comment" as const,
                         id: comment.id,
-                        displayText: `"${preview}" by @${comment.author.handle}`
-                    });
-                }
+                        displayText: `"${preview}" by @${comment.author.handle}`,
+                        fuzzyValues: [preview, comment.author.handle]
+                    }
+                );
             }
-
-            const drafts = await database().draftTimelapse.findMany({
-                select: { id: true, name: true, owner: { select: { handle: true } } }
-            });
 
             for (const draft of drafts) {
                 const displayName = draft.name || "(Untitled)";
-                if (identifierMatch(query, draft.id) || fuzzyMatch(query, displayName) || fuzzyMatch(query, draft.owner.handle)) {
-                    results.push({
+                pushSearchDescriptor(
+                    results,
+                    query,
+                    {
                         entity: "draftTimelapse" as const,
                         id: draft.id,
-                        displayText: `${displayName} by @${draft.owner.handle}`
-                    });
-                }
+                        displayText: `${displayName} by @${draft.owner.handle}`,
+                        fuzzyValues: [displayName, draft.owner.handle]
+                    }
+                );
             }
 
             return {
