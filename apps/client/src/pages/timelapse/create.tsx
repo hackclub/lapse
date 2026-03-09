@@ -10,7 +10,7 @@ import { getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
 import { api, apiUpload } from "@/api";
 import { TimelapseVideoSession } from "@/timelapseVideoSession";
-import {  SteppedProgress } from "@/common";
+import {  sleep, SteppedProgress } from "@/common";
 
 import { useOnce } from "@/hooks/useOnce";
 import { useAuth } from "@/hooks/useAuth";
@@ -480,6 +480,8 @@ export default function Page() {
       if (stream) {
         stream.getTracks().forEach(x => x.stop());
       }
+
+      await sleep(500);
 
       router.push(`/draft/${res.data.draftTimelapse.id}`);
     }

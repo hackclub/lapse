@@ -11,6 +11,7 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import chalk from "chalk";
 import dedent from "dedent";
 import { compositeRouterContract } from "@hackclub/lapse-api";
+import z from "zod";
 
 import { ensureCanonicalClient, getAuthenticatedUser } from "@/oauth.js"
 import { apiErr } from "@/common.js"
@@ -28,7 +29,7 @@ import developer from "@/routers/developer.js"
 import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
 import auth from "@/routers/auth.js"
-import z from "zod";
+import admin from "@/routers/admin.js"
 
 if (env.SENTRY_DSN) {
     Sentry.init({
@@ -49,7 +50,8 @@ const router = implement(compositeRouterContract)
         developer,
         global,
         hackatime,
-        auth
+        auth,
+        admin
     });
 
 const handler = new OpenAPIHandler(
