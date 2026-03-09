@@ -43,17 +43,17 @@ export default function Page() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorIsCritical, setErrorIsCritical] = useState(false);
-  
+
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editVisibility, setEditVisibility] = useState<TimelapseVisibility>("PUBLIC");
   const [isUpdating, setIsUpdating] = useState(false);
-  
+
   const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
   const [missingDeviceName, setMissingDeviceName] = useState<string>("");
   const [invalidPasskeyAttempt, setInvalidPasskeyAttempt] = useState(false);
-  
+
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [hackatimeProject, setHackatimeProject] = useState("");
   const [hackatimeProjects, setHackatimeProjects] = useState<HackatimeProject[]>([]);
@@ -66,6 +66,7 @@ export default function Page() {
 
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
   const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
+
   useEffect(() => {
     if (!timelapse)
       return;
@@ -75,7 +76,7 @@ export default function Page() {
   }, [timelapse]);
 
   const isOwned = timelapse && currentUser && currentUser.id === timelapse.owner.id;
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
 
   function setCriticalError(message: string) {
@@ -145,9 +146,9 @@ export default function Page() {
           setCriticalError(`Failed to load timelapse video, HTTP ${vidRes.status}!`);
           return;
         }
-        
+
         const vidData = await vidRes.arrayBuffer();
-        
+
         try {
           // Decrypt the video data using the device passkey and timelapse ID
           const decryptedData = await decryptVideo(
@@ -155,7 +156,7 @@ export default function Page() {
             timelapse.id,
             originDevice.passkey
           );
-          
+
           // Create a blob from the decrypted data and assign it to the video element
           const videoBlob = new Blob([decryptedData], { type: "video/mp4" });
           const url = URL.createObjectURL(videoBlob);
@@ -178,7 +179,7 @@ export default function Page() {
         apiErr instanceof Error
           ? apiErr.message
           : "An unknown error occurred while loading the timelapse"
-        );
+      );
     }
   }, [router, router.isReady]);
 
@@ -218,11 +219,11 @@ export default function Page() {
 
       if (result.ok) {
         setTimelapse(result.data.timelapse);
-      } 
+      }
       else {
         setRegularError(`Failed to publish: ${result.error}`);
       }
-    } 
+    }
     catch (error) {
       console.error("([id].tsx) error publishing timelapse:", error);
       setCriticalError(
@@ -230,7 +231,7 @@ export default function Page() {
           ? error.message
           : "An error occurred while publishing the timelapse."
       );
-    } 
+    }
     finally {
       setIsPublishing(false);
     }
@@ -264,15 +265,15 @@ export default function Page() {
       if (result.ok) {
         setTimelapse(result.data.timelapse);
         setEditModalOpen(false);
-      } 
+      }
       else {
         setRegularError(`Failed to update: ${result.error}`);
       }
-    } 
+    }
     catch (error) {
       console.error("([id].tsx) error updating timelapse:", error);
       setRegularError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
-    } 
+    }
     finally {
       setIsUpdating(false);
     }
@@ -320,15 +321,15 @@ export default function Page() {
         setTimelapse(result.data.timelapse);
         setSyncModalOpen(false);
         setHackatimeProject("");
-      } 
+      }
       else {
         setRegularError(`Failed to sync with Hackatime: ${result.error}`);
       }
-    } 
+    }
     catch (error) {
       console.error("([id].tsx) error syncing with Hackatime:", error);
       setRegularError(error instanceof Error ? error.message : "An error occurred while syncing with Hackatime.");
-    } 
+    }
     finally {
       setIsSyncing(false);
     }
@@ -392,12 +393,42 @@ export default function Page() {
     }
   }
 
+  async function handleReport() {
+    if (!timelapse) return;
+
+    const reason = prompt("Why are you reporting this timelapse?");
+    if (!reason)
+      return;
+
+    try {
+      const result = await trpc.report.create.mutate({
+        timelapseId: timelapse.id,
+        reason,
+      });
+
+      if (result.ok) {
+        alert("Report submitted. Thank you!");
+      }
+      else {
+        setRegularError(result.message);
+      }
+    }
+    catch (error) {
+      console.error("([id].tsx) error reporting timelapse:", error);
+      setRegularError(
+        error instanceof Error
+          ? error.message
+          : "An error occurred while submitting the report."
+      );
+    }
+  }
+
   return (
     <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
       <div className="flex flex-col md:flex-row h-full pb-48 gap-8 md:gap-12 md:px-16 md:pb-16">
         <div className="flex flex-col gap-4 w-full md:w-2/3 h-min">
-          <video 
-            ref={videoRef} 
+          <video
+            ref={videoRef}
             controls
             poster={timelapse?.isPublished ? timelapse?.thumbnailUrl || undefined : undefined}
             className="aspect-video w-full h-min md:rounded-2xl bg-[#000]"
@@ -412,27 +443,29 @@ export default function Page() {
                     Edit details
                   </Button>
 
-                  { !timelapse.isPublished && (
+                  {!timelapse.isPublished && (
                     <Button kind="primary" className="gap-2 w-full" onClick={() => setPublishModalOpen(true)} disabled={isPublishing}>
                       <Icon glyph="send-fill" size={24} />
                       {isPublishing ? "Publishing..." : "Publish"}
                     </Button>
-                  ) }
+                  )}
 
-                  { timelapse.isPublished && !timelapse.private?.hackatimeProject && (
+                  {timelapse.isPublished && !timelapse.private?.hackatimeProject && (
                     <Button className="gap-2 w-full" onClick={handleSyncWithHackatime} kind="primary">
                       <Icon glyph="history" size={24} />
                       Sync with Hackatime
                     </Button>
-                  ) }
+                  )}
                 </>
-              ) : (
-                <>
-                  <Button onClick={() => alert("Sorry, not implemented yet!")} className="gap-2 w-full">
-                    <Icon glyph="flag-fill" size={24} />
-                    Report
-                  </Button>
-                </>
+              ) : null
+            }
+
+            {
+              (!isOwned || process.env.NODE_ENV !== "production") && (
+                <Button onClick={handleReport} className="gap-2 w-full">
+                  <Icon glyph="flag-fill" size={24} />
+                  Report
+                </Button>
               )
             }
           </div>
@@ -442,20 +475,20 @@ export default function Page() {
           <div className="flex flex-col gap-2 px-4 md:px-0">
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-bold text-smoke leading-tight">
-                { timelapse?.name || <Skeleton /> }
-                
-                { timelapse && !timelapse.isPublished && (
+                {timelapse?.name || <Skeleton />}
+
+                {timelapse && !timelapse.isPublished && (
                   <Badge variant="warning" className="ml-4">UNPUBLISHED</Badge>
                 )}
 
-                { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
+                {timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && (
                   <Badge variant="default" className="ml-4">UNLISTED</Badge>
-                ) }
+                )}
               </h1>
             </div>
-            
+
             <div className="flex items-center gap-3 mb-4">
-              <ProfilePicture 
+              <ProfilePicture
                 isSkeleton={timelapse == null}
                 user={timelapse?.owner ?? null}
                 size="sm"
@@ -463,23 +496,23 @@ export default function Page() {
 
               <div className="text-secondary text-xl flex gap-x-3 text-nowrap flex-wrap">
                 <span>
-                  by { !timelapse ? <Skeleton /> : <NextLink href={`/user/@${timelapse.owner.handle}`}><span className="font-bold">@{timelapse.owner.displayName}</span></NextLink> }
+                  by {!timelapse ? <Skeleton /> : <NextLink href={`/user/@${timelapse.owner.handle}`}><span className="font-bold">@{timelapse.owner.displayName}</span></NextLink>}
                 </span>
 
                 <Bullet />
 
                 <span className="flex gap-1 sm:gap-2">
-                  { !timelapse ? <Skeleton /> : <><TimeAgo date={timelapse.createdAt} /> <Bullet/><Duration seconds={timelapse.duration}/> </>}
+                  {!timelapse ? <Skeleton /> : <><TimeAgo date={timelapse.createdAt} /> <Bullet /><Duration seconds={timelapse.duration} /> </>}
                 </span>
               </div>
             </div>
 
             <p className="text-white text-xl leading-relaxed">
-              { timelapse != null ? formattedDescription : <Skeleton lines={3} /> }
+              {timelapse != null ? formattedDescription : <Skeleton lines={3} />}
             </p>
           </div>
-          
-          { timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && isOwned && (
+
+          {timelapse && timelapse.isPublished && timelapse.visibility === "UNLISTED" && isOwned && (
             <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
               <Icon glyph="private-fill" size={32} className="text-yellow flex-shrink-0" />
               <p className="text-yellow">
@@ -489,7 +522,7 @@ export default function Page() {
             </div>
           )}
 
-          { timelapse && timelapse.isPublished && <CommentSection timelapseId={timelapse.id} comments={localComments} setComments={setLocalComments} /> }
+          {timelapse && timelapse.isPublished && <CommentSection timelapseId={timelapse.id} comments={localComments} setComments={setLocalComments} />}
         </div>
       </div>
 
@@ -528,7 +561,7 @@ export default function Page() {
             {isUpdating ? "Updating..." : "Update"}
           </Button>
 
-          { !timelapse?.isPublished && (
+          {!timelapse?.isPublished && (
             <div className="flex flex-col gap-2 pt-4 border-t border-slate">
               <Button onClick={handleDeleteTimelapse} disabled={isDeleting} kind="destructive">
                 <Icon glyph="delete" size={24} />
