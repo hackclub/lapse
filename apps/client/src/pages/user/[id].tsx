@@ -79,7 +79,7 @@ export default function Page() {
           return;
         }
 
-        setDrafts(draftsRes.data.timelapses);
+        setDrafts(draftsRes.data.timelapses.filter(d => !d.associatedTimelapseId));
       }
     }
     catch (apiErr) {

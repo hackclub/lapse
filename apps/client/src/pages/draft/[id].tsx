@@ -65,6 +65,12 @@ export default function Page() {
       }
 
       console.log("([id].tsx) timelapse fetched!", res.data.timelapse);
+
+      if (res.data.timelapse.associatedTimelapseId) {
+        router.replace(`/timelapse/${res.data.timelapse.associatedTimelapseId}`);
+        return;
+      }
+
       setDraft(res.data.timelapse);
       setName(res.data.timelapse.name || null);
       setDescription(res.data.timelapse.description);

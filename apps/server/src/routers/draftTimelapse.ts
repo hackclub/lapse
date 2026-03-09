@@ -42,7 +42,8 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }
         deviceId: entity.deviceId,
         owner: dtoPublicUser(entity.owner),
         isDraft: true,
-        iv: entity.iv
+        iv: entity.iv,
+        associatedTimelapseId: entity.associatedTimelapseId ?? undefined
     };
 }
 

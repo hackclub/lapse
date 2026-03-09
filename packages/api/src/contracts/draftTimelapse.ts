@@ -65,7 +65,10 @@ export const DraftTimelapseSchema = DraftTimelapsePayloadSchema.extend({
         .describe("Always `true`. This field is provided for convenience when using strongly-typed clients."),
 
     iv: z.hex()
-        .describe("The IV to use when encrypting and decrypting binary data associated with the timelapse.")
+        .describe("The IV to use when encrypting and decrypting binary data associated with the timelapse."),
+
+    associatedTimelapseId: LapseId.optional()
+        .describe("If defined, this draft is currently being published and has an associated timelapse that is processing.")
 });
 
 export const draftTimelapseRouterContract = {
