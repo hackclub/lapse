@@ -84,15 +84,18 @@ export default os.router({
         .use(requiredScopes("elevated"))
         .handler(async (req) => {
             const caller = req.context.user;
+            const canAdministerAnyApp = caller.permissionLevel === "ADMIN" || caller.permissionLevel === "ROOT";
 
             const app = await database().serviceClient.findFirst({
                 where: {
                     id: req.input.id,
                     revokedAt: null,
-                    OR: [
-                        { createdByUserId: caller.id },
-                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
-                    ]
+                    ...(!canAdministerAnyApp ? {
+                        OR: [
+                            { createdByUserId: caller.id },
+                            ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
+                        ]
+                    } : {})
                 }
             });
         

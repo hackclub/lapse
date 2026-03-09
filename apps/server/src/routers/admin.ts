@@ -1,16 +1,5 @@
 import { implement } from "@orpc/server";
-import {
-    adminRouterContract,
-    ADMIN_ENTITY_FIELDS,
-    type AdminEntity,
-    type AdminFilter,
-    type AdminFilterOperator,
-    type AdminSort,
-    type AdminUserRow,
-    type AdminTimelapseRow,
-    type AdminCommentRow,
-    type AdminDraftTimelapseRow
-} from "@hackclub/lapse-api";
+import { adminRouterContract, ADMIN_ENTITY_FIELDS, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow } from "@hackclub/lapse-api";
 
 import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
@@ -26,15 +15,13 @@ const os = implement(adminRouterContract)
 
 type FieldKind = "string" | "number" | "date" | "enum" | "boolean";
 
-interface EntityFieldDef {
+type FieldDefs = Record<string, {
     label: string;
     kind: FieldKind;
     sortable?: boolean;
     editable?: boolean;
     enumValues?: readonly string[];
-}
-
-type FieldDefs = Record<string, EntityFieldDef>;
+}>;
 
 function getFieldDefs(entity: AdminEntity): FieldDefs {
     return ADMIN_ENTITY_FIELDS[entity] as FieldDefs;
@@ -93,7 +80,8 @@ function buildWhere(filters: AdminFilter[], fieldDefs: FieldDefs): Record<string
 
     for (const filter of filters) {
         const def = fieldDefs[filter.field];
-        if (!def) continue;
+        if (!def)
+            continue;
 
         const joinInfo = JOIN_FIELD_MAP[filter.field];
         if (joinInfo) {
@@ -115,7 +103,8 @@ function buildWhere(filters: AdminFilter[], fieldDefs: FieldDefs): Record<string
 }
 
 function buildOrderBy(sort: AdminSort | undefined, fieldDefs: FieldDefs): Record<string, unknown> | undefined {
-    if (!sort) return undefined;
+    if (!sort)
+        return undefined;
 
     const def = fieldDefs[sort.field];
     if (!def || !def.sortable) return undefined;
@@ -223,9 +212,11 @@ const EDITABLE_DRAFT_FIELDS = new Set(["name", "description"]);
 function sanitizeChanges(changes: Record<string, unknown>, allowed: Set<string>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const key of Object.keys(changes)) {
-        if (allowed.has(key))
+        if (allowed.has(key)) {
             result[key] = changes[key];
+        }
     }
+
     return result;
 }
 
@@ -236,14 +227,16 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
             return rows.map(dtoAdminUser);
         },
         count: (where) => database().user.count({ where }),
-        update: async (id, changes, caller) => {
+        update: async (id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_USER_FIELDS);
-            if (Object.keys(safe).length === 0) return null;
+            if (Object.keys(safe).length === 0)
+                return null;
 
             const updated = await database().user.update({
                 where: { id },
                 data: safe
             });
+
             return dtoAdminUser(updated);
         }
     },
@@ -253,18 +246,21 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
                 where, orderBy, skip, take,
                 include: { owner: true }
             });
+
             return rows.map(dtoAdminTimelapse);
         },
         count: (where) => database().timelapse.count({ where }),
         update: async (id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_TIMELAPSE_FIELDS);
-            if (Object.keys(safe).length === 0) return null;
+            if (Object.keys(safe).length === 0)
+                return null;
 
             const updated = await database().timelapse.update({
                 where: { id },
                 data: safe,
                 include: { owner: true }
             });
+
             return dtoAdminTimelapse(updated);
         }
     },
@@ -274,18 +270,21 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
                 where, orderBy, skip, take,
                 include: { author: true }
             });
+
             return rows.map(dtoAdminComment);
         },
         count: (where) => database().comment.count({ where }),
         update: async (id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_COMMENT_FIELDS);
-            if (Object.keys(safe).length === 0) return null;
+            if (Object.keys(safe).length === 0)
+                return null;
 
             const updated = await database().comment.update({
                 where: { id },
                 data: safe,
                 include: { author: true }
             });
+
             return dtoAdminComment(updated);
         }
     },
@@ -304,18 +303,21 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
                 where, orderBy, skip, take,
                 include: { owner: true }
             });
+
             return rows.map(dtoAdminDraftTimelapse);
         },
         count: (where) => database().draftTimelapse.count({ where }),
         update: async (id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_DRAFT_FIELDS);
-            if (Object.keys(safe).length === 0) return null;
+            if (Object.keys(safe).length === 0)
+                return null;
 
             const updated = await database().draftTimelapse.update({
                 where: { id },
                 data: safe,
                 include: { owner: true }
             });
+
             return dtoAdminDraftTimelapse(updated);
         }
     }
@@ -324,20 +326,30 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
 function levenshteinDistance(a: string, b: string): number {
     const m = a.length;
     const n = b.length;
-    if (m === 0) return n;
-    if (n === 0) return m;
+    if (m === 0)
+        return n;
+
+    if (n === 0)
+        return m;
 
     const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
 
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 0; i <= m; i++) {
+        dp[i][0] = i;
+    }
+
+    for (let j = 0; j <= n; j++) {
+        dp[0][j] = j;
+    }
 
     for (let i = 1; i <= m; i++) {
         for (let j = 1; j <= n; j++) {
-            if (a[i - 1] === b[j - 1])
+            if (a[i - 1] === b[j - 1]) {
                 dp[i][j] = dp[i - 1][j - 1];
-            else
+            }
+            else {
                 dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+            }
         }
     }
 
@@ -347,7 +359,9 @@ function levenshteinDistance(a: string, b: string): number {
 function fuzzyMatch(query: string, text: string): boolean {
     const normalizedQuery = query.toLowerCase();
     const normalizedText = text.toLowerCase();
-    if (normalizedText.includes(normalizedQuery)) return true;
+    if (normalizedText.includes(normalizedQuery))
+        return true;
+
     const distance = levenshteinDistance(normalizedQuery, normalizedText);
     return distance <= Math.ceil(normalizedQuery.length / 2);
 }
@@ -408,8 +422,9 @@ export default os.router({
             const { entity, id, changes } = req.input;
 
             if (entity === "user" && "permissionLevel" in changes) {
-                if (caller.permissionLevel !== "ROOT")
+                if (caller.permissionLevel !== "ROOT") {
                     return apiErr("NO_PERMISSION", "Only ROOT users can change permission levels.");
+                }
             }
 
             const config = entityConfigs[entity];
@@ -444,10 +459,10 @@ export default os.router({
 
             const results = [];
 
-            // Search users
             const users = await database().user.findMany({
                 select: { id: true, handle: true, displayName: true, slackId: true }
             });
+
             for (const user of users) {
                 const matchScore = identifierMatch(query, user.id)
                     || (user.slackId !== null && identifierMatch(query, user.slackId))
@@ -462,48 +477,50 @@ export default os.router({
                     });
             }
 
-            // Search timelapses
             const timelapses = await database().timelapse.findMany({
                 select: { id: true, name: true, owner: { select: { handle: true } } }
             });
+
             for (const timelapse of timelapses) {
-                if (identifierMatch(query, timelapse.id) || fuzzyMatch(query, timelapse.name) || fuzzyMatch(query, timelapse.owner.handle))
+                if (identifierMatch(query, timelapse.id) || fuzzyMatch(query, timelapse.name) || fuzzyMatch(query, timelapse.owner.handle)) {
                     results.push({
                         entity: "timelapse" as const,
                         id: timelapse.id,
                         displayText: `${timelapse.name} by @${timelapse.owner.handle}`
                     });
+                }
             }
 
-            // Search comments
             const comments = await database().comment.findMany({
                 select: { id: true, content: true, author: { select: { handle: true } } }
             });
+
             for (const comment of comments) {
                 const preview = comment.content.substring(0, 50) + (comment.content.length > 50 ? "..." : "");
-                if (identifierMatch(query, comment.id) || fuzzyMatch(query, preview) || fuzzyMatch(query, comment.author.handle))
+                if (identifierMatch(query, comment.id) || fuzzyMatch(query, preview) || fuzzyMatch(query, comment.author.handle)) {
                     results.push({
                         entity: "comment" as const,
                         id: comment.id,
                         displayText: `"${preview}" by @${comment.author.handle}`
                     });
+                }
             }
 
-            // Search draft timelapses
             const drafts = await database().draftTimelapse.findMany({
                 select: { id: true, name: true, owner: { select: { handle: true } } }
             });
+
             for (const draft of drafts) {
                 const displayName = draft.name || "(Untitled)";
-                if (identifierMatch(query, draft.id) || fuzzyMatch(query, displayName) || fuzzyMatch(query, draft.owner.handle))
+                if (identifierMatch(query, draft.id) || fuzzyMatch(query, displayName) || fuzzyMatch(query, draft.owner.handle)) {
                     results.push({
                         entity: "draftTimelapse" as const,
                         id: draft.id,
                         displayText: `${displayName} by @${draft.owner.handle}`
                     });
+                }
             }
 
-            // Return first 10 results
             return {
                 ok: true as const,
                 data: { results: results.slice(0, 10) }

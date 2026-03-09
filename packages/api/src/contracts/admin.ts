@@ -4,25 +4,26 @@ import { apiResult, LapseId, LapseDate, createResultSchema } from "@/common";
 import { contract, NO_INPUT } from "@/internal";
 import { PermissionLevelSchema } from "@/contracts/user";
 
-export const AdminEntitySchema = z.enum(["user", "timelapse", "comment", "draftTimelapse"]);
 export type AdminEntity = z.infer<typeof AdminEntitySchema>;
+export const AdminEntitySchema = z.enum(["user", "timelapse", "comment", "draftTimelapse"]);
 
-export const AdminFilterOperatorSchema = z.enum(["eq", "neq", "contains", "gt", "lt", "gte", "lte"]);
 export type AdminFilterOperator = z.infer<typeof AdminFilterOperatorSchema>;
+export const AdminFilterOperatorSchema = z.enum(["eq", "neq", "contains", "gt", "lt", "gte", "lte"]);
 
+export type AdminFilter = z.infer<typeof AdminFilterSchema>;
 export const AdminFilterSchema = z.object({
     field: z.string(),
     operator: AdminFilterOperatorSchema,
     value: z.string()
 });
-export type AdminFilter = z.infer<typeof AdminFilterSchema>;
 
+export type AdminSort = z.infer<typeof AdminSortSchema>;
 export const AdminSortSchema = z.object({
     field: z.string(),
     direction: z.enum(["asc", "desc"])
 });
-export type AdminSort = z.infer<typeof AdminSortSchema>;
 
+export type AdminUserRow = z.infer<typeof AdminUserRowSchema>;
 export const AdminUserRowSchema = z.object({
     id: LapseId,
     email: z.string(),
@@ -36,8 +37,8 @@ export const AdminUserRowSchema = z.object({
     createdAt: LapseDate,
     lastHeartbeat: LapseDate
 });
-export type AdminUserRow = z.infer<typeof AdminUserRowSchema>;
 
+export type AdminTimelapseRow = z.infer<typeof AdminTimelapseRowSchema>;
 export const AdminTimelapseRowSchema = z.object({
     id: LapseId,
     name: z.string(),
@@ -51,8 +52,8 @@ export const AdminTimelapseRowSchema = z.object({
     createdAt: LapseDate,
     associatedJobId: z.string().nullable()
 });
-export type AdminTimelapseRow = z.infer<typeof AdminTimelapseRowSchema>;
 
+export type AdminCommentRow = z.infer<typeof AdminCommentRowSchema>;
 export const AdminCommentRowSchema = z.object({
     id: LapseId,
     content: z.string(),
@@ -61,8 +62,8 @@ export const AdminCommentRowSchema = z.object({
     timelapseId: LapseId,
     createdAt: LapseDate
 });
-export type AdminCommentRow = z.infer<typeof AdminCommentRowSchema>;
 
+export type AdminDraftTimelapseRow = z.infer<typeof AdminDraftTimelapseRowSchema>;
 export const AdminDraftTimelapseRowSchema = z.object({
     id: LapseId,
     name: z.string().nullable(),
@@ -75,7 +76,6 @@ export const AdminDraftTimelapseRowSchema = z.object({
     sessionsCount: z.number().int(),
     snapshotsCount: z.number().int()
 });
-export type AdminDraftTimelapseRow = z.infer<typeof AdminDraftTimelapseRowSchema>;
 
 export const ADMIN_ENTITY_FIELDS = {
     user: {
@@ -152,12 +152,12 @@ export const AdminUpdateResultSchema = z.object({
     row: z.record(z.string(), z.unknown())
 });
 
+export type AdminSearchResult = z.infer<typeof AdminSearchResultSchema>;
 export const AdminSearchResultSchema = z.object({
     entity: AdminEntitySchema,
     id: LapseId,
     displayText: z.string()
 });
-export type AdminSearchResult = z.infer<typeof AdminSearchResultSchema>;
 
 export const AdminSearchInputSchema = z.object({
     query: z.string().min(1)
@@ -169,7 +169,7 @@ export const AdminSearchOutputSchema = z.object({
 
 export const adminRouterContract = {
     stats: contract("GET", "/admin/stats")
-        .route({ description: "Returns aggregate statistics for the admin dashboard." })
+        .route({ description: "Returns aggregate statistics for the admin dashboard. Requires administrator permissions and an `elevated` grant." })
         .input(NO_INPUT)
         .output(apiResult({
             totalLoggedSeconds: z.number().nonnegative(),
@@ -178,17 +178,17 @@ export const adminRouterContract = {
         })),
 
     list: contract("POST", "/admin/list")
-        .route({ description: "Lists entities with filtering, sorting, and pagination. Requires ADMIN+ permissions." })
+        .route({ description: "Lists entities with filtering, sorting, and pagination. Requires administrator permissions and an `elevated` grant." })
         .input(AdminListInputSchema)
         .output(createResultSchema(AdminListResultSchema)),
 
     update: contract("PATCH", "/admin/update")
-        .route({ description: "Updates a single entity record. Requires ADMIN+ permissions. Permission level changes require ROOT." })
+        .route({ description: "Updates a single entity record. Requires administrator permissions and an `elevated` grant. Permission level changes require ROOT." })
         .input(AdminUpdateInputSchema)
         .output(createResultSchema(AdminUpdateResultSchema)),
 
     search: contract("POST", "/admin/search")
-        .route({ description: "Fuzzy search across all entities. Requires ADMIN+ permissions." })
+        .route({ description: "Fuzzy search across all entities. Requires administrator permissions and an `elevated` grant." })
         .input(AdminSearchInputSchema)
         .output(createResultSchema(AdminSearchOutputSchema))
 };
