@@ -12,6 +12,7 @@ export * from "./contracts/developer.js";
 export * from "./contracts/global.js";
 export * from "./contracts/hackatime.js";
 export * from "./contracts/auth.js";
+export * from "./contracts/admin.js";
 
 import { userRouterContract } from "./contracts/user.js";
 import { timelapseRouterContract } from "./contracts/timelapse.js";
@@ -21,6 +22,7 @@ import { developerRouterContract } from "./contracts/developer.js";
 import { globalRouterContract } from "./contracts/global.js";
 import { hackatimeRouterContract } from "./contracts/hackatime.js";
 import { authRouterContract } from "./contracts/auth.js";
+import { adminRouterContract } from "./contracts/admin.js";
 
 /**
  * Combines all routes the Lapse API is expected to implement into one router contract.
@@ -33,5 +35,6 @@ export const compositeRouterContract = {
     developer: developerRouterContract,
     global: globalRouterContract,
     hackatime: hackatimeRouterContract,
-    auth: authRouterContract
+    auth: authRouterContract,
+    admin: adminRouterContract
 };

@@ -56,7 +56,7 @@ export const developerRouterContract = {
         })),
 
     updateApp: contract()
-        .route({ description: "Updates data associated with an OAuth app owned by the calling user by its ID." })
+        .route({ description: "Updates data associated with an OAuth app by its ID. Regular users may update apps they own; administrators may update any app." })
         .input(
             z.object({
                 id: OAuthAppIdSchema
