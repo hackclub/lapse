@@ -9,7 +9,10 @@ if (env.SENTRY_DSN) {
         dsn: env.SENTRY_DSN,
         tracesSampleRate: 1,
         enableLogs: true,
-        sendDefaultPii: true
+        sendDefaultPii: true,
+        integrations: [
+            Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] })
+        ]
     });
 }
 
