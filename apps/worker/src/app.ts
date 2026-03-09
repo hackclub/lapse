@@ -7,7 +7,7 @@ import { env } from "@/env.js";
 if (env.SENTRY_DSN) {
     Sentry.init({
         dsn: env.SENTRY_DSN,
-        tracesSampleRate: 1,
+        tracesSampleRate: 0.1,
         enableLogs: true,
         sendDefaultPii: true,
         integrations: [
