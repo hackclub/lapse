@@ -33,7 +33,7 @@ import z from "zod";
 if (env.SENTRY_DSN) {
     Sentry.init({
         dsn: env.SENTRY_DSN,
-        tracesSampleRate: 0.1,
+        tracesSampleRate: 0,
         enableLogs: true,
         sendDefaultPii: true
     });
