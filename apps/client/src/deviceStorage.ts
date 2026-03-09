@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { readLegacyData, deleteLegacyDb } from "@/idbMigration";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -92,6 +93,7 @@ export class DeviceStorage {
     if (!await doesFileExist(lapseRoot, "store.json")) {
       console.log("(deviceStorage.ts) no OPFS store found - creating a new one");
       await this.writeStore({ devices: [], timelapse: null });
+      await this.migrateFromIndexedDb();
     }
     else {
       console.log("(deviceStorage.ts) existing OPFS store found");
@@ -119,6 +121,38 @@ export class DeviceStorage {
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(data));
     await writable.close();
+  }
+
+  private async migrateFromIndexedDb(): Promise<void> {
+    const legacy = await readLegacyData();
+    if (!legacy)
+      return;
+
+    console.log("(deviceStorage.ts) migrating data from IndexedDB to OPFS...");
+
+    const store = await this.readStore();
+
+    if (legacy.timelapse) {
+      store.timelapse = legacy.timelapse;
+
+      const dir = await this.getLapseDir();
+      for (const [sessionId, blob] of legacy.sessionBlobs) {
+        const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      }
+    }
+
+    for (const device of legacy.devices) {
+      if (!store.devices.some(d => d.id === device.id))
+        store.devices.push(device);
+    }
+
+    await this.writeStore(store);
+    await deleteLegacyDb();
+
+    console.log("(deviceStorage.ts) IndexedDB migration complete");
   }
 
   private async operation<T>(block: () => Promise<T>) {
