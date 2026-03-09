@@ -340,6 +340,11 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
 
   const fields = ADMIN_ENTITY_FIELDS[entity] as Record<string, { label: string; kind: string; sortable?: boolean; editable?: boolean; enumValues?: readonly string[] }>;
   const fieldKeys = Object.keys(fields);
+  const tableColumnKeys = [
+    ...(entity === "timelapse" ? ["__thumbnail"] : []),
+    ...(entity === "user" ? ["__profilePicture"] : []),
+    ...fieldKeys,
+  ];
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -485,21 +490,26 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         <table className="min-w-275 w-full table-fixed text-base">
           <thead>
             <tr className="border-b border-slate bg-darkless">
-              {fieldKeys.map(key => {
+              {tableColumnKeys.map(key => {
                 const def = fields[key];
                 const isSorted = query.sort?.field === key;
+                const isPreviewColumn = key.startsWith("__");
 
                 return (
                   <th
                     key={key}
                     className={clsx(
                       "px-3 py-2 text-left text-sm font-medium text-muted",
-                      def.sortable && "cursor-pointer hover:text-white transition-colors"
+                      def?.sortable && "cursor-pointer hover:text-white transition-colors"
                     )}
-                    onClick={() => handleSort(key)}
+                    onClick={() => !isPreviewColumn && handleSort(key)}
                   >
                     <div className="flex items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                      {def.label}
+                      {key === "__thumbnail"
+                        ? "Thumbnail"
+                        : key === "__profilePicture"
+                          ? "Profile Picture"
+                          : def.label}
                       {isSorted && (
                         <Icon
                           glyph={query.sort?.direction === "asc" ? "up-caret" : "down-caret"}
@@ -515,7 +525,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
           <tbody>
             {isLoading && !result && (
               <tr>
-                <td colSpan={fieldKeys.length} className="px-3 py-8 text-center text-muted text-base">
+                <td colSpan={tableColumnKeys.length} className="px-3 py-8 text-center text-muted text-base">
                   Loading...
                 </td>
               </tr>
@@ -531,24 +541,22 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
                 )}
                 onClick={() => setEditingRecord(row)}
               >
-                {fieldKeys.map(key => {
+                {tableColumnKeys.map(key => {
                   const def = fields[key];
 
-                  // Display thumbnail image for timelapse
-                  if (entity === "timelapse" && key === "id") {
+                  if (key === "__thumbnail") {
                     return (
-                      <td key={key} className="w-20 px-3 py-2 align-top">
+                      <td key={key} className="px-3 py-2 align-top">
                         <img
-                          src={String(row["thumbnailS3Key"] || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect fill='%23333' width='48' height='48'/%3E%3C/svg%3E")}
+                          src={String(row["thumbnailUrl"] || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect fill='%23333' width='48' height='48'/%3E%3C/svg%3E")}
                           alt="Thumbnail"
-                          className="w-12 h-12 rounded object-cover"
+                          className="h-12 w-auto max-w-none rounded object-cover"
                         />
                       </td>
                     );
                   }
 
-                  // Display profile picture for user
-                  if (entity === "user" && key === "id") {
+                  if (key === "__profilePicture") {
                     return (
                       <td key={key} className="w-20 px-3 py-2 align-top">
                         <img
@@ -580,7 +588,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
 
             {result && result.rows.length === 0 && (
               <tr>
-                <td colSpan={fieldKeys.length} className="px-3 py-8 text-center text-muted text-base">
+                <td colSpan={tableColumnKeys.length} className="px-3 py-8 text-center text-muted text-base">
                   No records found.
                 </td>
               </tr>

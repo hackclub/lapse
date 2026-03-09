@@ -15,6 +15,7 @@ import {
 import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
+import { env } from "@/env.js";
 import { logInfo } from "@/logging.js";
 
 import * as db from "@/generated/prisma/client.js";
@@ -170,6 +171,7 @@ function dtoAdminTimelapse(entity: db.Timelapse & { owner: db.User }): AdminTime
     return {
         id: entity.id,
         name: entity.name,
+        thumbnailUrl: entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`,
         visibility: entity.visibility,
         duration: entity.duration,
         ownerId: entity.ownerId,

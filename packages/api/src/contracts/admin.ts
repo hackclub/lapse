@@ -41,6 +41,7 @@ export type AdminUserRow = z.infer<typeof AdminUserRowSchema>;
 export const AdminTimelapseRowSchema = z.object({
     id: LapseId,
     name: z.string(),
+    thumbnailUrl: z.string().nullable(),
     visibility: z.string(),
     duration: z.number(),
     ownerId: LapseId,
