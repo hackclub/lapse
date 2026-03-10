@@ -380,14 +380,20 @@ export default function Page() {
     }
   }
 
-  async function stopRecording() {
-    if (!videoSession) {
-      console.warn("(create.tsx) attempted to stop the recording while no session has been started yet!");
+  async function uploadLocalTimelapse(options: { stopSession: boolean }) {
+    if (isUploading) {
       return;
     }
 
-    await videoSession.stop();
-    setVideoSession(null);
+    if (options.stopSession) {
+      if (!videoSession) {
+        console.warn("(create.tsx) attempted to stop the recording while no session has been started yet!");
+        return;
+      }
+
+      await videoSession.stop();
+      setVideoSession(null);
+    }
 
     setIsUploading(true);
 
@@ -491,6 +497,14 @@ export default function Page() {
     }
   }
 
+  async function stopRecording() {
+    await uploadLocalTimelapse({ stopSession: true });
+  }
+
+  async function submitExistingTimelapse() {
+    await uploadLocalTimelapse({ stopSession: videoSession != null });
+  }
+
   function onSetupModalClose() {
     if (setupState !== "UPDATE") {
       router.back();
@@ -573,6 +587,12 @@ export default function Page() {
                               "Create"
                             }
                           </Button>
+
+                          { setupState === "INIT_CONTINUE" && (
+                            <Button onClick={submitExistingTimelapse} kind="regular">
+                              Submit
+                            </Button>
+                          ) }
 
                           { (setupState === "INIT_CONTINUE" || setupState === "INIT_DISCARD") && (
                             <Button onClick={() => setSetupState("INIT_DISCARD")} kind="destructive" icon="delete">
