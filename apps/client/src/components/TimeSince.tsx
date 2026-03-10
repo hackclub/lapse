@@ -1,0 +1,60 @@
+import { useEffect, useState, useRef } from "react";
+
+export function TimeSince({ active, startTime, showUnknown }: {
+  active: boolean;
+  startTime: Date;
+  showUnknown: boolean;
+}) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => Math.floor((Date.now() - startTime.getTime()) / 1000));
+
+  useEffect(() => {
+    setElapsedSeconds(Math.floor((Date.now() - startTime.getTime()) / 1000));
+  }, [startTime]);
+
+  const [formattedTime, setFormattedTime] = useState("--:--");
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (active) {
+      intervalRef.current = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [active]);
+
+  useEffect(() => {
+    if (showUnknown) {
+      setFormattedTime("--:--");
+      return;
+    }
+
+    const hours = Math.floor(elapsedSeconds / 3600);
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+    const seconds = elapsedSeconds % 60;
+
+    const mm = minutes.toString().padStart(2, "0");
+    const ss = seconds.toString().padStart(2, "0");
+
+    if (hours > 0) {
+      const hh = hours.toString().padStart(2, "0");
+      setFormattedTime(`${hh}:${mm}:${ss}`);
+    }
+    else {
+      setFormattedTime(`${mm}:${ss}`);
+    }
+  }, [elapsedSeconds, showUnknown]);
+
+  return <span>{formattedTime}</span>;
+}

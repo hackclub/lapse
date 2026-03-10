@@ -15,31 +15,47 @@ In order to get started with developing Lapse, run these commands:
 # Install all packages
 pnpm install
 
-# cd into the web app directory
-cd apps/web
+# Set up the development environment
+pnpm dev:setup-env
 
-# Initialize the development environment
-pnpm dev:init
-
-# Start the development server
-pnpm turbo run dev
+# Start the web client and backend
+pnpm dev
 ```
+
 To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively.
 
+When developing, it's a good idea to re-compile all packages on the fly!
+```bash
+pnpm dev:watch-all
+```
+
+If you're interested, you're welcome to build your own custom client! See [`./docs/custom-clients.md`](./docs/custom-clients.md) for more info.
+
 ## 🛠️ Deployment
-Lapse is meant to be deployed via Docker. In order to deploy the main frontend/backend microservice, use `Dockerfile.web`, located in the root of this repo.
+Lapse is meant to be deployed via Docker, featuring three main services out-of-the-box: `client`, `server`, and `worker`. 
+- `client`: the web client server. Interfaces with `server` - use `Dockerfile.client` to deploy this service.
+- `server`: the backend server. Use `Dockerfile.server` to deploy this service.
+- `worker`: background job worker. This service is CPU-bound - it's a good idea to put it on a beefy server! Handles tasks like encoding. Use `Dockerfile.worker` to deploy this service.
+
+Both `server` and `worker` interface via Redis. You can put them on separate machines, as long as both have access to the same Redis server. `server` additionally needs a PostgreSQL database. Schemas are automatically applied - no need for any special setup.
+
+In order to deploy the main frontend/backend microservice, use `Dockerfile.web`, located in the root of this repo.
 
 For example - when deploying with Coolify, set these settings:
 - `Base Directory`: `/`
 - `Dockerfile Location`: `/Dockerfile.web`
 - `Ports Exposes`: `3000`
 
-You'll also need a PostgreSQL database running. The connection string to that database should be present in `DATABASE_URL`.
-
-You'll need at least one root user in order to promote other users to admins. You can do this via the [`./apps/web/prisma/promote.ts`](./apps/web/prisma/promote.ts) script:
+You'll need at least one root user in order to promote other users to admins. The recommended way to do this is via the `console.ts` script of `server`!
 
 ```sh
-# You'd probably want to use your production database URL here.
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lapse?schema=public"
-pnpm -F web exec tsx ./prisma/promote.ts --email ascpixi@hackclub.com
+cd apps/server
+
+# You'll be taken to a REPL after launching this!
+pnpm dev:console
+```
+
+```ts
+connect("postgresql://postgres:postgres@localhost:5432/lapse?schema=public") // you'll probably want your production database URL here!
+await promoteUser("ascpixi@hackclub.com")
 ```
