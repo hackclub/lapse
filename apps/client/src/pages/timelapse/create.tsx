@@ -29,6 +29,8 @@ import RecordIcon from "@/assets/icons/record.svg";
 import PauseIcon from "@/assets/icons/pause.svg";
 import StopIcon from "@/assets/icons/stop.svg";
 
+const MIN_TIMELAPSE_SIZE_BYTES = 1024;
+
 type VideoSourceKind = "NONE" | "CAMERA" | "SCREEN";
 
 function MediaSourceSelector({ description, stream, setStream, onInterrupt, videoSourceKind, setVideoSourceKind }: {
@@ -297,6 +299,13 @@ export default function Page() {
   useOnce(async () => {
     const existing = await deviceStorage.getTimelapse();
     if (existing) {
+      const size = await deviceStorage.getTimelapseVideoSize();
+      if (size < MIN_TIMELAPSE_SIZE_BYTES) {
+        console.log("(create.tsx) discarding tiny existing timelapse from OPFS", { size });
+        await deviceStorage.deleteTimelapse();
+        return;
+      }
+
       setSetupState("INIT_CONTINUE");
     }
   });
@@ -500,7 +509,29 @@ export default function Page() {
   }
 
   async function stopRecording() {
-    await uploadLocalTimelapse({ stopSession: true });
+    if (!videoSession) {
+      console.warn("(create.tsx) attempted to stop the recording while no session has been started yet!");
+      return;
+    }
+
+    await videoSession.stop();
+    setVideoSession(null);
+    await deviceStorage.sync();
+
+    const size = await deviceStorage.getTimelapseVideoSize();
+    if (size < MIN_TIMELAPSE_SIZE_BYTES) {
+      console.log("(create.tsx) discarding tiny timelapse after stop", { size });
+      await deviceStorage.deleteTimelapse();
+
+      if (stream) {
+        stream.getTracks().forEach(x => x.stop());
+      }
+
+      location.href = "/";
+      return;
+    }
+
+    await uploadLocalTimelapse({ stopSession: false });
   }
 
   async function submitExistingTimelapse() {

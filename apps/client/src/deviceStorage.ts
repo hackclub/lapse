@@ -218,6 +218,32 @@ export class DeviceStorage {
     });
   }
 
+  async getTimelapseVideoSize(): Promise<number> {
+    return await this.operation(async () => {
+      await this.ensureInit();
+
+      const store = await this.readStore();
+      if (!store.timelapse)
+        return 0;
+
+      const dir = await this.getLapseDir();
+      let totalSize = 0;
+
+      for (const sessionId of store.timelapse.sessions) {
+        try {
+          const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`);
+          const file = await fileHandle.getFile();
+          totalSize += file.size;
+        }
+        catch (err) {
+          console.warn(`(deviceStorage.ts) could not read session ${sessionId} size - skipping`, err);
+        }
+      }
+
+      return totalSize;
+    });
+  }
+
   async appendChunk(sessionId: number, chunk: Blob): Promise<void> {
     console.debug(`(deviceStorage.ts) appendChunk(${sessionId}) ->`, chunk);
 
