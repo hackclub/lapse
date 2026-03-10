@@ -11,5 +11,6 @@ if (process.env.NEXT_PUBLIC_POSTHOG_KEY) {
     defaults: "2026-01-30",
     capture_exceptions: true,
     debug: process.env.NODE_ENV === "development",
+    enable_recording_console_log: true
   });
 }
