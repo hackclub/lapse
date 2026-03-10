@@ -6,7 +6,7 @@ import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
 
-import type * as db from "@/generated/prisma/client.js";
+import * as db from "@/generated/prisma/client.js";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -107,6 +107,9 @@ export default os.router({
             if (!existing || existing.revokedAt)
                 return apiErr("NOT_FOUND", `Program key with ID ${req.input.id} not found.`);
 
+            if (existing.expiresAt <= new Date())
+                return apiErr("ERROR", "Cannot rotate an expired program key.");
+
             const rawKey = generateProgramKey();
             const keyPrefix = extractProgramKeyPrefix(rawKey);
             const keyHash = hashServiceSecret(rawKey);
@@ -189,6 +192,9 @@ export default os.router({
 
             if (!existing || existing.revokedAt)
                 return apiErr("NOT_FOUND", `Program key with ID ${req.input.id} not found.`);
+
+            if (existing.expiresAt <= new Date())
+                return apiErr("ERROR", "Cannot update scopes on an expired program key.");
 
             const updated = await database().programKey.update({
                 where: { id: req.input.id },

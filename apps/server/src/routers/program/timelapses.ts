@@ -1,46 +1,75 @@
 import { implement } from "@orpc/server";
-import { programRouterContract } from "@hackclub/lapse-api";
+import { programRouterContract, type ProgramTimelapse, type ProgramComment } from "@hackclub/lapse-api";
 
+import * as db from "@/generated/prisma/client.js";
 import { type ProgramKeyContext, programLogMiddleware, requiredProgramKey, requiredProgramScopes } from "@/router.js";
 import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
+
+type DbTimelapse = db.Timelapse & { owner: db.User, _count: { comments: number } };
+type DbComment = db.Comment & { author: db.User };
 
 const os = implement(programRouterContract)
     .$context<ProgramKeyContext>()
     .use(programLogMiddleware);
 
+/**
+ * Converts a database representation of a timelapse to a Program API DTO.
+ */
+export function dtoProgramTimelapse(entity: DbTimelapse): ProgramTimelapse {
+    return {
+        id: entity.id,
+        name: entity.name,
+        description: entity.description,
+        visibility: entity.visibility,
+        duration: entity.duration,
+        createdAt: entity.createdAt.getTime(),
+        ownerId: entity.ownerId,
+        ownerHandle: entity.owner.handle,
+        hackatimeProject: entity.hackatimeProject,
+        commentCount: entity._count.comments,
+    };
+}
+
+/**
+ * Converts a database representation of a comment to a Program API DTO.
+ */
+export function dtoProgramComment(entity: DbComment): ProgramComment {
+    return {
+        id: entity.id,
+        content: entity.content,
+        createdAt: entity.createdAt.getTime(),
+        authorId: entity.authorId,
+        authorHandle: entity.author.handle,
+        timelapseId: entity.timelapseId,
+    };
+}
+
 export const listTimelapses = os.listTimelapses
     .use(requiredProgramKey())
     .use(requiredProgramScopes("program:read"))
     .handler(async (req) => {
-        const where = req.input.cursor
-            ? { id: { lt: req.input.cursor } }
-            : {};
+        const limit = req.input.limit;
 
         const timelapses = await database().timelapse.findMany({
-            where,
+            include: { owner: true, _count: { select: { comments: true } } },
             orderBy: { id: "desc" },
-            take: req.input.limit + 1,
-            include: { owner: true, _count: { select: { comments: true } } }
+            take: limit + 1,
+            ...(req.input.cursor
+                ? { cursor: { id: req.input.cursor }, skip: 1 }
+                : {}),
         });
 
-        const hasMore = timelapses.length > req.input.limit;
-        if (hasMore) timelapses.pop();
+        const hasMore = timelapses.length > limit;
+        if (hasMore) {
+            timelapses.pop();
+        }
+
+        const nextCursor = hasMore ? timelapses[timelapses.length - 1].id : null;
 
         return apiOk({
-            timelapses: timelapses.map(t => ({
-                id: t.id,
-                name: t.name,
-                description: t.description,
-                visibility: t.visibility,
-                duration: t.duration,
-                createdAt: t.createdAt.getTime(),
-                ownerId: t.ownerId,
-                ownerHandle: t.owner.handle,
-                hackatimeProject: t.hackatimeProject,
-                commentCount: t._count.comments
-            })),
-            nextCursor: hasMore ? timelapses[timelapses.length - 1].id : null
+            timelapses: timelapses.map(dtoProgramTimelapse),
+            nextCursor,
         });
     });
 
@@ -50,25 +79,14 @@ export const getTimelapse = os.getTimelapse
     .handler(async (req) => {
         const timelapse = await database().timelapse.findFirst({
             where: { id: req.input.id },
-            include: { owner: true, _count: { select: { comments: true } } }
+            include: { owner: true, _count: { select: { comments: true } } },
         });
 
         if (!timelapse)
             return apiOk({ timelapse: null });
 
         return apiOk({
-            timelapse: {
-                id: timelapse.id,
-                name: timelapse.name,
-                description: timelapse.description,
-                visibility: timelapse.visibility,
-                duration: timelapse.duration,
-                createdAt: timelapse.createdAt.getTime(),
-                ownerId: timelapse.ownerId,
-                ownerHandle: timelapse.owner.handle,
-                hackatimeProject: timelapse.hackatimeProject,
-                commentCount: timelapse._count.comments
-            }
+            timelapse: dtoProgramTimelapse(timelapse),
         });
     });
 
@@ -76,29 +94,26 @@ export const listComments = os.listComments
     .use(requiredProgramKey())
     .use(requiredProgramScopes("program:read"))
     .handler(async (req) => {
-        const where = req.input.cursor
-            ? { id: { lt: req.input.cursor } }
-            : {};
+        const limit = req.input.limit;
 
         const comments = await database().comment.findMany({
-            where,
+            include: { author: true },
             orderBy: { id: "desc" },
-            take: req.input.limit + 1,
-            include: { author: true }
+            take: limit + 1,
+            ...(req.input.cursor
+                ? { cursor: { id: req.input.cursor }, skip: 1 }
+                : {}),
         });
 
-        const hasMore = comments.length > req.input.limit;
-        if (hasMore) comments.pop();
+        const hasMore = comments.length > limit;
+        if (hasMore) {
+            comments.pop();
+        }
+
+        const nextCursor = hasMore ? comments[comments.length - 1].id : null;
 
         return apiOk({
-            comments: comments.map(c => ({
-                id: c.id,
-                content: c.content,
-                createdAt: c.createdAt.getTime(),
-                authorId: c.authorId,
-                authorHandle: c.author.handle,
-                timelapseId: c.timelapseId
-            })),
-            nextCursor: hasMore ? comments[comments.length - 1].id : null
+            comments: comments.map(dtoProgramComment),
+            nextCursor,
         });
     });

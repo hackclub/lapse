@@ -44,8 +44,13 @@ export function extractProgramKeyPrefix(rawKey: string): string {
  */
 export function verifySecretHash(secret: string, storedHash: string): boolean {
     const [salt, hash] = storedHash.split(":");
+    if (!salt || !hash) return false;
+
     const computed = scryptSync(secret, salt, 64);
-    return timingSafeEqual(computed, Buffer.from(hash, "hex"));
+    const stored = Buffer.from(hash, "hex");
+    if (computed.length !== stored.length) return false;
+
+    return timingSafeEqual(computed, stored);
 }
 
 export async function createServiceClient(params: {

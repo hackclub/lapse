@@ -1,47 +1,59 @@
 import { implement } from "@orpc/server";
-import { programRouterContract } from "@hackclub/lapse-api";
+import { programRouterContract, type ProgramUser } from "@hackclub/lapse-api";
 
+import * as db from "@/generated/prisma/client.js";
 import { type ProgramKeyContext, programLogMiddleware, requiredProgramKey, requiredProgramScopes } from "@/router.js";
-import { apiErr, apiOk } from "@/common.js";
+import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
 
 const os = implement(programRouterContract)
     .$context<ProgramKeyContext>()
     .use(programLogMiddleware);
 
+/**
+ * Converts a database representation of a user to a Program API DTO.
+ */
+export function dtoProgramUser(entity: db.User): ProgramUser {
+    return {
+        id: entity.id,
+        createdAt: entity.createdAt.getTime(),
+        handle: entity.handle,
+        displayName: entity.displayName,
+        profilePictureUrl: entity.profilePictureUrl,
+        bio: entity.bio,
+        urls: entity.urls,
+        hackatimeId: entity.hackatimeId,
+        slackId: entity.slackId,
+        email: entity.email,
+        permissionLevel: entity.permissionLevel,
+        lastHeartbeat: entity.lastHeartbeat.getTime(),
+    };
+}
+
 export const listUsers = os.listUsers
     .use(requiredProgramKey())
     .use(requiredProgramScopes("program:read"))
     .handler(async (req) => {
-        const where = req.input.cursor
-            ? { id: { lt: req.input.cursor } }
-            : {};
+        const limit = req.input.limit;
 
         const users = await database().user.findMany({
-            where,
             orderBy: { id: "desc" },
-            take: req.input.limit + 1
+            take: limit + 1,
+            ...(req.input.cursor
+                ? { cursor: { id: req.input.cursor }, skip: 1 }
+                : {}),
         });
 
-        const hasMore = users.length > req.input.limit;
-        if (hasMore) users.pop();
+        const hasMore = users.length > limit;
+        if (hasMore) {
+            users.pop();
+        }
+
+        const nextCursor = hasMore ? users[users.length - 1].id : null;
 
         return apiOk({
-            users: users.map(u => ({
-                id: u.id,
-                createdAt: u.createdAt.getTime(),
-                handle: u.handle,
-                displayName: u.displayName,
-                profilePictureUrl: u.profilePictureUrl,
-                bio: u.bio,
-                urls: u.urls,
-                hackatimeId: u.hackatimeId,
-                slackId: u.slackId,
-                email: u.email,
-                permissionLevel: u.permissionLevel,
-                lastHeartbeat: u.lastHeartbeat.getTime()
-            })),
-            nextCursor: hasMore ? users[users.length - 1].id : null
+            users: users.map(dtoProgramUser),
+            nextCursor,
         });
     });
 
@@ -50,26 +62,13 @@ export const getUser = os.getUser
     .use(requiredProgramScopes("program:read"))
     .handler(async (req) => {
         const user = await database().user.findFirst({
-            where: { id: req.input.id }
+            where: { id: req.input.id },
         });
 
         if (!user)
             return apiOk({ user: null });
 
         return apiOk({
-            user: {
-                id: user.id,
-                createdAt: user.createdAt.getTime(),
-                handle: user.handle,
-                displayName: user.displayName,
-                profilePictureUrl: user.profilePictureUrl,
-                bio: user.bio,
-                urls: user.urls,
-                hackatimeId: user.hackatimeId,
-                slackId: user.slackId,
-                email: user.email,
-                permissionLevel: user.permissionLevel,
-                lastHeartbeat: user.lastHeartbeat.getTime()
-            }
+            user: dtoProgramUser(user),
         });
     });
