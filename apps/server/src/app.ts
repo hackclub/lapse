@@ -134,7 +134,7 @@ server.all("/openapi.json", async (req, reply) => {
 
 server.all("/health", async (req, reply) => {
     try {
-        database().user.findFirst();
+        await database().user.findFirst();
     }
     catch (err) {
         logError("Health check failed - couldn't query the database!", { err });
