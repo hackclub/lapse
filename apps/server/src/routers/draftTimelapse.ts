@@ -5,7 +5,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { oneOf, range, toHex } from "@hackclub/lapse-shared";
 
 import * as db from "@/generated/prisma/client.js";
-import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse } from "@hackclub/lapse-api";
+import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse, type LegacyUnpublishedTimelapse } from "@hackclub/lapse-api";
 import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
@@ -44,6 +44,16 @@ export function dtoDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }
         isDraft: true,
         iv: entity.iv,
         associatedTimelapseId: entity.associatedTimelapseId ?? undefined
+    };
+}
+
+export function dtoLegacyUnpublishedTimelapse(entity: db.LegacyUnpublishedTimelapse): LegacyUnpublishedTimelapse {
+    return {
+        id: entity.id,
+        name: entity.name,
+        description: entity.description,
+        deviceId: entity.deviceId,
+        primarySession: `${env.S3_PUBLIC_URL_ENCRYPTED}/${entity.primarySession}`
     };
 }
 
@@ -207,6 +217,45 @@ export default os.router({
             const res = await deleteDraftTimelapse(req.input.id, caller);
             if (res instanceof Err)
                 return res.toApiError();
+
+            return apiOk({});
+        }),
+
+    legacy: os.legacy
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const result = await database().legacyUnpublishedTimelapse.findMany({
+                where: { ownerId: caller.id, isMigrated: false }
+            });
+
+            return apiOk({
+                timelapses: result.map(x => dtoLegacyUnpublishedTimelapse(x))
+            });
+        }),
+
+    markAsMigrated: os.markAsMigrated
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const legacy = await database().legacyUnpublishedTimelapse.findFirst({
+                where: { id: req.input.id }
+            });
+
+            if (!legacy)
+                return apiErr("NOT_FOUND", "Couldn't find that legacy timelapse!");
+
+            if (legacy.ownerId !== caller.id && !(caller.permissionLevel in oneOf("ADMIN", "ROOT")))
+                return apiErr("NO_PERMISSION", "You don't have permission to mark this legacy timelapse as migrated.");
+
+            await database().legacyUnpublishedTimelapse.update({
+                where: { id: req.input.id },
+                data: { isMigrated: true }
+            });
 
             return apiOk({});
         })

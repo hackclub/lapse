@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { apiResult, LapseDate, LapseId } from "@/common";
 import { MAX_VIDEO_FRAME_COUNT } from "@/constants";
-import { contract, NO_OUTPUT } from "@/internal";
+import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
 import { TimelapseDescription, TimelapseName } from "@/contracts/timelapse";
 import { PublicUserSchema } from "@/contracts/user";
 
@@ -69,6 +69,27 @@ export const DraftTimelapseSchema = DraftTimelapsePayloadSchema.extend({
 
     associatedTimelapseId: LapseId.optional()
         .describe("If defined, this draft is currently being published and has an associated timelapse that is processing.")
+});
+
+/**
+ * Represents an unpublished, encrypted timelapse that has been created with a legacy version of Lapse.
+ */
+export type LegacyUnpublishedTimelapse = z.infer<typeof LegacyUnpublishedTimelapseSchema>;
+export const LegacyUnpublishedTimelapseSchema = z.object({
+    id: LapseId
+        .describe("The original ID of the unpublished timelapse."),
+
+    name: z.string()
+        .describe("The original name (title) of the timelapse."),
+
+    description: z.string()
+        .describe("The original description of the timelapse."),
+
+    primarySession: z.string()
+        .describe("A URL pointing to the primary session of the timelapse. Legacy versions of Lapse only supported single-session timelapses."),
+
+    deviceId: z.uuid()
+        .describe("The ID of the device that has created this timelapse.")
 });
 
 export const draftTimelapseRouterContract = {
@@ -167,4 +188,22 @@ export const draftTimelapseRouterContract = {
             })
         )
         .output(NO_OUTPUT),
+
+    legacy: contract("GET", "/draftTimelapse/legacy")
+        .route({ description: "Queries all unpublished timelapses that were created by the caller with a legacy version of Lapse that have not yet been migrated." })
+        .input(NO_INPUT)
+        .output(
+            apiResult({
+                timelapses: LegacyUnpublishedTimelapseSchema.array()
+                    .describe("The legacy timelapses created by the user that have not yet been migrated.")
+            })
+        ),
+
+    markAsMigrated: contract("POST", "/draftTimelapse/markAsMigrated")
+        .route({ description: "Marks a legacy unpublished timelapse as migrated. This does not delete the record - it only prevents it from appearing in the legacy query." })
+        .input(z.object({
+            id: LapseId
+                .describe("The ID of the legacy unpublished timelapse to mark as migrated.")
+        }))
+        .output(NO_OUTPUT)
 };

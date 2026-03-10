@@ -42,9 +42,11 @@ model KnownDevice {
   ownerId   String
   owner     User        @relation(fields: [ownerId], references: [id])
 
-  /// The draft timelapses created on this device. When a draft timelapse is published, all device metadata
-  /// is stripped.
+  /// The draft timelapses created on this device. When a draft timelapse is published, all device metadata is stripped.
   draftTimelapses     DraftTimelapse[]
+
+  /// Legacy unpublished timelapses that were created on this device. Only this device can decrypt and migrate such a timelapse.
+  legacyTimelapses    LegacyUnpublishedTimelapse[]
 }
 
 /// Represents a single user of Lapse.
@@ -73,6 +75,35 @@ model User {
   serviceGrants         ServiceGrant[]
   serviceClients        ServiceClient[]
   serviceClientReviews  ServiceClientReview[]
+  legacyTimelapses      LegacyUnpublishedTimelapse[]
+}
+
+/// Represents a timelapse created with a legacy version of Lapse. Such a timelapse is encrypted with a 6-digit passkey with a timelapse ID IV.
+/// When a legacy user logs in and begins client migration, it is expected for the client to query all legacy timelapses and convert them to
+/// `DraftTimelapse` instances.
+model LegacyUnpublishedTimelapse {
+  /// The original ID of the unpublished timelapse.
+  id                String         @id
+
+  /// The original name (title) of the timelapse.
+  name              String
+
+  /// The original description of the timelapse.
+  description       String
+
+  /// The S3 key pointing to the primary session of the timelapse. Legacy versions of Lapse only supported single-session timelapses.
+  primarySession    String
+
+  /// Whether this legacy timelapse has been migrated by the owning client. `false` indicates the timelapse still needs migration.
+  isMigrated        Boolean         @default(false)
+
+  /// The device that created this timelapse. Only said device can migrate the unpublished timelapse to the new encryption model.
+  deviceId          String
+  device            KnownDevice     @relation(fields: [deviceId], references: [id])
+
+  /// The user that originally owned this timelapse. Only this used can migrate the unpublished timelapse to the new encryption model.
+  ownerId           String
+  owner             User            @relation(fields: [ownerId], references: [id])
 }
 
 /// Represents a timelapse that is encrypted and awaits re-encoding. A `DraftTimelapse` is only displayed to the owner, and

@@ -59,7 +59,7 @@ type AdminFieldDef = {
 
 type AdminRecord = Record<string, unknown>;
 
-const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "app"] as const;
+const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse", "app"] as const;
 
 type AdminPanelEntity = typeof ENTITIES[number];
 
@@ -68,6 +68,7 @@ const ENTITY_LABELS: Record<AdminPanelEntity, string> = {
   timelapse: "Timelapses",
   comment: "Comments",
   draftTimelapse: "Draft Timelapses",
+  legacyTimelapse: "Legacy Timelapses",
   app: "Apps"
 };
 
@@ -76,6 +77,7 @@ const ENTITY_ICONS: Record<AdminPanelEntity, IconGlyph> = {
   timelapse: "controls",
   comment: "message",
   draftTimelapse: "docs",
+  legacyTimelapse: "profile-fill",
   app: "code"
 };
 
@@ -314,7 +316,7 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
 
   const fieldEntries = Object.entries(fields);
   const recordName = record["name"] ?? record["displayName"] ?? record["id"];
-  const entityName = entity === "user" ? "User" : entity === "timelapse" ? "Timelapse" : entity === "draftTimelapse" ? "Draft Timelapse" : "Comment";
+  const entityName = entity === "user" ? "User" : entity === "timelapse" ? "Timelapse" : entity === "draftTimelapse" ? "Draft Timelapse" : entity === "legacyTimelapse" ? "Legacy Timelapse" : "Comment";
 
   function setChange(key: string, value: unknown) {
     setChanges(prev => ({ ...prev, [key]: value }));
@@ -343,6 +345,7 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
           comment: "message",
           draftTimelapse: "instagram",
           timelapse: "instagram",
+          legacyTimelapse: "profile-fill",
         })}
       />
 
@@ -1124,7 +1127,8 @@ export default function AdminDashboard() {
     user: defaultQuery(),
     timelapse: defaultQuery(),
     comment: defaultQuery(),
-    draftTimelapse: defaultQuery()
+    draftTimelapse: defaultQuery(),
+    legacyTimelapse: defaultQuery()
   });
 
   const tableRef = useRef<HTMLDivElement>(null);

@@ -5,7 +5,7 @@ import { contract, NO_INPUT } from "@/internal";
 import { PermissionLevelSchema } from "@/contracts/user";
 
 export type AdminEntity = z.infer<typeof AdminEntitySchema>;
-export const AdminEntitySchema = z.enum(["user", "timelapse", "comment", "draftTimelapse"]);
+export const AdminEntitySchema = z.enum(["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse"]);
 
 export type AdminFilterOperator = z.infer<typeof AdminFilterOperatorSchema>;
 export const AdminFilterOperatorSchema = z.enum(["eq", "neq", "contains", "gt", "lt", "gte", "lte"]);
@@ -77,6 +77,18 @@ export const AdminDraftTimelapseRowSchema = z.object({
     snapshotsCount: z.number().int()
 });
 
+export type AdminLegacyTimelapseRow = z.infer<typeof AdminLegacyTimelapseRowSchema>;
+export const AdminLegacyTimelapseRowSchema = z.object({
+    id: LapseId,
+    name: z.string(),
+    description: z.string(),
+    primarySession: z.string(),
+    deviceId: z.string(),
+    ownerId: LapseId,
+    ownerHandle: z.string(),
+    isMigrated: z.boolean()
+});
+
 export const ADMIN_ENTITY_FIELDS = {
     user: {
         id: { label: "ID", kind: "string" as const, sortable: true },
@@ -122,6 +134,16 @@ export const ADMIN_ENTITY_FIELDS = {
         createdAt: { label: "Created At", kind: "date" as const, sortable: true },
         sessionsCount: { label: "Sessions Count", kind: "number" as const, sortable: true },
         snapshotsCount: { label: "Snapshots Count", kind: "number" as const, sortable: true }
+    },
+    legacyTimelapse: {
+        id: { label: "ID", kind: "string" as const, sortable: true },
+        name: { label: "Name", kind: "string" as const, sortable: true },
+        description: { label: "Description", kind: "string" as const },
+        primarySession: { label: "Primary Session", kind: "string" as const },
+        deviceId: { label: "Device ID", kind: "string" as const, sortable: true },
+        ownerId: { label: "Owner ID", kind: "string" as const, sortable: true },
+        ownerHandle: { label: "Owner Handle", kind: "string" as const, sortable: true },
+        isMigrated: { label: "Migrated", kind: "boolean" as const, sortable: true }
     }
 } as const;
 

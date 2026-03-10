@@ -1,3 +1,13 @@
+import { type PropsWithChildren } from "react";
+import { useRouter } from "next/router";
+import { useOnce } from "@/hooks/useOnce";
+
+// This file deals with migration old Lapse V1 data to the new V2 client.
+// For reference:
+//    client/deviceStorage.ts: https://github.com/hackclub/lapse/blob/a70359cdcb2d629e1771893d678b7df4c996929c/apps/web/src/client/deviceStorage.ts
+//    client/encryption.ts: https://github.com/hackclub/lapse/blob/a70359cdcb2d629e1771893d678b7df4c996929c/apps/web/src/client/encryption.ts
+//    server/encryption.ts: https://github.com/hackclub/lapse/blob/a70359cdcb2d629e1771893d678b7df4c996929c/apps/web/src/server/encryption.ts
+
 const IDB_NAME = "lapse";
 const IDB_VERSION = 1;
 const IDB_TIMELAPSES_STORE = "timelapses";
@@ -139,6 +149,82 @@ export async function readLegacyData(): Promise<MigrationResult | null> {
 }
 
 /**
+ * Derives deterministic key and IV salts from a timelapse ID, replicating the
+ * legacy encryption scheme that used timelapse IDs as the basis for salts.
+ */
+async function legacyDeriveSalts(timelapseId: string): Promise<{ keySalt: ArrayBuffer; ivSalt: ArrayBuffer }> {
+  const encoder = new TextEncoder();
+
+  const keySaltKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode("timelapse-key-salt"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const keySalt = await crypto.subtle.sign("HMAC", keySaltKey, encoder.encode(timelapseId));
+
+  const ivSaltKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode("timelapse-iv-salt"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const ivSalt = await crypto.subtle.sign("HMAC", ivSaltKey, encoder.encode(timelapseId));
+
+  return { keySalt, ivSalt };
+}
+
+/**
+ * Decrypts data that was encrypted with the legacy 6-digit passkey encryption scheme.
+ */
+export async function legacyDecryptData(encryptedData: ArrayBuffer, timelapseId: string, passkey: string): Promise<ArrayBuffer> {
+  const { keySalt, ivSalt } = await legacyDeriveSalts(timelapseId);
+
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(passkey),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey", "deriveBits"]
+  );
+
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: keySalt,
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    { name: "AES-CBC", length: 256 },
+    false,
+    ["decrypt"]
+  );
+
+  const iv = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: ivSalt,
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    128
+  );
+
+  return await crypto.subtle.decrypt(
+    { name: "AES-CBC", iv },
+    key,
+    encryptedData
+  );
+}
+
+/**
  * Deletes the legacy IndexedDB database after a successful migration.
  */
 export async function deleteLegacyDb(): Promise<void> {
@@ -147,4 +233,22 @@ export async function deleteLegacyDb(): Promise<void> {
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
+}
+
+export function LegacyMigrationGuard({ children }: PropsWithChildren) {
+  const router = useRouter();
+
+  useOnce(() => {
+    if (router.pathname === "/migrate" || router.pathname === "/auth")
+      return;
+
+    console.log("legacy migration guard running")
+
+    hasLegacyData().then(hasLegacy => {
+      if (hasLegacy)
+        router.replace("/migrate");
+    });
+  });
+
+  return <>{children}</>;
 }

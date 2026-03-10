@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { readLegacyData, deleteLegacyDb } from "@/idbMigration";
+import type { MigrationResult } from "@/migration";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -16,6 +16,7 @@ export interface StoredTimelapse {
 export interface LocalDevice {
   id: string;
   passkey: string;
+  legacyPasskey?: string;
   thisDevice: boolean;
 }
 
@@ -34,6 +35,7 @@ const LocalTimelapseSchema = v.object({
 const DeviceSchema = v.object({
   id: v.string(),
   passkey: v.string(),
+  legacyPasskey: v.optional(v.string()),
   thisDevice: v.boolean(),
 });
 
@@ -93,7 +95,6 @@ export class DeviceStorage {
     if (!await doesFileExist(lapseRoot, "store.json")) {
       console.log("(deviceStorage.ts) no OPFS store found - creating a new one");
       await this.writeStore({ devices: [], timelapse: null });
-      await this.migrateFromIndexedDb();
     }
     else {
       console.log("(deviceStorage.ts) existing OPFS store found");
@@ -123,40 +124,38 @@ export class DeviceStorage {
     await writable.close();
   }
 
-  private async migrateFromIndexedDb(): Promise<void> {
-    const legacy = await readLegacyData();
-    if (!legacy)
-      return;
-
-    console.log("(deviceStorage.ts) migrating data from IndexedDB to OPFS...");
-
-    const store = await this.readStore();
-
-    if (legacy.timelapse) {
-      store.timelapse = legacy.timelapse;
-
-      const dir = await this.getLapseDir();
-      for (const [sessionId, blob] of legacy.sessionBlobs) {
-        const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-      }
-    }
-
-    for (const device of legacy.devices) {
-      if (!store.devices.some(d => d.id === device.id))
-        store.devices.push(device);
-    }
-
-    await this.writeStore(store);
-    await deleteLegacyDb();
-
-    console.log("(deviceStorage.ts) IndexedDB migration complete");
-  }
-
   private async operation<T>(block: () => Promise<T>) {
     return await this.serialQueue.enqueue(block);
+  }
+
+  async importLegacyData(legacy: MigrationResult): Promise<void> {
+    return await this.operation(async () => {
+      await this.ensureInit();
+
+      console.log("(deviceStorage.ts) importing legacy data from IndexedDB...");
+
+      const store = await this.readStore();
+
+      if (legacy.timelapse) {
+        store.timelapse = legacy.timelapse;
+
+        const dir = await this.getLapseDir();
+        for (const [sessionId, blob] of legacy.sessionBlobs) {
+          const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        }
+      }
+
+      for (const device of legacy.devices) {
+        if (!store.devices.some(d => d.id === device.id))
+          store.devices.push({ ...device, legacyPasskey: device.passkey, passkey: "" });
+      }
+
+      await this.writeStore(store);
+      console.log("(deviceStorage.ts) legacy data imported successfully");
+    });
   }
 
   async createTimelapse(): Promise<StoredTimelapse> {

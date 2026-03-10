@@ -1,5 +1,5 @@
 import { implement } from "@orpc/server";
-import { adminRouterContract, ADMIN_ENTITY_FIELDS, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow } from "@hackclub/lapse-api";
+import { adminRouterContract, ADMIN_ENTITY_FIELDS, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLegacyTimelapseRow } from "@hackclub/lapse-api";
 import { match } from "@hackclub/lapse-shared";
 
 import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
@@ -44,6 +44,7 @@ function buildFilterCondition(field: string, operator: AdminFilterOperator, valu
     return (
         kind === "date" ? buildOperatorCondition(field, operator, new Date(Number.parseInt(value, 10))) :
         kind === "number" ? buildOperatorCondition(field, operator, Number.parseFloat(value)) :
+        kind === "boolean" ? buildOperatorCondition(field, operator, value === "true") :
         buildOperatorCondition(field, operator, value, { contains: value, mode: "insensitive" })
     );
 }
@@ -180,6 +181,19 @@ function dtoAdminDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }):
     };
 }
 
+function dtoAdminLegacyTimelapse(entity: db.LegacyUnpublishedTimelapse & { owner: db.User }): AdminLegacyTimelapseRow {
+    return {
+        id: entity.id,
+        name: entity.name,
+        description: entity.description,
+        primarySession: entity.primarySession,
+        deviceId: entity.deviceId,
+        ownerId: entity.ownerId,
+        ownerHandle: entity.owner.handle,
+        isMigrated: entity.isMigrated
+    };
+}
+
 interface EntityConfig {
     list: (where: Record<string, unknown>, sort: AdminSort | undefined, orderBy: Record<string, unknown> | undefined, skip: number, take: number) => Promise<Record<string, unknown>[]>;
     count: (where: Record<string, unknown>) => Promise<number>;
@@ -302,6 +316,18 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
 
             return dtoAdminDraftTimelapse(updated);
         }
+    },
+    legacyTimelapse: {
+        list: async (where, _sort, orderBy, skip, take) => {
+            const rows = await database().legacyUnpublishedTimelapse.findMany({
+                where, orderBy, skip, take,
+                include: { owner: true }
+            });
+
+            return rows.map(dtoAdminLegacyTimelapse);
+        },
+        count: (where) => database().legacyUnpublishedTimelapse.count({ where }),
+        update: async () => null
     }
 };
 
@@ -459,7 +485,7 @@ export default os.router({
 
             const results: SearchResultRow[] = [];
 
-            const [users, timelapses, comments, drafts] = await Promise.all([
+            const [users, timelapses, comments, drafts, legacyTimelapses] = await Promise.all([
                 database().user.findMany({
                     select: { id: true, handle: true, displayName: true, slackId: true }
                 }),
@@ -473,6 +499,10 @@ export default os.router({
                 }),
                 
                 database().draftTimelapse.findMany({
+                    select: { id: true, name: true, owner: { select: { handle: true } } }
+                }),
+
+                database().legacyUnpublishedTimelapse.findMany({
                     select: { id: true, name: true, owner: { select: { handle: true } } }
                 })
             ]);
@@ -528,6 +558,19 @@ export default os.router({
                         id: draft.id,
                         displayText: `${displayName} by @${draft.owner.handle}`,
                         fuzzyValues: [displayName, draft.owner.handle]
+                    }
+                );
+            }
+
+            for (const legacy of legacyTimelapses) {
+                pushSearchDescriptor(
+                    results,
+                    query,
+                    {
+                        entity: "legacyTimelapse" as const,
+                        id: legacy.id,
+                        displayText: `${legacy.name} by @${legacy.owner.handle} (legacy)`,
+                        fuzzyValues: [legacy.name, legacy.owner.handle]
                     }
                 );
             }
