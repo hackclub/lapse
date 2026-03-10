@@ -38,7 +38,7 @@ export const hackatimeRouterContract = {
      timelapsesForProject: contract("GET", "/hackatime/timelapsesForProject")
         .route({ description: "Gets the timelapses of a given Hackatime user associated with the given Hackatime project key." })
         .input(z.object({
-            hackatimeUserId: z.number().min(1)
+            hackatimeUserId: z.union([z.number().min(1), z.string()])
                 .describe("The Hackatime user ID of the Lapse user that should be the subject of this API call."),
 
             projectKey: z.string().min(1).max(256)
