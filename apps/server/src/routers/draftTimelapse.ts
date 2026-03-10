@@ -53,7 +53,9 @@ export function dtoLegacyUnpublishedTimelapse(entity: db.LegacyUnpublishedTimela
         name: entity.name,
         description: entity.description,
         deviceId: entity.deviceId,
-        primarySession: `${env.S3_PUBLIC_URL_ENCRYPTED}/${entity.primarySession}`
+        primarySession: `${env.S3_PUBLIC_URL_ENCRYPTED}/${entity.primarySession}`,
+        thumbnailUrl: `${env.S3_PUBLIC_URL_ENCRYPTED}/${entity.thumbnailS3Key}`,
+        snapshots: entity.snapshots.map(x => x.getTime())
     };
 }
 

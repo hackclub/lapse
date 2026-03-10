@@ -471,7 +471,6 @@ export default function Page() {
 
       progress.advance(4, "Cleaning up local data...");
 
-      await deviceStorage.markComplete();
       await deviceStorage.deleteTimelapse();
 
       progress.advance(5, "Upload complete!");

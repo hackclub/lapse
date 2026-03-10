@@ -1,321 +1,363 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Icon from "@hackclub/icons";
-import { encryptData, fromHex } from "@hackclub/lapse-shared";
-import type { LegacyUnpublishedTimelapse } from "@hackclub/lapse-api";
+import { ascending, encryptData, fromHex } from "@hackclub/lapse-shared";
 
 import RootLayout from "@/components/layout/RootLayout";
-import { Button } from "@/components/ui/Button";
-import { Modal, ModalHeader } from "@/components/layout/Modal";
-
-import { useAuth } from "@/hooks/useAuth";
-
+import { LoadingModal } from "@/components/layout/LoadingModal";
+import { ErrorModal } from "@/components/layout/ErrorModal";
 import { api, apiUpload } from "@/api";
 import { deviceStorage } from "@/deviceStorage";
 import { getCurrentDevice } from "@/encryption";
 import { videoGenerateThumbnail } from "@/video";
 import { sfetch } from "@/safety";
-import { sleep } from "@/common";
-import { hasLegacyData, readLegacyData, deleteLegacyDb, legacyDecryptData } from "@/migration";
+import { useOnce } from "@/hooks/useOnce";
 
-type MigrationPhase =
-  | "CHECKING"
-  | "MIGRATING_LOCAL"
-  | "MIGRATING_SERVER"
-  | "DONE"
-  | "ERROR"
-  | "NOT_NEEDED";
+const IDB_NAME = "lapse";
+const IDB_VERSION = 1;
+const IDB_TIMELAPSES_STORE = "timelapses";
+const IDB_SNAPSHOTS_STORE = "snapshots";
+const IDB_DEVICES_STORE = "devices";
 
-interface MigrationState {
-  phase: MigrationPhase;
-  message: string;
-  progress: number;
-  currentItem: number;
-  totalItems: number;
-  error: string | null;
+// This page deals with migration old Lapse V1 data to the new V2 client.
+// For reference:
+//    client/deviceStorage.ts: https://github.com/hackclub/lapse/blob/a70359cdcb2d629e1771893d678b7df4c996929c/apps/web/src/client/deviceStorage.ts
+//    client/encryption.ts: https://github.com/hackclub/lapse/blob/a70359cdcb2d629e1771893d678b7df4c996929c/apps/web/src/client/encryption.ts
+//    server/encryption.ts: https://github.com/hackclub/lapse/blob/a70359cdcb2d629e1771893d678b7df4c996929c/apps/web/src/server/encryption.ts
+
+/**
+ * Checks whether a legacy IndexedDB store exists that needs migration.
+ */
+export async function hasLegacyData(): Promise<boolean> {
+  const databases = await indexedDB.databases();
+  return databases.some(db => db.name === IDB_NAME);
 }
 
-const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 2000;
+function idbGetAll<T>(db: IDBDatabase, storeName: string): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([storeName], "readonly");
+    const store = transaction.objectStore(storeName);
+    const request = store.getAll();
 
-async function migrateOneTimelapse(
-  legacy: LegacyUnpublishedTimelapse,
-  passkey: string,
-  onProgress: (msg: string) => void
-): Promise<void> {
-  onProgress("Downloading encrypted session...");
-  const res = await sfetch(legacy.primarySession);
-  if (!res.ok)
-    throw new Error(`Failed to download session for ${legacy.id}: HTTP ${res.status}`);
-
-  const encryptedData = await res.arrayBuffer();
-
-  onProgress("Decrypting with legacy key...");
-  const decryptedData = await legacyDecryptData(encryptedData, legacy.id, passkey);
-  const decryptedBlob = new Blob([decryptedData], { type: "video/webm" });
-
-  onProgress("Generating thumbnail...");
-  const thumbnail = await videoGenerateThumbnail(decryptedBlob);
-
-  onProgress("Creating new draft...");
-  const device = await getCurrentDevice();
-  console.log(device);
-
-  const createRes = await api.draftTimelapse.create({
-    name: legacy.name || undefined,
-    description: legacy.description || undefined,
-    snapshots: [],
-    deviceId: device.id,
-    sessions: [{ fileSize: decryptedBlob.size + 8192 }],
-    thumbnailSize: thumbnail.size
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result ?? []);
   });
+}
 
-  if (!createRes.ok)
-    throw new Error(`Failed to create draft: ${createRes.message}`);
+function idbOpen(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(IDB_NAME, IDB_VERSION);
 
-  const draft = createRes.data.draftTimelapse;
+    request.onerror = () => resolve(null);
+    request.onsuccess = () => resolve(request.result);
 
-  onProgress("Encrypting session with new key...");
-  const encrypted = await encryptData(
-    fromHex(device.passkey).buffer,
-    fromHex(draft.iv).buffer,
-    decryptedBlob
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      db.close();
+      indexedDB.deleteDatabase(IDB_NAME);
+      resolve(null);
+    };
+  });
+}
+
+/**
+ * Derives salt for decrypting data that was encrypted with the legacy 6-digit passkey encryption scheme.
+ */
+async function legacyDeriveSalts(timelapseId: string): Promise<{ keySalt: ArrayBuffer; ivSalt: ArrayBuffer }> {
+  const encoder = new TextEncoder();
+
+  const keySaltKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode("timelapse-key-salt"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
   );
 
-  onProgress("Uploading session...");
-  await apiUpload(
-    createRes.data.sessionUploadTokens[0],
-    new Blob([encrypted], { type: "video/webm" })
+  const keySalt = await crypto.subtle.sign("HMAC", keySaltKey, encoder.encode(timelapseId));
+
+  const ivSaltKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode("timelapse-iv-salt"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
   );
 
-  onProgress("Encrypting and uploading thumbnail...");
-  const encryptedThumb = await encryptData(
-    fromHex(device.passkey).buffer,
-    fromHex(draft.iv).buffer,
-    thumbnail
+  const ivSalt = await crypto.subtle.sign("HMAC", ivSaltKey, encoder.encode(timelapseId));
+
+  return { keySalt, ivSalt };
+}
+
+/**
+ * Decrypts data that was encrypted with the legacy 6-digit passkey encryption scheme.
+ */
+export async function legacyDecryptData(encryptedData: ArrayBuffer, timelapseId: string, passkey: string): Promise<ArrayBuffer> {
+  const { keySalt, ivSalt } = await legacyDeriveSalts(timelapseId);
+
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(passkey),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey", "deriveBits"]
   );
 
-  await apiUpload(
-    createRes.data.thumbnailUploadToken,
-    new Blob([encryptedThumb], { type: "image/webp" })
+  const key = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: keySalt,
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    { name: "AES-CBC", length: 256 },
+    false,
+    ["decrypt"]
   );
+
+  const iv = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: ivSalt,
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    128
+  );
+
+  return await crypto.subtle.decrypt(
+    { name: "AES-CBC", iv },
+    key,
+    encryptedData
+  );
+}
+
+interface MigrationProgress {
+  stage: string;
+  progress?: number;
+}
+
+async function runMigration(onProgress: (progress: MigrationProgress) => void) {
+  onProgress({ stage: "Checking for legacy data..." });
+
+  if (!await hasLegacyData())
+    return;
+
+  const db = await idbOpen();
+  if (!db)
+    return;
+
+  let timelapseImported = false;
+
+  try {
+    // We expect only *one* legacy timelapse. We merge its data by creating a new local timelapse with its
+    // data on our side. The sessions should merge safely.
+    const timelapses = await idbGetAll<{
+      id: number;
+      name: string;
+      description: string;
+      startedAt: number;
+      chunks: {
+        data: Blob;
+        timestamp: number;
+        session: number;
+      }[];
+      isActive: boolean;
+    }>(db, IDB_TIMELAPSES_STORE);
+
+    if (timelapses.length > 0) {
+      onProgress({ stage: "Importing local timelapse data..." });
+
+      const snapshots = await idbGetAll<{
+        createdAt: number;
+        session: number;
+      }>(db, IDB_SNAPSHOTS_STORE);
+
+      const timelapse = timelapses[0]; // anything more is non-standard
+
+      // This might seem like voodoo magic, but all we're doing here is grouping all chunks by session,
+      // making sure each session has at least one chunk, and then we're going over all of the sessions and
+      // changing the arrays of Blob's to just one big Blob via the `blobParts` constructor.
+      //
+      // In the map, we're doing `v[0].data.type` - we're getting the first chunk of the session and taking its
+      // type, as Blob won't infer it automatically. We don't assume video/webm, as V1 captured in a variety of
+      // formats (and actually preferred AVC, so video/mp4).
+      const chunksBySession = Map.groupBy(timelapse.chunks, x => x.session)
+        .entries()
+        .filter(([k, v]) => v.length > 0) // ignore empty sessions
+        .map(([k, v]) => [ k, new Blob(v.map(x => x.data), { type: v[0].data.type }) ] as const)
+        .toArray();
+
+      await deviceStorage.importTimelapse(
+        {
+          startedAt: timelapse.startedAt,
+          snapshots: snapshots.map(x => x.createdAt).toSorted(ascending()),
+          sessions: chunksBySession.map(x => x[0])
+        },
+        chunksBySession
+      );
+
+      timelapseImported = true;
+    }
+
+    // Nice - timelapse import done. Now, we move onto devices. These are only used to decrypt the timelapses we
+    // have right now (we'll get them via draftTimelapse.legacy) in a jiffy - after we convert all of them to
+    // draft timelapses, there's no real reason to keep them around.
+    const devices = await idbGetAll<{
+      id: string;
+      passkey: string;
+      thisDevice: boolean;
+    }>(db, IDB_DEVICES_STORE);
+
+    onProgress({ stage: "Fetching legacy timelapses..." });
+
+    const legacyDrafts = await api.draftTimelapse.legacy({});
+    if (!legacyDrafts.ok)
+      throw new Error(`Could not fetch legacy timelapses: ${legacyDrafts.message}`);
+
+    const totalDrafts = legacyDrafts.data.timelapses.length;
+
+    for (const [i, draft] of legacyDrafts.data.timelapses.entries()) {
+      const draftLabel = totalDrafts > 1 ? ` (${i + 1}/${totalDrafts})` : "";
+      const device = devices.find(x => x.id == draft.deviceId);
+      if (!device)
+        continue; // this doesn't concern us; we didn't have a device registered for that timelapse
+
+      onProgress({ stage: `Downloading video${draftLabel}...` });
+
+      const res = await sfetch(draft.primarySession);
+      if (!res.ok)
+        throw new Error(`Could not fetch data for session ${draft.primarySession} (legacy ID ${draft.id})`);
+
+      const data = await res.arrayBuffer();
+
+      onProgress({ stage: `Decrypting video${draftLabel}...` });
+      const decryptedVideo = await legacyDecryptData(data, draft.id, device.passkey); // important: "passkey" here is from the OLD indexeddb!!!
+
+      let decryptedThumb: ArrayBuffer;
+
+      try {
+        const res = await sfetch(draft.thumbnailUrl);
+        if (!res.ok)
+          throw new Error(`Could not fetch thumbnail: ${draft.thumbnailUrl} (thumbnail w/ ID ${draft.id})`);
+
+        const data = await res.arrayBuffer();
+        decryptedThumb = await legacyDecryptData(data, draft.id, device.passkey);
+      }
+      catch (err) {
+        console.error("(migrate.tsx) could not decrypt thumbnail, falling back to manual generation!", err);
+        const blob = await videoGenerateThumbnail(new Blob([decryptedVideo], { type: "video/webm" }));
+        decryptedThumb = await blob.arrayBuffer();
+      }
+
+      // Now - we decrypted everything from our legacy encryption model (which didn't have much entropy...),
+      // and now we re-encrypt and immediately upload it to the server.
+
+      onProgress({ stage: `Re-encrypting${draftLabel}...` });
+
+      const actualDevice = await getCurrentDevice(); // this is our non-legacy device
+
+      const creation = await api.draftTimelapse.create({
+        snapshots: draft.snapshots,
+        deviceId: actualDevice.id,
+        sessions: [{ fileSize: decryptedVideo.byteLength + 8192 }],
+        thumbnailSize: decryptedThumb.byteLength + 8192,
+        name: draft.name,
+        description: draft.description
+      });
+
+      if (!creation.ok)
+        throw new Error(`API request to draftTimelapse.create failed! ${creation.message}`);
+
+      const passkey = fromHex(actualDevice.passkey).buffer;
+      const iv = fromHex(creation.data.draftTimelapse.iv).buffer;
+
+      const encryptedVideo = await encryptData(passkey, iv, decryptedVideo);
+      const encryptedThumb = await encryptData(passkey, iv, decryptedThumb); 
+
+      onProgress({ stage: `Uploading video${draftLabel}...`, progress: 0 });
+      await apiUpload(
+        creation.data.sessionUploadTokens[0],
+        new Blob([encryptedVideo], { type: "video/webm" }),
+        (uploaded, total) => onProgress({ stage: `Uploading video${draftLabel}...`, progress: (uploaded / total) * 100 })
+      );
+
+      onProgress({ stage: `Uploading thumbnail${draftLabel}...` });
+      await apiUpload(creation.data.thumbnailUploadToken, new Blob([encryptedThumb], { type: "image/webp" }));
+    
+      // And we're done! The new draft now lives on the server and this device can decrypt it.
+      console.log(`(migrate.tsx) legacy timelapse ${draft.id} migrated to ${creation.data.draftTimelapse.id}!`);
+    }
+
+    // No errors - and thus we assume everything went okay. Removing this data permanently is still scary, though.
+    onProgress({ stage: "Cleaning up legacy data..." });
+    console.log("(migrate.tsx) all drafts migrated successfully! removing IndexedDB - dangerous!");
+    
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(IDB_NAME);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+
+    console.log("(migrate.tsx) IndexedDB removed. all Lapse V1 data has been migrated from this device!");
+  }
+  finally {
+    db.close();
+
+    // If we're throwing a hissy fit, we won't be deleting IndexedDB content, so prevent data duplication
+    if (timelapseImported) {
+      await deviceStorage.deleteTimelapse();
+    }
+  }
 }
 
 export default function MigratePage() {
   const router = useRouter();
-  const { currentUser, isLoading: authLoading } = useAuth(true);
+  const [stage, setStage] = useState("Starting migration...");
+  const [progress, setProgress] = useState<number | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
 
-  const [phase, setPhase] = useState();
-
-  const migrationStarted = useRef(false);
-
-  function phaseIs(message: string) {
-    console.log("(migrate.")
-  }
-
-  const runMigration = useCallback(async () => {
-    if (migrationStarted.current)
-      return;
-
-    migrationStarted.current = true;
-
-    try {
-      // Phase 1: Check for legacy IDB data
-      setState(s => ({ ...s, phase: "CHECKING", message: "Checking for local data..." }));
-
-      const hasIdb = await hasLegacyData();
-      const legacyLocal = hasIdb ? await readLegacyData() : null;
-
-      // Phase 2: Migrate local IDB → OPFS
-      if (legacyLocal) {
-        setState(s => ({ ...s, phase: "MIGRATING_LOCAL", message: "Migrating local data to new storage..." }));
-
-        await deviceStorage.importLegacyData(legacyLocal);
-
-        setState(s => ({ ...s, progress: 10, message: "Local data migrated." }));
-      }
-
-      // Phase 3: Migrate server-side legacy timelapses
-      setState(s => ({ ...s, phase: "MIGRATING_SERVER", message: "Checking for legacy timelapses on server...", progress: 15 }));
-
-      const legacyRes = await api.draftTimelapse.legacy({});
-      if (!legacyRes.ok)
-        throw new Error(`Failed to fetch legacy timelapses: ${legacyRes.message}`);
-
-      const legacyTimelapses = legacyRes.data.timelapses;
-
-      if (legacyTimelapses.length === 0 && !legacyLocal) {
-        setState(s => ({ ...s, phase: "NOT_NEEDED", message: "No migration needed." }));
-        await sleep(500);
-        router.replace("/");
-        return;
-      }
-
-      if (legacyTimelapses.length > 0) {
-        const allDevices = await deviceStorage.getAllDevices();
-
-        setState(s => ({
-          ...s,
-          totalItems: legacyTimelapses.length,
-          message: `Found ${legacyTimelapses.length} legacy timelapse(s) to migrate.`
-        }));
-
-        for (const [i, legacy] of legacyTimelapses.entries()) {
-          const device = allDevices.find(d => d.id === legacy.deviceId);
-          if (!device?.legacyPasskey) {
-            console.warn(`(migrate.tsx) Skipping legacy timelapse ${legacy.id}: no local device matches ${legacy.deviceId} or missing legacy passkey`);
-            setState(s => ({
-              ...s,
-              currentItem: i + 1,
-              message: `Skipped "${legacy.name}" — legacy encryption key not available on this device.`
-            }));
-            continue;
-          }
-
-          let succeeded = false;
-
-          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-            try {
-              await migrateOneTimelapse(legacy, device.legacyPasskey, (msg) => {
-                setState(s => ({
-                  ...s,
-                  currentItem: i + 1,
-                  progress: 20 + Math.floor(((i + 0.5) / legacyTimelapses.length) * 75),
-                  message: `[${i + 1}/${legacyTimelapses.length}] "${legacy.name}": ${msg}`
-                }));
-              });
-              succeeded = true;
-              break;
-            }
-            catch (err) {
-              console.error(`(migrate.tsx) Attempt ${attempt + 1} failed for ${legacy.id}:`, err);
-              if (attempt < MAX_RETRIES - 1) {
-                const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-                setState(s => ({
-                  ...s,
-                  message: `[${i + 1}/${legacyTimelapses.length}] "${legacy.name}": Retrying in ${delay / 1000}s...`
-                }));
-                await sleep(delay);
-              }
-            }
-          }
-
-          if (!succeeded)
-            throw new Error(`Failed to migrate "${legacy.name}" after ${MAX_RETRIES} attempts.`);
-
-          setState(s => ({
-            ...s,
-            currentItem: i + 1,
-            progress: 20 + Math.floor(((i + 1) / legacyTimelapses.length) * 75),
-            message: `[${i + 1}/${legacyTimelapses.length}] "${legacy.name}" migrated successfully.`
-          }));
-        }
-      }
-
-      // Phase 4: Clean up legacy IDB if it still exists
-      if (hasIdb) {
-        await deleteLegacyDb();
-      }
-
-      setState(s => ({ ...s, phase: "DONE", progress: 100, message: "Migration complete!" }));
-      await sleep(1500);
-      router.replace("/");
-    }
-    catch (err) {
-      console.error("(migrate.tsx) Migration failed:", err);
-      migrationStarted.current = false;
-      setState(s => ({
-        ...s,
-        phase: "ERROR",
-        error: err instanceof Error ? err.message : "An unknown error occurred during migration."
-      }));
-    }
-  }, [router]);
+  useOnce(() => {
+    runMigration(({ stage, progress }) => {
+      setStage(stage);
+      setProgress(progress);
+    })
+      .then(() => router.replace("/"))
+      .catch(err => {
+        console.error("(migrate.tsx) migration failed:", err);
+        setError(err instanceof Error ? err.message : "An unknown error occurred during migration");
+      });
+  });
 
   useEffect(() => {
-    if (authLoading || !currentUser)
+    if (error)
       return;
 
-    runMigration();
-  }, [authLoading, currentUser, runMigration]);
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+    }
 
-  const isWorking = state.phase === "CHECKING" || state.phase === "MIGRATING_LOCAL" || state.phase === "MIGRATING_SERVER";
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [error]);
 
   return (
     <RootLayout title="Lapse — Migrating" showHeader={false}>
-      <div className="flex items-center justify-center w-full h-full">
-        <Modal isOpen={true}>
-          <ModalHeader
-            icon="clock-fill"
-            title="Migrating data"
-            description="Please don't close this page."
-          >
-            <div className="flex flex-col gap-4 w-full mt-2">
-              {state.phase === "ERROR" ? (
-                <>
-                  <p className="text-sm text-muted">{state.error}</p>
-                  <div className="flex flex-row gap-3">
-                    <Button kind="primary" onClick={() => runMigration()} className="flex-1">
-                      Retry
-                    </Button>
+      <LoadingModal
+        isOpen={!error}
+        title="Migrating your data"
+        message={`${stage} Please do not close this tab.`}
+        progress={progress}
+      />
 
-                    <Button kind="regular" onClick={() => router.replace("/")} className="flex-1">
-                      Skip
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-muted">{state.message}</p>
-
-                  {state.totalItems > 0 && (
-                    <p className="text-xs text-muted">
-                      Timelapse {state.currentItem} of {state.totalItems}
-                    </p>
-                  )}
-
-                  <div className="flex items-center gap-2 w-full">
-                    {isWorking && (
-                      <div className="animate-spin">
-                        <Icon glyph="clock" size={20} />
-                      </div>
-                    )}
-
-                    {state.progress > 0 && (
-                      <span className="text-xs text-muted">{Math.round(state.progress)}%</span>
-                    )}
-
-                    <div className="w-full bg-darkless rounded-full h-2 overflow-hidden">
-                      {state.progress > 0 ? (
-                        <div
-                          className="bg-red h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.max(0, Math.min(100, state.progress))}%` }}
-                        />
-                      ) : (
-                        <div
-                          className="bg-red h-2 rounded-full"
-                          style={{
-                            width: "30%",
-                            animation: "indeterminate 2s ease-in-out infinite"
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  <style jsx>{`
-                                        @keyframes indeterminate {
-                                            0% { transform: translateX(-100%); }
-                                            50% { transform: translateX(300%); }
-                                            100% { transform: translateX(-100%); }
-                                        }
-                                    `}</style>
-                </>
-              )}
-            </div>
-          </ModalHeader>
-        </Modal>
-      </div>
+      <ErrorModal
+        isOpen={!!error}
+        setIsOpen={(open) => !open && setError(null)}
+        message={error || ""}
+        onClose={() => router.replace("/")}
+      />
     </RootLayout>
   );
 }

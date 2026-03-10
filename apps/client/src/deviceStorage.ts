@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { hasLegacyData, type MigrationResult } from "@/migration";
+import { hasLegacyData } from "@/pages/migrate";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -25,11 +25,11 @@ export interface LocalDevice {
  */
 export type LocalDevices = LocalDevice[];
 
+export type LocalTimelapse = v.InferInput<typeof LocalTimelapseSchema>;
 const LocalTimelapseSchema = v.object({
   startedAt: v.number(),
   snapshots: v.array(v.number()),
-  sessions: v.array(v.number()),
-  isActive: v.boolean(),
+  sessions: v.array(v.number())
 });
 
 const DeviceSchema = v.object({
@@ -132,33 +132,28 @@ export class DeviceStorage {
     return await this.serialQueue.enqueue(block);
   }
 
-  async importLegacyData(legacy: MigrationResult): Promise<void> {
+  /**
+   * Imports a timelapse from a potentially foreign source.
+   */
+  async importTimelapse(metadata: LocalTimelapse, sessions: (readonly [number, Blob])[]) {
     return await this.operation(async () => {
       await this.ensureInit();
 
-      console.log("(deviceStorage.ts) importing legacy data from IndexedDB...");
-
       const store = await this.readStore();
+      store.timelapse = metadata;
 
-      if (legacy.timelapse) {
-        store.timelapse = legacy.timelapse;
-
-        const dir = await this.getLapseDir();
-        for (const [sessionId, blob] of legacy.sessionBlobs) {
-          const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-        }
-      }
-
-      for (const device of legacy.devices) {
-        if (!store.devices.some(d => d.id === device.id))
-          store.devices.push({ ...device, legacyPasskey: device.passkey, passkey: "" });
+      const dir = await this.getLapseDir();
+      for (const [sessionId, blob] of sessions) {
+        const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
       }
 
       await this.writeStore(store);
-      console.log("(deviceStorage.ts) legacy data imported successfully");
+      console.log("(deviceStorage.ts) imported timelapse data:", store.timelapse);
+
+      return store.timelapse;
     });
   }
 
@@ -170,8 +165,7 @@ export class DeviceStorage {
       store.timelapse = {
         startedAt: Date.now(),
         snapshots: [],
-        sessions: [],
-        isActive: true
+        sessions: []
       };
 
       await this.writeStore(store);
@@ -242,21 +236,6 @@ export class DeviceStorage {
       await writable.seek(file.size);
       await writable.write(chunk);
       await writable.close();
-    });
-  }
-
-  async markComplete(): Promise<void> {
-    return await this.operation(async () => {
-      await this.ensureInit();
-
-      const store = await this.readStore();
-      if (!store.timelapse)
-        return;
-
-      store.timelapse.isActive = false;
-      await this.writeStore(store);
-
-      console.log("(deviceStorage.ts) timelapse marked as complete");
     });
   }
 

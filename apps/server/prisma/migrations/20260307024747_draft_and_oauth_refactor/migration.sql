@@ -23,6 +23,8 @@ CREATE TABLE "LegacyUnpublishedTimelapse" (
     "name" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "primarySession" TEXT NOT NULL,
+    "thumbnailS3Key" TEXT NOT NULL,
+    "snapshots" TIMESTAMP(3)[],
     "deviceId" TEXT NOT NULL,
     "ownerId" TEXT NOT NULL,
 
@@ -49,10 +51,15 @@ ALTER TABLE "Timelapse" ADD COLUMN "snapshots" TIMESTAMP(3)[];
 -- Migrate every unpublished timelapse to LegacyUnpublishedTimelapse.
 -- Only timelapses with a known device can be migrated (deviceId is required for client-side decryption).
 -- Unpublished timelapses without a device are unrecoverable and will be deleted below.
-INSERT INTO "LegacyUnpublishedTimelapse" ("id", "name", "description", "primarySession", "deviceId", "ownerId")
-SELECT "id", "name", "description", "s3Key", "deviceId", "ownerId"
-FROM "Timelapse"
-WHERE "isPublished" = false AND "deviceId" IS NOT NULL;
+INSERT INTO "LegacyUnpublishedTimelapse" ("id", "name", "description", "primarySession", "thumbnailS3Key", "snapshots", "deviceId", "ownerId")
+SELECT t."id", t."name", t."description", t."s3Key", COALESCE(t."thumbnailS3Key", ''), COALESCE(s.snapshot_array, '{}'), t."deviceId", t."ownerId"
+FROM "Timelapse" t
+LEFT JOIN (
+    SELECT "timelapseId", array_agg("createdAt" ORDER BY "frame") AS snapshot_array
+    FROM "Snapshot"
+    GROUP BY "timelapseId"
+) s ON t."id" = s."timelapseId"
+WHERE t."isPublished" = false AND t."deviceId" IS NOT NULL;
 
 -- Migrate Snapshot timestamps into the new Timelapse.snapshots array field.
 UPDATE "Timelapse" t

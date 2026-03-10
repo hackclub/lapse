@@ -86,10 +86,16 @@ export const LegacyUnpublishedTimelapseSchema = z.object({
         .describe("The original description of the timelapse."),
 
     primarySession: z.string()
-        .describe("A URL pointing to the primary session of the timelapse. Legacy versions of Lapse only supported single-session timelapses."),
+        .describe("A URL pointing to the encrypted primary session of the timelapse. Legacy versions of Lapse only supported single-session timelapses."),
+
+    thumbnailUrl: z.string()
+        .describe("A URL pointing to the encrypted thumbnail URL of the timelapse."),
 
     deviceId: z.uuid()
-        .describe("The ID of the device that has created this timelapse.")
+        .describe("The ID of the device that has created this timelapse."),
+
+    snapshots: LapseDate.array()
+        .describe("Timestamps taken at regular intervals while the timelapse was recorded. This directly represents the resulting Hackatime heartbeats.")
 });
 
 export const draftTimelapseRouterContract = {
