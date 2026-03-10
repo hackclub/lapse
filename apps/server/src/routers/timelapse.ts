@@ -149,14 +149,14 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
     // Scary stuff ahead! If we mess this up, we permanently lose data. We don't want that!
     if (timelapse.s3Key) {
         await s3.send(new DeleteObjectCommand({
-            Bucket: env.S3_PUBLIC_URL_PUBLIC,
+            Bucket: env.S3_PUBLIC_BUCKET_NAME,
             Key: timelapse.s3Key
         }));
     }
 
     if (timelapse.thumbnailS3Key) {
         await s3.send(new DeleteObjectCommand({
-            Bucket: env.S3_PUBLIC_URL_PUBLIC,
+            Bucket: env.S3_PUBLIC_BUCKET_NAME,
             Key: timelapse.thumbnailS3Key
         }));
     }
