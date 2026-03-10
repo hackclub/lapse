@@ -16,4 +16,4 @@ export function useCachedApiCall<TRes>(caller: () => Promise<LapseResult<TRes>>,
   }, [res]);
 
   return res ?? cache;
-} 2
+}
