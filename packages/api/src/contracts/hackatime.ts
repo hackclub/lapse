@@ -2,7 +2,7 @@ import z from "zod";
 
 import { apiResult } from "@/common";
 import { contract, NO_INPUT } from "@/internal";
-import { TimelapseSchema } from "@/contracts/timelapse";
+import { OwnedTimelapseSchema, TimelapseSchema } from "@/contracts/timelapse";
 
 /**
  * Represents a Hackatime project of a given user.
@@ -19,6 +19,20 @@ export const hackatimeRouterContract = {
         .input(NO_INPUT)
         .output(apiResult({
             projects: z.array(HackatimeProjectSchema)
+        })),
+
+    myTimelapsesForProject: contract("GET", "/hackatime/myTimelapsesForProject")
+        .route({ description: "Gets the authenticated user's public and unlisted timelapses associated with the given Hackatime project key." })
+        .input(z.object({
+            projectKey: z.string().min(1).max(256)
+                .describe("The exact, case-sensitive Hackatime project key to query.")
+        }))
+        .output(apiResult({
+            count: z.number()
+                .describe("The number of timelapses made by the authenticated user associated with the project key."),
+
+            timelapses: z.array(OwnedTimelapseSchema)
+                .describe("The timelapses made by the authenticated user associated with the project key.")
         })),
 
      timelapsesForProject: contract("GET", "/hackatime/timelapsesForProject")

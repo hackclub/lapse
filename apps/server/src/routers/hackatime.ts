@@ -3,7 +3,7 @@ import { implement } from "@orpc/server";
 import { hackatimeRouterContract } from "@hackclub/lapse-api";
 
 import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
-import { dtoTimelapse, TIMELAPSE_INCLUDES } from "@/routers/timelapse.js";
+import { dtoOwnedTimelapse, dtoTimelapse, TIMELAPSE_INCLUDES } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
@@ -54,6 +54,27 @@ export default os.router({
                 logError("Failed to fetch Hackatime projects", { error, userId: caller.id });
                 return apiOk({ projects: [] });
             }
+        }),
+
+    myTimelapsesForProject: os.myTimelapsesForProject
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const timelapses = await database().timelapse.findMany({
+                include: TIMELAPSE_INCLUDES,
+                where: {
+                    ownerId: caller.id,
+                    hackatimeProject: req.input.projectKey,
+                    visibility: { in: ["PUBLIC", "UNLISTED"] }
+                }
+            });
+
+            return apiOk({
+                count: timelapses.length,
+                timelapses: timelapses.map(x => dtoOwnedTimelapse(x))
+            });
         }),
 
     timelapsesForProject: os.timelapsesForProject
