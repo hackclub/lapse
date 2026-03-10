@@ -290,27 +290,30 @@ async function runMigration(onProgress: (progress: MigrationProgress) => void) {
       // And we're done! The new draft now lives on the server and this device can decrypt it.
       console.log(`(migrate.tsx) legacy timelapse ${draft.id} migrated to ${creation.data.draftTimelapse.id}!`);
     }
-
-    // No errors - and thus we assume everything went okay. Removing this data permanently is still scary, though.
-    onProgress({ stage: "Cleaning up legacy data..." });
-    console.log("(migrate.tsx) all drafts migrated successfully! removing IndexedDB - dangerous!");
-    
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.deleteDatabase(IDB_NAME);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-
-    console.log("(migrate.tsx) IndexedDB removed. all Lapse V1 data has been migrated from this device!");
   }
-  finally {
-    db.close();
-
+  catch (err) {
     // If we're throwing a hissy fit, we won't be deleting IndexedDB content, so prevent data duplication
     if (timelapseImported) {
       await deviceStorage.deleteTimelapse();
     }
+
+    throw err;
   }
+  finally {
+    db.close();
+  }
+
+  // No errors - and thus we assume everything went okay. Removing this data permanently is still scary, though.
+  onProgress({ stage: "Cleaning up legacy data..." });
+  console.log("(migrate.tsx) all drafts migrated successfully! removing IndexedDB - dangerous!");
+  
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(IDB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+
+  console.log("(migrate.tsx) IndexedDB removed. all Lapse V1 data has been migrated from this device!");
 }
 
 export default function MigratePage() {
