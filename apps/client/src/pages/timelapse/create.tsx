@@ -33,14 +33,13 @@ const MIN_TIMELAPSE_SIZE_BYTES = 1024;
 
 type VideoSourceKind = "NONE" | "CAMERA" | "SCREEN";
 
-function MediaSourceSelector({ description, stream, setStream, onInterrupt, videoSourceKind, setVideoSourceKind }: {
+function MediaSourceSelector({ description, stream, setStream, onInterrupt }: {
   description: React.ReactNode,
   stream: MediaStream | null,
   setStream: React.Dispatch<SetStateAction<MediaStream | null>>,
-  onInterrupt: () => void,
-  videoSourceKind: VideoSourceKind,
-  setVideoSourceKind: (x: VideoSourceKind) => void
+  onInterrupt: () => void
 }) {
+  const [videoSourceKind, setVideoSourceKind] = useState<VideoSourceKind>("NONE");
   const [changingSource, setChangingSource] = useState(false);
 
   const [screenLabel, setScreenLabel] = useState("Screen");
@@ -265,11 +264,7 @@ export default function Page() {
   const [setupState, setSetupState] = useState<"INIT" | "INIT_CONTINUE" | "INIT_DISCARD" | "UPDATE">("INIT");
   const [setupModalOpen, setSetupModalOpen] = useState(true);
 
-  // The kind of video source our MediaSourceSelector gave us. This is used so that we know when to horizontally flip our preview.
-  const [videoSourceKind, setVideoSourceKind] = useState<VideoSourceKind>("NONE");
-
   const [startedAt, setStartedAt] = useState(new Date());
-
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
@@ -597,7 +592,6 @@ export default function Page() {
                   <div className="flex flex-col gap-6">
                     <MediaSourceSelector
                       stream={stream} setStream={setStream}
-                      videoSourceKind={videoSourceKind} setVideoSourceKind={setVideoSourceKind}
                       onInterrupt={handleStreamInterrupt}
                       description={
                         panelIsDiscarding
@@ -682,7 +676,6 @@ export default function Page() {
             autoPlay
             muted
             className="h-full rounded-[48px]"
-            style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
           />
         </div>
       </div>
