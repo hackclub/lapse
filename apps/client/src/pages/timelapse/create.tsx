@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import clsx from "clsx";
 import prettyBytes from "pretty-bytes";
+import posthog from "posthog-js";
 import { assert, encryptData, match, fromHex } from "@hackclub/lapse-shared";
 
 import { videoGenerateThumbnail } from "@/video";
@@ -396,6 +397,9 @@ export default function Page() {
     }
 
     setIsUploading(true);
+    posthog.capture("timelapse_upload_started", {
+      stop_session: options.stopSession,
+    });
 
     function bytesProgressCallback(uploaded: number, total: number) {
       setUploadProgress((uploaded / total) * 100);
@@ -488,12 +492,21 @@ export default function Page() {
 
       await sleep(500);
 
+      posthog.capture("timelapse_upload_completed", {
+        draft_id: res.data.draftTimelapse.id,
+        session_count: sessions.length,
+        snapshot_count: timelapse.snapshots.length,
+      });
+
       router.push(`/draft/${res.data.draftTimelapse.id}`);
     }
     catch (apiErr) {
       console.error("(create.tsx) upload failed:", apiErr);
       setIsUploading(false);
-      setError(apiErr instanceof Error ? apiErr.message : "An unknown error occurred during upload");
+      const errorMessage = apiErr instanceof Error ? apiErr.message : "An unknown error occurred during upload";
+      posthog.capture("timelapse_upload_failed", { error: errorMessage });
+      posthog.captureException(apiErr);
+      setError(errorMessage);
     }
   }
 

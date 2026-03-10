@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { clsx } from "clsx";
+import posthog from "posthog-js";
 import { decryptData, fromHex } from "@hackclub/lapse-shared";
 import { DraftTimelapse, EditListEntry, TimelapseVisibility } from "@hackclub/lapse-api";
 
@@ -222,6 +223,8 @@ export default function Page() {
       return;
     }
 
+    posthog.capture("timelapse_draft_deleted", { draft_id: draft.id });
+
     router.push(`/user/@${draft.owner.handle}`);
   }
 
@@ -270,6 +273,12 @@ export default function Page() {
       setError(res.message);
       return;
     }
+
+    posthog.capture("timelapse_published", {
+      timelapse_id: res.data.timelapse.id,
+      visibility: pendingVisibility,
+      has_hackatime_project: hackatimeProjectName !== null,
+    });
 
     router.push(`/timelapse/${res.data.timelapse.id}`);
   }

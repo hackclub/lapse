@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
+import posthog from "posthog-js";
 
 import { matchOrDefault } from "@hackclub/lapse-shared";
 import type { OAuthErrorCode } from "@hackclub/lapse-api";
@@ -123,6 +124,8 @@ export default function Auth() {
       const data = await response.json();
       localStorage.setItem("lapse:token", data.access_token);
       await refreshUser();
+
+      posthog.capture("user_signed_in");
 
       const redirect = sessionStorage.getItem("lapse:oauth_redirect");
       sessionStorage.removeItem("lapse:oauth_redirect");

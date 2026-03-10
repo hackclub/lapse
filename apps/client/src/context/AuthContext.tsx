@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/router";
 import type { User } from "@hackclub/lapse-api";
+import posthog from "posthog-js";
 
 import { api } from "@/api";
 import { useOnce } from "@/hooks/useOnce";
@@ -41,6 +42,11 @@ export function AuthProvider({ children }: {
     setUserCache(req.data.user);
     setCurrentUser(req.data.user);
     setIsLoading(false);
+
+    posthog.identify(req.data.user.id, {
+      handle: req.data.user.handle,
+      display_name: req.data.user.displayName,
+    });
   });
 
   const refreshUser = useCallback(async () => {
@@ -61,6 +67,9 @@ export function AuthProvider({ children }: {
 
   const signOut = useCallback(async () => {
     console.log("(AuthContext.tsx) signing out...");
+    posthog.capture("user_signed_out");
+    posthog.reset();
+    
     await api.user.signOut({});
     setUserCache(null);
     setCurrentUser(null);

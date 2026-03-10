@@ -31,6 +31,8 @@
     "mediabunny": "^1.38.0",
     "next": "^16.1.6",
     "platform": "^1.3.6",
+    "posthog-js": "^1.360.0",
+    "posthog-node": "^5.28.0",
     "pretty-bytes": "^7.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
