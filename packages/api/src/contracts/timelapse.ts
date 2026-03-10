@@ -78,7 +78,7 @@ export const OwnedTimelapseSchema = TimelapsePayloadSchema.extend({
         .describe("Information about the owner/author of the timelapse."),
 
     comments: z.array(CommentSchema)
-        .describe("All comments for this timelapse. TODO: If we get to the point where timelapses can actually get viral and have a lot of comments, we'll have to paginate this."),
+        .describe("All comments for this timelapse."),
 
     playbackUrl: z.url().nullable()
         .describe("The public URL that can be used to stream video data. If `null`, the timelapse is still being processed."),
