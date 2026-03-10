@@ -49,7 +49,9 @@ export function Header() {
 
             <div className="flex gap-1.5 px-6 py-2 h-min justify-center items-center rounded-2xl bg-dark border border-black shadow text-nowrap">
               <div aria-hidden className="w-2 h-2 rounded-full bg-green" />
-              <div>{usersActive} people recording right now</div>
+              <div>
+                {usersActive === 1 ? "1 person" : `${usersActive} people`} recording right now
+              </div>
             </div>
           </div>
 
