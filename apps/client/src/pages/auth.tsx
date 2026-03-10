@@ -132,6 +132,7 @@ export default function Auth() {
       router.push(redirect ?? "/");
     }
     catch (err) {
+      posthog.capture("auth_token_exchange_error", { err, query: location.search });
       console.error("(auth.tsx) error during token exchange!", err);
       setStatus("error");
       router.replace("/auth?error=token_exchange_failed");

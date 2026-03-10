@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { ascending, encryptData, fromHex } from "@hackclub/lapse-shared";
+import posthog from "posthog-js";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { LoadingModal } from "@/components/layout/LoadingModal";
@@ -214,8 +215,10 @@ async function runMigration(onProgress: (progress: MigrationProgress) => void) {
     onProgress({ stage: "Fetching legacy timelapses..." });
 
     const legacyDrafts = await api.draftTimelapse.legacy({});
-    if (!legacyDrafts.ok)
+    if (!legacyDrafts.ok) {
+      posthog.capture("migrate_legacy_query_fail", { legacyDrafts });
       throw new Error(`Could not fetch legacy timelapses: ${legacyDrafts.message}`);
+    }
 
     const totalDrafts = legacyDrafts.data.timelapses.length;
 
@@ -228,8 +231,10 @@ async function runMigration(onProgress: (progress: MigrationProgress) => void) {
       onProgress({ stage: `Downloading video${draftLabel}...` });
 
       const res = await sfetch(draft.primarySession);
-      if (!res.ok)
+      if (!res.ok) {
+        posthog.capture("migrate_legacy_vid_fetch_fail", { res, draft });
         throw new Error(`Could not fetch data for session ${draft.primarySession} (legacy ID ${draft.id})`);
+      }
 
       const data = await res.arrayBuffer();
 
@@ -247,6 +252,7 @@ async function runMigration(onProgress: (progress: MigrationProgress) => void) {
         decryptedThumb = await legacyDecryptData(data, draft.id, device.passkey);
       }
       catch (err) {
+        posthog.capture("migrate_thumbnail_fail", { err, draft });
         console.error("(migrate.tsx) could not decrypt thumbnail, falling back to manual generation!", err);
         const blob = await videoGenerateThumbnail(new Blob([decryptedVideo], { type: "video/webm" }));
         decryptedThumb = await blob.arrayBuffer();
@@ -292,6 +298,8 @@ async function runMigration(onProgress: (progress: MigrationProgress) => void) {
     }
   }
   catch (err) {
+    posthog.capture("migrate_fail", { err, timelapseImported });
+
     // If we're throwing a hissy fit, we won't be deleting IndexedDB content, so prevent data duplication
     if (timelapseImported) {
       await deviceStorage.deleteTimelapse();

@@ -54,8 +54,9 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt }: {
       console.log("(create.tsx) Enumerated cameras:", cameras);
       setAvailableCameras(cameras);
     }
-    catch (err) {
-      console.log("(create.tsx) Could not enumerate cameras:", err);
+    catch (error) {
+      posthog.capture("camera_enum_fail", { error, availableCameras, selectedCameraId });
+      console.log("(create.tsx) could not enumerate cameras:", error);
     }
   }
 
@@ -141,8 +142,9 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt }: {
           }
         }
       }
-      catch (apiErr) {
-        console.warn("(create.tsx) could not request permissions for camera stream.", apiErr);
+      catch (error) {
+        posthog.capture("camera_no_permission", { error, availableCameras, selectedCameraId });
+        console.warn("(create.tsx) could not request permissions for camera stream.", error);
         setChangingSource(false);
         return;
       }
@@ -160,8 +162,9 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt }: {
           audio: false
         });
       }
-      catch (apiErr) {
-        console.error("(create.tsx) could not request permissions for screen capture.", apiErr);
+      catch (error) {
+        posthog.capture("screen_no_permission", { error, availableCameras, selectedCameraId });
+        console.error("(create.tsx) could not request permissions for screen capture.", error);
         setChangingSource(false);
         return;
       }
@@ -332,9 +335,10 @@ export default function Page() {
           await deviceStorage.deleteTimelapse();
           existing = null;
         }
-        catch (err) {
-          console.error("(create.tsx) failed to discard timelapse:", err);
-          setError(err instanceof Error ? err.message : "Failed to discard timelapse");
+        catch (error) {
+          posthog.capture("timelapse_begin_discard_fail", { error, existing });
+          console.error("(create.tsx) failed to discard timelapse:", error);
+          setError(error instanceof Error ? error.message : "Failed to discard timelapse");
         }
       }
       else {
@@ -402,9 +406,6 @@ export default function Page() {
     }
 
     setIsUploading(true);
-    posthog.capture("timelapse_upload_started", {
-      stop_session: options.stopSession,
-    });
 
     function bytesProgressCallback(uploaded: number, total: number) {
       setUploadProgress((uploaded / total) * 100);
@@ -422,6 +423,7 @@ export default function Page() {
       const sessions = await deviceStorage.getTimelapseVideoSessions();
       const timelapse = await deviceStorage.getTimelapse();
       if (!timelapse || sessions.length == 0) {
+        posthog.capture("record_fail_empty", { timelapse, sessions, startedAt });
         console.error("(create.tsx) No local timelapse, or no sessions have been captured! Your browser storage might be malfuctioning...?", timelapse, sessions);
         throw new Error("No local timelapse, or no sessions have been captured");
       }
@@ -507,12 +509,13 @@ export default function Page() {
       // `router.push` here is worse for performance, but should force all browsers to hide the alert.
       location.href = `/draft/${res.data.draftTimelapse.id}`;
     }
-    catch (apiErr) {
-      console.error("(create.tsx) upload failed:", apiErr);
+    catch (error) {
+      posthog.capture("timelapse_upload_fail", { error, uploadProgress, uploadStage });
+      console.error("(create.tsx) upload failed:", error);
       setIsUploading(false);
-      const errorMessage = apiErr instanceof Error ? apiErr.message : "An unknown error occurred during upload";
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during upload";
       posthog.capture("timelapse_upload_failed", { error: errorMessage });
-      posthog.captureException(apiErr);
+      posthog.captureException(error);
       setError(errorMessage);
     }
   }

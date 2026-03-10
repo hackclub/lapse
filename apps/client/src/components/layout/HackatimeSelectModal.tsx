@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
 import { formatDuration } from "@hackclub/lapse-shared";
 import type { HackatimeProject } from "@hackclub/lapse-api";
+import posthog from "posthog-js";
 
 import { api } from "@/api";
 import { WindowedModal } from "@/components/layout/WindowedModal";
@@ -44,6 +45,7 @@ export function HackatimeSelectModal({ isOpen, setIsOpen, onAccept, onError }: {
       setHackatimeProject("");
     }
     catch (error) {
+      posthog.capture("hackatime_sync_error", { error });
       onError(error instanceof Error ? error.message : "An error occurred while publishing.");
     }
     finally {

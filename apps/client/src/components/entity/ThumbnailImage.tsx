@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
+import posthog from "posthog-js";
 import Icon from "@hackclub/icons";
 import { decryptData, fromHex } from "@hackclub/lapse-shared";
 
@@ -39,7 +40,8 @@ async function decryptThumbnail(timelapseId: string, encryptedThumbnailUrl: stri
     return url;
   }
   catch (error) {
-    console.warn(`(ThumbnailImage.tsx) Failed to decrypt thumbnail for timelapse ${timelapseId}:`, error);
+    posthog.capture("thumbnail_decrypt_fail", { error, timelapseId, encryptedThumbnailUrl });
+    console.warn(`(ThumbnailImage.tsx) failed to decrypt thumbnail for timelapse ${timelapseId}:`, error);
     return null;
   }
 }

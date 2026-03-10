@@ -89,8 +89,10 @@ export default function Page() {
       const sessions = await Promise.all(
         res.data.timelapse.sessions.map(async (x) => {
           const sessionRes = await sfetch(x);
-          if (!sessionRes.ok)
+          if (!sessionRes.ok) {
+            posthog.capture("draft_load_session_fail", { sessionRes, session: x });
             throw new Error(`Could not fetch timelapse session @ ${x}`);
+          }
 
           const data = new Blob([
             await decryptData(
@@ -109,9 +111,10 @@ export default function Page() {
 
       setDecryptedSessions(sessions);
     }
-    catch (apiErr) {
-      console.error("([id].tsx) error loading timelapse:", apiErr);
-      setError(apiErr instanceof Error ? apiErr.message : "An unknown error occurred while loading the timelapse");
+    catch (error) {
+      posthog.capture("draft_load_fail", { error, draft });
+      console.error("([id].tsx) error loading timelapse:", error);
+      setError(error instanceof Error ? error.message : "An unknown error occurred while loading the timelapse");
       setErrorIsCritical(true);
     }
   }, [router, router.isReady]);
@@ -156,8 +159,9 @@ export default function Page() {
       setDecryptedSessions(sessions);
       setPendingDraftForDecrypt(null);
     }
-    catch (err) {
-      console.error("([id].tsx) error decrypting with provided key:", err);
+    catch (error) {
+      posthog.capture("draft_decrypt_fail", { error, draft, timelapse });
+      console.error("([id].tsx) error decrypting with provided key:", error);
       setError("Failed to decrypt. The key may be incorrect.");
       await deviceStorage.deleteDevice(timelapse.deviceId);
     }

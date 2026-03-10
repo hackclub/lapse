@@ -1,6 +1,7 @@
 import { useRouter } from "next/router";
 import NextImage from "next/image";
 import { useState } from "react";
+import posthog from "posthog-js";
 import Icon from "@hackclub/icons";
 import { type Timelapse, type User, type PublicUser, DraftTimelapse } from "@hackclub/lapse-api";
 import { assert, validateUrl, matchOrDefault, descending } from "@hackclub/lapse-shared";
@@ -82,8 +83,9 @@ export default function Page() {
         setDrafts(draftsRes.data.timelapses.filter(d => !d.associatedTimelapseId));
       }
     }
-    catch (apiErr) {
-      console.error("([id].tsx) Error fetching user data:", apiErr);
+    catch (error) {
+      posthog.capture("user_profile_fail", { error, id });
+      console.error("([id].tsx) Error fetching user data:", error);
       setError("Failed to load user profile");
     }
   }, [router.isReady, router.query]);
@@ -138,7 +140,8 @@ export default function Page() {
       }
     }
     catch (error) {
-      console.error("([id].tsx) Error updating profile:", error);
+      posthog.capture("user_edit_fail", { error, user, editDisplayName, editBio, editHandle, validUrls, editUrls });
+      console.error("([id].tsx) error updating profile:", error);
       setError("Failed to update profile");
     }
     finally {

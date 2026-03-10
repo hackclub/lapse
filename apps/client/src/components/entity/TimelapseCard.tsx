@@ -4,6 +4,7 @@ import Icon from "@hackclub/icons";
 import type { DraftTimelapse, Timelapse } from "@hackclub/lapse-api"
 import { decryptData, fromHex } from "@hackclub/lapse-shared";
 import clsx from "clsx";
+import posthog from "posthog-js";
 
 import { deviceStorage } from "@/deviceStorage";
 import { retryable, sfetch } from "@/safety";
@@ -38,8 +39,10 @@ export function TimelapseCard({ timelapse }: {
         }
 
         const res = await sfetch(timelapse.previewThumbnail);
-        if (!res.ok)
+        if (!res.ok) {
+          posthog.capture("draft_thumbnail_fail", { res, timelapse, thumbnail: timelapse.previewThumbnail });
           throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
 
         const encryptedThumb = await res.arrayBuffer();
 

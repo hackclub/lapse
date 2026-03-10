@@ -1,8 +1,9 @@
-import { sleep } from "@/common";
+import posthog from "posthog-js";
+import * as mediabunny from "mediabunny";
 import { THUMBNAIL_SIZE, TIMELAPSE_FPS } from "@hackclub/lapse-api";
 import { assert, last } from "@hackclub/lapse-shared";
 
-import * as mediabunny from "mediabunny";
+import { sleep } from "@/common";
 
 const FILMSTRIP_WIDTH = 300;
 const FILMSTRIP_HEIGHT = 200;
@@ -59,6 +60,7 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
     return blob;
   }
   catch (err) {
+    posthog.capture("thumbnail_failed", { err, blobLength: videoBlob?.size });
     console.warn("(videoProcessing.ts) could not generate thumbnail - falling back to black image!", err);
     return await fetch(`data:image/webp;base64,UklGRiwAAABXRUJQVlA4TB8AAAAvf8JZAAcQEf0PCAkS/4+3EtH/jP/85z//+c9//l8AAA==`).then(x => x.blob());
   }
