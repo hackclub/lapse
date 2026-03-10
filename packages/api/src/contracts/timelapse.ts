@@ -218,6 +218,7 @@ export const timelapseRouterContract = {
             z.object({
                 cursor: LapseId.optional()
                     .describe("The ID of the last timelapse from the previous page. Omit to start from the beginning."),
+
                 limit: z.number().int().min(1).max(100).default(20)
                     .describe("The maximum number of timelapses to return per page."),
             })
@@ -226,6 +227,7 @@ export const timelapseRouterContract = {
             apiResult({
                 timelapses: z.array(OwnedTimelapseSchema)
                     .describe("The timelapses for this page."),
+
                 nextCursor: z.string().nullable()
                     .describe("The cursor to use for the next page. `null` if there are no more results."),
             })

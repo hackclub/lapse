@@ -428,7 +428,9 @@ export default os.router({
             });
 
             const hasMore = timelapses.length > limit;
-            if (hasMore) timelapses.pop();
+            if (hasMore) {
+                timelapses.pop();
+            }
 
             const nextCursor = hasMore ? timelapses[timelapses.length - 1].id : null;
 
