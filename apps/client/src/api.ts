@@ -51,7 +51,7 @@ export async function apiUpload(
   data: File | Blob | Buffer,
   onProgress?: (uploaded: number, total: number) => void
 ) {
-  return new Promise<void>(async (resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     console.log("(api.ts) beginning upload!", data);
 
     const upload = new tus.Upload(data, {
