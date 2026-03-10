@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import type { MigrationResult } from "@/migration";
+import { hasLegacyData, type MigrationResult } from "@/migration";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -98,6 +98,10 @@ export class DeviceStorage {
     }
     else {
       console.log("(deviceStorage.ts) existing OPFS store found");
+    }
+
+    if (await hasLegacyData()) {
+      location.href = "/migrate";
     }
   }
 

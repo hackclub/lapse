@@ -1,7 +1,3 @@
-import { type PropsWithChildren } from "react";
-import { useRouter } from "next/router";
-import { useOnce } from "@/hooks/useOnce";
-
 // This file deals with migration old Lapse V1 data to the new V2 client.
 // For reference:
 //    client/deviceStorage.ts: https://github.com/hackclub/lapse/blob/a70359cdcb2d629e1771893d678b7df4c996929c/apps/web/src/client/deviceStorage.ts
@@ -233,22 +229,4 @@ export async function deleteLegacyDb(): Promise<void> {
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
-}
-
-export function LegacyMigrationGuard({ children }: PropsWithChildren) {
-  const router = useRouter();
-
-  useOnce(() => {
-    if (router.pathname === "/migrate" || router.pathname === "/auth")
-      return;
-
-    console.log("legacy migration guard running")
-
-    hasLegacyData().then(hasLegacy => {
-      if (hasLegacy)
-        router.replace("/migrate");
-    });
-  });
-
-  return <>{children}</>;
 }
