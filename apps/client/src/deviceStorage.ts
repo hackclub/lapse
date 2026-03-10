@@ -101,8 +101,10 @@ export class DeviceStorage {
     }
 
     if (await hasLegacyData()) {
-      console.log("(deviceStorage.ts) legacy data found - redirecting to /migrate!");
-      location.href = "/migrate";
+      if (location.pathname !== "/migrate") {
+        console.log("(deviceStorage.ts) legacy data found - redirecting to /migrate!");
+        location.href = "/migrate";
+      }
     }
     else {
       console.log("(deviceStorage.ts) no legacy data needed for redirect found");
@@ -213,6 +215,32 @@ export class DeviceStorage {
       }
 
       return blobs;
+    });
+  }
+
+  async getTimelapseVideoSize(): Promise<number> {
+    return await this.operation(async () => {
+      await this.ensureInit();
+
+      const store = await this.readStore();
+      if (!store.timelapse)
+        return 0;
+
+      const dir = await this.getLapseDir();
+      let totalSize = 0;
+
+      for (const sessionId of store.timelapse.sessions) {
+        try {
+          const fileHandle = await dir.getFileHandle(`session-${sessionId}.webm`);
+          const file = await fileHandle.getFile();
+          totalSize += file.size;
+        }
+        catch (err) {
+          console.warn(`(deviceStorage.ts) could not read session ${sessionId} size - skipping`, err);
+        }
+      }
+
+      return totalSize;
     });
   }
 

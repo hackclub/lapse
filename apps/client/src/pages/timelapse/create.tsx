@@ -30,37 +30,38 @@ import RecordIcon from "@/assets/icons/record.svg";
 import PauseIcon from "@/assets/icons/pause.svg";
 import StopIcon from "@/assets/icons/stop.svg";
 
+const MIN_TIMELAPSE_SIZE_BYTES = 1024;
+
 type VideoSourceKind = "NONE" | "CAMERA" | "SCREEN";
 
-function MediaSourceSelector({ description, stream, setStream, onInterrupt, videoSourceKind, setVideoSourceKind }: {
+function MediaSourceSelector({ description, stream, setStream, onInterrupt }: {
   description: React.ReactNode,
   stream: MediaStream | null,
   setStream: React.Dispatch<SetStateAction<MediaStream | null>>,
-  onInterrupt: () => void,
-  videoSourceKind: VideoSourceKind,
-  setVideoSourceKind: (x: VideoSourceKind) => void
+  onInterrupt: () => void
 }) {
+  const [videoSourceKind, setVideoSourceKind] = useState<VideoSourceKind>("NONE");
   const [changingSource, setChangingSource] = useState(false);
 
   const [screenLabel, setScreenLabel] = useState("Screen");
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
 
+  async function enumerateCameras() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(device => device.kind === "videoinput");
+      console.log("(create.tsx) Enumerated cameras:", cameras);
+      setAvailableCameras(cameras);
+    }
+    catch (err) {
+      console.log("(create.tsx) Could not enumerate cameras:", err);
+    }
+  }
+
   // Every single time the available media devices (e.g. cameras) change (e.g. plug/unplug), update our local state that takes track
   // of this. We *would* prefer to just use the browser's information outright, but we have to enumerate them, so that's not really an option.
   useOnce(() => {
-    async function enumerateCameras() {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cameras = devices.filter(device => device.kind === "videoinput");
-        console.log("(create.tsx) Enumerated cameras:", cameras);
-        setAvailableCameras(cameras);
-      }
-      catch (err) {
-        console.log("(create.tsx) Could not enumerate cameras:", err);
-      }
-    }
-
     enumerateCameras();
 
     navigator.mediaDevices.addEventListener("devicechange", enumerateCameras);
@@ -117,6 +118,7 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt, vide
           if (deviceId) {
             // Nice - we know which device was actually selected.
             setSelectedCameraId(deviceId);
+            enumerateCameras(); // this is needed mostly on Safari
           }
           else {
             // Hm. The browser doesn't want to tell us which camera was actually selected - this means we can't actually update the UI to
@@ -263,11 +265,7 @@ export default function Page() {
   const [setupState, setSetupState] = useState<"INIT" | "INIT_CONTINUE" | "INIT_DISCARD" | "UPDATE">("INIT");
   const [setupModalOpen, setSetupModalOpen] = useState(true);
 
-  // The kind of video source our MediaSourceSelector gave us. This is used so that we know when to horizontally flip our preview.
-  const [videoSourceKind, setVideoSourceKind] = useState<VideoSourceKind>("NONE");
-
   const [startedAt, setStartedAt] = useState(new Date());
-
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>("");
@@ -298,6 +296,13 @@ export default function Page() {
   useOnce(async () => {
     const existing = await deviceStorage.getTimelapse();
     if (existing) {
+      const size = await deviceStorage.getTimelapseVideoSize();
+      if (size < MIN_TIMELAPSE_SIZE_BYTES) {
+        console.log("(create.tsx) discarding tiny existing timelapse from OPFS", { size });
+        await deviceStorage.deleteTimelapse();
+        return;
+      }
+
       setSetupState("INIT_CONTINUE");
     }
   });
@@ -490,7 +495,7 @@ export default function Page() {
         stream.getTracks().forEach(x => x.stop());
       }
 
-      await sleep(500);
+      await sleep(100);
 
       posthog.capture("timelapse_upload_completed", {
         draft_id: res.data.draftTimelapse.id,
@@ -498,7 +503,9 @@ export default function Page() {
         snapshot_count: timelapse.snapshots.length,
       });
 
-      router.push(`/draft/${res.data.draftTimelapse.id}`);
+      // Browsers can choose to still display the sharing alert even when we disposed of all the streams. Using `location.href` instead of
+      // `router.push` here is worse for performance, but should force all browsers to hide the alert.
+      location.href = `/draft/${res.data.draftTimelapse.id}`;
     }
     catch (apiErr) {
       console.error("(create.tsx) upload failed:", apiErr);
@@ -511,7 +518,29 @@ export default function Page() {
   }
 
   async function stopRecording() {
-    await uploadLocalTimelapse({ stopSession: true });
+    if (!videoSession) {
+      console.warn("(create.tsx) attempted to stop the recording while no session has been started yet!");
+      return;
+    }
+
+    await videoSession.stop();
+    setVideoSession(null);
+    await deviceStorage.sync();
+
+    const size = await deviceStorage.getTimelapseVideoSize();
+    if (size < MIN_TIMELAPSE_SIZE_BYTES) {
+      console.log("(create.tsx) discarding tiny timelapse after stop", { size });
+      await deviceStorage.deleteTimelapse();
+
+      if (stream) {
+        stream.getTracks().forEach(x => x.stop());
+      }
+
+      location.href = "/";
+      return;
+    }
+
+    await uploadLocalTimelapse({ stopSession: false });
   }
 
   async function submitExistingTimelapse() {
@@ -576,7 +605,6 @@ export default function Page() {
                   <div className="flex flex-col gap-6">
                     <MediaSourceSelector
                       stream={stream} setStream={setStream}
-                      videoSourceKind={videoSourceKind} setVideoSourceKind={setVideoSourceKind}
                       onInterrupt={handleStreamInterrupt}
                       description={
                         panelIsDiscarding
@@ -602,7 +630,7 @@ export default function Page() {
                           </Button>
 
                           { setupState === "INIT_CONTINUE" && (
-                            <Button onClick={submitExistingTimelapse} kind="regular">
+                            <Button onClick={submitExistingTimelapse} kind="regular" icon="send-fill">
                               Submit
                             </Button>
                           ) }
@@ -661,7 +689,6 @@ export default function Page() {
             autoPlay
             muted
             className="h-full rounded-[48px]"
-            style={{ transform: videoSourceKind === "CAMERA" ? "scaleX(-1)" : "none" }}
           />
         </div>
       </div>

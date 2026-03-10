@@ -465,7 +465,10 @@ export default os.router({
                 headers: {},
                 body: {
                     access_token: token.accessToken,
-                    expires_in: token.accessTokenExpiresAt!.getTime() / 1000,
+                    expires_in: Math.max(
+                        0,
+                        Math.floor((token.accessTokenExpiresAt!.getTime() - Date.now()) / 1000)
+                    ),
                     refresh_token: token.refreshToken!,
                     token_type: "Bearer",
                     scope: token.scope?.join(" ") ?? ""

@@ -1,6 +1,6 @@
 import NextLink from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
 import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-api";
 
@@ -25,6 +25,7 @@ import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { CommentSection } from "@/components/entity/CommentSection";
 import { Duration } from "@/components/Duration";
+import { sleep } from "@/common";
 
 export default function Page() {
   const router = useRouter();
@@ -53,8 +54,6 @@ export default function Page() {
 
   const isOwned = timelapse && currentUser && currentUser.id === timelapse.owner.id;
   
-  const videoRef = useRef<HTMLVideoElement>(null);
-
   useAsyncEffect(async () => {
     if (!router.isReady)
       return;
@@ -90,17 +89,13 @@ export default function Page() {
         setTimelapse(timelapse);
 
         if (timelapse.playbackUrl) {
-          const video = videoRef.current;
-          if (video)
-            video.src = timelapse.playbackUrl;
-
           break;
         }
 
         if (timelapse.visibility === "FAILED_PROCESSING")
           break;
 
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await sleep(5000);
       }
     }
     catch (apiErr) {
@@ -215,8 +210,8 @@ export default function Page() {
             </div>
           ) : (
             <video 
-              ref={videoRef} 
               controls
+              src={timelapse?.playbackUrl ?? undefined}
               poster={timelapse?.thumbnailUrl ?? undefined}
               className="aspect-video w-full h-min md:rounded-2xl bg-[#000]"
             />

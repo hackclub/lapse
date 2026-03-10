@@ -30,7 +30,8 @@ function formatArg(arg: unknown): string {
     return `${arg.name}: ${arg.message}`;
 
   try {
-    return JSON.stringify(arg);
+    const json = JSON.stringify(arg);
+    return json.trim() == "{}" ? String(arg) : json;
   }
   catch {
     return String(arg);

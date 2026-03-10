@@ -85,6 +85,13 @@ export async function deleteDraftTimelapse(id: string, actor: Actor): Promise<Er
         }));
     }
 
+    logInfo(`Deleting thumbnail ${draft.thumbnailKey} from S3.`);
+
+    await s3.send(new DeleteObjectCommand({
+        Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
+        Key: draft.thumbnailKey
+    }));
+
     await database().draftTimelapse.delete({
         where: { id }
     });
@@ -121,7 +128,7 @@ export default os.router({
 
             const drafts = await database().draftTimelapse.findMany({
                 include: { owner: true },
-                where: { ownerId: req.context.user.id }
+                where: { ownerId: req.input.user }
             });
 
             return apiOk({ timelapses: drafts.map(x => dtoDraftTimelapse(x)) });
