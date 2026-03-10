@@ -28,7 +28,7 @@ function getProxyBaseUrl() {
   if (!apiUrl)
     return null;
 
-  return apiUrl.endsWith("/") ? apiUrl : `${apiUrl}/`;
+  return `${apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl}/api/`;
 }
 
 function getEndpointPath(endpoint: string | string[] | undefined) {
