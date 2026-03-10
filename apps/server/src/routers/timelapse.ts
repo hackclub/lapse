@@ -410,6 +410,36 @@ export default os.router({
             return apiOk({ timelapses: timelapses.map(x => dtoTimelapse(x, caller)) });
         }),
 
+    myPublishedTimelapses: os.myPublishedTimelapses
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
+        .handler(async (req) => {
+            const caller = req.context.user;
+            const limit = req.input.limit;
+
+            const timelapses = await database().timelapse.findMany({
+                include: TIMELAPSE_INCLUDES,
+                where: { ownerId: caller.id },
+                orderBy: { createdAt: "desc" },
+                take: limit + 1,
+                ...(req.input.cursor
+                    ? { cursor: { id: req.input.cursor }, skip: 1 }
+                    : {}),
+            });
+
+            const hasMore = timelapses.length > limit;
+            if (hasMore) {
+                timelapses.pop();
+            }
+
+            const nextCursor = hasMore ? timelapses[timelapses.length - 1].id : null;
+
+            return apiOk({
+                timelapses: timelapses.map(dtoOwnedTimelapse),
+                nextCursor,
+            });
+        }),
+
     syncWithHackatime: os.syncWithHackatime
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
