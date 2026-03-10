@@ -121,7 +121,7 @@ export default os.router({
 
             const drafts = await database().draftTimelapse.findMany({
                 include: { owner: true },
-                where: { ownerId: req.context.user.id }
+                where: { ownerId: req.input.user }
             });
 
             return apiOk({ timelapses: drafts.map(x => dtoDraftTimelapse(x)) });
