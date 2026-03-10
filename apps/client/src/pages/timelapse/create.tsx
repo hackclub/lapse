@@ -47,21 +47,21 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt, vide
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
 
+  async function enumerateCameras() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(device => device.kind === "videoinput");
+      console.log("(create.tsx) Enumerated cameras:", cameras);
+      setAvailableCameras(cameras);
+    }
+    catch (err) {
+      console.log("(create.tsx) Could not enumerate cameras:", err);
+    }
+  }
+
   // Every single time the available media devices (e.g. cameras) change (e.g. plug/unplug), update our local state that takes track
   // of this. We *would* prefer to just use the browser's information outright, but we have to enumerate them, so that's not really an option.
   useOnce(() => {
-    async function enumerateCameras() {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cameras = devices.filter(device => device.kind === "videoinput");
-        console.log("(create.tsx) Enumerated cameras:", cameras);
-        setAvailableCameras(cameras);
-      }
-      catch (err) {
-        console.log("(create.tsx) Could not enumerate cameras:", err);
-      }
-    }
-
     enumerateCameras();
 
     navigator.mediaDevices.addEventListener("devicechange", enumerateCameras);
@@ -118,6 +118,7 @@ function MediaSourceSelector({ description, stream, setStream, onInterrupt, vide
           if (deviceId) {
             // Nice - we know which device was actually selected.
             setSelectedCameraId(deviceId);
+            enumerateCameras(); // this is needed mostly on Safari
           }
           else {
             // Hm. The browser doesn't want to tell us which camera was actually selected - this means we can't actually update the UI to
