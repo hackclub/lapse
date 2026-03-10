@@ -486,9 +486,11 @@ export default function Page() {
         stream.getTracks().forEach(x => x.stop());
       }
 
-      await sleep(500);
+      await sleep(100);
 
-      router.push(`/draft/${res.data.draftTimelapse.id}`);
+      // Browsers can choose to still display the sharing alert even when we disposed of all the streams. Using `location.href` instead of
+      // `router.push` here is worse for performance, but should force all browsers to hide the alert.
+      location.href = `/draft/${res.data.draftTimelapse.id}`;
     }
     catch (apiErr) {
       console.error("(create.tsx) upload failed:", apiErr);
@@ -589,7 +591,7 @@ export default function Page() {
                           </Button>
 
                           { setupState === "INIT_CONTINUE" && (
-                            <Button onClick={submitExistingTimelapse} kind="regular">
+                            <Button onClick={submitExistingTimelapse} kind="regular" icon="send-fill">
                               Submit
                             </Button>
                           ) }
