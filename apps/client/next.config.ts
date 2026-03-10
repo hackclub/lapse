@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
 import TerserPlugin from "terser-webpack-plugin";
+import { withPostHogConfig } from "@posthog/nextjs-config";
 
 let config: NextConfig = {
   reactStrictMode: true,
@@ -77,5 +78,17 @@ let config: NextConfig = {
     ];
   },
 };
+
+if (process.env.POSTHOG_PERSONAL_API_KEY && process.env.POSTHOG_ENV_ID) {
+  config = withPostHogConfig(config, {
+    personalApiKey: process.env.POSTHOG_PERSONAL_API_KEY,
+    envId: process.env.POSTHOG_ENV_ID,
+    host: "https://us.i.posthog.com",
+    sourcemaps: {
+      enabled: true,
+      deleteAfterUpload: false
+    }
+  });
+}
 
 export default config;

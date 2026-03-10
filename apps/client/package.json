@@ -23,6 +23,7 @@
     "@orpc/contract": "^1.13.5",
     "@orpc/openapi": "^1.13.5",
     "@orpc/openapi-client": "^1.13.5",
+    "@posthog/nextjs-config": "^1.8.19",
     "@scure/bip39": "^2.0.1",
     "@types/platform": "^1.3.6",
     "clsx": "^2.1.1",
