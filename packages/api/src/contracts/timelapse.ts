@@ -210,5 +210,24 @@ export const timelapseRouterContract = {
             apiResult({
                 timelapse: TimelapseSchema
             })
+        ),
+
+    myPublishedTimelapses: contract("GET", "/timelapse/myPublishedTimelapses")
+        .route({ description: "Lists all published timelapses owned by the authenticated user, with cursor-based pagination." })
+        .input(
+            z.object({
+                cursor: LapseId.optional()
+                    .describe("The ID of the last timelapse from the previous page. Omit to start from the beginning."),
+                limit: z.number().int().min(1).max(100).default(20)
+                    .describe("The maximum number of timelapses to return per page."),
+            })
+        )
+        .output(
+            apiResult({
+                timelapses: z.array(OwnedTimelapseSchema)
+                    .describe("The timelapses for this page."),
+                nextCursor: z.string().nullable()
+                    .describe("The cursor to use for the next page. `null` if there are no more results."),
+            })
         )
 };
