@@ -31,15 +31,6 @@ import hackatime from "@/routers/hackatime.js"
 import auth from "@/routers/auth.js"
 import admin from "@/routers/admin.js"
 
-if (env.SENTRY_DSN) {
-    Sentry.init({
-        dsn: env.SENTRY_DSN,
-        tracesSampleRate: 0,
-        enableLogs: true,
-        sendDefaultPii: true
-    });
-}
-
 const router = implement(compositeRouterContract)
     .$context<Context>()
     .router({
@@ -179,6 +170,14 @@ attachUploadServer(server);
 
 server.listen({ port: parseInt(env.PORT), host: env.HOST })
     .then(async (address) => {
+        if (env.SENTRY_DSN) {
+            Sentry.init({
+                dsn: env.SENTRY_DSN,
+                enableLogs: true,
+                sendDefaultPii: true
+            });
+        }
+
         if (process.env["NODE_ENV"] === "development") {
             chalk.level = 3;
 
