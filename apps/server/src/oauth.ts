@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import OAuth2Server from "@node-oauth/oauth2-server";
 import { assert } from "@hackclub/lapse-shared";
 import z from "zod";
@@ -10,9 +10,9 @@ import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
 import { logInfo, logWarning } from "@/logging.js";
 import type { FastifyRequest } from "fastify";
-import { getAllOAuthScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
+import { getAllOAuthScopes, type LapseOAuthScope, type LapseProgramScope } from "@hackclub/lapse-api";
 
-function hashServiceSecret(secret: string): string {
+export function hashServiceSecret(secret: string): string {
     const salt = randomBytes(16).toString("hex");
     const hashed = scryptSync(secret, salt, 64).toString("hex");
     return `${salt}:${hashed}`;
@@ -24,6 +24,28 @@ export function generateServiceClientId() {
 
 export function generateServiceClientSecret() {
     return `scs_${randomBytes(24).toString("hex")}`;
+}
+
+const PROGRAM_KEY_PREFIX = "pk_lapse_";
+
+export function generateProgramKey() {
+    return `${PROGRAM_KEY_PREFIX}${randomBytes(32).toString("hex")}`;
+}
+
+/**
+ * Extracts the key prefix (first 8 hex chars after `pk_lapse_`) from a raw program key.
+ */
+export function extractProgramKeyPrefix(rawKey: string): string {
+    return rawKey.substring(PROGRAM_KEY_PREFIX.length, PROGRAM_KEY_PREFIX.length + 8);
+}
+
+/**
+ * Verifies a raw secret against a stored scrypt hash in `salt:hash` format.
+ */
+export function verifySecretHash(secret: string, storedHash: string): boolean {
+    const [salt, hash] = storedHash.split(":");
+    const computed = scryptSync(secret, salt, 64);
+    return timingSafeEqual(computed, Buffer.from(hash, "hex"));
 }
 
 export async function createServiceClient(params: {
@@ -396,7 +418,13 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<{ user:
     if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer "))
         return { user: null, scopes: [] };
 
-    const token = decodeAccessToken(req.headers.authorization.substring("Bearer ".length));
+    const bearerToken = req.headers.authorization.substring("Bearer ".length);
+
+    // Program keys use a different auth path — skip JWT decoding for them
+    if (bearerToken.startsWith(PROGRAM_KEY_PREFIX))
+        return { user: null, scopes: [] };
+
+    const token = decodeAccessToken(bearerToken);
     if (token instanceof Error) {
         logWarning("Could not decode access token!", { error: token });
         return { user: null, scopes: [] };
@@ -422,4 +450,51 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<{ user:
         logWarning(`Could not fetch user ${token.sub} (authenticated via client ${token.cid})!`, { error });
         return { user: null, scopes: [] };
     }
+}
+
+export type AuthenticatedProgramKey = {
+    id: string;
+    name: string;
+    scopes: LapseProgramScope[];
+};
+
+export async function getAuthenticatedProgramKey(req: FastifyRequest): Promise<{ programKey: AuthenticatedProgramKey | null }> {
+    if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer "))
+        return { programKey: null };
+
+    const bearerToken = req.headers.authorization.substring("Bearer ".length);
+
+    if (!bearerToken.startsWith(PROGRAM_KEY_PREFIX))
+        return { programKey: null };
+
+    const prefix = extractProgramKeyPrefix(bearerToken);
+
+    const candidates = await database().programKey.findMany({
+        where: {
+            keyPrefix: prefix,
+            revokedAt: null,
+            expiresAt: { gt: new Date() }
+        }
+    });
+
+    for (const candidate of candidates) {
+        if (verifySecretHash(bearerToken, candidate.keyHash)) {
+            // Update lastUsedAt (fire-and-forget)
+            database().programKey.update({
+                where: { id: candidate.id },
+                data: { lastUsedAt: new Date() }
+            }).catch(() => {});
+
+            return {
+                programKey: {
+                    id: candidate.id,
+                    name: candidate.name,
+                    scopes: candidate.scopes as LapseProgramScope[]
+                }
+            };
+        }
+    }
+
+    logWarning(`Program key with prefix ${prefix} failed verification.`);
+    return { programKey: null };
 }
