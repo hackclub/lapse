@@ -128,6 +128,7 @@ export default os.router({
 
             const drafts = await database().draftTimelapse.findMany({
                 include: { owner: true },
+                orderBy: { createdAt: "desc" },
                 where: { ownerId: req.input.user }
             });
 
@@ -237,6 +238,7 @@ export default os.router({
             const caller = req.context.user;
 
             const result = await database().legacyUnpublishedTimelapse.findMany({
+                orderBy: { id: "desc" },
                 where: { ownerId: caller.id, isMigrated: false }
             });
 

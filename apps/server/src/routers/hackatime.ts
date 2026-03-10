@@ -64,6 +64,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: caller.id,
                     hackatimeProject: req.input.projectKey,
@@ -94,6 +95,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: subject.id,
                     hackatimeProject: req.input.projectKey
