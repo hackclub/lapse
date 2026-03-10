@@ -101,8 +101,10 @@ export class DeviceStorage {
     }
 
     if (await hasLegacyData()) {
-      console.log("(deviceStorage.ts) legacy data found - redirecting to /migrate!");
-      location.href = "/migrate";
+      if (location.pathname !== "/migrate") {
+        console.log("(deviceStorage.ts) legacy data found - redirecting to /migrate!");
+        location.href = "/migrate";
+      }
     }
     else {
       console.log("(deviceStorage.ts) no legacy data needed for redirect found");
