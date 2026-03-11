@@ -1,12 +1,13 @@
 import { implement } from "@orpc/server";
-import { adminRouterContract, ADMIN_ENTITY_FIELDS, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLegacyTimelapseRow } from "@hackclub/lapse-api";
+import { adminRouterContract, ADMIN_ENTITY_FIELDS, getAllOAuthScopes, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLegacyTimelapseRow, type ProgramKeyMetadata } from "@hackclub/lapse-api";
 import { match } from "@hackclub/lapse-shared";
 
-import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
+import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { logInfo } from "@/logging.js";
+import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -395,6 +396,24 @@ function pushSearchDescriptor(results: SearchResultRow[], query: string, descrip
     }
 }
 
+function dtoProgramKey(key: db.ProgramKey & { createdByUser: db.User }): ProgramKeyMetadata {
+    return {
+        id: key.id,
+        name: key.name,
+        keyPrefix: key.keyPrefix,
+        scopes: key.scopes,
+        createdBy: {
+            id: key.createdByUser.id,
+            handle: key.createdByUser.handle,
+            displayName: key.createdByUser.displayName,
+        },
+        createdAt: key.createdAt.toISOString(),
+        lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
+        revokedAt: key.revokedAt?.toISOString() ?? null,
+        expiresAt: key.expiresAt.toISOString(),
+    };
+}
+
 export default os.router({
     stats: os.stats
         .use(requiredAuth("ADMIN"))
@@ -442,6 +461,7 @@ export default os.router({
     update: os.update
         .use(requiredAuth("ADMIN"))
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             const { entity, id, changes } = req.input;
@@ -470,6 +490,164 @@ export default os.router({
                 data: { entity, row }
             };
         }),
+
+    programKey: os.programKey.router({
+        create: os.programKey.create
+            .use(requiredAuth("ROOT"))
+            .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
+            .handler(async (req) => {
+                const caller = req.context.user;
+                const { name, scopes, expiresAt } = req.input;
+
+                const validScopes = new Set(getAllOAuthScopes());
+                for (const scope of scopes) {
+                    if (!validScopes.has(scope as never)) {
+                        return apiErr("ERROR", `Unknown scope: "${scope}"`);
+                    }
+                }
+
+                const maxExpiry = Date.now() + 365 * 24 * 60 * 60 * 1000;
+                if (expiresAt > maxExpiry)
+                    return apiErr("ERROR", "Expiry must be within 1 year from now.");
+
+                if (expiresAt <= Date.now())
+                    return apiErr("ERROR", "Expiry must be in the future.");
+
+                const rawKey = generateProgramKey();
+                const keyHash = hashServiceSecret(rawKey);
+                const keyPrefix = extractProgramKeyPrefix(rawKey);
+
+                const key = await database().programKey.create({
+                    include: { createdByUser: true },
+                    data: {
+                        name,
+                        keyHash,
+                        keyPrefix,
+                        scopes,
+                        createdByUserId: caller.id,
+                        expiresAt: new Date(expiresAt),
+                    }
+                });
+
+                await database().programKeyAudit.create({
+                    data: { programKeyId: key.id, action: "created" }
+                });
+
+                logInfo(`Program key "${name}" created by @${caller.handle}.`);
+
+                return apiOk({ key: dtoProgramKey(key), rawKey });
+            }),
+
+        list: os.programKey.list
+            .use(requiredAuth("ROOT"))
+            .use(requiredScopes("elevated"))
+            .handler(async () => {
+                const keys = await database().programKey.findMany({
+                    include: { createdByUser: true },
+                    orderBy: { createdAt: "desc" }
+                });
+
+                return apiOk({ keys: keys.map(dtoProgramKey) });
+            }),
+
+        rotate: os.programKey.rotate
+            .use(requiredAuth("ROOT"))
+            .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
+            .handler(async (req) => {
+                const caller = req.context.user;
+                const { id } = req.input;
+
+                const existing = await database().programKey.findUnique({ where: { id } });
+                if (!existing)
+                    return apiErr("NOT_FOUND", "Program key not found.");
+
+                if (existing.expiresAt <= new Date())
+                    return apiErr("ERROR", "Cannot rotate an expired key.");
+
+                if (existing.revokedAt)
+                    return apiErr("ERROR", "Cannot rotate a revoked key.");
+
+                const rawKey = generateProgramKey();
+                const keyHash = hashServiceSecret(rawKey);
+                const keyPrefix = extractProgramKeyPrefix(rawKey);
+
+                const key = await database().programKey.update({
+                    where: { id },
+                    include: { createdByUser: true },
+                    data: { keyHash, keyPrefix }
+                });
+
+                await database().programKeyAudit.create({
+                    data: { programKeyId: id, action: "rotated" }
+                });
+
+                logInfo(`Program key "${existing.name}" rotated by @${caller.handle}.`);
+
+                return apiOk({ key: dtoProgramKey(key), rawKey });
+            }),
+
+        revoke: os.programKey.revoke
+            .use(requiredAuth("ROOT"))
+            .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
+            .handler(async (req) => {
+                const caller = req.context.user;
+                const { id } = req.input;
+
+                const existing = await database().programKey.findUnique({ where: { id } });
+                if (!existing)
+                    return apiErr("NOT_FOUND", "Program key not found.");
+
+                if (existing.revokedAt)
+                    return apiErr("ERROR", "Key is already revoked.");
+
+                await database().programKey.update({
+                    where: { id },
+                    data: { revokedAt: new Date() }
+                });
+
+                await database().programKeyAudit.create({
+                    data: { programKeyId: id, action: "revoked" }
+                });
+
+                logInfo(`Program key "${existing.name}" revoked by @${caller.handle}.`);
+
+                return apiOk({});
+            }),
+
+        update: os.programKey.update
+            .use(requiredAuth("ROOT"))
+            .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
+            .handler(async (req) => {
+                const caller = req.context.user;
+                const { id, name, scopes } = req.input;
+
+                if (scopes) {
+                    const validScopes = new Set(getAllOAuthScopes());
+                    for (const scope of scopes) {
+                        if (!validScopes.has(scope as never))
+                            return apiErr("ERROR", `Unknown scope: "${scope}"`);
+                    }
+                }
+
+                const existing = await database().programKey.findUnique({ where: { id } });
+                if (!existing)
+                    return apiErr("NOT_FOUND", "Program key not found.");
+
+                const key = await database().programKey.update({
+                    where: { id },
+                    include: { createdByUser: true },
+                    data: { name, scopes }
+                });
+
+                logInfo(`Program key "${existing.name}" updated by @${caller.handle}.`);
+
+                return apiOk({ key: dtoProgramKey(key) });
+            }),
+    }),
 
     search: os.search
         .use(requiredAuth("ADMIN"))

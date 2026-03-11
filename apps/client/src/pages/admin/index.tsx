@@ -4,7 +4,7 @@ import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import { formatDuration, match } from "@hackclub/lapse-shared";
-import { ADMIN_ENTITY_FIELDS, OAUTH_SCOPE_GROUPS, type AdminEntity, type AdminFilter, type AdminSort, type AdminSearchResult, type OAuthApp, type OAuthTrustLevel } from "@hackclub/lapse-api";
+import { ADMIN_ENTITY_FIELDS, OAUTH_SCOPE_GROUPS, type AdminEntity, type AdminFilter, type AdminSort, type AdminSearchResult, type OAuthApp, type OAuthTrustLevel, type ProgramKeyMetadata } from "@hackclub/lapse-api";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
@@ -59,7 +59,7 @@ type AdminFieldDef = {
 
 type AdminRecord = Record<string, unknown>;
 
-const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse", "app"] as const;
+const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse", "app", "programKey"] as const;
 
 type AdminPanelEntity = typeof ENTITIES[number];
 
@@ -69,7 +69,8 @@ const ENTITY_LABELS: Record<AdminPanelEntity, string> = {
   comment: "Comments",
   draftTimelapse: "Draft Timelapses",
   legacyTimelapse: "Legacy Timelapses",
-  app: "Apps"
+  app: "Apps",
+  programKey: "Program Keys"
 };
 
 const ENTITY_ICONS: Record<AdminPanelEntity, IconGlyph> = {
@@ -78,7 +79,8 @@ const ENTITY_ICONS: Record<AdminPanelEntity, IconGlyph> = {
   comment: "message",
   draftTimelapse: "docs",
   legacyTimelapse: "profile-fill",
-  app: "code"
+  app: "code",
+  programKey: "private-outline"
 };
 
 const ADMIN_FIELD_OPERATORS: Record<AdminFieldKind, Array<{ value: AdminFilter["operator"]; label: string }>> = {
@@ -403,6 +405,428 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
         />
       </ModalContent>
     </Modal>
+  );
+}
+
+const PROGRAM_KEY_TABLE_COLUMNS = ["Name", "Key Prefix", "Scopes", "Created By", "Expires", "Last Used", "Status"];
+
+function getKeyStatus(key: ProgramKeyMetadata): { label: string; color: string } {
+  if (key.revokedAt)
+    return { label: "Revoked", color: "red" };
+  if (new Date(key.expiresAt) < new Date())
+    return { label: "Expired", color: "yellow" };
+  return { label: "Active", color: "green" };
+}
+
+function AdminProgramKeysTable() {
+  const [keys, setKeys] = useState<ProgramKeyMetadata[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createScopes, setCreateScopes] = useState<string[]>([]);
+  const [createExpiresInDays, setCreateExpiresInDays] = useState("90");
+  const [isCreating, setIsCreating] = useState(false);
+  const [rawKeyResult, setRawKeyResult] = useState<string | null>(null);
+
+  const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [rotateId, setRotateId] = useState<string | null>(null);
+  const [editKey, setEditKey] = useState<ProgramKeyMetadata | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editScopes, setEditScopes] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const fetchKeys = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await api.admin.programKey.list({});
+      if (!res.ok) {
+        setError(res.message ?? "Unable to load program keys.");
+        return;
+      }
+      setKeys(res.data.keys);
+    }
+    catch (err) {
+      console.error("(admin/programKeys) failed to load", err);
+      setError("Unable to load program keys.");
+    }
+    finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchKeys();
+  }, [fetchKeys]);
+
+  async function handleCreate() {
+    setIsCreating(true);
+    setError(null);
+
+    try {
+      const days = parseInt(createExpiresInDays);
+      if (isNaN(days) || days < 1 || days > 365) {
+        setError("Expiration must be between 1 and 365 days.");
+        return;
+      }
+
+      const expiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
+
+      const res = await api.admin.programKey.create({
+        name: createName,
+        scopes: createScopes,
+        expiresAt
+      });
+
+      if (!res.ok) {
+        setError(res.message ?? "Failed to create program key.");
+        return;
+      }
+
+      setKeys(prev => [res.data.key, ...prev]);
+      setRawKeyResult(res.data.rawKey);
+      setCreateOpen(false);
+      setCreateName("");
+      setCreateScopes([]);
+      setCreateExpiresInDays("90");
+    }
+    catch (err) {
+      console.error("(admin/programKeys) failed to create", err);
+      setError("Failed to create program key.");
+    }
+    finally {
+      setIsCreating(false);
+    }
+  }
+
+  async function handleRevoke() {
+    if (!revokeId) return;
+    setIsSaving(true);
+
+    try {
+      const res = await api.admin.programKey.revoke({ id: revokeId });
+      if (!res.ok) {
+        setError(res.message ?? "Failed to revoke key.");
+        return;
+      }
+      await fetchKeys();
+      setRevokeId(null);
+    }
+    catch (err) {
+      console.error("(admin/programKeys) failed to revoke", err);
+      setError("Failed to revoke key.");
+    }
+    finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleRotate() {
+    if (!rotateId) return;
+    setIsSaving(true);
+
+    try {
+      const res = await api.admin.programKey.rotate({ id: rotateId });
+      if (!res.ok) {
+        setError(res.message ?? "Failed to rotate key.");
+        return;
+      }
+      setKeys(prev => prev.map(k => k.id === rotateId ? res.data.key : k));
+      setRawKeyResult(res.data.rawKey);
+      setRotateId(null);
+    }
+    catch (err) {
+      console.error("(admin/programKeys) failed to rotate", err);
+      setError("Failed to rotate key.");
+    }
+    finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleUpdate() {
+    if (!editKey) return;
+    setIsSaving(true);
+
+    try {
+      const res = await api.admin.programKey.update({ id: editKey.id, name: editName, scopes: editScopes });
+      if (!res.ok) {
+        setError(res.message ?? "Failed to update key.");
+        return;
+      }
+      setKeys(prev => prev.map(k => k.id === editKey.id ? res.data.key : k));
+      setEditKey(null);
+    }
+    catch (err) {
+      console.error("(admin/programKeys) failed to update", err);
+      setError("Failed to update key.");
+    }
+    finally {
+      setIsSaving(false);
+    }
+  }
+
+  function toggleCreateScope(scope: string) {
+    setCreateScopes(prev =>
+      prev.includes(scope) ? prev.filter(s => s !== scope) : [...prev, scope]
+    );
+  }
+
+  function toggleEditScope(scope: string) {
+    setEditScopes(prev =>
+      prev.includes(scope) ? prev.filter(s => s !== scope) : [...prev, scope]
+    );
+  }
+
+  return (
+    <>
+      {/* Create Key Modal */}
+      <Modal isOpen={createOpen} size="REGULAR">
+        <ModalHeader
+          title="Create Program Key"
+          description="Generate a new service-wide API key"
+          showCloseButton
+          onClose={() => setCreateOpen(false)}
+          icon="private-outline"
+        />
+        <ModalContent className="gap-4 text-base">
+          <AdminFieldRow label="Name">
+            <TextInput value={createName} onChange={setCreateName} placeholder="e.g. Analytics Service" />
+          </AdminFieldRow>
+
+          <AdminFieldRow label="Expires in" align="start">
+            <div className="flex items-center gap-2">
+              <TextInput value={createExpiresInDays} onChange={setCreateExpiresInDays} placeholder="90" />
+              <span className="text-muted text-sm whitespace-nowrap">days (max 365)</span>
+            </div>
+          </AdminFieldRow>
+
+          <AdminFieldRow label="Scopes" align="start">
+            <div className="rounded-xl border border-slate bg-dark p-4">
+              <div className="grid gap-4">
+                {Object.entries(OAUTH_SCOPE_GROUPS).map(([group, scopes]) => (
+                  <div key={group} className="grid gap-2">
+                    <span className="text-sm font-semibold text-white">{group}</span>
+                    <div className="grid gap-2">
+                      {Object.entries(scopes).map(([scope, description]) => (
+                        <label key={scope} className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={createScopes.includes(scope)}
+                            onChange={() => toggleCreateScope(scope)}
+                            className="mt-1"
+                          />
+                          <span className="flex flex-col">
+                            <span className="text-sm text-white">{scope}</span>
+                            <span className="text-sm text-muted">{description}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </AdminFieldRow>
+
+          <div className="flex gap-3 justify-end pt-4">
+            <Button kind="regular" onClick={() => setCreateOpen(false)} disabled={isCreating}>Cancel</Button>
+            <Button kind="primary" onClick={handleCreate} disabled={isCreating || !createName.trim() || createScopes.length === 0}>
+              {isCreating ? "Creating..." : "Create Key"}
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+
+      {/* Revoke Confirmation Modal */}
+      <Modal isOpen={!!revokeId} size="SMALL">
+        <ModalHeader title="Revoke Program Key" description="This action cannot be undone" showCloseButton onClose={() => setRevokeId(null)} icon="delete" />
+        <ModalContent className="gap-4 text-base">
+          <p className="text-muted">Revoking this key will immediately prevent any service using it from authenticating.</p>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button kind="regular" onClick={() => setRevokeId(null)} disabled={isSaving}>Cancel</Button>
+            <Button kind="primary" onClick={handleRevoke} disabled={isSaving}>
+              {isSaving ? "Revoking..." : "Revoke Key"}
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+
+      {/* Rotate Confirmation Modal */}
+      <Modal isOpen={!!rotateId} size="SMALL">
+        <ModalHeader title="Rotate Program Key" description="This will invalidate the existing key" showCloseButton onClose={() => setRotateId(null)} icon="announcement" />
+        <ModalContent className="gap-4 text-base">
+          <p className="text-muted">Rotating the key will immediately invalidate the existing key. The new key will be shown once.</p>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button kind="regular" onClick={() => setRotateId(null)} disabled={isSaving}>Cancel</Button>
+            <Button kind="primary" onClick={handleRotate} disabled={isSaving}>
+              {isSaving ? "Rotating..." : "Rotate Key"}
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+
+      {/* Edit Key Modal */}
+      <Modal isOpen={!!editKey} size="REGULAR">
+        <ModalHeader
+          title="Edit Program Key"
+          description={editKey ? `Editing "${editKey.name}"` : ""}
+          showCloseButton
+          onClose={() => setEditKey(null)}
+          icon="settings"
+        />
+        <ModalContent className="gap-4 text-base">
+          <AdminFieldRow label="Name">
+            <TextInput value={editName} onChange={setEditName} placeholder="e.g. Analytics Service" />
+          </AdminFieldRow>
+
+          <AdminFieldRow label="Scopes" align="start">
+            <div className="rounded-xl border border-slate bg-dark p-4">
+              <div className="grid gap-4">
+                {Object.entries(OAUTH_SCOPE_GROUPS).map(([group, scopes]) => (
+                  <div key={group} className="grid gap-2">
+                    <span className="text-sm font-semibold text-white">{group}</span>
+                    <div className="grid gap-2">
+                      {Object.entries(scopes).map(([scope, description]) => (
+                        <label key={scope} className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editScopes.includes(scope)}
+                            onChange={() => toggleEditScope(scope)}
+                            className="mt-1"
+                          />
+                          <span className="flex flex-col">
+                            <span className="text-sm text-white">{scope}</span>
+                            <span className="text-sm text-muted">{description}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </AdminFieldRow>
+
+          <ModalActions isSaving={isSaving} onClose={() => setEditKey(null)} onSave={handleUpdate} />
+        </ModalContent>
+      </Modal>
+
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button kind="primary" onClick={() => setCreateOpen(true)} icon="plus">
+            Create Program Key
+          </Button>
+          <Button kind="regular" onClick={fetchKeys} icon="view-reload" disabled={isLoading}>
+            Refresh
+          </Button>
+          <span className="text-base text-muted ml-auto">
+            {keys.length} total keys
+          </span>
+        </div>
+
+        {rawKeyResult && (
+          <div className="rounded-2xl border border-red bg-dark p-6 text-red-200">
+            <p className="font-semibold text-lg">This is your program key — it won&apos;t be shown again!</p>
+            <p className="mt-2 break-all">
+              <span className="font-mono text-sm select-all">{rawKeyResult}</span>
+            </p>
+            <Button kind="regular" onClick={() => setRawKeyResult(null)} className="mt-3">
+              Dismiss
+            </Button>
+          </div>
+        )}
+
+        <ModalError error={error} size="sm" />
+
+        <div className="w-full overflow-x-auto rounded-xl border border-slate">
+          <table className="min-w-275 w-full table-fixed text-base">
+            <thead>
+              <tr className="border-b border-slate bg-darkless">
+                {PROGRAM_KEY_TABLE_COLUMNS.map(column => (
+                  <th key={column} className="px-3 py-2 text-left text-sm font-medium text-muted">{column}</th>
+                ))}
+                <th className="px-3 py-2 text-left text-sm font-medium text-muted">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && keys.length === 0 && (
+                <TableStatusRow colSpan={PROGRAM_KEY_TABLE_COLUMNS.length + 1}>Loading program keys...</TableStatusRow>
+              )}
+
+              {keys.map(key => {
+                const status = getKeyStatus(key);
+                return (
+                  <tr key={key.id} className="border-b border-slate/50 hover:bg-darkless/50 transition-colors">
+                    <td className="px-3 py-2 align-top font-semibold text-white">{key.name}</td>
+                    <td className="px-3 py-2 align-top">
+                      <span className="font-mono text-sm text-muted">pk_lapse_{key.keyPrefix}...</span>
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <div className="flex flex-wrap gap-1">
+                        {key.scopes.map(scope => (
+                          <span key={scope} className="rounded-full bg-dark px-2 py-1 text-xs text-muted border border-slate">
+                            {scope}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 align-top text-sm">
+                      @{key.createdBy.handle}
+                    </td>
+                    <td className="px-3 py-2 align-top text-sm text-muted">
+                      {new Date(key.expiresAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-3 py-2 align-top text-sm text-muted">
+                      {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : "Never"}
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <span className={clsx(
+                        "inline-flex rounded-full px-2 py-1 text-xs font-semibold",
+                        `bg-${status.color}/15 text-${status.color}`
+                      )}>
+                        {status.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      {!key.revokedAt && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setEditKey(key); setEditName(key.name); setEditScopes([...key.scopes]); }}
+                            className="text-sm text-muted hover:text-white transition-colors cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setRotateId(key.id)}
+                            className="text-sm text-muted hover:text-white transition-colors cursor-pointer"
+                          >
+                            Rotate
+                          </button>
+                          <button
+                            onClick={() => setRevokeId(key.id)}
+                            className="text-sm text-red hover:text-red/80 transition-colors cursor-pointer"
+                          >
+                            Revoke
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {!isLoading && keys.length === 0 && (
+                <TableStatusRow colSpan={PROGRAM_KEY_TABLE_COLUMNS.length + 1}>No program keys found.</TableStatusRow>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1250,7 +1674,9 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex gap-2 flex-wrap border-b border-slate pb-0">
-          {ENTITIES.map(entity => (
+          {ENTITIES
+            .filter(entity => entity !== "programKey" || auth.currentUser?.private.permissionLevel === "ROOT")
+            .map(entity => (
             <button
               key={entity}
               onClick={() => handleEntityChange(entity)}
@@ -1270,6 +1696,8 @@ export default function AdminDashboard() {
         <div ref={tableRef}>
           {activeEntity === "app"
             ? <AdminAppsTable />
+            : activeEntity === "programKey"
+            ? <AdminProgramKeysTable />
             : (
                 <AdminEntityTable
                   entity={activeEntity}

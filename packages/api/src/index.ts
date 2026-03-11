@@ -36,5 +36,5 @@ export const compositeRouterContract = {
     global: globalRouterContract,
     hackatime: hackatimeRouterContract,
     auth: authRouterContract,
-    admin: adminRouterContract
+    admin: adminRouterContract,
 };

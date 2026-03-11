@@ -1,7 +1,7 @@
 import { implement } from "@orpc/server"
 import { developerRouterContract, getAllOAuthScopes, type LapseOAuthScope, type OAuthApp, type OAuthGrant } from "@hackclub/lapse-api"
 
-import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
+import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { createServiceClient, normalizeRedirectUris, normalizeScopes, rotateServiceClientSecret } from "@/oauth.js";
@@ -58,6 +58,7 @@ export default os.router({
     rotateAppSecret: os.rotateAppSecret
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -82,6 +83,7 @@ export default os.router({
     updateApp: os.updateApp
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             const canAdministerAnyApp = caller.permissionLevel === "ADMIN" || caller.permissionLevel === "ROOT";
@@ -145,6 +147,7 @@ export default os.router({
     revokeApp: os.revokeApp
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -173,6 +176,7 @@ export default os.router({
     getAllOwnedApps: os.getAllOwnedApps
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -194,6 +198,7 @@ export default os.router({
     createApp: os.createApp
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -239,6 +244,7 @@ export default os.router({
     updateAppTrustLevel: os.updateAppTrustLevel
         .use(requiredAuth("ADMIN"))
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -268,6 +274,7 @@ export default os.router({
     getOwnedOAuthGrants: os.getOwnedOAuthGrants
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -285,6 +292,7 @@ export default os.router({
     revokeOAuthGrant: os.revokeOAuthGrant
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 

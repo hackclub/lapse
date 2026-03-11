@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { inspect, getCallSites } from "node:util";
 
 import * as db from "@/generated/prisma/client.js";
+import type { ExternalActor } from "@/ownership.js";
 
 function inlineStringify(x: unknown) {
     return inspect(x, {
@@ -134,9 +135,9 @@ export function logError(message: string, data: Record<string, unknown> = {}) {
     Sentry.logger.error(`(${scope}) ${message}`, remapData(data));
 }
 
-export function logRequest(endpoint: string, input: unknown, user: db.User | null) {
-    Sentry.logger.info(`(request) ${endpoint}`, { input, user });
-    console.log(getPlain("info", "request", `${endpoint}(${inlineStringify(input)}) from ${user ? `@${user.handle}` : "<anon>"}`, {}));
+export function logRequest(endpoint: string, input: unknown, actor: ExternalActor | null) {
+    Sentry.logger.info(`(request) ${endpoint}`, { input, actor });
+    console.log(getPlain("info", "request", `${endpoint}(${inlineStringify(input)}) from ${actor ? (actor.kind == "USER" ? `@${actor.user.handle}` : actor.programKey.name) : "<anon>"}`, {}));
 }
 
 export function logFastifyRequest(endpoint: string, req: FastifyRequest) {

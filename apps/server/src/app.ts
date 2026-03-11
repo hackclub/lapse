@@ -42,7 +42,7 @@ const router = implement(compositeRouterContract)
         global,
         hackatime,
         auth,
-        admin
+        admin,
     });
 
 const handler = new OpenAPIHandler(
@@ -86,11 +86,13 @@ server.addContentTypeParser("*", (request, payload, done) => {
 });
 
 server.all("/api/*", async (req, reply) => {
-    const { user, scopes } = await getAuthenticatedUser(req);
+    const actor = await getAuthenticatedUser(req);
+    const user = actor?.kind === "USER" ? actor.user : null;
+    const scopes = actor == null ? [] : actor.kind === "USER" ? actor.scopes : actor.programKey.scopes;
 
     const { matched } = await handler.handle(req, reply, {
         prefix: "/api",
-        context: { req, user, scopes }
+        context: { req, actor, user, scopes }
     });
 
     if (!matched) {

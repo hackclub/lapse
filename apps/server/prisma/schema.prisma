@@ -76,6 +76,7 @@ model User {
   serviceClients        ServiceClient[]
   serviceClientReviews  ServiceClientReview[]
   legacyTimelapses      LegacyUnpublishedTimelapse[]
+  programKeysCreated    ProgramKey[]                 @relation("programKeysCreated")
 }
 
 /// Represents a timelapse created with a legacy version of Lapse. Such a timelapse is encrypted with a 6-digit passkey with a timelapse ID IV.
@@ -316,6 +317,66 @@ model ServiceGrant {
   lastUsedAt       DateTime?
 
   @@unique([serviceClientId, userId])
+}
+
+/// Represents a service-wide API key that allows trusted services to access platform data.
+/// Program keys are not user-scoped — they authenticate as the service itself.
+model ProgramKey {
+  /// Internal UUID primary key.
+  id                String      @id @default(uuid())
+
+  /// A human-readable name for this key (e.g., "Analytics Service", "CI Pipeline").
+  name              String
+
+  /// An scrypt hash of the program key, in the format "<16 byte salt>:<64 byte hash>".
+  keyHash           String
+
+  /// The first 8 hex characters after the `pk_lapse_` prefix, stored in plaintext for efficient lookup.
+  keyPrefix         String
+
+  /// The scopes granted to this program key (e.g., "program:read", "program:write", "program:admin").
+  scopes            String[]    @default([])
+
+  /// The ROOT user who created this key.
+  createdByUserId   String
+  createdByUser     User        @relation("programKeysCreated", fields: [createdByUserId], references: [id])
+
+  /// When this key was created.
+  createdAt         DateTime    @default(now())
+
+  /// When this key was last used to authenticate a request. `null` if never used.
+  lastUsedAt        DateTime?
+
+  /// When this key was revoked. `null` if active.
+  revokedAt         DateTime?
+
+  /// When this key expires. Required — max 1 year from creation.
+  expiresAt         DateTime
+
+  /// Audit trail entries for this key.
+  audits            ProgramKeyAudit[]
+}
+
+/// Audit log for program key lifecycle events and usage.
+model ProgramKeyAudit {
+  id              String      @id @default(uuid())
+
+  programKeyId    String
+  programKey      ProgramKey  @relation(fields: [programKeyId], references: [id])
+
+  /// The action performed: "created", "rotated", "revoked", or "used".
+  action          String
+
+  /// The endpoint that was accessed (only for "used" actions).
+  endpoint        String?
+
+  /// The IP address of the request.
+  ip              String?
+
+  /// The User-Agent of the request.
+  userAgent       String?
+
+  createdAt       DateTime    @default(now())
 }
 
 model ServiceClientReview {

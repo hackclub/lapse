@@ -3,7 +3,7 @@ import { deleteCookie } from "@orpc/server/helpers"
 import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS } from "@hackclub/lapse-api"
 import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
-import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
+import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
@@ -133,21 +133,38 @@ export default os.router({
             return apiOk({ user });
         }),
 
+    queryByEmail: os.queryByEmail
+        .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("user:read"))
+        .handler(async (req) => {
+            const user = await database().user.findFirst({
+                where: { email: req.input.email }
+            });
+
+            if (!user)
+                return apiOk({ user: null });
+
+            return apiOk({ user: dtoPublicUser(user) });
+        }),
+
     update: os.update
         .use(requiredAuth())
         .use(requiredScopes("user:write"))
         .handler(async (req) => {
-            const caller = req.context.user;
+            const actor = req.context.actor;
 
-            if (caller.permissionLevel === "USER" && caller.id !== req.input.id)
+            if (actor.kind == "USER" && actor.user.permissionLevel === "USER" && actor.user.id !== req.input.id)
                 return apiErr("NO_PERMISSION", "You can only edit your own profile");
 
-            if (req.input.changes.handle !== undefined) {
-                const user = await database().user.findFirst({
-                    where: { id: req.input.id }
-                });
+            const user = await database().user.findFirst({
+                where: { id: req.input.id }
+            });
 
-                if (user && user.lastHandleChangeAt) {
+            if (!user)
+                return apiErr("NOT_FOUND", "The given user could not be found.");
+
+            if (req.input.changes.handle !== undefined) {
+                if (user.lastHandleChangeAt) {
                     const timeSinceLastChange = Date.now() - user.lastHandleChangeAt.getTime();
                     if (timeSinceLastChange < HANDLE_CHANGE_COOLDOWN_MS) {
                         return apiErr("ERROR", `You can change your handle again in ${Math.ceil((HANDLE_CHANGE_COOLDOWN_MS - timeSinceLastChange) / (60 * 60 * 1000))} hours`);
@@ -175,6 +192,7 @@ export default os.router({
     getDevices: os.getDevices
         .use(requiredAuth())
         .use(requiredScopes("user:read"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -188,6 +206,7 @@ export default os.router({
     registerDevice: os.registerDevice
         .use(requiredAuth())
         .use(requiredScopes("user:write"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -204,6 +223,7 @@ export default os.router({
     removeDevice: os.removeDevice
         .use(requiredAuth())
         .use(requiredScopes("user:write"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -227,7 +247,7 @@ export default os.router({
 
             await Promise.all(
                 drafts.map(async (timelapse) => {
-                    await deleteDraftTimelapse(timelapse.id, caller);
+                    await deleteDraftTimelapse(timelapse.id, req.context.actor);
                 })
             );
 
@@ -253,6 +273,7 @@ export default os.router({
     hackatimeProjects: os.hackatimeProjects
         .use(requiredAuth())
         .use(requiredScopes("user:read"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -292,6 +313,7 @@ export default os.router({
     getTotalTimelapseTime: os.getTotalTimelapseTime
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -309,6 +331,7 @@ export default os.router({
     emitHeartbeat: os.emitHeartbeat
         .use(requiredAuth())
         .use(requiredScopes("user:write"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -323,6 +346,7 @@ export default os.router({
     requestKeyRelay: os.requestKeyRelay
         .use(requiredAuth())
         .use(requiredScopes("user:keyrelay"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -361,6 +385,7 @@ export default os.router({
     queryKeyRelayRequest: os.queryKeyRelayRequest
         .use(requiredAuth())
         .use(requiredScopes("user:keyrelay"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -387,6 +412,7 @@ export default os.router({
     provideKeyRelay: os.provideKeyRelay
         .use(requiredAuth())
         .use(requiredScopes("user:keyrelay"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -404,6 +430,7 @@ export default os.router({
     denyKeyRelay: os.denyKeyRelay
         .use(requiredAuth())
         .use(requiredScopes("user:keyrelay"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -418,6 +445,7 @@ export default os.router({
     receiveKeyRelay: os.receiveKeyRelay
         .use(requiredAuth())
         .use(requiredScopes("user:keyrelay"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 

@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import OAuth2Server from "@node-oauth/oauth2-server";
 import { assert } from "@hackclub/lapse-shared";
 import z from "zod";
@@ -11,8 +11,9 @@ import { env } from "@/env.js";
 import { logInfo, logWarning } from "@/logging.js";
 import type { FastifyRequest } from "fastify";
 import { getAllOAuthScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
+import type { ExternalActor, AuthenticatedProgramKey } from "@/ownership.js";
 
-function hashServiceSecret(secret: string): string {
+export function hashServiceSecret(secret: string): string {
     const salt = randomBytes(16).toString("hex");
     const hashed = scryptSync(secret, salt, 64).toString("hex");
     return `${salt}:${hashed}`;
@@ -24,6 +25,33 @@ export function generateServiceClientId() {
 
 export function generateServiceClientSecret() {
     return `scs_${randomBytes(24).toString("hex")}`;
+}
+
+const PROGRAM_KEY_PREFIX = "pk_lapse_";
+
+export function generateProgramKey() {
+    return `${PROGRAM_KEY_PREFIX}${randomBytes(32).toString("hex")}`;
+}
+
+/**
+ * Extracts the key prefix (first 8 hex chars after `pk_lapse_`) from a raw program key.
+ */
+export function extractProgramKeyPrefix(rawKey: string): string {
+    return rawKey.substring(PROGRAM_KEY_PREFIX.length, PROGRAM_KEY_PREFIX.length + 8);
+}
+
+/**
+ * Verifies a raw secret against a stored scrypt hash in `salt:hash` format.
+ */
+export function verifySecretHash(secret: string, storedHash: string): boolean {
+    const [salt, hash] = storedHash.split(":");
+    if (!salt || !hash) return false;
+
+    const computed = scryptSync(secret, salt, 64);
+    const stored = Buffer.from(hash, "hex");
+    if (computed.length !== stored.length) return false;
+
+    return timingSafeEqual(computed, stored);
 }
 
 export async function createServiceClient(params: {
@@ -392,14 +420,24 @@ export const oauthSrv = new OAuth2Server({
     accessTokenLifetime: 60 * 60 * 24 * 30, // 30d
 });
 
-export async function getAuthenticatedUser(req: FastifyRequest): Promise<{ user: db.User | null, scopes: LapseOAuthScope[] }> {
+export async function getAuthenticatedUser(req: FastifyRequest): Promise<ExternalActor | null> {
     if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer "))
-        return { user: null, scopes: [] };
+        return null;
 
-    const token = decodeAccessToken(req.headers.authorization.substring("Bearer ".length));
+    const bearerToken = req.headers.authorization.substring("Bearer ".length);
+
+    if (bearerToken.startsWith(PROGRAM_KEY_PREFIX)) {
+        const programKey = await authenticateProgramKey(bearerToken);
+        if (!programKey)
+            return null;
+        
+        return { kind: "PROGRAM", programKey };
+    }
+
+    const token = decodeAccessToken(bearerToken);
     if (token instanceof Error) {
         logWarning("Could not decode access token!", { error: token });
-        return { user: null, scopes: [] };
+        return null;
     }
 
     try {
@@ -407,19 +445,49 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<{ user:
             where: { id: token.sub }
         });
 
+        if (!user) return null;
+
         const allScopes = new Set(getAllOAuthScopes());
         if (!token.scp.every(x => allScopes.has(x as LapseOAuthScope))) {
             logWarning(`Unknown scopes present in access token; denying auth! All scopes: ${token.scp.join(", ")}`);
-            return { user: null, scopes: [] };
+            return null;
         }
 
-        return {
-            user,
-            scopes: token.scp as LapseOAuthScope[]
-        };
+        return { kind: "USER", user, scopes: token.scp as LapseOAuthScope[] };
     }
     catch (error) {
         logWarning(`Could not fetch user ${token.sub} (authenticated via client ${token.cid})!`, { error });
-        return { user: null, scopes: [] };
+        return null;
     }
+}
+
+async function authenticateProgramKey(bearerToken: string): Promise<AuthenticatedProgramKey | null> {
+    const prefix = extractProgramKeyPrefix(bearerToken);
+
+    const candidates = await database().programKey.findMany({
+        where: {
+            keyPrefix: prefix,
+            revokedAt: null,
+            expiresAt: { gt: new Date() }
+        }
+    });
+
+    for (const candidate of candidates) {
+        if (verifySecretHash(bearerToken, candidate.keyHash)) {
+            // Update lastUsedAt (fire-and-forget)
+            database().programKey.update({
+                where: { id: candidate.id },
+                data: { lastUsedAt: new Date() }
+            }).catch(() => {});
+
+            return {
+                id: candidate.id,
+                name: candidate.name,
+                scopes: candidate.scopes as LapseOAuthScope[]
+            };
+        }
+    }
+
+    logWarning(`Program key with prefix ${prefix} failed verification.`);
+    return null;
 }

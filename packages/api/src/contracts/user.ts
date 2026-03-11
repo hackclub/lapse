@@ -168,6 +168,21 @@ export const userRouterContract = {
             })
         ),
 
+    queryByEmail: contract("GET", "/user/queryByEmail")
+        .route({ description: "Finds a profile by its e-mail. Only administrators and program keys can call this endpoint." })
+        .input(
+            z.object({
+                email: z.email()
+                    .describe("The case-sensitive e-mail of the user to look up.")
+            })
+        )
+        .output(
+            apiResult({
+                user: PublicUserSchema.nullable()
+                    .describe("The found user. `null` if no user exists with that -email")
+            })
+        ),
+
     update: contract("PATCH", "/user/update")
         .route({ description: "Updates user profile information." })
         .input(
