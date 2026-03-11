@@ -110,6 +110,7 @@ export async function syncTimelapseWithHackatime(timelapse: db.Timelapse & { own
         time: x.getTime() / 1000,
         category: "timelapsing",
         type: "timelapse",
+        language: "Lapse",
         user_agent: "wakatime/lapse (lapse) lapse/2.0.0 lapse/2.0.0",
         project: timelapse.hackatimeProject!
     }));
