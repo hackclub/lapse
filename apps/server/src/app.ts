@@ -13,9 +13,9 @@ import dedent from "dedent";
 import { compositeRouterContract } from "@hackclub/lapse-api";
 import z from "zod";
 
-import { ensureCanonicalClient, getAuthenticatedUser, getAuthenticatedProgramKey } from "@/oauth.js"
+import { ensureCanonicalClient, getAuthenticatedUser } from "@/oauth.js"
 import { apiErr } from "@/common.js"
-import type { Context, ProgramKeyContext } from "@/router.js"
+import type { Context } from "@/router.js"
 import { database, initDatabase } from "@/db.js";
 import { env } from "@/env.js"
 import { logError } from "@/logging.js";
@@ -30,8 +30,6 @@ import global from "@/routers/global.js"
 import hackatime from "@/routers/hackatime.js"
 import auth from "@/routers/auth.js"
 import admin from "@/routers/admin.js"
-import programKey from "@/routers/programKey.js"
-import { programRouter } from "@/routers/program/index.js"
 
 const router = implement(compositeRouterContract)
     .$context<Context>()
@@ -45,7 +43,6 @@ const router = implement(compositeRouterContract)
         hackatime,
         auth,
         admin,
-        programKey
     });
 
 const handler = new OpenAPIHandler(
@@ -64,26 +61,6 @@ const handler = new OpenAPIHandler(
         plugins: [
             new ResponseHeadersPlugin(),
             new RequestHeadersPlugin<Context>(),
-        ]
-    }
-);
-
-const programHandler = new OpenAPIHandler(
-    programRouter,
-    {
-        interceptors: [
-            onError(err => {
-                if (err instanceof ORPCError && err.cause instanceof ValidationError) {
-                    logError(z.prettifyError(err.cause), { err, zodError: err.cause });
-                }
-                else {
-                    logError(`${err}`, { err });
-                }
-            })
-        ],
-        plugins: [
-            new ResponseHeadersPlugin(),
-            new RequestHeadersPlugin<ProgramKeyContext>(),
         ]
     }
 );
@@ -109,28 +86,17 @@ server.addContentTypeParser("*", (request, payload, done) => {
 });
 
 server.all("/api/*", async (req, reply) => {
-    const { user, scopes } = await getAuthenticatedUser(req);
+    const actor = await getAuthenticatedUser(req);
+    const user = actor?.kind === "USER" ? actor.user : null;
+    const scopes = actor?.scopes ?? [];
 
     const { matched } = await handler.handle(req, reply, {
         prefix: "/api",
-        context: { req, user, scopes }
+        context: { req, actor, user, scopes }
     });
 
     if (!matched) {
         reply.status(404).send(JSON.stringify(apiErr("NOT_FOUND", "No API route found")));
-    }
-});
-
-server.all("/program-api/*", async (req, reply) => {
-    const { programKey } = await getAuthenticatedProgramKey(req);
-
-    const { matched } = await programHandler.handle(req, reply, {
-        prefix: "/program-api",
-        context: { req, programKey }
-    });
-
-    if (!matched) {
-        reply.status(404).send(JSON.stringify(apiErr("NOT_FOUND", "No program API route found")));
     }
 });
 

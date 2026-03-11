@@ -71,7 +71,7 @@ export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
  * Converts a database representation of a timelapse to a runtime (API) one, including all private fields if the
  * `actor` is entitled to said fields.
  */
-export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Actor): Timelapse | OwnedTimelapse {
+export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Actor | null): Timelapse | OwnedTimelapse {
     if (actorEntitledTo(entity, actor)) {
         return dtoOwnedTimelapse(entity);
     }
@@ -126,7 +126,7 @@ export async function syncTimelapseWithHackatime(timelapse: db.Timelapse & { own
 /**
  * Permanently deletes a timelapse, including all its snapshots and S3 files.
  */
-export async function deleteTimelapse(timelapseId: string, actor: Actor): Promise<Result<void>> {
+export async function deleteTimelapse(timelapseId: string, actor: Actor | null): Promise<Result<void>> {
     const timelapse = await database().timelapse.findFirst({
         where: { id: timelapseId }
     });
@@ -134,16 +134,8 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
     if (!timelapse)
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
 
-    if (actor !== "SERVER") {
-        const canDelete =
-            actor && (
-                actor.id === timelapse.ownerId ||
-                actor.permissionLevel in oneOf("ADMIN", "ROOT")
-            );
-
-        if (!canDelete) {
-            return new Err("NO_PERMISSION", "You don't have permission to delete this timelapse");
-        }
+    if (!actorEntitledTo(timelapse, actor)) {
+        return new Err("NO_PERMISSION", "You don't have permission to delete this timelapse");
     }
 
     // Scary stuff ahead! If we mess this up, we permanently lose data. We don't want that!
@@ -172,7 +164,7 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor): Promis
 /**
  * Finds a timelapse by its ID.
  */
-export async function getTimelapseById(id: string, actor: Actor): Promise<Result<Timelapse | OwnedTimelapse>> {
+export async function getTimelapseById(id: string, actor: Actor | null): Promise<Result<Timelapse | OwnedTimelapse>> {
     const timelapse = await database().timelapse.findFirst({
         where: { id },
         include: TIMELAPSE_INCLUDES
@@ -230,9 +222,7 @@ export const TIMELAPSE_INCLUDES = {
 export default os.router({
     query: os.query
         .handler(async (req) => {
-            const caller = req.context.user;
-
-            const timelapse = await getTimelapseById(req.input.id, caller);
+            const timelapse = await getTimelapseById(req.input.id, req.context.actor);
             if (timelapse instanceof Err)
                 return timelapse.toApiError();
 
@@ -379,9 +369,7 @@ export default os.router({
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
-            const caller = req.context.user;
-
-            const res = await deleteTimelapse(req.input.id, caller);
+            const res = await deleteTimelapse(req.input.id, req.context.actor);
             if (res instanceof Err)
                 return res.toApiError();
 
@@ -391,10 +379,12 @@ export default os.router({
     findByUser: os.findByUser
         .handler(async (req) => {
             const caller = req.context.user;
+            const actor = req.context.actor;
 
             const isEntitled = (
                 (caller && caller.id === req.input.user) || // viewing self
-                (caller && (caller.permissionLevel in oneOf("ADMIN", "ROOT"))) // caller is admin
+                (caller && (caller.permissionLevel in oneOf("ADMIN", "ROOT"))) || // caller is admin
+                actor?.kind === "PROGRAM" // program keys can always view
             );
 
             const timelapses = await database().timelapse.findMany({
@@ -407,7 +397,7 @@ export default os.router({
                 }
             });
 
-            return apiOk({ timelapses: timelapses.map(x => dtoTimelapse(x, caller)) });
+            return apiOk({ timelapses: timelapses.map(x => dtoTimelapse(x, actor)) });
         }),
 
     myPublishedTimelapses: os.myPublishedTimelapses

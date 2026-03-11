@@ -1,8 +1,25 @@
 import { z } from "zod";
 
 import { apiResult, LapseId, LapseDate, createResultSchema } from "@/common";
-import { contract, NO_INPUT } from "@/internal";
+import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
 import { PermissionLevelSchema } from "@/contracts/user";
+
+export type ProgramKeyMetadata = z.infer<typeof ProgramKeyMetadataSchema>;
+export const ProgramKeyMetadataSchema = z.object({
+    id: z.uuid(),
+    name: z.string().min(1).max(64),
+    keyPrefix: z.string(),
+    scopes: z.array(z.string()),
+    createdBy: z.object({
+        id: z.string(),
+        handle: z.string(),
+        displayName: z.string(),
+    }),
+    createdAt: z.string(),
+    lastUsedAt: z.string().nullable(),
+    revokedAt: z.string().nullable(),
+    expiresAt: z.string(),
+});
 
 export type AdminEntity = z.infer<typeof AdminEntitySchema>;
 export const AdminEntitySchema = z.enum(["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse"]);
@@ -212,5 +229,88 @@ export const adminRouterContract = {
     search: contract("POST", "/admin/search")
         .route({ description: "Fuzzy search across all entities. Requires administrator permissions and an `elevated` grant." })
         .input(AdminSearchInputSchema)
-        .output(createResultSchema(AdminSearchOutputSchema))
+        .output(createResultSchema(AdminSearchOutputSchema)),
+
+    programKey: {
+        create: contract()
+            .route({ description: "Creates a new program key. The raw key is only returned with this response or when rotating. Requires ROOT access." })
+            .input(
+                z.object({
+                    name: z.string().min(1).max(64)
+                        .describe("A human-readable name for the key."),
+
+                    scopes: z.array(z.string())
+                        .describe("The scopes to grant to this key."),
+
+                    expiresAt: z.number()
+                        .describe("Expiration timestamp in milliseconds since Unix epoch. Must be within 1 year from now."),
+                })
+            )
+            .output(
+                apiResult({
+                    key: ProgramKeyMetadataSchema
+                        .describe("The created program key metadata."),
+
+                    rawKey: z.string()
+                        .describe("The raw program key — this will only be shown once."),
+                })
+            ),
+
+        list: contract()
+            .route({ description: "Lists all program keys. Requires ROOT access." })
+            .input(NO_INPUT)
+            .output(
+                apiResult({
+                    keys: z.array(ProgramKeyMetadataSchema),
+                })
+            ),
+
+        rotate: contract()
+            .route({ description: "Rotates a program key, generating a new raw key. The old key is immediately invalidated. Requires ROOT access." })
+            .input(
+                z.object({
+                    id: z.uuid()
+                        .describe("The ID of the program key to rotate."),
+                })
+            )
+            .output(
+                apiResult({
+                    key: ProgramKeyMetadataSchema
+                        .describe("The updated program key metadata."),
+
+                    rawKey: z.string()
+                        .describe("The new raw program key — this will only be shown once."),
+                })
+            ),
+
+        revoke: contract()
+            .route({ description: "Revokes a program key, permanently disabling it. Requires ROOT access." })
+            .input(
+                z.object({
+                    id: z.uuid()
+                        .describe("The ID of the program key to revoke."),
+                })
+            )
+            .output(NO_OUTPUT),
+
+        update: contract()
+            .route({ description: "Updates the name and/or scopes of an existing program key. Requires ROOT access." })
+            .input(
+                z.object({
+                    id: z.uuid()
+                        .describe("The ID of the program key to update."),
+
+                    name: z.string().min(1).max(64).optional()
+                        .describe("The new name for this key."),
+                        
+                    scopes: z.array(z.string()).optional()
+                        .describe("The new set of scopes for this key."),
+                })
+            )
+            .output(
+                apiResult({
+                    key: ProgramKeyMetadataSchema,
+                })
+            ),
+    }
 };

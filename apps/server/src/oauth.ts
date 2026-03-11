@@ -10,7 +10,8 @@ import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
 import { logInfo, logWarning } from "@/logging.js";
 import type { FastifyRequest } from "fastify";
-import { getAllOAuthScopes, type LapseOAuthScope, type LapseProgramScope } from "@hackclub/lapse-api";
+import { getAllOAuthScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
+import type { ExternalActor, AuthenticatedProgramKey } from "@/ownership.js";
 
 export function hashServiceSecret(secret: string): string {
     const salt = randomBytes(16).toString("hex");
@@ -419,20 +420,22 @@ export const oauthSrv = new OAuth2Server({
     accessTokenLifetime: 60 * 60 * 24 * 30, // 30d
 });
 
-export async function getAuthenticatedUser(req: FastifyRequest): Promise<{ user: db.User | null, scopes: LapseOAuthScope[] }> {
+export async function getAuthenticatedUser(req: FastifyRequest): Promise<ExternalActor | null> {
     if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer "))
-        return { user: null, scopes: [] };
+        return null;
 
     const bearerToken = req.headers.authorization.substring("Bearer ".length);
 
-    // Program keys use a different auth path — skip JWT decoding for them
-    if (bearerToken.startsWith(PROGRAM_KEY_PREFIX))
-        return { user: null, scopes: [] };
+    if (bearerToken.startsWith(PROGRAM_KEY_PREFIX)) {
+        const programKey = await authenticateProgramKey(bearerToken);
+        if (!programKey) return null;
+        return { kind: "PROGRAM", programKey };
+    }
 
     const token = decodeAccessToken(bearerToken);
     if (token instanceof Error) {
         logWarning("Could not decode access token!", { error: token });
-        return { user: null, scopes: [] };
+        return null;
     }
 
     try {
@@ -440,38 +443,23 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<{ user:
             where: { id: token.sub }
         });
 
+        if (!user) return null;
+
         const allScopes = new Set(getAllOAuthScopes());
         if (!token.scp.every(x => allScopes.has(x as LapseOAuthScope))) {
             logWarning(`Unknown scopes present in access token; denying auth! All scopes: ${token.scp.join(", ")}`);
-            return { user: null, scopes: [] };
+            return null;
         }
 
-        return {
-            user,
-            scopes: token.scp as LapseOAuthScope[]
-        };
+        return { kind: "USER", user, scopes: token.scp as LapseOAuthScope[] };
     }
     catch (error) {
         logWarning(`Could not fetch user ${token.sub} (authenticated via client ${token.cid})!`, { error });
-        return { user: null, scopes: [] };
+        return null;
     }
 }
 
-export type AuthenticatedProgramKey = {
-    id: string;
-    name: string;
-    scopes: LapseProgramScope[];
-};
-
-export async function getAuthenticatedProgramKey(req: FastifyRequest): Promise<{ programKey: AuthenticatedProgramKey | null }> {
-    if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer "))
-        return { programKey: null };
-
-    const bearerToken = req.headers.authorization.substring("Bearer ".length);
-
-    if (!bearerToken.startsWith(PROGRAM_KEY_PREFIX))
-        return { programKey: null };
-
+async function authenticateProgramKey(bearerToken: string): Promise<AuthenticatedProgramKey | null> {
     const prefix = extractProgramKeyPrefix(bearerToken);
 
     const candidates = await database().programKey.findMany({
@@ -491,15 +479,13 @@ export async function getAuthenticatedProgramKey(req: FastifyRequest): Promise<{
             }).catch(() => {});
 
             return {
-                programKey: {
-                    id: candidate.id,
-                    name: candidate.name,
-                    scopes: candidate.scopes as LapseProgramScope[]
-                }
+                id: candidate.id,
+                name: candidate.name,
+                scopes: candidate.scopes as LapseOAuthScope[]
             };
         }
     }
 
     logWarning(`Program key with prefix ${prefix} failed verification.`);
-    return { programKey: null };
+    return null;
 }

@@ -4,7 +4,7 @@ import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import { formatDuration, match } from "@hackclub/lapse-shared";
-import { ADMIN_ENTITY_FIELDS, OAUTH_SCOPE_GROUPS, PROGRAM_SCOPE_GROUPS, type AdminEntity, type AdminFilter, type AdminSort, type AdminSearchResult, type OAuthApp, type OAuthTrustLevel, type ProgramKeyMetadata } from "@hackclub/lapse-api";
+import { ADMIN_ENTITY_FIELDS, OAUTH_SCOPE_GROUPS, type AdminEntity, type AdminFilter, type AdminSort, type AdminSearchResult, type OAuthApp, type OAuthTrustLevel, type ProgramKeyMetadata } from "@hackclub/lapse-api";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
@@ -432,7 +432,8 @@ function AdminProgramKeysTable() {
 
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [rotateId, setRotateId] = useState<string | null>(null);
-  const [editScopesKey, setEditScopesKey] = useState<ProgramKeyMetadata | null>(null);
+  const [editKey, setEditKey] = useState<ProgramKeyMetadata | null>(null);
+  const [editName, setEditName] = useState("");
   const [editScopes, setEditScopes] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -441,7 +442,7 @@ function AdminProgramKeysTable() {
     setError(null);
 
     try {
-      const res = await api.programKey.list({});
+      const res = await api.admin.programKey.list({});
       if (!res.ok) {
         setError(res.message ?? "Unable to load program keys.");
         return;
@@ -474,7 +475,7 @@ function AdminProgramKeysTable() {
 
       const expiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
 
-      const res = await api.programKey.create({
+      const res = await api.admin.programKey.create({
         name: createName,
         scopes: createScopes,
         expiresAt
@@ -506,7 +507,7 @@ function AdminProgramKeysTable() {
     setIsSaving(true);
 
     try {
-      const res = await api.programKey.revoke({ id: revokeId });
+      const res = await api.admin.programKey.revoke({ id: revokeId });
       if (!res.ok) {
         setError(res.message ?? "Failed to revoke key.");
         return;
@@ -528,7 +529,7 @@ function AdminProgramKeysTable() {
     setIsSaving(true);
 
     try {
-      const res = await api.programKey.rotate({ id: rotateId });
+      const res = await api.admin.programKey.rotate({ id: rotateId });
       if (!res.ok) {
         setError(res.message ?? "Failed to rotate key.");
         return;
@@ -546,22 +547,22 @@ function AdminProgramKeysTable() {
     }
   }
 
-  async function handleUpdateScopes() {
-    if (!editScopesKey) return;
+  async function handleUpdate() {
+    if (!editKey) return;
     setIsSaving(true);
 
     try {
-      const res = await api.programKey.updateScopes({ id: editScopesKey.id, scopes: editScopes });
+      const res = await api.admin.programKey.update({ id: editKey.id, name: editName, scopes: editScopes });
       if (!res.ok) {
-        setError(res.message ?? "Failed to update scopes.");
+        setError(res.message ?? "Failed to update key.");
         return;
       }
-      setKeys(prev => prev.map(k => k.id === editScopesKey.id ? res.data.key : k));
-      setEditScopesKey(null);
+      setKeys(prev => prev.map(k => k.id === editKey.id ? res.data.key : k));
+      setEditKey(null);
     }
     catch (err) {
-      console.error("(admin/programKeys) failed to update scopes", err);
-      setError("Failed to update scopes.");
+      console.error("(admin/programKeys) failed to update", err);
+      setError("Failed to update key.");
     }
     finally {
       setIsSaving(false);
@@ -606,7 +607,7 @@ function AdminProgramKeysTable() {
           <AdminFieldRow label="Scopes" align="start">
             <div className="rounded-xl border border-slate bg-dark p-4">
               <div className="grid gap-4">
-                {Object.entries(PROGRAM_SCOPE_GROUPS).map(([group, scopes]) => (
+                {Object.entries(OAUTH_SCOPE_GROUPS).map(([group, scopes]) => (
                   <div key={group} className="grid gap-2">
                     <span className="text-sm font-semibold text-white">{group}</span>
                     <div className="grid gap-2">
@@ -668,42 +669,49 @@ function AdminProgramKeysTable() {
         </ModalContent>
       </Modal>
 
-      {/* Update Scopes Modal */}
-      <Modal isOpen={!!editScopesKey} size="REGULAR">
+      {/* Edit Key Modal */}
+      <Modal isOpen={!!editKey} size="REGULAR">
         <ModalHeader
-          title="Update Scopes"
-          description={editScopesKey ? `Editing scopes for "${editScopesKey.name}"` : ""}
+          title="Edit Program Key"
+          description={editKey ? `Editing "${editKey.name}"` : ""}
           showCloseButton
-          onClose={() => setEditScopesKey(null)}
+          onClose={() => setEditKey(null)}
           icon="settings"
         />
         <ModalContent className="gap-4 text-base">
-          <div className="rounded-xl border border-slate bg-dark p-4">
-            <div className="grid gap-4">
-              {Object.entries(PROGRAM_SCOPE_GROUPS).map(([group, scopes]) => (
-                <div key={group} className="grid gap-2">
-                  <span className="text-sm font-semibold text-white">{group}</span>
-                  <div className="grid gap-2">
-                    {Object.entries(scopes).map(([scope, description]) => (
-                      <label key={scope} className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editScopes.includes(scope)}
-                          onChange={() => toggleEditScope(scope)}
-                          className="mt-1"
-                        />
-                        <span className="flex flex-col">
-                          <span className="text-sm text-white">{scope}</span>
-                          <span className="text-sm text-muted">{description}</span>
-                        </span>
-                      </label>
-                    ))}
+          <AdminFieldRow label="Name">
+            <TextInput value={editName} onChange={setEditName} placeholder="e.g. Analytics Service" />
+          </AdminFieldRow>
+
+          <AdminFieldRow label="Scopes" align="start">
+            <div className="rounded-xl border border-slate bg-dark p-4">
+              <div className="grid gap-4">
+                {Object.entries(OAUTH_SCOPE_GROUPS).map(([group, scopes]) => (
+                  <div key={group} className="grid gap-2">
+                    <span className="text-sm font-semibold text-white">{group}</span>
+                    <div className="grid gap-2">
+                      {Object.entries(scopes).map(([scope, description]) => (
+                        <label key={scope} className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editScopes.includes(scope)}
+                            onChange={() => toggleEditScope(scope)}
+                            className="mt-1"
+                          />
+                          <span className="flex flex-col">
+                            <span className="text-sm text-white">{scope}</span>
+                            <span className="text-sm text-muted">{description}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-          <ModalActions isSaving={isSaving} onClose={() => setEditScopesKey(null)} onSave={handleUpdateScopes} />
+          </AdminFieldRow>
+
+          <ModalActions isSaving={isSaving} onClose={() => setEditKey(null)} onSave={handleUpdate} />
         </ModalContent>
       </Modal>
 
@@ -787,10 +795,10 @@ function AdminProgramKeysTable() {
                       {!key.revokedAt && (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => { setEditScopesKey(key); setEditScopes([...key.scopes]); }}
+                            onClick={() => { setEditKey(key); setEditName(key.name); setEditScopes([...key.scopes]); }}
                             className="text-sm text-muted hover:text-white transition-colors cursor-pointer"
                           >
-                            Scopes
+                            Edit
                           </button>
                           <button
                             onClick={() => setRotateId(key.id)}

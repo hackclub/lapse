@@ -1,11 +1,11 @@
 import type { FastifyRequest } from "fastify";
 import { ORPCError, os } from "@orpc/server";
-import { permissionLevelOrdinal, type LapseOAuthScope, type LapseProgramScope, type PermissionLevel, type User } from "@hackclub/lapse-api";
+import { permissionLevelOrdinal, type LapseOAuthScope, type PermissionLevel } from "@hackclub/lapse-api";
 import type { RequestHeadersPluginContext, ResponseHeadersPluginContext } from "@orpc/server/plugins";
 
-import * as db from "@/generated/prisma/client.js";
+import type * as db from "@/generated/prisma/client.js";
 
-import type { AuthenticatedProgramKey } from "@/oauth.js";
+import type { ExternalActor, UserActor } from "@/ownership.js";
 import { logRequest } from "@/logging.js";
 
 /**
@@ -15,16 +15,31 @@ export interface Context extends
     ResponseHeadersPluginContext, // resHeaders
     RequestHeadersPluginContext // reqHeaders
 {
-    user: db.User | null;
-    scopes: LapseOAuthScope[];
     req: FastifyRequest;
+    
+    /**
+     * The actor that is making the API request. `null` if the request is unauthenticated.
+     */
+    actor: ExternalActor | null;
+
+    /** 
+     * **Extracted from `actor`.** The authenticated user, or `null` if the actor is a program key or unauthenticated.
+     */
+    user: db.User | null;
+
+    /**
+     * **Extracted from `scopes`.** The scopes granted to the authenticated actor, or [] if unauthenticated.
+     */
+    scopes: LapseOAuthScope[];
 }
 
 /**
  * Same as `Context`, but specifies that a user *must* be authenticated.
  */
 export interface ProtectedContext extends Context {
+    actor: UserActor;
     user: db.User;
+    scopes: LapseOAuthScope[];
 }
 
 /**
@@ -52,18 +67,18 @@ export function requiredAuth(minimumLevel?: PermissionLevel) {
     return os
         .$context<Context>()
         .middleware(async ({ context, next }) => {
-            const { req, user, scopes } = context;
+            const actor = context.actor;
 
             if (
-                !user ||
-                ( minimumLevel && (permissionLevelOrdinal(user.permissionLevel) < permissionLevelOrdinal(minimumLevel)) )
+                !actor ||
+                actor.kind !== "USER" ||
+                ( minimumLevel && (permissionLevelOrdinal(actor.user.permissionLevel) < permissionLevelOrdinal(minimumLevel)) )
             ) {
                 throw new ORPCError("UNAUTHORIZED");
             }
-            
 
             return next<ProtectedContext>({
-                context: { req, user, scopes }
+                context: { ...context, actor, user: actor.user, scopes: actor.scopes }
             });
         });
 }
@@ -83,77 +98,6 @@ export function requiredScopes(...scopes: LapseOAuthScope[]) {
                             message: `Missing required scope "${scope}".`
                         });
                 }
-            }
-
-            return next({ context });
-        });
-}
-
-/**
- * Represents server-side information about an incoming program API request,
- * authenticated via a program key rather than a user token.
- */
-export interface ProgramKeyContext extends
-    ResponseHeadersPluginContext,
-    RequestHeadersPluginContext
-{
-    programKey: AuthenticatedProgramKey | null;
-    req: FastifyRequest;
-}
-
-/**
- * Same as `ProgramKeyContext`, but specifies that a program key *must* be present.
- */
-export interface ProtectedProgramKeyContext extends ProgramKeyContext {
-    programKey: AuthenticatedProgramKey;
-}
-
-/**
- * Logs each oRPC request for the program API.
- */
-export const programLogMiddleware = os
-    .$context<ProgramKeyContext>()
-    .middleware(async ({ context, next }, input) => {
-        if (
-            typeof input === "object" && input != null &&
-            ("body" in input && "headers" in input)
-        ) {
-            input = input["body"];
-        }
-
-        logRequest(context.req.url.split("?")[0], input, null);
-        return next({ context });
-    });
-
-/**
- * An oRPC middleware that ensures a valid program key is present on the request.
- */
-export function requiredProgramKey() {
-    return os
-        .$context<ProgramKeyContext>()
-        .middleware(async ({ context, next }) => {
-            if (!context.programKey)
-                throw new ORPCError("UNAUTHORIZED");
-
-            return next<ProtectedProgramKeyContext>({
-                context: { ...context, programKey: context.programKey }
-            });
-        });
-}
-
-/**
- * An oRPC middleware that checks whether the authenticated program key has the required scopes.
- * Intended to be used after `requiredProgramKey`.
- */
-export function requiredProgramScopes(...scopes: LapseProgramScope[]) {
-    return os
-        .$context<ProtectedProgramKeyContext>()
-        .middleware(async ({ context, next }) => {
-            for (const scope of scopes) {
-                if (!context.programKey.scopes.includes(scope))
-                    throw new ORPCError("UNAUTHORIZED", {
-                        message: `Missing required program scope "${scope}".`
-                    });
             }
 
             return next({ context });

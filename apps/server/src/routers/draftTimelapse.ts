@@ -62,7 +62,7 @@ export function dtoLegacyUnpublishedTimelapse(entity: db.LegacyUnpublishedTimela
 /**
  * Deletes a draft timelapse alongside all of its associated S3 resources. Does *not* delete any other database object.
  */
-export async function deleteDraftTimelapse(id: string, actor: Actor): Promise<Err | void> {
+export async function deleteDraftTimelapse(id: string, actor: Actor | null): Promise<Err | void> {
     logInfo(`Deleting draft timelapse ${id} (action triggered by ${stringifyActor(actor)})`);
     const draft = await database().draftTimelapse.findFirst({
         where: { id }
@@ -104,14 +104,12 @@ export default os.router({
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
-            const caller = req.context.user;
-
             const draft = await database().draftTimelapse.findFirst({
                 include: { owner: true },
                 where: { id: req.input.id }
             });
 
-            if (!draft || !actorEntitledTo(draft, caller))
+            if (!draft || !actorEntitledTo(draft, req.context.actor))
                 return apiErr("NOT_FOUND", "The requested draft timelapse doesn't exist.");
 
             return apiOk({ timelapse: dtoDraftTimelapse(draft) });
