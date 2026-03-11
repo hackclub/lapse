@@ -306,8 +306,11 @@ export default os.router({
                 // Generally, e-mails should be avoided as they can expose real/dead names.
                 let baseHandle = slack ? slack.profile.display_name : hktUser.emails[0].split("@")[0];
                 baseHandle = baseHandle.toLowerCase().replace(/[^a-z0-9]/g, "")
-                    .slice(0, MAX_HANDLE_LENGTH)
-                    .padEnd(MIN_HANDLE_LENGTH);
+                    .slice(0, MAX_HANDLE_LENGTH);
+
+                if (baseHandle.length < MIN_HANDLE_LENGTH) {
+                    baseHandle = baseHandle.padEnd(MIN_HANDLE_LENGTH, "0");
+                }
 
                 let handle = baseHandle;
                 let increment = 1;
