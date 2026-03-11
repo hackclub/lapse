@@ -51,7 +51,7 @@ realizeEvents.waitUntilReady()
 
             if (draft) {
                 // We're doing a complete delete of the draft timelapse - alongside the now consumed encrypted S3 objects.
-                const err = await deleteDraftTimelapse(draft.id, "SERVER");
+                const err = await deleteDraftTimelapse(draft.id, { kind: "SERVER" });
                 if (err) {
                     logWarning(`Could not delete draft timelapse ${draft.id} when publishing ${timelapseId}! ${err.message}`);
                 }

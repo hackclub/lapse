@@ -2,13 +2,14 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { hackatimeRouterContract } from "@hackclub/lapse-api";
 
-import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
 import { dtoOwnedTimelapse, dtoTimelapse, TIMELAPSE_INCLUDES } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
 import { apiErr } from "@/common.js";
 import { HackatimeOAuthApi } from "@/hackatime.js";
+import { maybe } from "@hackclub/lapse-shared";
 
 const os = implement(hackatimeRouterContract)
     .$context<Context>()
@@ -18,6 +19,7 @@ export default os.router({
     allProjects: os.allProjects
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -59,6 +61,7 @@ export default os.router({
     myTimelapsesForProject: os.myTimelapsesForProject
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -82,7 +85,7 @@ export default os.router({
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
-            const caller = req.context.user;
+            const actor = req.context.actor;
 
             const subject = await database().user.findFirst({
                 where: {
@@ -98,13 +101,19 @@ export default os.router({
                 orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: subject.id,
-                    hackatimeProject: req.input.projectKey
+                    hackatimeProject: req.input.projectKey,
+                    visibility: {
+                        in: [
+                            "PUBLIC",
+                            ...maybe("UNLISTED" as const, actor.kind == "PROGRAM" || actor.user.id == subject.id)
+                        ]
+                    }
                 }
             });
 
             return apiOk({
                 count: timelapses.length,
-                timelapses: timelapses.map(x => dtoTimelapse(x, caller))
+                timelapses: timelapses.map(x => dtoTimelapse(x, req.context.actor))
             });
         }),
 });

@@ -428,7 +428,9 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<Externa
 
     if (bearerToken.startsWith(PROGRAM_KEY_PREFIX)) {
         const programKey = await authenticateProgramKey(bearerToken);
-        if (!programKey) return null;
+        if (!programKey)
+            return null;
+        
         return { kind: "PROGRAM", programKey };
     }
 

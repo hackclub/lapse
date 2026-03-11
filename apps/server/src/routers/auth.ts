@@ -1,18 +1,16 @@
 import { z } from "zod";
 import { implement, ORPCError } from "@orpc/server";
-import { authRouterContract, MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH, type LapseOAuthScope, type OAuthErrorCode } from "@hackclub/lapse-api";
+import { authRouterContract, MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH, type OAuthErrorCode } from "@hackclub/lapse-api";
 import { createHash, randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
 import OAuth2Server from "@node-oauth/oauth2-server";
+import { deleteCookie, getCookie, setCookie } from "@orpc/server/helpers";
+import { arraysEqual } from "@hackclub/lapse-shared";
 
-import * as db from "@/generated/prisma/client.js";
-
-import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
-import { deleteCookie, getCookie, setCookie } from "@orpc/server/helpers";
 import { logError, logInfo, logWarning } from "@/logging.js";
-import { arraysEqual } from "@hackclub/lapse-shared";
 import { HackatimeOAuthApi } from "@/hackatime.js";
 import { slackQueryProfile } from "@/slack.js";
 import { oauthSrv } from "@/oauth.js";
@@ -180,6 +178,7 @@ export default os.router({
     grantConsent: os.grantConsent
         .use(requiredAuth())
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             return {
                 token: createConsentToken({

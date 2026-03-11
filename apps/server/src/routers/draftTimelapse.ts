@@ -6,7 +6,7 @@ import { oneOf, range, toHex } from "@hackclub/lapse-shared";
 
 import * as db from "@/generated/prisma/client.js";
 import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse, type LegacyUnpublishedTimelapse } from "@hackclub/lapse-api";
-import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
 
@@ -119,9 +119,9 @@ export default os.router({
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
-            const caller = req.context.user;
+            const actor = req.context.actor;
 
-            if (caller.id != req.input.user && !(caller.permissionLevel in oneOf("ADMIN", "ROOT")))
+            if (actor.kind == "USER" && (actor.user.id != req.input.user && !(actor.user.permissionLevel in oneOf("ADMIN", "ROOT"))))
                 return apiErr("NO_PERMISSION", "You may only query draft timelapses for yourself.");
 
             const drafts = await database().draftTimelapse.findMany({
@@ -136,6 +136,7 @@ export default os.router({
     create: os.create
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             const id = lapseId();
@@ -191,7 +192,7 @@ export default os.router({
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
-            const caller = req.context.user;
+            const actor = req.context.actor;
 
             const draft = await database().draftTimelapse.findFirst({
                 where: { id: req.input.id },
@@ -200,9 +201,11 @@ export default os.router({
             if (!draft)
                 return apiErr("NOT_FOUND", "Couldn't find that draft timelapse!");
 
-            const canEdit =
-                caller.id === draft.ownerId ||
-                caller.permissionLevel in oneOf("ADMIN", "ROOT");
+            const canEdit = actor.kind == "PROGRAM" || (
+                actor.user.id === draft.ownerId ||
+                actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
+            );
+
 
             if (!canEdit)
                 return apiErr("NO_PERMISSION", "You don't have permission to edit this draft timelapse!");
@@ -222,7 +225,7 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const res = await deleteDraftTimelapse(req.input.id, caller);
+            const res = await deleteDraftTimelapse(req.input.id, req.context.actor);
             if (res instanceof Err)
                 return res.toApiError();
 
@@ -232,6 +235,7 @@ export default os.router({
     legacy: os.legacy
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -248,6 +252,7 @@ export default os.router({
     markAsMigrated: os.markAsMigrated
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 

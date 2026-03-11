@@ -62,11 +62,9 @@ export function actorIsProgram(actor: Actor): actor is ProgramActor {
 }
 
 /**
- * Represents any object with an `ownerId` field.
+ * Represents any object with an `ownerId` or `authorId` field.
  */
-export interface OwnedObject {
-    ownerId: string;
-}
+export type OwnedObject = { ownerId: string; } | { authorId: string; };
 
 /**
  * Returns `true` if the actor is entitled to elevated access to the given `entity`.
@@ -80,7 +78,7 @@ export function actorEntitledTo(entity: OwnedObject, actor: Actor | null): boole
         return true;
 
     return (
-        actor.user.id === entity.ownerId ||
+        actor.user.id === ("ownerId" in entity ? entity.ownerId : entity.authorId) ||
         actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
     );
 }

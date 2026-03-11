@@ -88,7 +88,7 @@ server.addContentTypeParser("*", (request, payload, done) => {
 server.all("/api/*", async (req, reply) => {
     const actor = await getAuthenticatedUser(req);
     const user = actor?.kind === "USER" ? actor.user : null;
-    const scopes = actor?.scopes ?? [];
+    const scopes = actor == null ? [] : actor.kind === "USER" ? actor.scopes : actor.programKey.scopes;
 
     const { matched } = await handler.handle(req, reply, {
         prefix: "/api",

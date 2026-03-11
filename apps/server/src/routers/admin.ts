@@ -2,7 +2,7 @@ import { implement } from "@orpc/server";
 import { adminRouterContract, ADMIN_ENTITY_FIELDS, getAllOAuthScopes, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLegacyTimelapseRow, type ProgramKeyMetadata } from "@hackclub/lapse-api";
 import { match } from "@hackclub/lapse-shared";
 
-import { type Context, logMiddleware, requiredAuth, requiredScopes } from "@/router.js";
+import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
@@ -461,6 +461,7 @@ export default os.router({
     update: os.update
         .use(requiredAuth("ADMIN"))
         .use(requiredScopes("elevated"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             const { entity, id, changes } = req.input;
@@ -494,6 +495,7 @@ export default os.router({
         create: os.programKey.create
             .use(requiredAuth("ROOT"))
             .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { name, scopes, expiresAt } = req.input;
@@ -552,6 +554,7 @@ export default os.router({
         rotate: os.programKey.rotate
             .use(requiredAuth("ROOT"))
             .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { id } = req.input;
@@ -588,6 +591,7 @@ export default os.router({
         revoke: os.programKey.revoke
             .use(requiredAuth("ROOT"))
             .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { id } = req.input;
@@ -616,6 +620,7 @@ export default os.router({
         update: os.programKey.update
             .use(requiredAuth("ROOT"))
             .use(requiredScopes("elevated"))
+            .use(requiredImplicitUser())
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { id, name, scopes } = req.input;

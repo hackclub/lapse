@@ -5,7 +5,7 @@ import { oneOf } from "@hackclub/lapse-shared";
 import { EditListEntrySchema, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
-import { logMiddleware, requiredAuth, requiredScopes, type Context } from "@/router.js";
+import { logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes, type Context } from "@/router.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
@@ -232,6 +232,7 @@ export default os.router({
     publish: os.publish
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -324,7 +325,7 @@ export default os.router({
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
         .handler(async (req) => {
-            const caller = req.context.user;
+            const actor = req.context.actor;
 
             const timelapse = await database().timelapse.findFirst({
                 where: { id: req.input.id }
@@ -333,9 +334,10 @@ export default os.router({
             if (!timelapse)
                 return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
 
-            const canEdit =
-                caller.id === timelapse.ownerId ||
-                caller.permissionLevel in oneOf("ADMIN", "ROOT");
+            const canEdit = actor.kind == "PROGRAM" || (
+                actor.user.id === timelapse.ownerId ||
+                actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
+            );
 
             if (!canEdit)
                 return apiErr("NOT_FOUND", "You don't have permission to edit this timelapse");
@@ -403,6 +405,7 @@ export default os.router({
     myPublishedTimelapses: os.myPublishedTimelapses
         .use(requiredAuth())
         .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
             const limit = req.input.limit;
@@ -433,6 +436,7 @@ export default os.router({
     syncWithHackatime: os.syncWithHackatime
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -466,6 +470,6 @@ export default os.router({
                 include: TIMELAPSE_INCLUDES
             });
 
-            return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, caller) });
+            return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
         })
 });
