@@ -133,6 +133,20 @@ export default os.router({
             return apiOk({ user });
         }),
 
+    queryByEmail: os.queryByEmail
+        .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("user:read"))
+        .handler(async (req) => {
+            const user = await database().user.findFirst({
+                where: { email: req.input.email }
+            });
+
+            if (!user)
+                return apiOk({ user: null });
+
+            return apiOk({ user: dtoPublicUser(user) });
+        }),
+
     update: os.update
         .use(requiredAuth())
         .use(requiredScopes("user:write"))
