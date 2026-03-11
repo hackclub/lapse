@@ -67,7 +67,7 @@ export default os.router({
             if (!comment)
                 return apiErr("NOT_FOUND", "Comment not found.");
 
-            if (actorEntitledTo(comment, req.context.actor))
+            if (!actorEntitledTo(comment, req.context.actor))
                 return apiErr("NO_PERMISSION", "You can only delete your own comments.");
 
             await database().comment.delete({
