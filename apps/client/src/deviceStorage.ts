@@ -1,5 +1,6 @@
 import * as v from "valibot";
 import { hasLegacyData } from "@/pages/migrate";
+import { sleep } from "@/common";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -135,7 +136,21 @@ export class DeviceStorage {
   }
 
   private async operation<T>(block: () => Promise<T>) {
-    return await this.serialQueue.enqueue(block);
+    return await this.serialQueue.enqueue(async () => {
+      while (true) {
+        try {
+          return await block();
+        }
+        catch (error) {
+          if (error instanceof DOMException && error.name == "NotReadableError") {
+            await sleep(500); // race condition/browser locked the file while we were trying to read it...?
+            continue;
+          }
+
+          throw error;
+        }
+      }
+    });
   }
 
   /**
