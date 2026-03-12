@@ -82,8 +82,6 @@ export default os.router({
         }),
 
     timelapsesForProject: os.timelapsesForProject
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
         .handler(async (req) => {
             const actor = req.context.actor;
 
@@ -96,6 +94,11 @@ export default os.router({
             if (!subject)
                 return apiOk({ count: 0, timelapses: [] });
 
+            const isPrivilidged = (actor != null) && (
+                (actor.kind == "PROGRAM" && actor.programKey.scopes.includes("timelapse:read")) ||
+                (actor.kind == "USER" && actor.scopes.includes("timelapse:read"))
+            );
+
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
                 orderBy: { createdAt: "desc" },
@@ -105,7 +108,7 @@ export default os.router({
                     visibility: {
                         in: [
                             "PUBLIC",
-                            ...maybe("UNLISTED" as const, actor.kind == "PROGRAM" || actor.user.id == subject.id)
+                            ...maybe("UNLISTED" as const, isPrivilidged)
                         ]
                     }
                 }
