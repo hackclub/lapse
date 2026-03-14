@@ -188,23 +188,32 @@ export async function getTimelapseById(id: string, actor: Actor | null): Promise
 }
 
 /**
- * Computes the length of a timelapse by its snapshots. A snapshot is a timestamp of when a video frame was captured.
+ * Computes the length of a timelapse by its snapshots using Hackatime-style
+ * "unique heartbeat seconds": sum consecutive gaps only when the gap is
+ * positive and within a timeout window.
+ *
+ * Snapshots are sorted ascending first, as they are not guaranteed to be ordered.
  */
-export function durationBySnapshots(snapshots: Date[]): number {
-    const TOLERANCE = 2 * 60 * 1000; // spans in two adjacent snapshots that are larger than this are ignored and not summed
-
-    if (snapshots.length <= 1)
+export function durationBySnapshots(snapshots: Date[], timeoutSeconds = 120): number {
+    if (snapshots.length < 2)
         return 0;
 
-    let totalDuration = 0;
-    for (let i = 1; i < snapshots.length; i++) {
-        const span = snapshots[i].getTime() - snapshots[i - 1].getTime();
-        if (span <= TOLERANCE) {
-            totalDuration += span;
+    const timesMs = snapshots
+        .map((d) => d.getTime())
+        .filter((t) => Number.isFinite(t))
+        .sort((a, b) => a - b);
+
+    let totalSeconds = 0;
+
+    for (let i = 1; i < timesMs.length; i++) {
+        const gapSeconds = (timesMs[i] - timesMs[i - 1]) / 1000;
+
+        if (gapSeconds > 0 && gapSeconds <= timeoutSeconds) {
+            totalSeconds += gapSeconds;
         }
     }
 
-    return totalDuration / 1000;
+    return Math.trunc(totalSeconds);
 }
 
 /**

@@ -241,6 +241,13 @@ export const adminRouterContract = {
             data: z.record(z.string(), z.unknown())
         })),
 
+    recalculateDurations: contract("POST", "/admin/recalculateDurations")
+        .route({ description: "Recalculates the duration of every timelapse from its snapshots. Requires administrator permissions and an `elevated` grant." })
+        .input(NO_INPUT)
+        .output(apiResult({
+            updated: z.number().int().nonnegative()
+        })),
+
     programKey: {
         create: contract()
             .route({ description: "Creates a new program key. The raw key is only returned with this response or when rotating. Requires ROOT access." })

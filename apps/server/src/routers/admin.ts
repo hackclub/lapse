@@ -8,6 +8,7 @@ import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { logInfo } from "@/logging.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
+import { durationBySnapshots } from "@/routers/timelapse.js";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -509,6 +510,32 @@ export default os.router({
                 return apiErr("NOT_FOUND", "Record not found.");
 
             return apiOk({ data: record });
+        }),
+
+    recalculateDurations: os.recalculateDurations
+        .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("elevated"))
+        .handler(async () => {
+            const timelapses = await database().timelapse.findMany({
+                select: { id: true, snapshots: true }
+            });
+
+            let updated = 0;
+
+            for (const timelapse of timelapses) {
+                const duration = durationBySnapshots(timelapse.snapshots);
+
+                await database().timelapse.update({
+                    where: { id: timelapse.id },
+                    data: { duration }
+                });
+
+                updated++;
+            }
+
+            logInfo(`Recalculated durations for ${updated} timelapses.`);
+
+            return apiOk({ updated });
         }),
 
     programKey: os.programKey.router({
