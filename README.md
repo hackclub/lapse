@@ -15,7 +15,7 @@ In order to get started with developing Lapse, run these commands:
 # Install all packages
 pnpm install
 
-# Set up the development environment
+# Set up the development environment (makes the .env file for you)
 pnpm dev:setup-env
 
 # Start the web client and backend
