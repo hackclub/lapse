@@ -22,6 +22,12 @@ pnpm dev:setup-env
 pnpm dev
 ```
 
+You'll need to install ffmpeg as well.
+
+- Windows: install Chocolatey and then run `choco install ffmpeg` in an Administrative command prompt
+- Mac: installed homebrew and then run `brew install ffmpeg`
+- Linux: install ffmpeg with your package manager
+
 To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively.
 
 When developing, it's a good idea to re-compile all packages on the fly!
