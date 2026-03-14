@@ -231,6 +231,16 @@ export const adminRouterContract = {
         .input(AdminSearchInputSchema)
         .output(createResultSchema(AdminSearchOutputSchema)),
 
+    export: contract("POST", "/admin/export")
+        .route({ description: "Exports the raw database record for the given entity. Requires administrator permissions and an `elevated` grant." })
+        .input(z.object({
+            entity: AdminEntitySchema,
+            id: LapseId
+        }))
+        .output(apiResult({
+            data: z.record(z.string(), z.unknown())
+        })),
+
     programKey: {
         create: contract()
             .route({ description: "Creates a new program key. The raw key is only returned with this response or when rotating. Requires ROOT access." })

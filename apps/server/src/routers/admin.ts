@@ -491,6 +491,26 @@ export default os.router({
             };
         }),
 
+    export: os.export
+        .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("elevated"))
+        .handler(async (req) => {
+            const { entity, id } = req.input;
+
+            const record = await (
+                entity === "user" ? database().user.findUnique({ where: { id } })
+                : entity === "timelapse" ? database().timelapse.findUnique({ where: { id } })
+                : entity === "comment" ? database().comment.findUnique({ where: { id } })
+                : entity === "draftTimelapse" ? database().draftTimelapse.findUnique({ where: { id } })
+                : database().legacyUnpublishedTimelapse.findUnique({ where: { id } })
+            );
+
+            if (!record)
+                return apiErr("NOT_FOUND", "Record not found.");
+
+            return apiOk({ data: record });
+        }),
+
     programKey: os.programKey.router({
         create: os.programKey.create
             .use(requiredAuth("ROOT"))

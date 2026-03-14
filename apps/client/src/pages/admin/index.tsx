@@ -307,6 +307,7 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
 }) {
   const [changes, setChanges] = useState<AdminRecord>({});
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     setChanges({});
@@ -332,6 +333,27 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
     }
     catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save changes");
+    }
+  }
+
+  async function handleExport() {
+    setIsExporting(true);
+    try {
+      const res = await api.admin.export({ entity, id: String(record!["id"]) });
+      if (!res.ok) {
+        setError(res.message ?? "Failed to export record.");
+        return;
+      }
+
+      const blob = new Blob([JSON.stringify(res.data.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    }
+    catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export record.");
+    }
+    finally {
+      setIsExporting(false);
     }
   }
 
@@ -397,12 +419,17 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
         })}
 
         <ModalError error={error} />
-        <ModalActions
-          isSaving={isSaving}
-          isSaveDisabled={Object.keys(changes).length === 0}
-          onClose={onClose}
-          onSave={handleSave}
-        />
+        <div className="flex gap-3 justify-between pt-4">
+          <Button kind="regular" onClick={handleExport} disabled={isExporting}>
+            {isExporting ? "Exporting..." : "Export JSON"}
+          </Button>
+          <div className="flex gap-3">
+            <Button kind="regular" onClick={onClose} disabled={isSaving}>Cancel</Button>
+            <Button kind="primary" onClick={handleSave} disabled={isSaving || Object.keys(changes).length === 0}>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </div>
       </ModalContent>
     </Modal>
   );
