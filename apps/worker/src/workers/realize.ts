@@ -92,6 +92,11 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                     );
                 }
 
+                if (encryptedBuffer.byteLength <= 8) {
+                    log.info(`skipping impossibly small session ${sessionUrl} (${encryptedBuffer.byteLength} bytes)`);
+                    continue;
+                }
+
                 let decryptedBuffer: ArrayBuffer;
 
                 try {
@@ -111,6 +116,12 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 await fsp.writeFile(sessionPath, Buffer.from(decryptedBuffer));
 
                 sessions.push(sessionPath);
+            }
+
+            if (sessions.length === 0) {
+                throw log.echo(
+                    new Error("No valid sessions were retrieved or decrypted; aborting realization.")
+                );
             }
 
             // Won't be needing this anymore!
