@@ -118,6 +118,12 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 sessions.push(sessionPath);
             }
 
+            if (sessions.length === 0) {
+                throw log.echo(
+                    new Error("No valid sessions were retrieved or decrypted; aborting realization.")
+                );
+            }
+
             // Won't be needing this anymore!
             input.passkey = "<REDACTED>";
             job.data.passkey = "<REDACTED>";
