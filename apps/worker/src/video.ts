@@ -49,8 +49,10 @@ export async function probeVideo(file: string, log: JobLogger): Promise<ProbedVi
         const stderr = (err as { stderr?: string }).stderr ?? "";
         duration = parseLastFfmpegTime(stderr);
 
-        if (isNaN(duration))
+        if (isNaN(duration)) {
             log.error(`could not determine duration for ${file}; ffmpeg stderr: ${stderr}`);
+            throw err;
+        }
     }
 
     return { width, height, duration };
