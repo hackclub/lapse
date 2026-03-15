@@ -516,21 +516,37 @@ export default os.router({
         .use(requiredAuth("ADMIN"))
         .use(requiredScopes("elevated"))
         .handler(async () => {
-            const timelapses = await database().timelapse.findMany({
-                select: { id: true, snapshots: true }
-            });
-
+            const PAGE_SIZE = 100;
             let updated = 0;
+            let cursor: string | undefined;
 
-            for (const timelapse of timelapses) {
-                const duration = durationBySnapshots(timelapse.snapshots);
-
-                await database().timelapse.update({
-                    where: { id: timelapse.id },
-                    data: { duration }
+            while (true) {
+                const batch = await database().timelapse.findMany({
+                    select: { id: true, snapshots: true },
+                    take: PAGE_SIZE,
+                    orderBy: { id: "asc" },
+                    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {})
                 });
 
-                updated++;
+                if (batch.length === 0)
+                    break;
+
+                for (const timelapse of batch) {
+                    const duration = durationBySnapshots(timelapse.snapshots);
+
+                    await database().timelapse.update({
+                        where: { id: timelapse.id },
+                        data: { duration }
+                    });
+
+                    updated++;
+                }
+
+                cursor = batch[batch.length - 1].id;
+
+                if (batch.length < PAGE_SIZE) {
+                    break;
+                }
             }
 
             logInfo(`Recalculated durations for ${updated} timelapses.`);
