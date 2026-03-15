@@ -130,12 +130,17 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
 
             log.info(`all sessions probed; dominant resolution is ${resolution.width}x${resolution.height}`);
 
+            // Ensure dimensions are even — ffmpeg's scale with force_original_aspect_ratio rounds
+            // output to even numbers, which can exceed odd pad dimensions and cause failures.
+            const padWidth = resolution.width + (resolution.width % 2);
+            const padHeight = resolution.height + (resolution.height % 2);
+
             // These normalize all sessions to the same resolution, FPS, and color space.
             const normalizeFilters = sessions
                 .map((_, i) => (
                     `[${i}:v]` + // input i, access video stream
-                    `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=decrease,` +
-                    `pad=${resolution.width}:${resolution.height}:(ow-iw)/2:(oh-ih)/2,` +
+                    `scale=${padWidth}:${padHeight}:force_original_aspect_ratio=decrease,` +
+                    `pad=${padWidth}:${padHeight}:(ow-iw)/2:(oh-ih)/2,` +
                     `fps=${TIMELAPSE_FPS},format=yuv420p,setsar=1[v${i}]` // output goes to "v${i}"
                 ))
                 .join(";");
