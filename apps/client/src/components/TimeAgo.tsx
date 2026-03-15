@@ -55,7 +55,10 @@ export function TimeAgo({ date, className }: {
     date = new Date(date);
   }
 
-  const [display, setDisplay] = useState(formatTimeElapsed(date));
+  // We default to a deterministic state to avoid any hydration errors.
+  const [display, setDisplay] = useState(
+    new Date().toLocaleDateString("en-us", { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "numeric" })
+  );
 
   useEffect(() => {
     const delta = (new Date().getTime() - date.getTime()) / 1000;
@@ -75,5 +78,7 @@ export function TimeAgo({ date, className }: {
     return () => clearInterval(timer);
   }, [date]);
 
-  return <time dateTime={date.toISOString()} className={className}>{display}</time>
+  return (
+    <time dateTime={date.toISOString()} className={className}>{display}</time>
+  );
 }
