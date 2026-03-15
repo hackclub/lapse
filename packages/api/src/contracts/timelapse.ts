@@ -219,7 +219,7 @@ export const timelapseRouterContract = {
                 cursor: LapseId.optional()
                     .describe("The ID of the last timelapse from the previous page. Omit to start from the beginning."),
 
-                limit: z.number().int().min(1).max(100).default(20)
+                limit: z.coerce.number().int().min(1).max(100).default(20)
                     .describe("The maximum number of timelapses to return per page."),
             })
         )

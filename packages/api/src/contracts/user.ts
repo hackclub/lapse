@@ -158,7 +158,7 @@ export const userRouterContract = {
                 handle: UserHandle.optional()
                     .describe("The handle of the profile to query. Can be undefined if another field is specified."),
 
-                hackatimeId: z.number().min(1).optional()
+                hackatimeId: z.coerce.number().min(1).optional()
                     .describe("The Hackatime ID of the profile to query. Can be undefined if another field is specified."),
             })
         )
