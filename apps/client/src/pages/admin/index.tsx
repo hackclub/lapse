@@ -1201,6 +1201,9 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   const [error, setError] = useState<string | null>(null);
   const [editingRecord, setEditingRecord] = useState<AdminRecord | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionStatus, setActionStatus] = useState<{ message: string; kind: "success" | "error" } | null>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   const fields = ADMIN_ENTITY_FIELDS[entity] as Record<string, AdminFieldDef>;
   const fieldKeys = Object.keys(fields);
@@ -1239,6 +1242,36 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   }, [entity, query]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!actionsOpen)
+      return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node))
+        setActionsOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [actionsOpen]);
+
+  async function handleRecalculateDurations() {
+    setActionsOpen(false);
+    setActionStatus(null);
+
+    try {
+      const res = await api.admin.recalculateDurations({});
+      if (!res.ok)
+        throw new Error(res.message);
+
+      setActionStatus({ message: `Recalculated durations for ${res.data.updated} timelapses.`, kind: "success" });
+      fetchData();
+    }
+    catch {
+      setActionStatus({ message: "Failed to recalculate durations.", kind: "error" });
+    }
+  }
 
   function handleSort(field: string) {
     const fieldDef = fields[field];
@@ -1328,12 +1361,42 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
               Refresh
             </Button>
 
+            {entity === "timelapse" && (
+              <div className="relative" ref={actionsRef}>
+                <Button kind="regular" onClick={() => setActionsOpen(!actionsOpen)} icon="down-caret">
+                  Actions
+                </Button>
+
+                {actionsOpen && (
+                  <div className="absolute top-full left-0 mt-2 z-50 min-w-56 rounded-lg border border-slate bg-dark shadow-xl">
+                    <button
+                      onClick={handleRecalculateDurations}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-white transition-colors hover:bg-darkless rounded-lg cursor-pointer"
+                    >
+                      <Icon glyph="clock" size={18} />
+                      Recalculate durations
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {result && (
               <span className="text-base text-muted ml-auto">
                 {result.total} total records
               </span>
             )}
           </div>
+
+          {actionStatus && (
+            <div className={clsx(
+              "rounded-lg border p-3 text-sm",
+              actionStatus.kind === "success" && "border-green-500/20 bg-green-500/10 text-green-400",
+              actionStatus.kind === "error" && "border-red/20 bg-red/10 text-red"
+            )}>
+              {actionStatus.message}
+            </div>
+          )}
 
           {query.filters.map((filter, i) => (
             <FilterRow

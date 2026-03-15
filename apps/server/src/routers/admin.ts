@@ -8,6 +8,7 @@ import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { logInfo } from "@/logging.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
+import { durationBySnapshots } from "@/routers/timelapse.js";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -509,6 +510,48 @@ export default os.router({
                 return apiErr("NOT_FOUND", "Record not found.");
 
             return apiOk({ data: record });
+        }),
+
+    recalculateDurations: os.recalculateDurations
+        .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("elevated"))
+        .handler(async () => {
+            const PAGE_SIZE = 100;
+            let updated = 0;
+            let cursor: string | undefined;
+
+            while (true) {
+                const batch = await database().timelapse.findMany({
+                    select: { id: true, snapshots: true },
+                    take: PAGE_SIZE,
+                    orderBy: { id: "asc" },
+                    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {})
+                });
+
+                if (batch.length === 0)
+                    break;
+
+                for (const timelapse of batch) {
+                    const duration = durationBySnapshots(timelapse.snapshots);
+
+                    await database().timelapse.update({
+                        where: { id: timelapse.id },
+                        data: { duration }
+                    });
+
+                    updated++;
+                }
+
+                cursor = batch[batch.length - 1].id;
+
+                if (batch.length < PAGE_SIZE) {
+                    break;
+                }
+            }
+
+            logInfo(`Recalculated durations for ${updated} timelapses.`);
+
+            return apiOk({ updated });
         }),
 
     programKey: os.programKey.router({
