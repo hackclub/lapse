@@ -90,5 +90,8 @@ if (process.env.POSTHOG_PERSONAL_API_KEY && process.env.POSTHOG_ENV_ID) {
     }
   });
 }
+else {
+  console.log("Not initializing PostHog config - this is fine for development environments, but in production, this might be a problem.");
+}
 
 export default config;
