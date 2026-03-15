@@ -112,6 +112,11 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                     );
                 }
 
+                if (decryptedBuffer.byteLength <= 8) {
+                    log.info(`skipping impossibly small session ${sessionUrl} (${encryptedBuffer.byteLength} bytes)`);
+                    continue;
+                }
+
                 const sessionPath = path.join(tmp, `session-${i}.webm`); // assuming webm here - but ffmpeg should be able to figure that out from the file headers
                 await fsp.writeFile(sessionPath, Buffer.from(decryptedBuffer));
 
