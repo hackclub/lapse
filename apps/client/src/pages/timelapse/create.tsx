@@ -420,7 +420,8 @@ export default function Page() {
 
       await deviceStorage.sync(); // if we have any pending operations (e.g. writing chunks to disk), wait for them to finish
 
-      const sessions = await deviceStorage.getTimelapseVideoSessions();
+      // We filter out any session that is <=8 bytes long, in case such an impossibly small session is (somehow) created.
+      const sessions = (await deviceStorage.getTimelapseVideoSessions()).filter(x => x.size > 8);
       const timelapse = await deviceStorage.getTimelapse();
       if (!timelapse || sessions.length == 0) {
         posthog.capture("record_fail_empty", { timelapse, sessions, startedAt });

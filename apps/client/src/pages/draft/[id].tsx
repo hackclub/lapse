@@ -86,7 +86,7 @@ export default function Page() {
         return;
       }
 
-      const sessions = await Promise.all(
+      const sessions = (await Promise.all(
         res.data.timelapse.sessions.map(async (x) => {
           const sessionRes = await sfetch(x);
           if (!sessionRes.ok) {
@@ -104,12 +104,21 @@ export default function Page() {
 
           console.log(`([id].tsx) decrypted session @ ${x}!`, data);
 
+          if (data.size <= 8) {
+            posthog.capture("draft_session_too_small", { data, x, timelapse: res.data.timelapse, size: data.size });
+            console.warn(`([id].tsx) session is impossibly small (${data.size} bytes in size) - ignoring!`);
+            return null;
+          }
+
           const url = URL.createObjectURL(data);
           return { url, duration: (await videoDuration(url)) ?? 120 };
         })
-      );
+      ));
 
-      setDecryptedSessions(sessions);
+      setDecryptedSessions(
+        // We can return `null` for sessions we want to skip.
+        sessions.filter((x): x is { url: string, duration: number } => x !== null)
+      );
     }
     catch (error) {
       posthog.capture("draft_load_fail", { error, draft });
@@ -137,24 +146,28 @@ export default function Page() {
     setEditList(timelapse.editList);
 
     try {
-      const sessions = await Promise.all(
+      const sessions = (await Promise.all(
         timelapse.sessions.map(async (x) => {
           const sessionRes = await sfetch(x);
           if (!sessionRes.ok)
             throw new Error(`Could not fetch timelapse session @ ${x}`);
 
+          const encryptedData = await sessionRes.arrayBuffer();
+          if (encryptedData.byteLength <= 8)
+            return null;
+
           const data = new Blob([
             await decryptData(
               fromHex(passkey).buffer,
               fromHex(timelapse.iv).buffer,
-              await sessionRes.arrayBuffer()
+              encryptedData
             )
           ], { type: "video/webm" });
 
           const url = URL.createObjectURL(data);
           return { url, duration: (await videoDuration(url)) ?? 120 };
         })
-      );
+      )).filter((x): x is { url: string, duration: number } => x !== null);
 
       setDecryptedSessions(sessions);
       setPendingDraftForDecrypt(null);

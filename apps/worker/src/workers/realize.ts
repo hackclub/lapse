@@ -92,6 +92,11 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                     );
                 }
 
+                if (encryptedBuffer.byteLength <= 8) {
+                    log.info(`skipping impossibly small session ${sessionUrl} (${encryptedBuffer.byteLength} bytes)`);
+                    continue;
+                }
+
                 let decryptedBuffer: ArrayBuffer;
 
                 try {
