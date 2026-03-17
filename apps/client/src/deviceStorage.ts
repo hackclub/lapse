@@ -4,6 +4,7 @@ import { jsonrepair } from "jsonrepair";
 import { hasLegacyData } from "@/pages/migrate";
 import { sleep } from "@/common";
 import posthog from "posthog-js";
+import { ascending } from "@hackclub/lapse-shared";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -192,7 +193,7 @@ export class DeviceStorage {
         }
 
         console.log(`(deviceStorage.ts) session found for restore: ${filename} (ID ${match[1]})`);
-        sessions.push(parseInt(match[1]));
+        sessions.push(parseInt(match[1], 10));
       }
 
       if (sessions.length == 0) {
@@ -207,6 +208,8 @@ export class DeviceStorage {
         await this.writeStore(store);
         return store;
       }
+
+      sessions.sort(ascending());
 
       posthog.capture("json_datastore_recovery_success", { contents, devices, snapshots, startedAt, sessions });
 
