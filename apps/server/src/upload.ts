@@ -105,7 +105,8 @@ export function attachUploadServer(app: FastifyInstance) {
             if (token instanceof Err)
                 throw { status_code: 401, body: token.message };
 
-            if (!upload.size || upload.size > token.maxSize)
+            // We tolerate an error margin of 1MiB.
+            if (!upload.size || upload.size > (token.maxSize + (1024 * 1024)))
                 throw { status_code: 413, body: `Upload size (${upload.size}) exceeds maximum size (${token.maxSize}).` };
 
             return {};
