@@ -304,7 +304,16 @@ export default os.router({
                 // User doesn't exist. Let's create an account for them!
                 // For handles, we try to use Slack first, but, if it's not available, we use the e-mail.
                 // Generally, e-mails should be avoided as they can expose real/dead names.
-                let baseHandle = slack ? slack.profile.display_name : hktUser.emails[0].split("@")[0];
+                let baseHandle = (
+                    slack ? 
+                        (slack.profile.display_name ?? slack.profile.real_name ?? slack.profile.real_name_normalized) :
+                    hktUser.github_username ?
+                        hktUser.github_username :
+                    (hktUser.emails.length > 0) ?
+                        hktUser.emails[0].split("@")[0] :
+                    hktUser.slack_id ?? "user"
+                );
+                    
                 baseHandle = baseHandle.toLowerCase().replace(/[^a-z0-9]/g, "")
                     .slice(0, MAX_HANDLE_LENGTH);
 
