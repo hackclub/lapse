@@ -1,5 +1,6 @@
 import { sleep } from "@/common";
 import fetchRetry from "fetch-retry";
+import posthog from "posthog-js";
 
 /**
  * Catches all errors `procedure` might throw, and if one is thrown, returns it. Otherwise,
@@ -47,6 +48,8 @@ export async function retryable<T>(label: string, procedure: () => T | Promise<T
 export const sfetch = fetchRetry(fetch, {
   retries: 5,
   retryDelay(attempt, error, response) {
+    posthog.capture("fetch_attempt_failed", { attempt, error, response });
+
     const delay = Math.pow(2, attempt) * 500;
     console.warn(`(safety.ts) fetch failed - retrying in ${delay}ms`, error, response);
     return delay;
