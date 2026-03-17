@@ -57,7 +57,7 @@ export function TimeAgo({ date, className }: {
 
   // We default to a deterministic state to avoid any hydration errors.
   const [display, setDisplay] = useState(
-    new Date().toLocaleDateString("en-us", { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "numeric" })
+    date.toLocaleDateString("en-us", { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "numeric" })
   );
 
   useEffect(() => {
