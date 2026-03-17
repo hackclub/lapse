@@ -89,6 +89,14 @@ export class DeviceStorage {
     if (this.root)
       return;
 
+    if (!("createWritable" in FileSystemFileHandle.prototype)) {
+      console.warn("(deviceStorage.ts) createWritable is missing in FileSystemFileHandle; assuming outdated browser");
+
+      if (!location.href.includes("update-browser")) {
+        location.href = "/update-browser";
+      }
+    }
+
     if (navigator.storage.persist) {
       const persisted = await navigator.storage.persist();
       console.log(`(deviceStorage.ts) persistence ${persisted ? "granted" : "denied"}`);
