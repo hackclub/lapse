@@ -146,12 +146,17 @@ export class DeviceStorage {
       }
 
       function tryGet<T>(keys: string[], defaultValue: T, coalesce: (x: unknown) => T): T {
-        let current = restored;
+        let current: any = restored;
         for (const key of keys) {
-          if (!(key in current))
+          if (
+            current == null ||
+            (typeof current !== "object" && typeof current !== "function") ||
+            !(key in current)
+          ) {
             return defaultValue;
+          }
 
-          current = restored[key];
+          current = current[key];
         }
 
         return coalesce(current);
