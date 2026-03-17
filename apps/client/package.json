@@ -30,7 +30,7 @@
     "fetch-retry": "^6.0.0",
     "jsonrepair": "^3.13.3",
     "mediabunny": "^1.38.0",
-    "next": "^16.1.6",
+    "next": "^16.1.7",
     "platform": "^1.3.6",
     "posthog-js": "^1.360.0",
     "posthog-node": "^5.28.0",
