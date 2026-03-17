@@ -1,6 +1,9 @@
 import * as v from "valibot";
+import { jsonrepair } from "jsonrepair";
+
 import { hasLegacyData } from "@/pages/migrate";
 import { sleep } from "@/common";
+import posthog from "posthog-js";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -122,9 +125,101 @@ export class DeviceStorage {
     const dir = await this.getLapseDir();
     const fileHandle = await dir.getFileHandle("store.json");
     const file = await fileHandle.getFile();
-    const data = v.parse(StoreSchema, JSON.parse(await file.text()));
 
-    return data;
+    const contents = await file.text();
+
+    try {
+      return v.parse(StoreSchema, JSON.parse(contents));
+    }
+    catch (err) {
+      posthog.capture("json_datastore_recovery_started", { contents, err });
+
+      console.error(`(deviceStorage.ts) JSON store corrupted - rebuilding! ${contents}`, err);
+      localStorage.setItem("lapse:corruptedStoreBackup", contents); // just in case...
+      
+      let restored: any = {};
+      try {
+        restored = JSON.parse(jsonrepair(contents));
+      }
+      catch (err) {
+        console.warn(`(deviceStorage.ts) could not restore JSON - will rebuild completely. risky!`, err);
+      }
+
+      function tryGet<T>(keys: string[], defaultValue: T, coalesce: (x: unknown) => T): T {
+        let current = restored;
+        for (const key of keys) {
+          if (!(key in current))
+            return defaultValue;
+
+          current = restored[key];
+        }
+
+        return coalesce(current);
+      }
+
+      const devices = tryGet(["devices"], [], (x) => {
+        if (!Array.isArray(x))
+          return [];
+
+        return x.filter(x => "thisDevice" in x && x["thisDevice"]);
+      });
+
+      const snapshots = tryGet(["timelapse", "snapshots"], [], (x) => {
+        if (Array.isArray(x))
+          return x.map(x => typeof x === "number" ? x : Number(x));
+
+        return [];
+      });
+
+      const startedAt = tryGet(["timelapse", "startedAt"], Date.now(), (x) => {
+        return typeof x === "number" ? x : Number(x);
+      });
+
+      const sessions: number[] = [];
+
+      // The sessions array is just a shortcut - we can recompute it by listing the contents of the directory
+      // and querying all files in the Lapse directory with the format of "session-<ID>.webm".
+      for await (const [filename] of dir.entries()) {
+        const match = /session-([0-9]+)\.webm/.exec(filename);
+        if (!match) {
+          console.log(`(deviceStorage.ts) ignoring file ${filename} for session restore`);
+          continue;
+        }
+
+        console.log(`(deviceStorage.ts) session found for restore: ${filename} (ID ${match[1]})`);
+        sessions.push(parseInt(match[1]));
+      }
+
+      if (sessions.length == 0) {
+        posthog.capture("json_datastore_recovery_no_timelapse", { contents, devices });
+        console.warn("(deviceStorage.ts) no sessions found while restoring timelapse. no timelapse has been started...?");
+        
+        const store = {
+          devices,
+          timelapse: null
+        };
+        
+        await this.writeStore(store);
+        return store;
+      }
+
+      posthog.capture("json_datastore_recovery_success", { contents, devices, snapshots, startedAt, sessions });
+
+      console.log("(deviceStorage.ts) existing timelapse successfully recovered from corrupted JSON!");
+      console.log("(deviceStorage.ts) recovery payload:", devices, snapshots, startedAt, sessions);
+      
+      const data = {
+        devices,
+        timelapse: {
+          snapshots,
+          startedAt,
+          sessions
+        }
+      };
+
+      await this.writeStore(data);
+      return data;
+    }
   }
 
   private async writeStore(data: Store): Promise<void> {
