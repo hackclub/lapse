@@ -46,6 +46,9 @@ importers:
       fetch-retry:
         specifier: ^6.0.0
         version: 6.0.0
+      jsonrepair:
+        specifier: ^3.13.3
+        version: 3.13.3
       mediabunny:
         specifier: ^1.38.0
         version: 1.38.0
@@ -5026,6 +5029,10 @@ packages:
 
   jsonfy@0.1.0:
     resolution: {integrity: sha512-Xw4o10mEUftnLkpAvLMCZAv7sWtJIkqGzAYkuqEGx8l0KcQbbg6V6OYfUrZcXrRMTRt2xXcwNZC/1R1bInGs6w==}
+
+  jsonrepair@3.13.3:
+    resolution: {integrity: sha512-BTznj0owIt2CBAH/LTo7+1I5pMvl1e1033LRl/HUowlZmJOIhzC0zbX5bxMngLkfT4WnzPP26QnW5wMr2g9tsQ==}
+    hasBin: true
 
   jsonwebtoken@9.0.3:
     resolution: {integrity: sha512-MT/xP0CrubFRNLNKvxJ2BYfy53Zkm++5bX9dtuPbqAeQpTVe0MQTFhao8+Cp//EmJp244xt6Drw/GVEGCUj40g==}
@@ -12418,6 +12425,8 @@ snapshots:
   json5@2.2.3: {}
 
   jsonfy@0.1.0: {}
+
+  jsonrepair@3.13.3: {}
 
   jsonwebtoken@9.0.3:
     dependencies:
