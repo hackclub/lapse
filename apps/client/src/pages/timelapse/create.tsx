@@ -4,14 +4,14 @@ import Icon from "@hackclub/icons";
 import clsx from "clsx";
 import prettyBytes from "pretty-bytes";
 import posthog from "posthog-js";
-import { assert, encryptData, match, fromHex } from "@hackclub/lapse-shared";
+import { assert, encryptData, match, fromHex, MIN_SESSION_SIZE_BYTES } from "@hackclub/lapse-shared";
 
 import { videoGenerateThumbnail } from "@/video";
 import { getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
 import { api, apiUpload } from "@/api";
 import { TimelapseVideoSession } from "@/timelapseVideoSession";
-import {  sleep, SteppedProgress } from "@/common";
+import { sleep, SteppedProgress } from "@/common";
 
 import { useOnce } from "@/hooks/useOnce";
 import { useAuth } from "@/hooks/useAuth";
@@ -420,8 +420,8 @@ export default function Page() {
 
       await deviceStorage.sync(); // if we have any pending operations (e.g. writing chunks to disk), wait for them to finish
 
-      // We filter out any session that is <=8 bytes long, in case such an impossibly small session is (somehow) created.
-      const sessions = (await deviceStorage.getTimelapseVideoSessions()).filter(x => x.size > 8);
+      // We filter out any session that is too small, in case such an impossibly small session is (somehow) created.
+      const sessions = (await deviceStorage.getTimelapseVideoSessions()).filter(x => x.size > MIN_SESSION_SIZE_BYTES);
       const timelapse = await deviceStorage.getTimelapse();
       if (!timelapse || sessions.length == 0) {
         posthog.capture("record_fail_empty", { timelapse, sessions, startedAt });

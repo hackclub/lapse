@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { clsx } from "clsx";
 import posthog from "posthog-js";
-import { decryptData, fromHex } from "@hackclub/lapse-shared";
+import { decryptData, fromHex, MIN_SESSION_SIZE_BYTES } from "@hackclub/lapse-shared";
 import { DraftTimelapse, EditListEntry, TimelapseVisibility } from "@hackclub/lapse-api";
 
 import { EditorTimeline } from "@/components/editor/EditorTimeline";
@@ -104,7 +104,7 @@ export default function Page() {
 
           console.log(`([id].tsx) decrypted session @ ${x}!`, data);
 
-          if (data.size <= 8) {
+          if (data.size <= MIN_SESSION_SIZE_BYTES) {
             posthog.capture("draft_session_too_small", { data, x, timelapse: res.data.timelapse, size: data.size });
             console.warn(`([id].tsx) session is impossibly small (${data.size} bytes in size) - ignoring!`);
             return null;
