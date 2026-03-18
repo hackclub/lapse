@@ -522,12 +522,12 @@ export default function Page() {
           posthog.captureException(err, { attempt, when: "timelapse_upload_try_error" });
 
           if (retriable) {
-            console.error(`(create.tsx) attempt #${attempt} failed! silently retrying in 250ms!`, err);
+            console.error(`(create.tsx) attempt #${attempt + 1} failed! silently retrying in 250ms!`, err);
             lastError = err;
             await sleep(250);
           }
           else {
-            console.warn(`(create.tsx) attempt #${attempt} failed, but is not retriable. going through.`, err);
+            console.warn(`(create.tsx) attempt #${attempt + 1} failed, but is not retriable. going through.`, err);
             lastError = undefined; 
           }
         }
