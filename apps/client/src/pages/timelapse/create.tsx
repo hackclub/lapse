@@ -12,6 +12,7 @@ import { deviceStorage } from "@/deviceStorage";
 import { api, apiUpload } from "@/api";
 import { TimelapseVideoSession } from "@/timelapseVideoSession";
 import { sleep, SteppedProgress } from "@/common";
+import { retryable } from "@/safety";
 
 import { useOnce } from "@/hooks/useOnce";
 import { useAuth } from "@/hooks/useAuth";
@@ -423,8 +424,16 @@ export default function Page() {
       await deviceStorage.sync(); // if we have any pending operations (e.g. writing chunks to disk), wait for them to finish
 
       // We filter out any session that is too small, in case such an impossibly small session is (somehow) created.
-      const sessions = (await deviceStorage.getTimelapseVideoSessions()).filter(x => x.size > MIN_SESSION_SIZE_BYTES);
-      const timelapse = await deviceStorage.getTimelapse();
+      let sessions = await retryable(async () => await deviceStorage.getTimelapseVideoSessions());
+      if (sessions instanceof Error)
+        throw sessions;
+
+      sessions = sessions.filter(x => x.size > MIN_SESSION_SIZE_BYTES);
+
+      const timelapse = await retryable(async () => await deviceStorage.getTimelapse());
+      if (timelapse instanceof Error)
+        throw timelapse;
+
       if (!timelapse || sessions.length == 0) {
         posthog.capture("record_fail_empty", { timelapse, sessions, startedAt });
         console.error("(create.tsx) No local timelapse, or no sessions have been captured! Your browser storage might be malfuctioning...?", timelapse, sessions);
