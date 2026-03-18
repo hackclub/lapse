@@ -510,6 +510,8 @@ export default function Page() {
 
           await sleep(100);
 
+          posthog.capture("timelapse_upload_completed", { res });
+
           // Browsers can choose to still display the sharing alert even when we disposed of all the streams. Using `location.href` instead of
           // `router.push` here is worse for performance, but should force all browsers to hide the alert.
           location.href = `/draft/${res.data.draftTimelapse.id}`;
