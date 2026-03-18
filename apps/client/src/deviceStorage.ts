@@ -59,6 +59,7 @@ class AsyncQueue {
       () => { },
       () => { }
     );
+
     return promise;
   }
 
@@ -264,6 +265,12 @@ export class DeviceStorage {
             await sleep(500); // race condition/browser locked the file while we were trying to read it...?
             continue;
           }
+
+          posthog.capture("devicestorage_uncaught_exception", {
+            error,
+            stack: error instanceof Error ? error.stack : undefined,
+            message: error instanceof Error ? error.message : undefined
+          });
 
           throw error;
         }
