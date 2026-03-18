@@ -413,6 +413,8 @@ export default function Page() {
     }
 
     let progress = new SteppedProgress(6, setUploadStage, setUploadProgress);
+    let retriable = true;
+    let lastError: unknown;
 
     try {
       // ------------------------------------------------------- //
@@ -450,71 +452,95 @@ export default function Page() {
 
       if (!res.ok)
         throw new Error(res.message);
-      
-      // ------------------------------------------------------- //
-      for (const [i, session] of sessions.entries()) {
-        setUploadProgress(0);
-        setUploadStage(`Encrypting session #${i + 1}...`);
-        const encrypted = await encryptData(
-          fromHex(device.passkey).buffer,
-          fromHex(res.data.draftTimelapse.iv).buffer,
-          session
-        );
 
-        console.log(`(create.tsx) encrypted session #${i + 1}:`, encrypted);
+      for (let attempt = 0; attempt < 5; attempt++) {
+        console.log(`(create.tsx) upload attempt #${attempt + 1}`);
 
-        setUploadStage("Uploading video session...");
-        await apiUpload(res.data.sessionUploadTokens[i], new Blob([encrypted], { type: "video/webm" }), bytesProgressCallback);
+        try {
+          // ------------------------------------------------------- //
+          for (const [i, session] of sessions.entries()) {
+            setUploadProgress(0);
+            setUploadStage(`Encrypting session #${i + 1}...`);
+            const encrypted = await encryptData(
+              fromHex(device.passkey).buffer,
+              fromHex(res.data.draftTimelapse.iv).buffer,
+              session
+            );
+
+            console.log(`(create.tsx) encrypted session #${i + 1}:`, encrypted);
+
+            setUploadStage("Uploading video session...");
+            await apiUpload(res.data.sessionUploadTokens[i], new Blob([encrypted], { type: "video/webm" }), bytesProgressCallback);
+          }
+
+          console.log("(create.tsx) all sessions uploaded successfully!");
+          // ------------------------------------------------------- //
+
+          progress.advance(3, "Encrypting thumbnail...");
+          const encryptedThumb = await encryptData(
+            fromHex(device.passkey).buffer,
+            fromHex(res.data.draftTimelapse.iv).buffer,
+            thumbnail
+          );
+
+          console.log("(create.tsx) - encrypted thumbnail:", encryptedThumb);
+
+          await apiUpload(
+            res.data.thumbnailUploadToken,
+            new Blob([encryptedThumb], { type: "image/webp" }),
+            bytesProgressCallback
+          );
+          
+          console.log("(create.tsx) thumbnail uploaded successfully! we're done, yay!");
+
+          // Everything's done - if anything fails at this point we should simply go through with it.
+          retriable = false;
+          lastError = undefined;
+
+          progress.advance(4, "Cleaning up local data...");
+
+          await deviceStorage.deleteTimelapse();
+
+          progress.advance(5, "Upload complete!");
+
+          // We're done here! We can dispose of the stream.
+          if (stream) {
+            stream.getTracks().forEach(x => x.stop());
+          }
+
+          await sleep(100);
+
+          // Browsers can choose to still display the sharing alert even when we disposed of all the streams. Using `location.href` instead of
+          // `router.push` here is worse for performance, but should force all browsers to hide the alert.
+          location.href = `/draft/${res.data.draftTimelapse.id}`;
+        }
+        catch (err) {
+          posthog.capture("timelapse_upload_try_error", { err, attempt });
+          posthog.captureException(err, { attempt, when: "timelapse_upload_try_error" });
+
+          if (retriable) {
+            console.error(`(create.tsx) attempt #${attempt} failed! silently retrying in 250ms!`, err);
+            lastError = err;
+            await sleep(250);
+          }
+          else {
+            console.warn(`(create.tsx) attempt #${attempt} failed, but is not retriable. going through.`, err);
+            lastError = undefined; 
+          }
+        }
       }
-
-      console.log("(create.tsx) all sessions uploaded successfully!");
-      // ------------------------------------------------------- //
-
-      progress.advance(3, "Encrypting thumbnail...");
-      const encryptedThumb = await encryptData(
-        fromHex(device.passkey).buffer,
-        fromHex(res.data.draftTimelapse.iv).buffer,
-        thumbnail
-      );
-
-      console.log("(create.tsx) - encrypted thumbnail:", encryptedThumb);
-
-      await apiUpload(
-        res.data.thumbnailUploadToken,
-        new Blob([encryptedThumb], { type: "image/webp" }),
-        bytesProgressCallback
-      );
-      
-      console.log("(create.tsx) thumbnail uploaded successfully! we're done, yay!");
-
-      progress.advance(4, "Cleaning up local data...");
-
-      await deviceStorage.deleteTimelapse();
-
-      progress.advance(5, "Upload complete!");
-
-      // We're done here! We can dispose of the stream.
-      if (stream) {
-        stream.getTracks().forEach(x => x.stop());
-      }
-
-      await sleep(100);
-
-      posthog.capture("timelapse_upload_completed", {
-        draft_id: res.data.draftTimelapse.id,
-        session_count: sessions.length,
-        snapshot_count: timelapse.snapshots.length,
-      });
-
-      // Browsers can choose to still display the sharing alert even when we disposed of all the streams. Using `location.href` instead of
-      // `router.push` here is worse for performance, but should force all browsers to hide the alert.
-      location.href = `/draft/${res.data.draftTimelapse.id}`;
     }
     catch (error) {
-      posthog.capture("timelapse_upload_fail", { error, uploadProgress, uploadStage });
-      console.error("(create.tsx) upload failed:", error);
+      console.error("(create.tsx) outer error captured!", error);
+      lastError = error;
+    }
+
+    if (lastError) {
+      posthog.capture("timelapse_upload_fail", { lastError, uploadProgress, uploadStage });
+      console.error("(create.tsx) upload failed:", lastError);
+
       setIsUploading(false);
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during upload";
+      const errorMessage = lastError instanceof Error ? lastError.message : "An unknown error occurred during upload";
       posthog.capture("timelapse_upload_failed", { error: errorMessage });
       posthog.captureException(error);
       setError(errorMessage);
@@ -712,10 +738,6 @@ export default function Page() {
         setIsOpen={(open) => !open && setError(null)}
         message={error || ""}
         onClose={() => router.back()}
-        onRetry={() => {
-          setError(null);
-          stopRecording();
-        }}
       />
     </RootLayout>
   );
