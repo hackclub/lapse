@@ -101,6 +101,7 @@ export class DeviceStorage {
     if (!("createWritable" in FileSystemFileHandle.prototype)) {
       handleMissingApi();
       await sleep(1000);
+      return;
     }
 
     if (navigator.storage.persist) {
@@ -251,6 +252,7 @@ export class DeviceStorage {
       // We already handle this with the prototype check, but apparently old Safari lies to us.
       handleMissingApi(true);
       await sleep(10000);
+      return;
     }
 
     const writable = await fileHandle.createWritable();
