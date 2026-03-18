@@ -19,7 +19,13 @@ export async function safely<T>(procedure: () => T | Promise<T>): Promise<T | Er
  * Invokes `procedure` multiple times with exponential backoff. If `procedure` throws an error, it will
  * be catched and invoked at a later time. If the retry limit is reached, the last thrown error is returned.
  */
-export async function retryable<T>(label: string, procedure: () => T | Promise<T>): Promise<T | Error> {
+export async function retryable<T>(procedure: () => T | Promise<T>): Promise<T | Error>;
+export async function retryable<T>(label: string, procedure: () => T | Promise<T>): Promise<T | Error>;
+
+export async function retryable<T>(labelOrProcedure: string | (() => T | Promise<T>), maybeProcedure?: () => T | Promise<T>): Promise<T | Error> {
+  const label = typeof labelOrProcedure === "string" ? labelOrProcedure : "procedure";
+  const procedure = typeof labelOrProcedure === "function" ? labelOrProcedure : maybeProcedure!;
+  
   let lastError: Error | null = null;
   let delay = 250;
 

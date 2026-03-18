@@ -5,6 +5,7 @@ import { hasLegacyData } from "@/pages/migrate";
 import { sleep } from "@/common";
 import posthog from "posthog-js";
 import { ascending } from "@hackclub/lapse-shared";
+import { retryable } from "@/safety";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -59,6 +60,7 @@ class AsyncQueue {
       () => { },
       () => { }
     );
+
     return promise;
   }
 
@@ -77,6 +79,13 @@ async function doesFileExist(directoryHandle: FileSystemDirectoryHandle, fileNam
   return false;
 }
 
+function handleMissingApi(forceNavigation: boolean = false) {
+  console.warn("(deviceStorage.ts) missing API detected; assuming outdated browser");
+
+  if (forceNavigation || !location.href.includes("update-browser")) {
+    location.href = "/update-browser";
+  }
+}
 
 /**
  * Securely stores data on the client device.
@@ -90,11 +99,9 @@ export class DeviceStorage {
       return;
 
     if (!("createWritable" in FileSystemFileHandle.prototype)) {
-      console.warn("(deviceStorage.ts) createWritable is missing in FileSystemFileHandle; assuming outdated browser");
-
-      if (!location.href.includes("update-browser")) {
-        location.href = "/update-browser";
-      }
+      handleMissingApi();
+      await sleep(1000);
+      return;
     }
 
     if (navigator.storage.persist) {
@@ -241,34 +248,56 @@ export class DeviceStorage {
   private async writeStore(data: Store): Promise<void> {
     const dir = await this.getLapseDir();
     const fileHandle = await dir.getFileHandle("store.json", { create: true });
+    if (!("createWritable" in Object.getPrototypeOf(fileHandle))) {
+      // We already handle this with the prototype check, but apparently old Safari lies to us.
+      handleMissingApi(true);
+      await sleep(10000);
+      return;
+    }
+
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(data));
     await writable.close();
   }
 
   private async operation<T>(block: () => Promise<T>) {
-    return await this.serialQueue.enqueue(async () => {
-      while (true) {
-        try {
-          return await block();
-        }
-        catch (error) {
-          if (error instanceof DOMException) {
-            posthog.capture("devicestorage_domexception", {
+    const result = await retryable("deviceStorage operation", async () => {
+      return await this.serialQueue.enqueue(async () => {
+        while (true) {
+          try {
+            return await block();
+          }
+          catch (error) {
+            if (error instanceof DOMException) {
+              posthog.capture("devicestorage_domexception", {
+                error,
+                stack: error.stack,
+                message: error.message,
+                name: error.name
+              });
+
+              await sleep(500); // DOMExceptions is usually odd browser state. we should be able to safely retry
+              continue;
+            }
+
+            posthog.capture("devicestorage_uncaught_exception", {
               error,
-              stack: error.stack,
-              message: error.message,
-              name: error.name
+              stack: error instanceof Error ? error.stack : undefined,
+              message: error instanceof Error ? error.message : undefined
             });
 
-            await sleep(500); // race condition/browser locked the file while we were trying to read it...?
-            continue;
+            throw error;
           }
-
-          throw error;
         }
-      }
+      });
     });
+
+    if (result instanceof Error) {
+      posthog.captureException(result);
+      throw result;
+    }
+
+    return result;
   }
 
   /**
