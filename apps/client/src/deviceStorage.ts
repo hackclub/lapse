@@ -79,6 +79,13 @@ async function doesFileExist(directoryHandle: FileSystemDirectoryHandle, fileNam
   return false;
 }
 
+function handleMissingApi(forceNavigation: boolean = false) {
+  console.warn("(deviceStorage.ts) missing API detected; assuming outdated browser");
+
+  if (forceNavigation || !location.href.includes("update-browser")) {
+    location.href = "/update-browser";
+  }
+}
 
 /**
  * Securely stores data on the client device.
@@ -92,11 +99,7 @@ export class DeviceStorage {
       return;
 
     if (!("createWritable" in FileSystemFileHandle.prototype)) {
-      console.warn("(deviceStorage.ts) createWritable is missing in FileSystemFileHandle; assuming outdated browser");
 
-      if (!location.href.includes("update-browser")) {
-        location.href = "/update-browser";
-      }
     }
 
     if (navigator.storage.persist) {
@@ -243,6 +246,12 @@ export class DeviceStorage {
   private async writeStore(data: Store): Promise<void> {
     const dir = await this.getLapseDir();
     const fileHandle = await dir.getFileHandle("store.json", { create: true });
+    if (!("createWritable" in Object.getPrototypeOf(fileHandle))) {
+      // We already handle this with the prototype check, but apparently old Safari lies to us.
+      handleMissingApi(true);
+      await sleep(10000);
+    }
+
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(data));
     await writable.close();
