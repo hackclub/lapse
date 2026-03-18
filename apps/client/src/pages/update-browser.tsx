@@ -8,6 +8,9 @@ import RootLayout from "@/components/layout/RootLayout";
 // We mostly display this to a really small subset of Safari users.
 
 export default function BrowserUpdatePage() {
+  const ua = navigator.userAgent.toLowerCase();
+  const platform = navigator.platform.toLowerCase();
+
   useEffect(() => {
     posthog.capture("outdated_browser_detected", { userAgent: navigator.userAgent });
     console.log(`(update-browser.tsx) outdated browser: ${navigator.userAgent}`);
@@ -19,8 +22,12 @@ export default function BrowserUpdatePage() {
         <Icon glyph="download" size={128} className="text-muted" />
         <h1 className="text-3xl font-bold">Update your browser</h1>
         
-        <p className="text-muted text-xl w-1/3 text-center">
-          Lapse uses features that your browser does not support. Please update your browser to its latest version in order to use Lapse.
+        <p className="text-muted text-xl w-1/2 text-center">
+          {
+            ua.includes("safari/")
+              ? <>Lapse uses features that your browser does not support. Please update your browser to its latest version in order to use Lapse.</>
+              : <>Lapse uses features that your version of Safari doesn't support. Try updating {platform.includes("mac") ? "macOS" : platform.includes("iphone") ? "iOS" : "iPadOS"}.</>
+          }
         </p>
       </div>
     </RootLayout>
