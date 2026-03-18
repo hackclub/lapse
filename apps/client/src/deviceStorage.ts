@@ -253,7 +253,14 @@ export class DeviceStorage {
           return await block();
         }
         catch (error) {
-          if (error instanceof DOMException && error.name == "NotReadableError") {
+          if (error instanceof DOMException) {
+            posthog.capture("devicestorage_domexception", {
+              error,
+              stack: error.stack,
+              message: error.message,
+              name: error.name
+            });
+
             await sleep(500); // race condition/browser locked the file while we were trying to read it...?
             continue;
           }
