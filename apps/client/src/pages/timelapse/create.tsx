@@ -542,7 +542,7 @@ export default function Page() {
       setIsUploading(false);
       const errorMessage = lastError instanceof Error ? lastError.message : "An unknown error occurred during upload";
       posthog.capture("timelapse_upload_failed", { error: errorMessage });
-      posthog.captureException(error);
+      posthog.captureException(lastError);
       setError(errorMessage);
     }
   }
