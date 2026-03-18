@@ -414,7 +414,7 @@ export default function Page() {
     }
 
     let progress = new SteppedProgress(6, setUploadStage, setUploadProgress);
-    let retriable = true;
+    let hasntFinishedYet = true;
     let lastError: unknown;
 
     try {
@@ -487,9 +487,9 @@ export default function Page() {
 
           progress.advance(3, "Encrypting thumbnail...");
           const encryptedThumb = await encryptData(
-            fromHex(device.passkey).buffer,
-            fromHex(res.data.draftTimelapse.iv).buffer,
-            thumbnail
+              fromHex(device.passkey).buffer,
+              fromHex(res.data.draftTimelapse.iv).buffer,
+              thumbnail
           );
 
           console.log("(create.tsx) - encrypted thumbnail:", encryptedThumb);
@@ -503,7 +503,7 @@ export default function Page() {
           console.log("(create.tsx) thumbnail uploaded successfully! we're done, yay!");
 
           // Everything's done - if anything fails at this point we should simply go through with it.
-          retriable = false;
+          hasntFinishedYet = false;
           lastError = undefined;
 
           progress.advance(4, "Cleaning up local data...");
@@ -530,14 +530,15 @@ export default function Page() {
           posthog.capture("timelapse_upload_try_error", { err, attempt });
           posthog.captureException(err, { attempt, when: "timelapse_upload_try_error" });
 
-          if (retriable) {
+          if (hasntFinishedYet) {
             console.error(`(create.tsx) attempt #${attempt + 1} failed! silently retrying in 250ms!`, err);
             lastError = err;
             await sleep(250);
           }
           else {
             console.warn(`(create.tsx) attempt #${attempt + 1} failed, but is not retriable. going through.`, err);
-            lastError = undefined; 
+            lastError = undefined;
+            break;
           }
         }
       }
