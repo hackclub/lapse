@@ -5,6 +5,7 @@ import { hasLegacyData } from "@/pages/migrate";
 import { sleep } from "@/common";
 import posthog from "posthog-js";
 import { ascending } from "@hackclub/lapse-shared";
+import { retryable } from "@/safety";
 
 /**
  * The metadata about a stored timelapse. This does *not* include the actual video - invoke `deviceStorage.getTimelapseVideoSessions` for this.
@@ -248,34 +249,43 @@ export class DeviceStorage {
   }
 
   private async operation<T>(block: () => Promise<T>) {
-    return await this.serialQueue.enqueue(async () => {
-      while (true) {
-        try {
-          return await block();
-        }
-        catch (error) {
-          if (error instanceof DOMException) {
-            posthog.capture("devicestorage_domexception", {
+    const result = await retryable("deviceStorage operation", async () => {
+      return await this.serialQueue.enqueue(async () => {
+        while (true) {
+          try {
+            return await block();
+          }
+          catch (error) {
+            if (error instanceof DOMException) {
+              posthog.capture("devicestorage_domexception", {
+                error,
+                stack: error.stack,
+                message: error.message,
+                name: error.name
+              });
+
+              await sleep(500); // race condition/browser locked the file while we were trying to read it...?
+              continue;
+            }
+
+            posthog.capture("devicestorage_uncaught_exception", {
               error,
-              stack: error.stack,
-              message: error.message,
-              name: error.name
+              stack: error instanceof Error ? error.stack : undefined,
+              message: error instanceof Error ? error.message : undefined
             });
 
-            await sleep(500); // race condition/browser locked the file while we were trying to read it...?
-            continue;
+            throw error;
           }
-
-          posthog.capture("devicestorage_uncaught_exception", {
-            error,
-            stack: error instanceof Error ? error.stack : undefined,
-            message: error instanceof Error ? error.message : undefined
-          });
-
-          throw error;
         }
-      }
+      });
     });
+
+    if (result instanceof Error) {
+      posthog.captureException(result);
+      throw result;
+    }
+
+    return result;
   }
 
   /**
