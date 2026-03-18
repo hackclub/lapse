@@ -274,7 +274,7 @@ export class DeviceStorage {
                 name: error.name
               });
 
-              await sleep(500); // race condition/browser locked the file while we were trying to read it...?
+              await sleep(500); // DOMExceptions is usually odd browser state. we should be able to safely retry
               continue;
             }
 
