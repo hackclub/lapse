@@ -13,16 +13,14 @@ export interface ErrorModalButton {
   kind?: "primary" | "regular";
 }
 
-export function ErrorModal({ isOpen, setIsOpen, title = "Woops!", message, icon = "important", buttons, onRetry, onClose, retryLabel = "Try Again", className }: {
+export function ErrorModal({ isOpen, setIsOpen, title = "Woops!", message, icon = "important", buttons, onClose, className }: {
   isOpen: boolean;
   setIsOpen: (x: boolean) => void;
   title?: string;
   message: string;
   icon?: IconGlyph;
   buttons?: ErrorModalButton[];
-  onRetry?: () => void;
   onClose?: () => void;
-  retryLabel?: string;
   className?: string;
 }) {
   onClose ??= () => {
@@ -30,15 +28,11 @@ export function ErrorModal({ isOpen, setIsOpen, title = "Woops!", message, icon 
   };
 
   const defaultButtons: ErrorModalButton[] = [
-    ...(
-      onRetry ? [
-        {
-          label: retryLabel,
-          onClick: onRetry,
-          kind: "regular" as const
-        }
-      ] : []
-    ),
+    {
+      label: "Refresh",
+      onClick: () => location.reload(),
+      kind: "regular" as const
+    },
     {
       label: "Close",
       onClick: onClose,
