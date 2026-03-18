@@ -99,7 +99,8 @@ export class DeviceStorage {
       return;
 
     if (!("createWritable" in FileSystemFileHandle.prototype)) {
-
+      handleMissingApi();
+      await sleep(1000);
     }
 
     if (navigator.storage.persist) {
