@@ -9,15 +9,12 @@ files:
 
 mac:
   category: public.app-category.developer-tools
-  icon: build/icon.icns
+  icon: build/icon.png
   target:
     - target: dmg
       arch: [x64, arm64]
     - target: zip
       arch: [x64, arm64]
-  hardenedRuntime: true
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
 
 win:
   icon: build/icon.png
@@ -37,9 +34,8 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  differentialPackage: true
 
 publish:
   provider: github
-  owner: hackclub
-  repo: lapse
+  owner: claynicholson
+  repo: Clapse
