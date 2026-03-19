@@ -339,7 +339,7 @@ export default os.router({
                         hackatimeRefreshToken: tokenData.refresh_token || null,
                         slackId: hktUser.slack_id || null,
                         handle: handle,
-                        displayName: (slack?.profile.display_name || slack?.profile.real_name) || baseHandle,
+                        displayName: ((slack?.profile.display_name || slack?.profile.real_name) || baseHandle).slice(0, 24) || "User",
                         profilePictureUrl: pfp,
                         bio: slack?.profile.title ?? "",
                         urls: [],
