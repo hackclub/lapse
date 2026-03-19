@@ -68,7 +68,7 @@ class CaptureManager {
     this.registerCaptureIpc();
 
     // Create the hidden capture window
-    const preloadPath = join(__dirname, "../preload/capturePreload.js");
+    const preloadPath = join(__dirname, "../preload/capturePreload.mjs");
     const captureScriptPath = join(__dirname, "captureWindow.js");
 
     this.captureWindow = new BrowserWindow({

@@ -35,28 +35,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build workspace packages
+        run: pnpm --filter @hackclub/lapse-shared --filter @hackclub/lapse-api run build
+
       - name: Build desktop app
         working-directory: apps/desktop
         run: npx electron-vite build
 
+      - name: Get Electron version
+        id: electron-ver
+        shell: bash
+        run: echo "version=$(node -e "console.log(require('electron/package.json').version)")" >> $GITHUB_OUTPUT
+
       - name: Build installer (Linux)
         if: matrix.platform == 'linux'
         working-directory: apps/desktop
-        run: npx electron-builder --linux AppImage deb --config electron-builder.yml
+        run: npx electron-builder --linux AppImage deb --config electron-builder.yml -c.electronVersion=${{ steps.electron-ver.outputs.version }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build installer (macOS)
         if: matrix.platform == 'mac'
         working-directory: apps/desktop
-        run: npx electron-builder --mac dmg zip --config electron-builder.yml
+        run: npx electron-builder --mac dmg zip --config electron-builder.yml -c.electronVersion=${{ steps.electron-ver.outputs.version }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build installer (Windows)
         if: matrix.platform == 'win'
         working-directory: apps/desktop
-        run: npx electron-builder --win nsis --config electron-builder.yml
+        run: npx electron-builder --win nsis --config electron-builder.yml -c.electronVersion=${{ steps.electron-ver.outputs.version }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

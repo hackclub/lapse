@@ -3,6 +3,7 @@
     "version": "2.0.0",
     "description": "Lapse desktop client — timelapse recording for Hack Clubbers",
     "private": true,
+    "type": "module",
     "main": "out/main/index.js",
     "scripts": {
         "dev": "electron-vite dev",
