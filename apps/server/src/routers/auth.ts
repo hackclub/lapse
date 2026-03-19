@@ -306,7 +306,7 @@ export default os.router({
                 // Generally, e-mails should be avoided as they can expose real/dead names.
                 let baseHandle = (
                     slack ? 
-                        (slack.profile.display_name ?? slack.profile.real_name ?? slack.profile.real_name_normalized) :
+                        (slack.profile.display_name || slack.profile.real_name || slack.profile.real_name_normalized) :
                     hktUser.github_username ?
                         hktUser.github_username :
                     (hktUser.emails.length > 0) ?
@@ -314,7 +314,7 @@ export default os.router({
                     hktUser.slack_id ?? "user"
                 );
                     
-                baseHandle = baseHandle.toLowerCase().replace(/[^a-z0-9]/g, "")
+                baseHandle = baseHandle.toLowerCase().replace(/[^a-z0-9]/g, "_")
                     .slice(0, MAX_HANDLE_LENGTH);
 
                 if (baseHandle.length < MIN_HANDLE_LENGTH) {
@@ -339,7 +339,7 @@ export default os.router({
                         hackatimeRefreshToken: tokenData.refresh_token || null,
                         slackId: hktUser.slack_id || null,
                         handle: handle,
-                        displayName: slack ? slack.profile.display_name : baseHandle,
+                        displayName: (slack?.profile.display_name || slack?.profile.real_name) || baseHandle,
                         profilePictureUrl: pfp,
                         bio: slack?.profile.title ?? "",
                         urls: [],
