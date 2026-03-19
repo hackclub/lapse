@@ -7,6 +7,8 @@ onlyBuiltDependencies:
   - '@prisma/engines'
   - '@sentry/cli'
   - esbuild
+  - electron
+  - electron-winstaller
   - prisma
   - sharp
   - unrs-resolver
