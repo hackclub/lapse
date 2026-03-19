@@ -139,10 +139,17 @@ export class DeviceStorage {
     await this.ensureInit();
 
     const dir = await this.getLapseDir();
-    const fileHandle = await dir.getFileHandle("store.json");
+    const fileHandle = await dir.getFileHandle("store.json", { create: true });
     const file = await fileHandle.getFile();
 
     const contents = await file.text();
+
+    if (!contents) {
+      console.warn("(deviceStorage.ts) store.json was empty or missing - reinitializing");
+      const store: Store = { devices: [], timelapse: null };
+      await this.writeStore(store);
+      return store;
+    }
 
     try {
       return v.parse(StoreSchema, JSON.parse(contents));
@@ -276,7 +283,11 @@ export class DeviceStorage {
                 name: error.name
               });
 
-              await sleep(500); // DOMExceptions is usually odd browser state. we should be able to safely retry
+              if (error.name === "NotFoundError") {
+                throw error;
+              }
+
+              await sleep(500); // DOMExceptions are usually odd browser state. we should be able to safely retry
               continue;
             }
 
