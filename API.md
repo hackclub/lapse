@@ -6,9 +6,9 @@ This document provides guidance on how to integrate Lapse into external services
 
 ## Overview
 
-The most valuable resource in your journey of integrating Lapse will be the [**Swagger UI docs**](https://lapse.hackclub.com/api/rest/docs). These are automatically generated from the source code.
+The most valuable resource in your journey of integrating Lapse will be the [**Swagger UI docs**](https://api.lapse.hackclub.com/docs). These are automatically generated from the source code.
 
-The main REST API is available at `https://lapse.hackclub.com/api/rest/` (or your self-hosted instance).
+The main REST API is available at `https://api.lapse.hackclub.com/api` (or your self-hosted instance).
 
 Every single response by the API is in JSON, and **always** has the shape of either:
 ```json
@@ -26,7 +26,7 @@ Lapse has two kinds of endpoints: **public** and **protected** ones. **Public** 
 For example - `global/weeklyLeaderboard` is a public endpoint:
 
 ```
-GET /api/rest/global/weeklyLeaderboard
+GET /api/global/weeklyLeaderboard
 ```
 
 **Response:**
@@ -215,7 +215,7 @@ async function startOAuth() {
   const state = generateRandomString(32);
   localStorage.setItem("oauth_state", state);
   
-  const response = await fetch("https://lapse.hackclub.com/api/oauth/authorize", {
+  const response = await fetch("https://api.lapse.hackclub.com/api/oauth/authorize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -239,7 +239,7 @@ async function startOAuth() {
 
 // Step 2: User approves, submit consent
 async function approveOAuth(state) {
-  const response = await fetch("https://lapse.hackclub.com/api/oauth/authorize", {
+  const response = await fetch("https://api.lapse.hackclub.com/api/oauth/authorize", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
