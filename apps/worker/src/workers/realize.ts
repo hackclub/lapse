@@ -346,7 +346,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 timelapseId,
                 videoKey,
                 thumbnailKey,
-                videoDuration
+                realTimeDuration: videoDuration * TIMELAPSE_FACTOR
             };
         }
         finally {

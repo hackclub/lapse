@@ -242,7 +242,7 @@ export const adminRouterContract = {
         })),
 
     recalculateDurations: contract("POST", "/admin/recalculateDurations")
-        .route({ description: "Recalculates the duration of every timelapse from its snapshots. Requires administrator permissions and an `elevated` grant." })
+        .route({ description: "Recalculates the duration of unrealized timelapses (those still processing, without a compiled video) from their snapshots. Realized timelapses are skipped because their duration is derived from the compiled video. Requires administrator permissions and an `elevated` grant." })
         .input(NO_INPUT)
         .output(apiResult({
             updated: z.number().int().nonnegative()

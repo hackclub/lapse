@@ -1,5 +1,5 @@
 import { Queue, QueueEvents } from "bullmq";
-import { TIMELAPSE_FACTOR, type EditListEntry } from "@hackclub/lapse-api";
+import type { EditListEntry } from "@hackclub/lapse-api";
 import { REALIZE_JOB_QUEUE_NAME, RealizeJobOutputsSchema, type RealizeJobInputs, type RealizeJobOutputs } from "@hackclub/lapse-jobs";
 
 import { logError, logInfo, logWarning } from "@/logging.js";
@@ -39,9 +39,9 @@ realizeEvents.waitUntilReady()
     .then(() => {
         realizeEvents.on("completed", async ({ jobId, returnvalue }) => {
             const result = RealizeJobOutputsSchema.parse(typeof returnvalue === "object" ? returnvalue : JSON.parse(returnvalue));
-            const { videoKey, thumbnailKey, timelapseId, videoDuration } = result;
+            const { videoKey, thumbnailKey, timelapseId, realTimeDuration } = result;
 
-            logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey, videoDuration });
+            logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey, realTimeDuration });
 
             const draft = await database().draftTimelapse.findFirst({
                 where: {
@@ -84,7 +84,7 @@ realizeEvents.waitUntilReady()
                     associatedJobId: null,
                     s3Key: videoKey,
                     thumbnailS3Key: thumbnailKey,
-                    ...(videoDuration != null && { duration: videoDuration * TIMELAPSE_FACTOR })
+                    ...(realTimeDuration != null && { duration: realTimeDuration })
                 },
                 include: { owner: true }
             });
