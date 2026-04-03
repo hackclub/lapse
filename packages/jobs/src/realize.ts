@@ -53,9 +53,9 @@ export const RealizeJobOutputsSchema = z.object({
     thumbnailKey: z.string(),
 
     /**
-     * The real-time duration of the timelapse in seconds (i.e. `videoDuration * TIMELAPSE_FACTOR`),
-     * as measured by ffprobe on the compiled output video. This value can be stored directly as the
-     * timelapse `duration` without further conversion.
+     * The real-time duration of the timelapse in seconds, derived from the compiled video duration
+     * (as measured by ffprobe) multiplied by `TIMELAPSE_FACTOR`. This value can be stored directly
+     * as the timelapse `duration` without further conversion.
      * Optional for backwards compatibility with in-flight jobs that predate this field.
      */
     realTimeDuration: z.number().gt(0).finite().optional()
