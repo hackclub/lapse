@@ -246,7 +246,8 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             ]);
 
             // Thumbnail generation - we opt for a simple approach where we just get the frame in the middle of the video.
-            const thumbnailTimestamp = (await measureVideoDuration(outputPath)) / 2;
+            const videoDuration = await measureVideoDuration(outputPath);
+            const thumbnailTimestamp = videoDuration / 2;
 
             // Arguments to generate thumbnails regardless of output format
             let thumbnailContentType = "image/avif";
@@ -344,7 +345,8 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
             return {
                 timelapseId,
                 videoKey,
-                thumbnailKey
+                thumbnailKey,
+                videoDuration
             };
         }
         finally {

@@ -50,7 +50,13 @@ export const RealizeJobOutputsSchema = z.object({
     /**
      * The S3 key for the thumbnail, stored in the public S3 bucket, shared by both the server and the worker.
      */
-    thumbnailKey: z.string()
+    thumbnailKey: z.string(),
+
+    /**
+     * The duration of the compiled output video in seconds, as measured by ffprobe.
+     * Optional for backwards compatibility with in-flight jobs that predate this field.
+     */
+    videoDuration: z.number().nonnegative().optional()
 });
 
 /**

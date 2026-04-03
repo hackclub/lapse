@@ -516,6 +516,8 @@ export default os.router({
         .use(requiredAuth("ADMIN"))
         .use(requiredScopes("elevated"))
         .handler(async () => {
+            // Only recalculate durations for timelapses that haven't been realized yet.
+            // Realized timelapses have their duration set from the compiled video, which is the source of truth.
             const PAGE_SIZE = 100;
             let updated = 0;
             let cursor: string | undefined;
@@ -523,6 +525,7 @@ export default os.router({
             while (true) {
                 const batch = await database().timelapse.findMany({
                     select: { id: true, snapshots: true },
+                    where: { s3Key: null },
                     take: PAGE_SIZE,
                     orderBy: { id: "asc" },
                     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {})
@@ -549,7 +552,7 @@ export default os.router({
                 }
             }
 
-            logInfo(`Recalculated durations for ${updated} timelapses.`);
+            logInfo(`Recalculated durations for ${updated} unrealized timelapses (skipped realized timelapses).`);
 
             return apiOk({ updated });
         }),
