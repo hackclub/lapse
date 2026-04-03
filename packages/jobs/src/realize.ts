@@ -50,7 +50,15 @@ export const RealizeJobOutputsSchema = z.object({
     /**
      * The S3 key for the thumbnail, stored in the public S3 bucket, shared by both the server and the worker.
      */
-    thumbnailKey: z.string()
+    thumbnailKey: z.string(),
+
+    /**
+     * The real-time duration of the timelapse in seconds, derived from the compiled video duration
+     * (as measured by ffprobe) multiplied by `TIMELAPSE_FACTOR`. This value can be stored directly
+     * as the timelapse `duration` without further conversion.
+     * Optional for backwards compatibility with in-flight jobs that predate this field.
+     */
+    realTimeDuration: z.number().gt(0).finite().optional()
 });
 
 /**

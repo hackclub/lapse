@@ -39,9 +39,9 @@ realizeEvents.waitUntilReady()
     .then(() => {
         realizeEvents.on("completed", async ({ jobId, returnvalue }) => {
             const result = RealizeJobOutputsSchema.parse(typeof returnvalue === "object" ? returnvalue : JSON.parse(returnvalue));
-            const { videoKey, thumbnailKey, timelapseId } = result;
+            const { videoKey, thumbnailKey, timelapseId, realTimeDuration } = result;
 
-            logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey });
+            logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey, realTimeDuration });
 
             const draft = await database().draftTimelapse.findFirst({
                 where: {
@@ -83,7 +83,8 @@ realizeEvents.waitUntilReady()
                 data: {
                     associatedJobId: null,
                     s3Key: videoKey,
-                    thumbnailS3Key: thumbnailKey
+                    thumbnailS3Key: thumbnailKey,
+                    ...(realTimeDuration != null && { duration: realTimeDuration })
                 },
                 include: { owner: true }
             });
