@@ -27,9 +27,9 @@ export default function BrowserUpdatePage() {
         
         <p className="text-muted text-xl w-1/2 text-center">
           {
-            ua.includes("safari/")
-              ? <>Lapse uses features that your browser does not support. Please update your browser to its latest version in order to use Lapse.</>
-              : <>Lapse uses features that your version of Safari doesn't support. Try updating {platform.includes("mac") ? "macOS" : platform.includes("iphone") ? "iOS" : "iPadOS"}.</>
+            ua.includes("safari/") && !ua.includes("chrome/")
+              ? <>Lapse uses features that your version of Safari doesn't support. Try updating {platform.includes("mac") ? "macOS" : platform.includes("iphone") ? "iOS" : "iPadOS"}.</>
+              : <>Lapse uses features that your browser does not support. Please update your browser to its latest version in order to use Lapse.</>
           }
         </p>
       </div>
