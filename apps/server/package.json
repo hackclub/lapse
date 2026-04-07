@@ -49,13 +49,13 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@prisma/client": "^7.2.0",
+    "@prisma/client": "^7.6.0",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^25.0.3",
-    "fastify-cli": "^7.4.1",
+    "@types/node": "^25.5.2",
+    "fastify-cli": "^8.0.0",
     "require-in-the-middle": "^8.0.1",
     "tsc-alias": "^1.8.16",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
