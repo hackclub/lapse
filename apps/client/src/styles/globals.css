@@ -48,6 +48,7 @@
     --color-secondary: var(--secondary);
     --color-primary: #ec3750;
     --color-accent: var(--accent);
+    --color-red-accent: #ef596d;
 
     --animate-blink: blink 2s infinite steps(1, end);
     @keyframes blink {

@@ -17,17 +17,21 @@ const __dirname = dirname(__filename);
 const DEFAULT_DATABASE_PORT = 5432;
 const DEFAULT_SERVER_PORT = 3123;
 const DEFAULT_REDIS_PORT = 6379;
+const DEFAULT_DATABASE_USER = "postgres";
+const DEFAULT_DATABASE_PASSWORD = "postgres";
 
 let databasePort = DEFAULT_DATABASE_PORT;
 let serverPort = DEFAULT_SERVER_PORT;
 let redisPort = DEFAULT_REDIS_PORT;
+let databaseUser = DEFAULT_DATABASE_USER;
+let databasePassword = DEFAULT_DATABASE_PASSWORD;
 
 function getDatabaseUrl() {
-    return `postgresql://postgres:postgres@localhost:${databasePort}/lapse?schema=public`;
+	return `postgresql://${databaseUser}:${databasePassword}@localhost:${databasePort}/lapse?schema=public`;
 }
 
 function getRedisUrl() {
-    return `redis://localhost:${redisPort}`;
+	return `redis://localhost:${redisPort}`;
 }
 
 let S3_ENDPOINT = "http://s3.localhost.localstack.cloud:4566";
@@ -270,7 +274,7 @@ async function updateEnvFiles(envVars: {
 			writeEnvFile(clientDir, envVars.client),
 			writeEnvFile(workerDir, envVars.worker),
 		]);
-		
+
 		spinner.succeed(chalk.green("Environment variables updated successfully"));
 		logInfo(`Updated .env files for ${chalk.italic("server")}, ${chalk.italic("client")}, and ${chalk.italic("worker")}`);
 	}
@@ -363,7 +367,7 @@ async function updateDockerComposeFile(localstackImage: string | null) {
 async function runSetup() {
 	console.clear();
 
-	const TOTAL_STEPS = 8;
+	const TOTAL_STEPS = 9;
 	let currentStep = 0;
 
 	try {
@@ -378,6 +382,16 @@ async function runSetup() {
 		databasePort = await askForPort("database", DEFAULT_DATABASE_PORT);
 		serverPort = await askForPort("API server", DEFAULT_SERVER_PORT);
 		redisPort = await askForPort("Redis", DEFAULT_REDIS_PORT);
+
+		logStep(++currentStep, TOTAL_STEPS, "Configuring database credentials...");
+		databaseUser = await input({
+			message: `Enter database username (default: ${DEFAULT_DATABASE_USER}): `,
+			default: DEFAULT_DATABASE_USER,
+		});
+		databasePassword = await input({
+			message: `Enter database password (default: ${DEFAULT_DATABASE_PASSWORD}): `,
+			default: DEFAULT_DATABASE_PASSWORD,
+		});
 
 		logStep(++currentStep, TOTAL_STEPS, "Configuring storage backend...");
 		localstackORr2 = await askLocalstackOrR2();
@@ -500,7 +514,7 @@ async function main() {
 				await startDockerCompose();
 				return;
 			}
-			
+
 			await runSetup();
 		});
 
