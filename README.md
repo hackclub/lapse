@@ -15,19 +15,15 @@ In order to get started with developing Lapse, run these commands:
 # Install all packages
 pnpm install
 
-# Set up the development environment (makes the .env file for you)
+# Set up the development environment (opens the environment variables wizard)
 pnpm dev:setup-env
 
 # Start the web client and backend
 pnpm dev
 ```
 
-You'll need to install ffmpeg as well.
-
-- Windows: install Chocolatey and then run `choco install ffmpeg` in an Administrative command prompt
-- Mac: installed homebrew and then run `brew install ffmpeg`
-- Linux: install ffmpeg with your package manager
-
+Lapse relies on ffmpeg for its serverside video processing.
+You can install ffmpeg [from their website](https://ffmpeg.org/download.html) by downloading the appropriate ffmpeg binary for your operating system.
 To start and stop the development environment, use `pnpm dev:start-env` and `pnpm dev:stop-env` respectively.
 
 When developing, it's a good idea to re-compile all packages on the fly!
