@@ -367,8 +367,8 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
         icon={match(entity, {
           user: "profile-fill",
           comment: "message",
-          draftTimelapse: "instagram",
-          timelapse: "instagram",
+          draftTimelapse: "docs",
+          timelapse: "controls",
           legacyTimelapse: "profile-fill",
         })}
       />
