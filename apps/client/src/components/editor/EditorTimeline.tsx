@@ -43,7 +43,7 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key == "Backspace" || "Delete") {
+      if (event.key == "Backspace" || event.key == "Delete") {
         const target = event.target as HTMLElement
         if (["INPUT", "TEXTAREA"].includes(target?.tagName) == false) {
           setEditList(editList.filter((_, i) => i !== selectedEditRegionIdx));
