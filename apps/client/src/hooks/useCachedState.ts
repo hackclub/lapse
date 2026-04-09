@@ -1,0 +1,22 @@
+import { useEffect, useState } from "react";
+
+import { useCache } from "@/hooks/useCache";
+
+export function useCachedState<T>(key: string, initialValue: T) {
+  const [value, setValue] = useState(initialValue);
+  const [cached, setCached] = useCache<T>(key);
+
+  useEffect(() => {
+    if (cached !== null) {
+      setValue(cached);
+    }
+  }, [cached, setCached]);
+
+  return [
+    value,
+    (x: T) => {
+      setValue(x);
+      setCached(x);
+    }
+  ] as const;
+}

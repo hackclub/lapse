@@ -1,6 +1,13 @@
 {
 	"packageManager": "pnpm@10.25.0",
-	"devDependencies": {
-		"turbo": "^2.6.3"
+	"scripts": {
+		"build": "pnpm --parallel run build",
+		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
+		"dev:watch-all": "pnpm --parallel run watch",
+		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env",
+		"dev:start-env": "pnpm run --filter @hackclub/lapse-devscripts dev:start-env",
+		"dev:stop-env": "pnpm run --filter @hackclub/lapse-devscripts dev:stop-env",
+		"dev:remove-env": "pnpm run --filter @hackclub/lapse-devscripts dev:remove-env",
+		"console": "pnpm tsx ./apps/server/etc/scripts/console.ts"
 	}
 }
