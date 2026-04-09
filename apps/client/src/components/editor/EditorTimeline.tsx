@@ -245,7 +245,7 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
     const centerVisibleTime = scrolledTime + visibleTimeRange / 2;
 
     const cutDuration = Math.max(0.5, visibleTimeRange / 4);
-    const begin = Math.max(0, centerVisibleTime - cutDuration / 2);
+    const begin = Math.max(0, time);
     const end = Math.min(totalTime, begin + cutDuration);
 
     setEditList(
