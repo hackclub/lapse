@@ -41,6 +41,21 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
 
   playingRef.current = playing;
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key == "Backspace" || "Delete") {
+        const target = event.target as HTMLElement
+        if (["INPUT", "TEXTAREA"].includes(target?.tagName) == false) {
+          setEditList(editList.filter((_, i) => i !== selectedEditRegionIdx));
+          setSelectedIndex(null);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  })
+
   // Thumbnail regeneration - this usually happens just once, unless `sessions` updates for some reason.
   useAsyncEffect(async () => {
     const startedAt = Date.now();
