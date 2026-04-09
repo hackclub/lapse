@@ -46,8 +46,7 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
       if (event.key == "Backspace" || event.key == "Delete") {
         const target = event.target as HTMLElement
         if (["INPUT", "TEXTAREA"].includes(target?.tagName) == false) {
-          setEditList(editList.filter((_, i) => i !== selectedEditRegionIdx));
-          setSelectedIndex(null);
+          removeSelectedEditRegion();
         }
       }
     }
@@ -255,13 +254,10 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
     });
   }
 
-  const removeSelectedEditRegion = useCallback(
-    () => {
-      setEditList(editList.filter((_, i) => i !== selectedEditRegionIdx));
-      setSelectedIndex(null);
-    },
-    [editList]
-  );
+  const removeSelectedEditRegion = (() => {
+    setEditList(editList.filter((_, i) => i !== selectedEditRegionIdx));
+    setSelectedIndex(null);
+  });
 
   const durationAfterCuts = (() => {
     let duration = totalTime;
