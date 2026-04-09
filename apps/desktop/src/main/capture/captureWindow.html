@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lapse Capture</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' file:; media-src 'self' mediastream:;">
+</head>
+<body>
+  <!--
+    Hidden capture window. This page hosts the MediaRecorder and canvas-based
+    frame capture loop. It has no visible UI.
+
+    At runtime, captureManager.ts writes a version of this HTML to a temp file
+    with the correct absolute path to the built captureWindow.js bundle. The
+    preload script (capturePreload.js) provides the IPC bridge as
+    window.captureApi.
+  -->
+  <script src="./captureWindow.js"></script>
+</body>
+</html>
