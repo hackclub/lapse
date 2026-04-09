@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, Dispatch, SetStateAction } from "react";
 import Icon from "@hackclub/icons";
 import clsx from "clsx";
 import { EditListEntry } from "@hackclub/lapse-api";
@@ -20,7 +20,7 @@ const FILMSTRIP_COUNT = 90;
 export function EditorTimeline({ sessions, editList, setEditList, playback, onSaveAndExit, onPublish, onDeleteDraft }: {
   sessions: { url: string; duration: number }[],
   editList: EditListEntry[],
-  setEditList: (x: EditListEntry[]) => void,
+  setEditList: Dispatch<SetStateAction<EditListEntry[]>>,
   playback: VideoPlayback,
   onSaveAndExit: () => void,
   onPublish: () => void,
@@ -248,9 +248,11 @@ export function EditorTimeline({ sessions, editList, setEditList, playback, onSa
     const begin = Math.max(0, time);
     const end = Math.min(totalTime, begin + cutDuration);
 
-    setEditList(
-      [ ...editList, { begin, end, kind: "CUT" } ]
-    );
+    setEditList(prev => {
+      const next: EditListEntry[] = [ ...prev, { begin, end, kind: "CUT" } ]
+      setSelectedIndex(next.length - 1)
+      return next
+    });
   }
 
   const removeSelectedEditRegion = useCallback(
