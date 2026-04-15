@@ -93,6 +93,46 @@ export class TimelapseVideoSession {
     this.canvas.height = this.video.videoHeight;
     this.canvasCtx.drawImage(this.video, 0, 0);
 
+    // --- Add Time Overlay ---
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, "0");
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+    const timestamp = `${hours}:${minutes}`;
+
+    this.canvasCtx.font = "bold 28px 'SF Mono', 'Consolas', 'Monaco', monospace";
+    this.canvasCtx.textAlign = "left";
+    this.canvasCtx.textBaseline = "middle";
+
+    const textMetrics = this.canvasCtx.measureText(timestamp);
+    const textWidth = textMetrics.width;
+    const textHeight = 28;
+
+    const paddingX = 24;
+    const paddingY = 14;
+    const pillWidth = textWidth + paddingX * 2;
+    const pillHeight = textHeight + paddingY * 2;
+    const pillX = this.canvas.width - pillWidth - 24;
+    const pillY = 24;
+    const borderRadius = pillHeight / 2;
+
+    this.canvasCtx.save();
+    this.canvasCtx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    this.canvasCtx.shadowBlur = 12;
+    this.canvasCtx.shadowOffsetX = 0;
+    this.canvasCtx.shadowOffsetY = 4;
+
+    this.canvasCtx.beginPath();
+    this.canvasCtx.roundRect(pillX, pillY, pillWidth, pillHeight, borderRadius);
+    this.canvasCtx.fillStyle = "rgba(20, 20, 24, 0.9)";
+    this.canvasCtx.fill();
+
+    this.canvasCtx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+    this.canvasCtx.lineWidth = 1;
+    this.canvasCtx.stroke();
+    this.canvasCtx.restore();
+    this.canvasCtx.fillStyle = "white";
+    this.canvasCtx.fillText(timestamp, pillX + paddingX, pillY + pillHeight / 2);
+
     if (this.canvasTrack.synced) {
       this.canvasTrack.stream.requestFrame();
     }
