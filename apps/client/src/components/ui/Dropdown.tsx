@@ -173,11 +173,6 @@ export function Dropdown<TKey extends string>({ value, onChange, options, disabl
 
   let isEffectivelyOpen = isOpen && !disabled;
   const anchor = mainRef.current?.getBoundingClientRect();
-  
-  const selected: DropdownOption<TKey> =
-    findOption(value, options) ??
-    findFirstOption(options) ??
-    { label: "", value }; // This should never happen!
 
   const filteredOptions = allowUserCustom && inputValue
     ? filterTree(options, inputValue)
@@ -274,7 +269,7 @@ export function Dropdown<TKey extends string>({ value, onChange, options, disabl
                 if (!isOpen) setIsOpen(true);
               }}
               onFocus={() => setIsOpen(true)}
-              placeholder={(typeof selected.label === "string" ? selected.label : selected.searchLabel) || "Type to search or create..."}
+              placeholder="Type to search or create..."
               disabled={disabled}
               className="flex-1 bg-transparent outline-none placeholder-secondary"
             />
@@ -296,7 +291,7 @@ export function Dropdown<TKey extends string>({ value, onChange, options, disabl
             )}
             onClick={handleClick}
           >
-            <span>{selected.label || value}</span>
+            <span>{value}</span>
             <Icon glyph="down-caret" size={18} className="text-secondary" />
           </div>
         )
