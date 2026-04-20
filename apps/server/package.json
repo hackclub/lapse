@@ -28,7 +28,7 @@
     "@hackclub/lapse-shared": "workspace:*",
     "@inquirer/prompts": "^8.2.1",
     "@node-oauth/oauth2-server": "^5.2.1",
-    "@orpc/openapi": "^1.13.5",
+    "@orpc/openapi": "^1.13.9",
     "@orpc/server": "^1.13.5",
     "@orpc/zod": "^1.13.5",
     "@prisma/adapter-pg": "^7.2.0",
