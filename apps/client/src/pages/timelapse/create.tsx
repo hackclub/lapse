@@ -607,12 +607,14 @@ export default function Page() {
   useEffect(() => {
     let release = {};
 
-    navigator.locks.request("lapse_tab", { ifAvailable: true },
+    navigator.locks.request("lapse_lock", { ifAvailable: true },
       async (lock) => {
         if (!lock) {
           console.log("didn't get tab lock...")
+          console.log(lock)
           alert("You can only have one tab open on the recording page. Close the other tab.")
           router.push("/")
+          return
         }
         console.log("got tab lock. I think")
         console.log(lock)
