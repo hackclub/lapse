@@ -609,7 +609,7 @@ export default function Page() {
     if (didRun.current) { return; }
     didRun.current = true;
 
-    navigator.locks.request("lapse_lock", { ifAvailable: true },
+    navigator.locks.request("lapse_lock_thing", { ifAvailable: true },
       async (lock) => {
         if (!lock) {
           console.log("didn't get tab lock...")
