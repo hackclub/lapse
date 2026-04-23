@@ -602,10 +602,12 @@ export default function Page() {
   function handleStreamInterrupt() {
     
   }
-
+  const didRun = useRef(false);
   // force this code to be ran on the client
   useEffect(() => {
     let release = {};
+    if (didRun.current) { return; }
+    didRun.current = true;
 
     navigator.locks.request("lapse_lock", { ifAvailable: true },
       async (lock) => {
