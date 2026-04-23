@@ -603,6 +603,25 @@ export default function Page() {
     
   }
 
+  // force this code to be ran on the client
+  useEffect(() => {
+    let release = {};
+
+    navigator.locks.request("lapse_tab", { ifAvailable: true },
+      async (lock) => {
+        if (!lock) {
+          console.log("didn't get tab lock...")
+          alert("You can only have one tab open on the recording page. Close the other tab.")
+          router.push("/")
+        }
+        console.log("got tab lock. I think")
+        console.log(lock)
+        await new Promise((resolve) => {
+          release = resolve
+        })
+      })
+  }, [])
+
   return (
     <RootLayout showHeader={false}>
       <Modal isOpen={setupModalOpen}>
