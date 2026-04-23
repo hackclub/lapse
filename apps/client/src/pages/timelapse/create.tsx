@@ -602,6 +602,29 @@ export default function Page() {
   function handleStreamInterrupt() {
     
   }
+  const didRun = useRef(false);
+  // force this code to be ran on the client
+  useEffect(() => {
+    let release = {};
+    if (didRun.current) { return; }
+    didRun.current = true;
+
+    navigator.locks.request("lapse_lock_thing", { ifAvailable: true },
+      async (lock) => {
+        if (!lock) {
+          console.log("didn't get tab lock...")
+          console.log(lock)
+          alert("You can only have one tab open on the recording page. Close the other tab.")
+          router.push("/")
+          return
+        }
+        console.log("got tab lock. I think")
+        console.log(lock)
+        await new Promise((resolve) => {
+          release = resolve
+        })
+      })
+  }, [])
 
   return (
     <RootLayout showHeader={false}>
