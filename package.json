@@ -1,5 +1,10 @@
 {
 	"packageManager": "pnpm@10.25.0",
+	"pnpm": {
+		"overrides": {
+			"protobufjs": "7.5.5"
+		}
+	},
 	"scripts": {
 		"build": "pnpm --parallel run build",
 		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
