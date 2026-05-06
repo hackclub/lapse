@@ -56,6 +56,6 @@
     "fastify-cli": "^8.0.0",
     "require-in-the-middle": "^8.0.1",
     "tsc-alias": "^1.8.17",
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   }
 }

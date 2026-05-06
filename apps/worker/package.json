@@ -38,6 +38,6 @@
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^25.6.0",
     "tsc-alias": "^1.8.17",
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   }
 }
