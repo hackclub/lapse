@@ -21,7 +21,7 @@
     "@hackclub/lapse-shared": "workspace:*",
     "@orpc/client": "^1.13.6",
     "@orpc/contract": "^1.13.5",
-    "@orpc/openapi": "^1.13.5",
+    "@orpc/openapi": "^1.13.9",
     "@orpc/openapi-client": "^1.13.5",
     "@posthog/nextjs-config": "^1.8.19",
     "@scure/bip39": "^2.0.1",
