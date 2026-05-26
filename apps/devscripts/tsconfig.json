@@ -6,6 +6,7 @@
     "./etc"
   ],
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     // File Layout
     "rootDir": "./src",
     "outDir": "./dist",
