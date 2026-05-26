@@ -6,6 +6,7 @@
   ],
   "exclude": [],
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     // File Layout
     "outDir": "./dist",
 

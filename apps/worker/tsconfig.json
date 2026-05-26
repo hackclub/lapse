@@ -1,6 +1,7 @@
 {
   "extends": "@tsconfig/node24/tsconfig.json",
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     // File Layout
     "rootDir": "./src",
     "outDir": "./dist",
