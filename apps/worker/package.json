@@ -28,10 +28,10 @@
     "@hackclub/lapse-api": "workspace:*",
     "@hackclub/lapse-jobs": "workspace:*",
     "@hackclub/lapse-shared": "workspace:*",
-    "@sentry/node": "^10.53.1",
-    "bullmq": "^5.77.3",
+    "@sentry/node": "^10.54.0",
+    "bullmq": "^5.77.4",
     "dotenv": "^17.4.2",
-    "ioredis": "^5.10.1",
+    "ioredis": "^5.11.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
