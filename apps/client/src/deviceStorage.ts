@@ -103,6 +103,12 @@ export class DeviceStorage {
     if (this.root)
       return;
 
+    if (/firefox\//i.test(navigator.userAgent)) {
+      handleMissingApi();
+      await sleep(1000);
+      return;
+    }
+
     if (!("createWritable" in FileSystemFileHandle.prototype)) {
       handleMissingApi();
       await sleep(1000);
