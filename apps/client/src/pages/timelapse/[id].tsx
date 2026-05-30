@@ -231,7 +231,7 @@ export default function Page() {
                     Edit details
                   </Button>
                   { timelapse.playbackUrl && !timelapse.private?.hackatimeProject && (
-                    <Button className="gap-2 w-full" onClick={() => setHackatimeModalOpen(true)}>
+                    <Button className="gap-2 w-full text-secondary!" onClick={() => setHackatimeModalOpen(true)} disabled={true}>
                       <Icon glyph="history" size={24} />
                       Sync with Hackatime
                     </Button>

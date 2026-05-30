@@ -248,13 +248,16 @@ export default function Page() {
   async function handleVisibilitySelected(visibility: TimelapseVisibility) {
     setPublishModalOpen(false);
     setPendingVisibility(visibility);
-    setHackatimeModalOpen(true);
+    // setHackatimeModalOpen(true);
+    await publish(null, visibility);
   }
 
-  async function publish(hackatimeProjectName: string | null) {
+  async function publish(hackatimeProjectName: string | null, visibilityOverride?: TimelapseVisibility) {
     setHackatimeModalOpen(false);
 
-    if (!draft || !pendingVisibility)
+    const visibility = visibilityOverride ?? pendingVisibility;
+
+    if (!draft || !visibility)
       return;
 
     const allDevices = await deviceStorage.getAllDevices();
@@ -281,7 +284,7 @@ export default function Page() {
 
     const res = await api.timelapse.publish({
       id: draft.id,
-      visibility: pendingVisibility,
+      visibility: visibility,
       deviceKey: device.passkey,
       hackatimeProject: hackatimeProjectName ?? undefined,
     });
@@ -293,7 +296,7 @@ export default function Page() {
 
     posthog.capture("timelapse_published", {
       timelapse_id: res.data.timelapse.id,
-      visibility: pendingVisibility,
+      visibility: visibility,
       has_hackatime_project: hackatimeProjectName !== null,
     });
 
