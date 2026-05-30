@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import posthog from "posthog-js";
 
 import RootLayout from "@/components/layout/RootLayout";
+import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 
 // This page is displayed when we detect that we are missing some APIs (often Baseline 2025) that we absolutely need (e.g. OPFS ones).
 // We mostly display this to a really small subset of Safari users.
 
+export const BYPASS_BROWSER_CHECK_KEY = "lapse:bypass_browser_check";
+
 export default function BrowserUpdatePage() {
   const [ua, setUserAgent] = useState("");
   const [platform, setPlatform] = useState("");
+  const [showWarning, setShowWarning] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setUserAgent(navigator.userAgent.toLowerCase());
@@ -18,6 +25,17 @@ export default function BrowserUpdatePage() {
     posthog.capture("outdated_browser_detected", { userAgent: navigator.userAgent });
     console.log(`(update-browser.tsx) outdated browser: ${navigator.userAgent}`);
   }, []);
+
+  function handleContinueAnyway() {
+    if (!showWarning) {
+      setShowWarning(true);
+      return;
+    }
+
+    localStorage.setItem(BYPASS_BROWSER_CHECK_KEY, "1");
+    posthog.capture("outdated_browser_bypass", { userAgent: navigator.userAgent });
+    router.push("/");
+  }
 
   return (
     <RootLayout showHeader={false} title="Update your browser">
@@ -32,6 +50,23 @@ export default function BrowserUpdatePage() {
               : <>Lapse uses features that your browser does not support. Please update your browser to its latest version in order to use Lapse.</>
           }
         </p>
+
+        {showWarning && (
+          <div className="w-1/2 mt-2">
+            <Alert variant="warning" icon="important">
+              <p className="font-bold">Experimental — things may break</p>
+              <p className="text-sm mt-1">Lapse relies on browser features your browser doesn't support. Continuing anyway may cause data loss, crashes, or other unexpected behaviour. Click again to proceed.</p>
+            </Alert>
+          </div>
+        )}
+
+        <Button
+          kind="destructive"
+          onClick={handleContinueAnyway}
+          className="mt-4"
+        >
+          Continue anyway
+        </Button>
       </div>
     </RootLayout>
   );

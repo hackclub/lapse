@@ -82,6 +82,11 @@ async function doesFileExist(directoryHandle: FileSystemDirectoryHandle, fileNam
 function handleMissingApi(forceNavigation: boolean = false) {
   console.warn("(deviceStorage.ts) missing API detected; assuming outdated browser");
 
+  if (localStorage.getItem("lapse:bypass_browser_check") === "1") {
+    console.warn("(deviceStorage.ts) bypass flag set; skipping update-browser redirect");
+    return;
+  }
+
   if (forceNavigation || !location.href.includes("update-browser")) {
     location.href = "/update-browser";
   }
