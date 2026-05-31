@@ -91,6 +91,13 @@ export default function Page() {
           const sessionRes = await sfetch(x);
           if (!sessionRes.ok) {
             posthog.capture("draft_load_session_fail", { sessionRes, session: x });
+
+            const localTimelapse = await deviceStorage.getTimelapse();
+            if (localTimelapse) {
+              router.replace("/timelapse/create?reason=session_unavailable");
+              return null;
+            }
+
             throw new Error(`Could not fetch timelapse session @ ${x}`);
           }
 
