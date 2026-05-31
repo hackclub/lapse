@@ -21,6 +21,7 @@ import { useInterval } from "@/hooks/useInterval";
 import RootLayout from "@/components/layout/RootLayout";
 import { TimeSince } from "@/components/TimeSince";
 import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
@@ -646,6 +647,12 @@ export default function Page() {
               {[false, true].map((panelIsDiscarding) => (
                 <div key={panelIsDiscarding ? "discard" : "resume"} className={clsx("w-1/2 shrink-0", panelIsDiscarding ? "pl-4" : "pr-4")}>
                   <div className="flex flex-col gap-6">
+                    {!panelIsDiscarding && setupState === "INIT_CONTINUE" && (
+                      <Alert variant="warning" icon="important">
+                        <p className="text-sm mt-1">Resuming a timelapse can cause issues with the final video. Consider submitting your current timelapse and starting a new one instead.</p>
+                      </Alert>
+                    )}
+
                     <MediaSourceSelector
                       stream={stream} setStream={setStream}
                       onInterrupt={handleStreamInterrupt}
