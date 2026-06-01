@@ -2,9 +2,8 @@ import * as v from "valibot";
 import { jsonrepair } from "jsonrepair";
 
 import { hasLegacyData } from "@/pages/migrate";
-import { sleep } from "@/common";
 import posthog from "posthog-js";
-import { ascending } from "@hackclub/lapse-shared";
+import { ascending, sleep } from "@hackclub/lapse-shared";
 import { retryable } from "@/safety";
 
 /**

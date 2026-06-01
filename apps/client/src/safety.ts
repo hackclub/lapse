@@ -1,4 +1,4 @@
-import { sleep } from "@/common";
+import { sleep } from "@hackclub/lapse-shared";
 import fetchRetry from "fetch-retry";
 import posthog from "posthog-js";
 

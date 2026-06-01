@@ -26,7 +26,7 @@ import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { CommentSection } from "@/components/entity/CommentSection";
 import { Duration } from "@/components/Duration";
-import { sleep } from "@/common";
+import { sleep } from "@hackclub/lapse-shared";
 
 export default function Page() {
   const router = useRouter();
@@ -231,7 +231,7 @@ export default function Page() {
                     Edit details
                   </Button>
                   { timelapse.playbackUrl && !timelapse.private?.hackatimeProject && (
-                    <Button className="gap-2 w-full text-secondary!" onClick={() => setHackatimeModalOpen(true)} disabled={true}>
+                    <Button className="gap-2 w-full" onClick={() => setHackatimeModalOpen(true)}>
                       <Icon glyph="history" size={24} />
                       Sync with Hackatime
                     </Button>

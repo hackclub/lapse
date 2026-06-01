@@ -11,7 +11,8 @@ import { getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
 import { api, apiUpload } from "@/api";
 import { TimelapseVideoSession } from "@/timelapseVideoSession";
-import { sleep, SteppedProgress } from "@/common";
+import { sleep } from "@hackclub/lapse-shared";
+import { SteppedProgress } from "@/common";
 import { retryable } from "@/safety";
 
 import { useOnce } from "@/hooks/useOnce";
