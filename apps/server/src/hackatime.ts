@@ -1,3 +1,4 @@
+import { chunked } from "@hackclub/lapse-shared";
 import { logError } from "@/logging.js";
 
 export interface WakaTimeCategorizedStat {
@@ -222,13 +223,21 @@ export class HackatimeUserApi extends HackatimeBase {
         );
     }
 
+    // Hackatime enforces a max of 100 heartbeats per bulk request.
     async pushHeartbeats(heartbeats: WakaTimeHeartbeat[]) {
-        return await this.query<{
-            responses: [CreatedWakaTimeHeartbeat, number][]
-        }>(
-            "POST", "hackatime/v1/users/current/heartbeats.bulk",
-            { heartbeats }
-        );
+        const allResponses: [CreatedWakaTimeHeartbeat, number][] = [];
+
+        for (const batch of chunked(heartbeats, 100)) {
+            const result = await this.query<{
+                responses: [CreatedWakaTimeHeartbeat, number][]
+            }>(
+                "POST", "hackatime/v1/users/current/heartbeats.bulk",
+                { heartbeats: batch }
+            );
+            allResponses.push(...result.responses);
+        }
+
+        return { responses: allResponses };
     }
 }
 
