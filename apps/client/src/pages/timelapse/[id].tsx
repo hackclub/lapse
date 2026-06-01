@@ -26,7 +26,7 @@ import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { CommentSection } from "@/components/entity/CommentSection";
 import { Duration } from "@/components/Duration";
-import { sleep } from "@/common";
+import { sleep } from "@hackclub/lapse-shared";
 
 export default function Page() {
   const router = useRouter();
