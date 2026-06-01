@@ -13,10 +13,7 @@ export function createFormData(fields: Record<string, Blob | string>): FormData 
   return data;
 }
 
-/**
- * Returns a `Promise<void>` that returns after `ms` milliseconds.
- */
-export const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+export { sleep } from "@hackclub/lapse-shared";
 
 export type IconGlyph = keyof typeof hackClubGlyphs;
 

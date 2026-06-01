@@ -1,5 +1,7 @@
 import { maybe } from "@/functional";
 
+export const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
 /**
  * Returns a `Date` equal to the current date, `days` days ago.
  */

@@ -1,4 +1,4 @@
-import { chunked } from "@hackclub/lapse-shared";
+import { chunked, sleep } from "@hackclub/lapse-shared";
 import { logError } from "@/logging.js";
 
 export interface WakaTimeCategorizedStat {
@@ -223,7 +223,7 @@ class HackatimeBase {
 
             if (req.status === 429 && attempt < MAX_RETRIES) {
                 const retryAfter = parseInt(req.headers.get("Retry-After") ?? "") || (2 ** attempt);
-                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                await sleep(retryAfter * 1000);
                 continue;
             }
 
