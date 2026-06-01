@@ -13,8 +13,6 @@ export function createFormData(fields: Record<string, Blob | string>): FormData 
   return data;
 }
 
-export { sleep } from "@hackclub/lapse-shared";
-
 export type IconGlyph = keyof typeof hackClubGlyphs;
 
 type Range<N extends number, Acc extends number[] = []> =

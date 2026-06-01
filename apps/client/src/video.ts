@@ -1,9 +1,7 @@
 import posthog from "posthog-js";
 import * as mediabunny from "mediabunny";
 import { THUMBNAIL_SIZE, TIMELAPSE_FPS } from "@hackclub/lapse-api";
-import { assert, last } from "@hackclub/lapse-shared";
-
-import { sleep } from "@/common";
+import { assert, last, sleep } from "@hackclub/lapse-shared";
 
 const FILMSTRIP_WIDTH = 300;
 const FILMSTRIP_HEIGHT = 200;
