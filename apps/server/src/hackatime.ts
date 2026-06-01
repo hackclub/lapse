@@ -206,6 +206,37 @@ class HackatimeBase {
 
         return await req.json() as T;
     }
+
+    protected async queryWithRetry<T>(method: "GET" | "POST", endpoint: string, params: object = {}) {
+        const MAX_RETRIES = 3;
+
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            const req = await fetch(`https://hackatime.hackclub.com/api/${endpoint}`, {
+                method,
+                body: (method === "GET" || !params) ? undefined : JSON.stringify(params),
+                headers: new Headers({
+                    "Authorization": `Bearer ${this.token}`,
+                    "User-Agent": "lapse/2.0.0",
+                    "Content-Type": "application/json"
+                })
+            });
+
+            if (req.status === 429 && attempt < MAX_RETRIES) {
+                const retryAfter = parseInt(req.headers.get("Retry-After") ?? "") || (2 ** attempt);
+                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                continue;
+            }
+
+            if (!req.ok) {
+                logError("API request failed!", { req, method, params });
+                throw new Error(`Hackatime API request failed with HTTP ${req.status}`);
+            }
+
+            return await req.json() as T;
+        }
+
+        throw new Error("Hackatime API request failed: max retries exceeded");
+    }
 }
 
 /**
@@ -223,17 +254,18 @@ export class HackatimeUserApi extends HackatimeBase {
         );
     }
 
-    // Hackatime enforces a max of 100 heartbeats per bulk request.
     async pushHeartbeats(heartbeats: WakaTimeHeartbeat[]) {
         const allResponses: [CreatedWakaTimeHeartbeat, number][] = [];
 
+        // Hackatime enforces a max of 100 heartbeats per bulk request.
         for (const batch of chunked(heartbeats, 100)) {
-            const result = await this.query<{
+            const result = await this.queryWithRetry<{
                 responses: [CreatedWakaTimeHeartbeat, number][]
             }>(
                 "POST", "hackatime/v1/users/current/heartbeats.bulk",
                 { heartbeats: batch }
             );
+
             allResponses.push(...result.responses);
         }
 
