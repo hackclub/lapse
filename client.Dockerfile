@@ -14,7 +14,7 @@ FROM base AS deps
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/client/package.json ./apps/client/
+COPY apps/web/package.json ./apps/web/
 COPY packages/api/package.json ./packages/api/
 COPY packages/shared/package.json ./packages/shared/
 
@@ -30,12 +30,12 @@ ENV SOURCE_COMMIT=${SOURCE_COMMIT}
 
 COPY packages/shared/ ./packages/shared/
 COPY packages/api/ ./packages/api/
-COPY apps/client/ ./apps/client/
+COPY apps/web/ ./apps/web/
 
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     pnpm --filter @hackclub/lapse-shared run build && \
     pnpm --filter @hackclub/lapse-api run build && \
-    pnpm --filter @lapse/lapse-client run build
+    pnpm --filter @lapse/lapse-web run build
 
 ############################  runner  ############################
 FROM base AS runner
@@ -43,9 +43,9 @@ WORKDIR /app
 
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
-COPY --from=builder --chown=nextjs:nextjs /app/apps/client/.next/standalone ./
-COPY --from=builder --chown=nextjs:nextjs /app/apps/client/.next/static ./apps/client/.next/static
-COPY --from=builder --chown=nextjs:nextjs /app/apps/client/public ./apps/client/public
+COPY --from=builder --chown=nextjs:nextjs /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nextjs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=nextjs:nextjs /app/apps/web/public ./apps/web/public
 
 USER nextjs
 
@@ -56,4 +56,4 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 EXPOSE 3000
 
-CMD ["node", "apps/client/server.js"]
+CMD ["node", "apps/web/server.js"]

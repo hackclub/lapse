@@ -17,7 +17,7 @@ Do note that the raw timelapse recordings should always be in real-time, and we 
 ## Encryption
 In order to allow different clients to handle the draft timelapses of foreign clients, we standardize the encryption used for thumbnails and video. You are required to encrypt all draft timelapse sessions and thumbnails with **AES-128** with the salts specified by the backend. All device keys are 128-bit long, and the server does **not** store them anywhere permanent.
 
-You can reference the way the first-party client does encryption in [`/apps/client/src/encryption.ts`](/apps/client/src/encryption.ts).
+You can reference the way the first-party client does encryption in [`/apps/web/src/encryption.ts`](/apps/web/src/encryption.ts).
 
 ## Upload
 As raw timelapse videos captured by user-agent might be *very* large, and the network connections of users might be unreliable, we use the `tus` protocol for the API data plane. We chose `tus` as it has been battle-tested, is open-source, and is even [enforced by Cloudflare](https://developers.cloudflare.com/stream/uploading-videos/resumable-uploads/) on their Stream service.

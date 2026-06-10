@@ -1,5 +1,5 @@
 {
-  "name": "@lapse/lapse-client",
+  "name": "@lapse/lapse-web",
   "version": "2.0.0",
   "description": "The canonical Lapse web client",
   "private": true,

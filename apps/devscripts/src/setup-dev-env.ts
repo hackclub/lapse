@@ -42,7 +42,7 @@ let S3_SECRET_ACCESS_KEY = "test";
 
 const repoRoot = resolve(__dirname, "..", "..", "..");
 const devscriptsDir = resolve(repoRoot, "apps", "devscripts");
-const clientDir = resolve(repoRoot, "apps", "client");
+const webDir = resolve(repoRoot, "apps", "web");
 const serverDir = resolve(repoRoot, "apps", "server");
 const workerDir = resolve(repoRoot, "apps", "worker");
 
@@ -271,12 +271,12 @@ async function updateEnvFiles(envVars: {
 	try {
 		await Promise.all([
 			writeEnvFile(serverDir, envVars.server),
-			writeEnvFile(clientDir, envVars.client),
+			writeEnvFile(webDir, envVars.client),
 			writeEnvFile(workerDir, envVars.worker),
 		]);
 
 		spinner.succeed(chalk.green("Environment variables updated successfully"));
-		logInfo(`Updated .env files for ${chalk.italic("server")}, ${chalk.italic("client")}, and ${chalk.italic("worker")}`);
+		logInfo(`Updated .env files for ${chalk.italic("server")}, ${chalk.italic("web")}, and ${chalk.italic("worker")}`);
 	}
 	catch (error) {
 		spinner.fail(chalk.red("Failed to update environment variables"));
