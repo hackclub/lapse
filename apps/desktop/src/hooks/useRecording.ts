@@ -45,10 +45,9 @@ export function useRecording() {
   }, [stopPolling]);
 
   const start = useCallback(
-    async (sourceId: string, sourceKind: string) => {
+    async (sources: { id: string; kind: string; name: string }[]) => {
       const result = await invoke<{ session_id: string }>("recording_start", {
-        sourceId,
-        sourceKind,
+        sources,
       });
       setSessionId(result.session_id);
       setPhase("Recording");

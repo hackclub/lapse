@@ -47,8 +47,8 @@ function App() {
   const [isPublishing, setIsPublishing] = useState(false);
 
   const handleStart = useCallback(
-    async (sourceId: string, sourceKind: string) => {
-      await recording.start(sourceId, sourceKind);
+    async (sources: { id: string; kind: string; name: string }[]) => {
+      await recording.start(sources);
       setView({ kind: "recording" });
     },
     [recording]
@@ -161,7 +161,11 @@ function App() {
     case "setup":
       return (
         <SetupView
-          user={auth.user}
+          user={auth.user ? {
+            displayName: auth.user.displayName,
+            handle: auth.user.handle,
+            profilePictureUrl: auth.user.profilePictureUrl,
+          } : null}
           onStart={handleStart}
           onLogout={auth.logout}
         />
