@@ -42,6 +42,9 @@ pub fn run() {
             files::get_file_size,
             files::read_file_bytes,
             files::cleanup_session,
+            files::stash_save,
+            files::stash_list,
+            files::stash_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

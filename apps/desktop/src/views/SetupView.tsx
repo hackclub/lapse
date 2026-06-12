@@ -1,13 +1,24 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { LogOut, Monitor, AppWindow, Camera, Check } from "lucide-react";
+import { LogOut, Monitor, AppWindow, Camera, Check, Trash2, ChevronRight } from "lucide-react";
+import lapseIcon from "../assets/icon.svg";
 
 interface CaptureSource {
   id: string;
   name: string;
   kind: string;
   icon?: string;
+}
+
+interface StashedTimelapse {
+  session_id: string;
+  created_at: number;
+  frame_count: number;
+  elapsed_seconds: number;
+  output_path: string;
+  thumbnail_path: string;
+  snapshots: number[];
 }
 
 interface SetupViewProps {
@@ -17,6 +28,7 @@ interface SetupViewProps {
     profilePictureUrl: string | null;
   } | null;
   onStart: (sources: { id: string; kind: string; name: string }[]) => void;
+  onResumeStash: (stash: StashedTimelapse) => void;
   onLogout: () => void;
 }
 
@@ -259,7 +271,25 @@ const TAB_ICONS = {
   Camera: Camera,
 } as const;
 
-export function SetupView({ user, onStart, onLogout }: SetupViewProps) {
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+export function SetupView({ user, onStart, onResumeStash, onLogout }: SetupViewProps) {
   const [sources, setSources] = useState<CaptureSource[]>([]);
   const [selectedSources, setSelectedSources] = useState<CaptureSource[]>([]);
   const [sourceTab, setSourceTab] = useState<"Screen" | "Window" | "Camera">(
@@ -267,6 +297,7 @@ export function SetupView({ user, onStart, onLogout }: SetupViewProps) {
   );
   const [ffmpegError, setFfmpegError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stashes, setStashes] = useState<StashedTimelapse[]>([]);
   const windowsFetched = useRef(false);
 
   useEffect(() => {
@@ -322,6 +353,30 @@ export function SetupView({ user, onStart, onLogout }: SetupViewProps) {
     };
   }, []);
 
+  const [stashThumbs, setStashThumbs] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    invoke<StashedTimelapse[]>("stash_list").then((list) => {
+      setStashes(list);
+      for (const s of list) {
+        invoke<string>("read_file_bytes", { path: s.thumbnail_path })
+          .then((b64) => {
+            setStashThumbs((prev) => ({
+              ...prev,
+              [s.session_id]: `data:image/jpeg;base64,${b64}`,
+            }));
+          })
+          .catch(() => {});
+      }
+    }).catch(() => {});
+  }, []);
+
+  async function deleteStash(e: React.MouseEvent, sessionId: string) {
+    e.stopPropagation();
+    await invoke("stash_remove", { sessionId });
+    setStashes((prev) => prev.filter((s) => s.session_id !== sessionId));
+  }
+
   function toggleSource(source: CaptureSource) {
     setSelectedSources(prev => {
       const exists = prev.some(s => s.id === source.id && s.kind === source.kind);
@@ -338,7 +393,7 @@ export function SetupView({ user, onStart, onLogout }: SetupViewProps) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
-        <h1 className="text-lg font-semibold">Lapse</h1>
+        <img src={lapseIcon} alt="Lapse" className="h-7" />
         {user && (
           <div className="flex items-center gap-2.5">
             {user.profilePictureUrl ? (
@@ -366,6 +421,49 @@ export function SetupView({ user, onStart, onLogout }: SetupViewProps) {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-5">
+        {/* Stashed timelapses */}
+        {stashes.length > 0 && (
+          <div className="mb-5 animate-in">
+            <div className="text-[13px] text-muted mb-2 px-0.5">Stashed</div>
+            <div className="flex flex-col gap-1.5">
+              {stashes.map((stash) => (
+                <button
+                  key={stash.session_id}
+                  onClick={() => onResumeStash(stash)}
+                  className="cursor-pointer w-full flex items-center gap-3 px-2 py-2 bg-white/5 border border-white/10 rounded-lg group hover:border-white/20 hover:bg-white/[0.07] transition-all text-left"
+                >
+                  {stashThumbs[stash.session_id] ? (
+                    <img
+                      src={stashThumbs[stash.session_id]}
+                      alt=""
+                      className="w-16 h-10 rounded object-cover shrink-0 bg-black/30"
+                    />
+                  ) : (
+                    <div className="w-16 h-10 rounded bg-white/5 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      {formatDuration(stash.elapsed_seconds)}
+                    </div>
+                    <div className="text-xs text-muted">
+                      {formatTimeAgo(stash.created_at)}
+                    </div>
+                  </div>
+                  <div
+                    onClick={(e) => deleteStash(e, stash.session_id)}
+                    className="shrink-0 p-1.5 text-muted hover:text-red rounded-md hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Delete"
+                    role="button"
+                  >
+                    <Trash2 size={13} />
+                  </div>
+                  <ChevronRight size={14} className="shrink-0 text-muted" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {ffmpegError ? (
           <div className="bg-red/10 border border-red/30 rounded-lg p-4 text-sm text-red">
             {ffmpegError}
