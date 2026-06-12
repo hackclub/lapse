@@ -1,7 +1,8 @@
-This is a repository for Lapse - a web app for tracking time spent on personal projects by recording timelapses. We use TypeScript, Next.js, Fastify, Prisma ORM, Tailwind CSS, and BullMQ for our tech stack.
+This is the monorepo for Lapse - a platform for tracking time spent on personal projects by recording timelapses.
 
 This project features the following packages:
 - `apps/web`: a frontend built with Next.js, interfacing with the server via the `api` package.
+- `apps/desktop`: a desktop client that interfaces with the server via the `api` package.
 - `apps/server`: the main Fastify/oRPC backend for Lapse.
 - `packages/api`: contracts shared between `web` and `server`. This package also allows for third-party clients to be developed for Lapse.
 - `apps/worker`: a BullMQ worker responsible for tasks like encoding. Interfaces with `server`.
