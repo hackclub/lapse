@@ -7,7 +7,7 @@ interface DoneViewProps {
 
 export function DoneView({ timelapseId, onRecordAnother }: DoneViewProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6">
+    <div className="flex flex-col items-center justify-center h-full gap-6 animate-in">
       <div className="text-center">
         <h2 className="text-2xl font-semibold mb-2">
           Your timelapse is live!

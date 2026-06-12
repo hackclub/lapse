@@ -19,7 +19,7 @@ export function EncodingView({ frameCount }: EncodingViewProps) {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 px-8">
+    <div className="flex flex-col items-center justify-center h-full gap-6 px-8 animate-in">
       <h2 className="text-xl font-semibold">Encoding your timelapse...</h2>
 
       <div className="w-full max-w-sm">

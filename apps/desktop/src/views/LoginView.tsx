@@ -6,7 +6,7 @@ interface LoginViewProps {
 
 export function LoginView({ isLoggingIn, error, onLogin }: LoginViewProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6">
+    <div className="flex flex-col items-center justify-center h-full gap-6 animate-in">
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">Lapse</h1>
         <p className="text-muted text-sm">
