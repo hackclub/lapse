@@ -18,12 +18,25 @@ use core_graphics::window::{
 use foreign_types::ForeignType;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::Emitter;
+
+extern "C" {
+    fn proc_pidpath(pid: i32, buffer: *mut u8, buffersize: u32) -> i32;
+}
+
+#[link(name = "objc")]
+extern "C" {
+    fn objc_getClass(name: *const libc::c_char) -> *mut libc::c_void;
+    fn sel_registerName(name: *const libc::c_char) -> *mut libc::c_void;
+    fn objc_msgSend();
+}
 
 extern "C" {
     fn CGWindowListCopyWindowInfo(
@@ -63,6 +76,8 @@ pub struct CaptureSource {
     pub id: String,
     pub name: String,
     pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 struct StreamHandle {
@@ -87,10 +102,10 @@ struct ThumbnailFrame {
     data: String,
 }
 
-fn capture_source_image(source_id: &str, source_kind: &str, source_name: &str) -> Option<CGImage> {
+pub fn capture_source_image(source_id: &str, source_kind: &str, _source_name: &str) -> Option<CGImage> {
     match source_kind {
         "Screen" => {
-            let screen_num = parse_screen_number(source_name)?;
+            let screen_num = parse_screen_number(source_id)?;
             let displays = CGDisplay::active_displays().ok()?;
             let display_id = displays.get(screen_num as usize)?;
             CGDisplay::new(*display_id).image()
@@ -216,17 +231,75 @@ pub fn thumbnail_stream_stop_all(
     Ok(())
 }
 
+fn get_display_name_map() -> HashMap<u32, String> {
+    type Send = unsafe extern "C" fn(*mut libc::c_void, *mut libc::c_void) -> *mut libc::c_void;
+    type SendIdx = unsafe extern "C" fn(*mut libc::c_void, *mut libc::c_void, usize) -> *mut libc::c_void;
+    type SendObj = unsafe extern "C" fn(*mut libc::c_void, *mut libc::c_void, *const libc::c_void) -> *mut libc::c_void;
+
+    let mut map = HashMap::new();
+    unsafe {
+        let send: Send = std::mem::transmute(objc_msgSend as *const ());
+        let send_idx: SendIdx = std::mem::transmute(objc_msgSend as *const ());
+        let send_obj: SendObj = std::mem::transmute(objc_msgSend as *const ());
+
+        let ns_screen = objc_getClass(b"NSScreen\0".as_ptr() as *const _);
+        if ns_screen.is_null() { return map; }
+
+        let screens = send(ns_screen, sel_registerName(b"screens\0".as_ptr() as *const _));
+        if screens.is_null() { return map; }
+
+        let count = send(screens, sel_registerName(b"count\0".as_ptr() as *const _)) as usize;
+
+        let obj_at_idx = sel_registerName(b"objectAtIndex:\0".as_ptr() as *const _);
+        let localized_name_sel = sel_registerName(b"localizedName\0".as_ptr() as *const _);
+        let utf8_sel = sel_registerName(b"UTF8String\0".as_ptr() as *const _);
+        let device_desc_sel = sel_registerName(b"deviceDescription\0".as_ptr() as *const _);
+        let obj_for_key_sel = sel_registerName(b"objectForKey:\0".as_ptr() as *const _);
+        let uint_val_sel = sel_registerName(b"unsignedIntValue\0".as_ptr() as *const _);
+
+        let screen_number_key = CFString::new("NSScreenNumber");
+        let screen_number_key_ptr = screen_number_key.as_concrete_TypeRef() as *const libc::c_void;
+
+        for i in 0..count {
+            let screen = send_idx(screens, obj_at_idx, i);
+            if screen.is_null() { continue; }
+
+            let name_obj = send(screen, localized_name_sel);
+            if name_obj.is_null() { continue; }
+            let name_cstr = send(name_obj, utf8_sel) as *const libc::c_char;
+            if name_cstr.is_null() { continue; }
+            let name = std::ffi::CStr::from_ptr(name_cstr).to_string_lossy().to_string();
+
+            let desc = send(screen, device_desc_sel);
+            if desc.is_null() { continue; }
+            let num_obj = send_obj(desc, obj_for_key_sel, screen_number_key_ptr);
+            if num_obj.is_null() { continue; }
+            let display_id = send(num_obj, uint_val_sel) as u32;
+
+            map.insert(display_id, name);
+        }
+    }
+    map
+}
+
 #[tauri::command]
 pub fn enumerate_sources() -> Result<Vec<CaptureSource>, String> {
     let displays = CGDisplay::active_displays()
         .map_err(|e| format!("Failed to enumerate displays: {:?}", e))?;
+    let names = get_display_name_map();
     Ok(displays
         .iter()
         .enumerate()
-        .map(|(i, _)| CaptureSource {
-            id: format!("Capture screen {}", i),
-            name: format!("Capture screen {}", i),
-            kind: "Screen".to_string(),
+        .map(|(i, display_id)| {
+            let name = names.get(display_id)
+                .cloned()
+                .unwrap_or_else(|| format!("Display {}", i + 1));
+            CaptureSource {
+                id: format!("Capture screen {}", i),
+                name,
+                kind: "Screen".to_string(),
+                icon: None,
+            }
         })
         .collect())
 }
@@ -273,6 +346,7 @@ fn enumerate_cameras_sync() -> Result<Vec<CaptureSource>, String> {
                     id,
                     name,
                     kind: "Camera".to_string(),
+                    icon: None,
                 });
             }
         }
@@ -288,8 +362,80 @@ pub async fn enumerate_windows_cmd() -> Result<Vec<CaptureSource>, String> {
         .map_err(|e| e.to_string())
 }
 
+fn get_app_bundle_from_pid(pid: i32) -> Option<PathBuf> {
+    let mut buf = vec![0u8; 4096];
+    let len = unsafe { proc_pidpath(pid, buf.as_mut_ptr(), buf.len() as u32) };
+    if len <= 0 {
+        return None;
+    }
+    let path = PathBuf::from(String::from_utf8_lossy(&buf[..len as usize]).to_string());
+    let mut current = path.as_path();
+    loop {
+        if current.extension().map(|e| e == "app").unwrap_or(false) {
+            return Some(current.to_path_buf());
+        }
+        match current.parent() {
+            Some(p) if p != current => current = p,
+            _ => return None,
+        }
+    }
+}
+
+fn get_app_icon(bundle: &Path) -> Option<String> {
+    let info_plist = bundle.join("Contents/Info.plist");
+    if !info_plist.exists() {
+        return None;
+    }
+
+    let output = Command::new("defaults")
+        .args(["read", &bundle.join("Contents/Info").to_string_lossy(), "CFBundleIconFile"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let mut icon_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if icon_name.is_empty() {
+        return None;
+    }
+    if !icon_name.ends_with(".icns") {
+        icon_name.push_str(".icns");
+    }
+
+    let icon_path = bundle.join("Contents/Resources").join(&icon_name);
+    if !icon_path.exists() {
+        return None;
+    }
+
+    let hash = icon_path.to_string_lossy().len();
+    let temp_path = format!("/tmp/lapse-icon-{}.png", hash);
+
+    let sips = Command::new("sips")
+        .args([
+            "-s", "format", "png",
+            "--resampleWidth", "64",
+            &icon_path.to_string_lossy(),
+            "--out", &temp_path,
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .ok()?;
+
+    if !sips.success() {
+        return None;
+    }
+
+    let bytes = fs::read(&temp_path).ok()?;
+    let _ = fs::remove_file(&temp_path);
+    Some(format!("data:image/png;base64,{}", STANDARD.encode(&bytes)))
+}
+
 fn enumerate_windows() -> Vec<CaptureSource> {
     let mut results = Vec::new();
+    let mut icon_cache: HashMap<i64, Option<String>> = HashMap::new();
 
     let options =
         K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY | K_CG_WINDOW_LIST_EXCLUDE_DESKTOP_ELEMENTS;
@@ -361,24 +507,29 @@ fn enumerate_windows() -> Vec<CaptureSource> {
             })
             .unwrap_or(0);
 
+        let icon = icon_cache.entry(pid).or_insert_with(|| {
+            get_app_bundle_from_pid(pid as i32).and_then(|b| get_app_icon(&b))
+        }).clone();
+
         results.push(CaptureSource {
             id: window_id.to_string(),
             name: format!("{} — {}", owner, name),
             kind: "Window".to_string(),
+            icon,
         });
     }
 
     results
 }
 
-fn parse_screen_number(source_name: &str) -> Option<u32> {
+pub fn parse_screen_number(source_name: &str) -> Option<u32> {
     source_name
         .to_lowercase()
         .strip_prefix("capture screen ")
         .and_then(|n| n.trim().parse().ok())
 }
 
-fn cgimage_to_jpeg(image: &CGImage) -> Result<Vec<u8>, String> {
+pub fn cgimage_to_jpeg(image: &CGImage) -> Result<Vec<u8>, String> {
     unsafe {
         let data = CFDataCreateMutable(ptr::null(), 0);
         if data.is_null() {
@@ -413,6 +564,11 @@ fn cgimage_to_jpeg(image: &CGImage) -> Result<Vec<u8>, String> {
         CFRelease(data as *const _);
         Ok(bytes)
     }
+}
+
+pub fn capture_source_to_jpeg(source_id: &str, source_kind: &str, source_name: &str) -> Option<Vec<u8>> {
+    let img = capture_source_image(source_id, source_kind, source_name)?;
+    cgimage_to_jpeg(&img).ok()
 }
 
 #[tauri::command]
