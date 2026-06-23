@@ -77,6 +77,16 @@ export const env = {
     get JWT_UPLOAD_TOKEN() { return required("JWT_UPLOAD_TOKEN") },
 
     /**
+     * The base URL of the Lookout service (e.g. "https://lookout.hackclub.com").
+     */
+    get LOOKOUT_API_BASE_URL() { return required("LOOKOUT_API_BASE_URL") },
+
+    /**
+     * The Lookout API key for server-to-server session management (e.g. "lk_...").
+     */
+    get LOOKOUT_API_KEY() { return required("LOOKOUT_API_KEY") },
+
+    /**
      * Passed to `Sentry.init`.
      */
     get SENTRY_DSN() { return optional("SENTRY_DSN") },

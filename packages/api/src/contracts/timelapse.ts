@@ -212,6 +212,58 @@ export const timelapseRouterContract = {
             })
         ),
 
+    createRecordingSession: contract("POST", "/timelapse/createRecordingSession")
+        .route({ description: "Creates a new Lookout-backed recording session. Returns a Lookout token the client uses to initialize the Lookout SDK." })
+        .input(z.object({}))
+        .output(
+            apiResult({
+                lookoutToken: z.string()
+                    .describe("The Lookout session token to pass to the Lookout SDK."),
+                lookoutApiBaseUrl: z.string()
+                    .describe("The base URL of the Lookout API."),
+                timelapseId: LapseId
+                    .describe("The ID of the Lapse timelapse record created for this session."),
+            })
+        ),
+
+    publishFromLookout: contract("POST", "/timelapse/publishFromLookout")
+        .route({ description: "Publishes a Lookout-backed timelapse. The Lookout session must have status 'complete'." })
+        .input(
+            z.object({
+                id: LapseId
+                    .describe("The ID of the timelapse to publish."),
+                name: TimelapseName,
+                description: TimelapseDescription.optional(),
+                visibility: TimelapseVisibilitySchema,
+                hackatimeProject: z.string().min(1).max(128).optional()
+                    .describe("If provided, snapshots will be synced to this Hackatime project."),
+            })
+        )
+        .output(
+            apiResult({
+                timelapse: TimelapseSchema
+            })
+        ),
+
+    pollLookoutStatus: contract("GET", "/timelapse/pollLookoutStatus")
+        .route({ description: "Polls the status of a Lookout-backed timelapse recording/compilation." })
+        .input(
+            z.object({
+                id: LapseId
+                    .describe("The ID of the timelapse to poll."),
+            })
+        )
+        .output(
+            apiResult({
+                lookoutStatus: z.string()
+                    .describe("The current Lookout session status (e.g. 'active', 'stopped', 'compiling', 'complete', 'failed')."),
+                videoUrl: z.string().nullable()
+                    .describe("The video URL, if compilation is complete."),
+                thumbnailUrl: z.string().nullable()
+                    .describe("The thumbnail URL, if compilation is complete."),
+            })
+        ),
+
     myPublishedTimelapses: contract("GET", "/timelapse/myPublishedTimelapses")
         .route({ description: "Lists all published timelapses owned by the authenticated user, with cursor-based pagination." })
         .input(

@@ -212,6 +212,18 @@ model Timelapse {
   /// the draft is deleted or unlinked, allowing failed processing timelapses to link back to the original draft.
   sourceDraftId         String?
 
+  /// The Lookout session UUID backing this timelapse. Present only for timelapses recorded via Lookout.
+  lookoutSessionId      String?     @unique
+
+  /// The Lookout session token used for API calls (timings, status polling).
+  lookoutToken          String?
+
+  /// The permanent Lookout media URL for the compiled video.
+  lookoutVideoUrl       String?
+
+  /// The permanent Lookout media URL for the thumbnail image.
+  lookoutThumbnailUrl   String?
+
   ownerId               String
   owner                 User                @relation(fields: [ownerId], references: [id])
 

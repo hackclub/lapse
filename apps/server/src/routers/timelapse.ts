@@ -15,6 +15,7 @@ import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/hackatime.js";
 import { dtoComment, type DbComment } from "@/routers/comment.js";
 import { enqueueRealizeJob } from "@/job.js";
+import * as lookout from "@/lookout.js";
 
 const s3 = new S3Client({
     region: "auto",
@@ -46,8 +47,10 @@ export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
         description: entity.description,
         comments: entity.comments.map(dtoComment),
         visibility: entity.visibility,
-        playbackUrl: entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`,
-        thumbnailUrl: entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`,
+        playbackUrl: entity.lookoutVideoUrl
+            ?? (entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`),
+        thumbnailUrl: entity.lookoutThumbnailUrl
+            ?? (entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`),
         duration: entity.duration,
         isDraft: false
     };
@@ -481,5 +484,116 @@ export default os.router({
             });
 
             return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
-        })
+        }),
+
+    createRecordingSession: os.createRecordingSession
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const session = await lookout.createSession(undefined, {
+                lapseUserId: caller.id,
+                lapseUserHandle: caller.handle,
+                source: "lapse",
+            });
+
+            const id = lapseId();
+
+            await database().timelapse.create({
+                data: {
+                    id,
+                    createdAt: new Date(),
+                    ownerId: caller.id,
+                    name: `Timelapse at ${new Date().toLocaleString("en-US", { month: "long", day: "numeric", minute: "numeric", hour: "numeric" })}`,
+                    visibility: "UNLISTED",
+                    snapshots: [],
+                    duration: 0,
+                    lookoutSessionId: session.sessionId,
+                    lookoutToken: session.token,
+                    associatedJobId: "lookout-pending",
+                }
+            });
+
+            return apiOk({
+                lookoutToken: session.token,
+                lookoutApiBaseUrl: env.LOOKOUT_API_BASE_URL,
+                timelapseId: id,
+            });
+        }),
+
+    pollLookoutStatus: os.pollLookoutStatus
+        .use(requiredAuth())
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const timelapse = await database().timelapse.findFirst({
+                where: { id: req.input.id, ownerId: caller.id }
+            });
+
+            if (!timelapse || !timelapse.lookoutSessionId)
+                return apiErr("NOT_FOUND", "Couldn't find that Lookout-backed timelapse!");
+
+            const session = await lookout.getSession(timelapse.lookoutSessionId);
+
+            return apiOk({
+                lookoutStatus: session.session.status,
+                videoUrl: session.session.videoUrl,
+                thumbnailUrl: session.session.thumbnailUrl,
+            });
+        }),
+
+    publishFromLookout: os.publishFromLookout
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const timelapse = await database().timelapse.findFirst({
+                where: { id: req.input.id, ownerId: caller.id },
+                include: { owner: true }
+            });
+
+            if (!timelapse || !timelapse.lookoutSessionId || !timelapse.lookoutToken)
+                return apiErr("NOT_FOUND", "Couldn't find that Lookout-backed timelapse!");
+
+            const session = await lookout.getSession(timelapse.lookoutSessionId);
+
+            if (session.session.status !== "complete")
+                return apiErr("ERROR", `Lookout session is not ready yet (status: ${session.session.status}).`);
+
+            const timings = await lookout.getTimings(timelapse.lookoutToken);
+            const snapshots = timings.timestamps.map(ts => new Date(ts));
+            const duration = durationBySnapshots(snapshots);
+
+            const updatedTimelapse = await database().timelapse.update({
+                where: { id: req.input.id },
+                data: {
+                    name: req.input.name,
+                    description: req.input.description ?? "",
+                    visibility: req.input.visibility,
+                    lookoutVideoUrl: session.session.videoUrl,
+                    lookoutThumbnailUrl: session.session.thumbnailUrl,
+                    snapshots,
+                    duration,
+                    associatedJobId: null,
+                    hackatimeProject: req.input.hackatimeProject ?? null,
+                },
+                include: TIMELAPSE_INCLUDES
+            });
+
+            if (req.input.hackatimeProject && caller.hackatimeId && caller.hackatimeAccessToken) {
+                try {
+                    await syncTimelapseWithHackatime(updatedTimelapse, caller);
+                }
+                catch (err) {
+                    logError("Couldn't sync heartbeats during Lookout publish!", { err });
+                }
+            }
+
+            return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
+        }),
 });
