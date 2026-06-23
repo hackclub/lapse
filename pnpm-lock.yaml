@@ -10,7 +10,14 @@ overrides:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
 
   apps/client:
     dependencies:
@@ -43,7 +50,7 @@ importers:
         version: 1.14.3(@opentelemetry/api@1.9.1)
       '@posthog/nextjs-config':
         specifier: ^1.9.34
-        version: 1.9.34(next@16.2.6(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(webpack@5.107.2(lightningcss@1.32.0))
+        version: 1.9.34(next@16.2.6(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))
       '@scure/bip39':
         specifier: ^2.2.0
         version: 2.2.0
@@ -94,7 +101,7 @@ importers:
         version: 1.4.1(typescript@6.0.3)
       webpack:
         specifier: ^5.107.2
-        version: 5.107.2(lightningcss@1.32.0)
+        version: 5.107.2(lightningcss@1.32.0)(postcss@8.5.15)
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -155,7 +162,7 @@ importers:
         version: 4.1.7(vitest@4.1.7)
       babel-loader:
         specifier: ^10.1.1
-        version: 10.1.1(@babel/core@7.29.7)(webpack@5.107.2(lightningcss@1.32.0))
+        version: 10.1.1(@babel/core@7.29.7)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))
       eslint:
         specifier: ^10.4.0
         version: 10.4.0(jiti@2.7.0)
@@ -173,7 +180,7 @@ importers:
         version: 4.3.0
       terser-webpack-plugin:
         specifier: ^5.6.0
-        version: 5.6.0(lightningcss@1.32.0)(webpack@5.107.2(lightningcss@1.32.0))
+        version: 5.6.0(lightningcss@1.32.0)(postcss@8.5.15)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.9.1)(typescript@6.0.3)
@@ -472,11 +479,7 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  vendor/lookout/packages/shared:
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
+  vendor/lookout/packages/shared: {}
 
 packages:
 
@@ -9272,11 +9275,11 @@ snapshots:
     dependencies:
       '@posthog/types': 1.376.0
 
-  '@posthog/nextjs-config@1.9.34(next@16.2.6(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(webpack@5.107.2(lightningcss@1.32.0))':
+  '@posthog/nextjs-config@1.9.34(next@16.2.6(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))':
     dependencies:
       '@posthog/cli': 0.7.13
       '@posthog/plugin-utils': 1.1.1
-      '@posthog/webpack-plugin': 1.4.34(webpack@5.107.2(lightningcss@1.32.0))
+      '@posthog/webpack-plugin': 1.4.34(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))
       next: 16.2.6(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       semver: 7.8.1
     transitivePeerDependencies:
@@ -9288,12 +9291,12 @@ snapshots:
 
   '@posthog/types@1.376.0': {}
 
-  '@posthog/webpack-plugin@1.4.34(webpack@5.107.2(lightningcss@1.32.0))':
+  '@posthog/webpack-plugin@1.4.34(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))':
     dependencies:
       '@posthog/cli': 0.7.13
       '@posthog/core': 1.29.9
       '@posthog/plugin-utils': 1.1.1
-      webpack: 5.107.2(lightningcss@1.32.0)
+      webpack: 5.107.2(lightningcss@1.32.0)(postcss@8.5.15)
 
   '@prisma/adapter-pg@7.8.0':
     dependencies:
@@ -10624,12 +10627,12 @@ snapshots:
 
   axobject-query@4.1.0: {}
 
-  babel-loader@10.1.1(@babel/core@7.29.7)(webpack@5.107.2(lightningcss@1.32.0)):
+  babel-loader@10.1.1(@babel/core@7.29.7)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15)):
     dependencies:
       '@babel/core': 7.29.7
       find-up: 5.0.0
     optionalDependencies:
-      webpack: 5.107.2(lightningcss@1.32.0)
+      webpack: 5.107.2(lightningcss@1.32.0)(postcss@8.5.15)
 
   babel-plugin-polyfill-corejs2@0.4.17(@babel/core@7.29.7):
     dependencies:
@@ -13655,15 +13658,16 @@ snapshots:
 
   tapable@2.3.3: {}
 
-  terser-webpack-plugin@5.6.0(lightningcss@1.32.0)(webpack@5.107.2(lightningcss@1.32.0)):
+  terser-webpack-plugin@5.6.0(lightningcss@1.32.0)(postcss@8.5.15)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.48.0
-      webpack: 5.107.2(lightningcss@1.32.0)
+      webpack: 5.107.2(lightningcss@1.32.0)(postcss@8.5.15)
     optionalDependencies:
       lightningcss: 1.32.0
+      postcss: 8.5.15
 
   terser@5.48.0:
     dependencies:
@@ -14020,7 +14024,7 @@ snapshots:
 
   webpack-sources@3.5.0: {}
 
-  webpack@5.107.2(lightningcss@1.32.0):
+  webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -14042,7 +14046,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.0(lightningcss@1.32.0)(webpack@5.107.2(lightningcss@1.32.0))
+      terser-webpack-plugin: 5.6.0(lightningcss@1.32.0)(postcss@8.5.15)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))
       watchpack: 2.5.1
       webpack-sources: 3.5.0
     transitivePeerDependencies:
