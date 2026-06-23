@@ -137,12 +137,13 @@ function findFirstOption<TKey extends string>(options: DropdownTree<TKey>): Drop
  * />
  * ```
  */
-export function Dropdown<TKey extends string>({ value, onChange, options, disabled, allowUserCustom }: {
+export function Dropdown<TKey extends string>({ value, onChange, options, disabled, allowUserCustom, placeholder }: {
   value: TKey;
   onChange: (value: TKey) => void;
   options: DropdownTree<TKey>,
   disabled?: boolean,
-  allowUserCustom?: boolean
+  allowUserCustom?: boolean,
+  placeholder?: string
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -274,7 +275,7 @@ export function Dropdown<TKey extends string>({ value, onChange, options, disabl
                 if (!isOpen) setIsOpen(true);
               }}
               onFocus={() => setIsOpen(true)}
-              placeholder={(typeof selected.label === "string" ? selected.label : selected.searchLabel) || "Type to search or create..."}
+              placeholder={placeholder || (typeof selected.label === "string" ? selected.label : selected.searchLabel) || "Type to search or create..."}
               disabled={disabled}
               className="flex-1 bg-transparent outline-none placeholder-secondary"
             />

@@ -99,6 +99,7 @@ export function HackatimeSelectModal({ isOpen, setIsOpen, onAccept, onError }: {
                 }))
               }
               allowUserCustom
+              placeholder="Click here to select or search..."
             />
           </>
         )}
