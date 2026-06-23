@@ -287,6 +287,7 @@ export default function LookoutRecorder() {
   const [captureMode, setCaptureMode] = useState<CaptureMode | null>(null);
   const [cameraDeviceId, setCameraDeviceId] = useState<string | null>(null);
   const [pickingCamera, setPickingCamera] = useState(false);
+  const [desktopLaunched, setDesktopLaunched] = useState(false);
   const sessionCreated = useRef(false);
 
   useEffect(() => {
@@ -313,6 +314,7 @@ export default function LookoutRecorder() {
 
     if (selectedMode === "desktop") {
       window.location.href = `lookout://session?token=${config.lookoutToken}`;
+      setDesktopLaunched(true);
       return;
     }
 
@@ -342,6 +344,40 @@ export default function LookoutRecorder() {
     return (
       <RootLayout showHeader={false}>
         <LoadingModal isOpen title="Setting up" message="Creating recording session..." />
+      </RootLayout>
+    );
+  }
+
+  if (desktopLaunched) {
+    return (
+      <RootLayout showHeader={false}>
+        <div className="flex w-screen h-screen items-center justify-center p-8">
+          <div className="flex flex-col items-center text-center gap-6 max-w-md">
+            <img src="/images/lookout-icon.png" alt="Lookout" className="w-16 h-16 rounded-2xl" />
+            <div className="flex flex-col gap-2">
+              <h1 className="text-2xl font-bold">Opening Lookout</h1>
+              <p className="text-muted">
+                The Lookout app should have opened on your desktop. If nothing happened, you may need to install it first.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 w-full">
+              <a
+                href="https://lookout.hackclub.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center"
+              >
+                Get Lookout
+              </a>
+              <button
+                onClick={() => setDesktopLaunched(false)}
+                className="w-full border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
+              >
+                Go back
+              </button>
+            </div>
+          </div>
+        </div>
       </RootLayout>
     );
   }
