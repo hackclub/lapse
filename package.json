@@ -2,7 +2,8 @@
 	"packageManager": "pnpm@10.25.0",
 	"pnpm": {
 		"overrides": {
-			"protobufjs": "7.5.5"
+			"protobufjs": "7.5.5",
+			"@lookout/shared": "link:./vendor/lookout/packages/shared"
 		}
 	},
 	"scripts": {

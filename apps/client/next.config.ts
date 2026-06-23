@@ -1,3 +1,4 @@
+import path from "path";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
 import TerserPlugin from "terser-webpack-plugin";
@@ -28,6 +29,17 @@ let config: NextConfig = {
       issuer: /\.[jt]sx?$/,
       use: ['@svgr/webpack'],
     });
+
+    // Force a single copy of React for linked packages (vendor/lookout)
+    const reactDir = path.dirname(require.resolve("react/package.json"));
+    const reactDomDir = path.dirname(require.resolve("react-dom/package.json"));
+    config.resolve!.alias = {
+      ...config.resolve!.alias,
+      react: reactDir,
+      "react-dom": reactDomDir,
+      "react/jsx-runtime": path.join(reactDir, "jsx-runtime"),
+      "react/jsx-dev-runtime": path.join(reactDir, "jsx-dev-runtime"),
+    };
 
     if (!isServer) {
       config.resolve!.fallback = {
