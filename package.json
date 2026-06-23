@@ -3,11 +3,11 @@
 	"pnpm": {
 		"overrides": {
 			"protobufjs": "7.5.5",
-			"@lookout/shared": "link:./vendor/lookout/packages/shared"
+			"@lookout/shared": "workspace:*"
 		}
 	},
 	"scripts": {
-		"build": "pnpm --parallel run build",
+		"build": "pnpm -r run build",
 		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
 		"dev:watch-all": "pnpm --parallel run watch",
 		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env",

@@ -7,6 +7,7 @@ import { withPostHogConfig } from "@posthog/nextjs-config";
 let config: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  transpilePackages: ["@lookout/react"],
   productionBrowserSourceMaps: true,
   poweredByHeader: false,
 
