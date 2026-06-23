@@ -1,7 +1,6 @@
 import * as v from "valibot";
 import { jsonrepair } from "jsonrepair";
 
-import { hasLegacyData } from "@/pages/migrate";
 import posthog from "posthog-js";
 import { ascending, sleep } from "@hackclub/lapse-shared";
 import { retryable } from "@/safety";
@@ -130,15 +129,7 @@ export class DeviceStorage {
       console.log("(deviceStorage.ts) existing OPFS store found");
     }
 
-    if (await hasLegacyData()) {
-      if (location.pathname !== "/migrate") {
-        console.log("(deviceStorage.ts) legacy data found - redirecting to /migrate!");
-        location.href = "/migrate";
-      }
-    }
-    else {
-      console.log("(deviceStorage.ts) no legacy data needed for redirect found");
-    }
+    // Legacy migration redirect removed — migrate.tsx has been deprecated.
   }
 
   private async getLapseDir(): Promise<FileSystemDirectoryHandle> {
