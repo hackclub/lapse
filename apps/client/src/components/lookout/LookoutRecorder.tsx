@@ -36,10 +36,10 @@ import PauseIcon from "@/assets/icons/pause.svg";
 import StopIcon from "@/assets/icons/stop.svg";
 
 interface LookoutSessionConfig {
+  draftId: string;
   lookoutToken: string;
   lookoutApiBaseUrl: string;
   lookoutSessionId: string;
-  timelapseId: string;
 }
 
 type RecordingMode = "desktop" | "screen" | "camera";
@@ -288,60 +288,58 @@ function timeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
-function SessionSelector({ sessions, onSelectSession, onNewSession, onRemoveSession, onClose }: {
-  sessions: StoredLookoutSession[];
+type ServerDraft = {
+  id: string;
+  createdAt: string;
+  lookoutSessionId: string;
+  lookoutToken: string;
+  lookoutStatus: string;
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+};
+
+function SessionSelector({ onSelectSession, onNewSession, onClose }: {
   onSelectSession: (session: StoredLookoutSession) => void;
   onNewSession: () => void;
-  onRemoveSession: (timelapseId: string) => void;
   onClose: () => void;
 }) {
-  const [validating, setValidating] = useState<string | null>(null);
-  const [thumbnails, setThumbnails] = useState<Record<string, string | null>>({});
+  const [drafts, setDrafts] = useState<ServerDraft[]>([]);
+  const [lookoutApiBaseUrl, setLookoutApiBaseUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    for (const session of sessions) {
-      const pollInput = session.lookoutSessionId
-        ? { lookoutSessionId: session.lookoutSessionId }
-        : { id: session.timelapseId };
-      api.timelapse.pollLookoutStatus(pollInput).then(res => {
-        if (res.ok && res.data.thumbnailUrl) {
-          setThumbnails(prev => ({ ...prev, [session.timelapseId]: res.data.thumbnailUrl }));
-        }
-      }).catch(() => {});
-    }
-  }, [sessions]);
-
-  async function handleSelect(session: StoredLookoutSession) {
-    setValidating(session.timelapseId);
-    try {
-      const res = await api.timelapse.pollLookoutStatus(
-        session.lookoutSessionId
-          ? { lookoutSessionId: session.lookoutSessionId }
-          : { id: session.timelapseId }
-      );
-      if (!res.ok) {
-        onRemoveSession(session.timelapseId);
-        return;
+    api.timelapse.getLookoutDrafts({}).then(res => {
+      if (res.ok) {
+        setDrafts(res.data.drafts);
+        setLookoutApiBaseUrl(res.data.lookoutApiBaseUrl);
       }
+    }).finally(() => setLoading(false));
+  }, []);
 
-      const status = res.data.lookoutStatus;
-      if (status === "complete" || status === "stopped" || status === "compiling") {
-        window.location.href = `/timelapse/publish/${session.timelapseId}`;
-        return;
-      }
+  function handleContinue(draft: ServerDraft) {
+    onSelectSession({
+      draftId: draft.id,
+      lookoutToken: draft.lookoutToken,
+      lookoutApiBaseUrl: lookoutApiBaseUrl,
+      lookoutSessionId: draft.lookoutSessionId,
+      createdAt: new Date(draft.createdAt).getTime(),
+    });
+  }
 
-      if (status === "failed") {
-        onRemoveSession(session.timelapseId);
-        return;
-      }
+  async function handleDiscard(draftId: string) {
+    setBusy(draftId);
+    await api.timelapse.discardLookoutDraft({ id: draftId });
+    removeStoredSession(draftId);
+    setDrafts(drafts.filter(d => d.id !== draftId));
+    setBusy(null);
 
-      onSelectSession(session);
-    } catch {
-      onRemoveSession(session.timelapseId);
-    } finally {
-      setValidating(null);
+    if (drafts.length <= 1) {
+      onNewSession();
     }
   }
+
+  const isReady = (d: ServerDraft) => d.lookoutStatus === "complete" || d.lookoutStatus === "stopped" || d.lookoutStatus === "compiling";
 
   return (
     <Modal isOpen>
@@ -354,31 +352,20 @@ function SessionSelector({ sessions, onSelectSession, onNewSession, onRemoveSess
         shortDescription="Select a session"
       />
       <ModalContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {sessions.map(session => {
-            const thumb = thumbnails[session.timelapseId];
-            return (
+        {loading ? (
+          <p className="text-muted text-center">Loading drafts...</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {drafts.map(draft => (
               <div
-                key={session.timelapseId}
-                role="button"
-                tabIndex={0}
-                onClick={() => validating === null && handleSelect(session)}
-                onKeyDown={(e) => e.key === "Enter" && validating === null && handleSelect(session)}
+                key={draft.id}
                 className={clsx(
-                  "relative flex flex-col items-center gap-3 p-4 w-full cursor-pointer transition-colors rounded-lg border border-slate hover:bg-darkless overflow-hidden",
-                  validating !== null && "opacity-50 pointer-events-none"
+                  "flex flex-col items-center gap-3 p-4 w-full rounded-lg border border-slate overflow-hidden",
+                  busy !== null && "opacity-50 pointer-events-none"
                 )}
               >
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRemoveSession(session.timelapseId); }}
-                  className="absolute top-2 right-2 z-10 p-1 rounded-full bg-darker/80 hover:bg-slate/50 transition-colors cursor-pointer"
-                  aria-label="Remove session"
-                >
-                  <Icon glyph="view-close" size={20} className="text-muted" />
-                </button>
-
-                {thumb ? (
-                  <img src={thumb} alt="" className="w-full aspect-video rounded-md object-cover" />
+                {draft.thumbnailUrl ? (
+                  <img src={draft.thumbnailUrl} alt="" className="w-full aspect-video rounded-md object-cover" />
                 ) : (
                   <div className="w-full aspect-video rounded-md bg-darker flex items-center justify-center">
                     <Icon glyph="clock-fill" size={48} className="text-muted" />
@@ -386,30 +373,66 @@ function SessionSelector({ sessions, onSelectSession, onNewSession, onRemoveSess
                 )}
 
                 <div className="flex flex-col items-center text-center gap-1">
-                  <span className="font-bold">Unfinished session</span>
+                  <span className="font-bold">
+                    {isReady(draft) ? "Ready to publish" : "Recording in progress"}
+                  </span>
                   <span className="text-sm text-muted">
-                    {validating === session.timelapseId ? "Checking..." : timeAgo(session.createdAt)}
+                    {timeAgo(new Date(draft.createdAt).getTime())}
                   </span>
                 </div>
-              </div>
-            );
-          })}
 
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => validating === null && onNewSession()}
-            onKeyDown={(e) => e.key === "Enter" && validating === null && onNewSession()}
-            className={clsx(
-              "flex flex-col items-center justify-center gap-3 p-4 w-full cursor-pointer transition-colors rounded-lg border border-dashed border-slate hover:bg-darkless",
-              validating !== null && "opacity-50 pointer-events-none"
-            )}
-            style={{ minHeight: "10rem" }}
-          >
-            <Icon glyph="plus" size={48} className="text-muted" />
-            <span className="font-bold">New session</span>
+                <div className="flex gap-2 w-full">
+                  {isReady(draft) ? (
+                    <>
+                      <button
+                        onClick={() => window.location.href = `/timelapse/publish/${draft.id}`}
+                        className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
+                      >
+                        Publish
+                      </button>
+                      <button
+                        onClick={() => handleContinue(draft)}
+                        className="flex-1 border border-slate hover:bg-darkless font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
+                      >
+                        Continue
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleContinue(draft)}
+                        className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
+                      >
+                        Continue
+                      </button>
+                      <button
+                        onClick={() => handleDiscard(draft.id)}
+                        className="flex-1 border border-red text-red hover:bg-red/10 font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
+                      >
+                        Discard
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => busy === null && onNewSession()}
+              onKeyDown={(e) => e.key === "Enter" && busy === null && onNewSession()}
+              className={clsx(
+                "flex flex-col items-center justify-center gap-3 p-4 w-full cursor-pointer transition-colors rounded-lg border border-dashed border-slate hover:bg-darkless",
+                busy !== null && "opacity-50 pointer-events-none"
+              )}
+              style={{ minHeight: "10rem" }}
+            >
+              <Icon glyph="plus" size={48} className="text-muted" />
+              <span className="font-bold">New session</span>
+            </div>
           </div>
-        </div>
+        )}
       </ModalContent>
     </Modal>
   );
@@ -426,7 +449,8 @@ export default function LookoutRecorder() {
   const [cameraDeviceId, setCameraDeviceId] = useState<string | null>(null);
   const [pickingCamera, setPickingCamera] = useState(false);
   const [desktopLaunched, setDesktopLaunched] = useState(false);
-  const [storedSessions, setStoredSessions] = useState<StoredLookoutSession[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
   const initialized = useRef(false);
 
@@ -434,69 +458,81 @@ export default function LookoutRecorder() {
     if (initialized.current) return;
     initialized.current = true;
 
-    const sessions = getStoredSessions();
-    if (sessions.length > 0) {
-      setStoredSessions(sessions);
-      setPhase("selecting");
-    } else {
-      createNewSession();
-    }
+    api.timelapse.getLookoutDrafts({}).then(res => {
+      if (res.ok && res.data.drafts.length > 0) {
+        setHasDrafts(true);
+        setPhase("selecting");
+      } else {
+        setHasDrafts(false);
+        setPhase("ready");
+      }
+    }).catch(() => {
+      setHasDrafts(false);
+      setPhase("ready");
+    });
   }, []);
 
-  function createNewSession() {
-    setPhase("ready");
-    api.timelapse.createRecordingSession({}).then(res => {
+  async function createSessionAndStart(onReady: (cfg: LookoutSessionConfig) => void) {
+    setIsCreating(true);
+    try {
+      const res = await api.timelapse.createRecordingSession({});
       if (!res.ok) {
         setInitError(res.message);
         return;
       }
-      setConfig({
+      if (!res.data.draftId) {
+        setInitError("Server returned no draft ID. Please restart the server.");
+        return;
+      }
+      const cfg: LookoutSessionConfig = {
+        draftId: res.data.draftId,
         lookoutToken: res.data.lookoutToken,
         lookoutApiBaseUrl: res.data.lookoutApiBaseUrl,
         lookoutSessionId: res.data.lookoutSessionId,
-        timelapseId: res.data.timelapseId,
+      };
+      setConfig(cfg);
+      storeSession({
+        draftId: cfg.draftId,
+        lookoutToken: cfg.lookoutToken,
+        lookoutApiBaseUrl: cfg.lookoutApiBaseUrl,
+        lookoutSessionId: cfg.lookoutSessionId,
+        createdAt: Date.now(),
       });
-    }).catch(err => {
+      onReady(cfg);
+    } catch (err) {
       setInitError(err instanceof Error ? err.message : "Failed to create recording session");
-    });
-  }
-
-  function persistCurrentSession() {
-    if (!config) return;
-    storeSession({
-      lookoutToken: config.lookoutToken,
-      lookoutApiBaseUrl: config.lookoutApiBaseUrl,
-      lookoutSessionId: config.lookoutSessionId,
-      timelapseId: config.timelapseId,
-      createdAt: Date.now(),
-    });
+    } finally {
+      setIsCreating(false);
+    }
   }
 
   function handleResumeSession(session: StoredLookoutSession) {
-    setConfig({
+    const cfg: LookoutSessionConfig = {
+      draftId: session.draftId,
       lookoutToken: session.lookoutToken,
       lookoutApiBaseUrl: session.lookoutApiBaseUrl,
       lookoutSessionId: session.lookoutSessionId,
-      timelapseId: session.timelapseId,
+    };
+    setConfig(cfg);
+    storeSession({
+      ...session,
+      createdAt: Date.now(),
     });
     setPhase("ready");
   }
 
-  function handleRemoveSession(timelapseId: string) {
-    removeStoredSession(timelapseId);
-    const remaining = getStoredSessions();
-    setStoredSessions(remaining);
-    if (remaining.length === 0) {
-      createNewSession();
+  function handleStart() {
+    if (config) {
+      startWithConfig(config);
+      return;
     }
+
+    createSessionAndStart(startWithConfig);
   }
 
-  function handleStart() {
-    if (!config) return;
-
+  function startWithConfig(cfg: LookoutSessionConfig) {
     if (selectedMode === "desktop") {
-      persistCurrentSession();
-      window.location.href = `lookout://session?token=${config.lookoutToken}`;
+      window.location.href = `lookout://session?token=${cfg.lookoutToken}`;
       setDesktopLaunched(true);
       return;
     }
@@ -506,33 +542,33 @@ export default function LookoutRecorder() {
       return;
     }
 
-    persistCurrentSession();
     setCaptureMode(selectedMode);
   }
 
   function handleCameraSelected(deviceId: string) {
-    persistCurrentSession();
     setCameraDeviceId(deviceId);
     setPickingCamera(false);
-    setCaptureMode("camera");
+    if (config) {
+      setCaptureMode("camera");
+    } else {
+      createSessionAndStart(() => setCaptureMode("camera"));
+    }
   }
 
   if (phase === "checking") {
     return (
       <RootLayout showHeader={false}>
-        <LoadingModal isOpen title="Setting up" message="Checking for sessions..." />
+        <div className="flex items-center justify-center h-screen text-muted">Checking for sessions...</div>
       </RootLayout>
     );
   }
 
-  if (phase === "selecting" && storedSessions.length > 0) {
+  if (phase === "selecting" && hasDrafts) {
     return (
       <RootLayout showHeader={false}>
         <SessionSelector
-          sessions={storedSessions}
           onSelectSession={handleResumeSession}
-          onNewSession={createNewSession}
-          onRemoveSession={handleRemoveSession}
+          onNewSession={() => { setHasDrafts(false); setPhase("ready"); }}
           onClose={() => router.back()}
         />
       </RootLayout>
@@ -547,15 +583,7 @@ export default function LookoutRecorder() {
     );
   }
 
-  if (!config) {
-    return (
-      <RootLayout showHeader={false}>
-        <div className="flex items-center justify-center h-screen text-muted">Talking to Lookout...</div>
-      </RootLayout>
-    );
-  }
-
-  if (desktopLaunched) {
+  if (desktopLaunched && config) {
     return (
       <RootLayout showHeader={false}>
         <div className="flex w-screen h-screen items-center justify-center p-8">
@@ -598,7 +626,7 @@ export default function LookoutRecorder() {
     );
   }
 
-  if (captureMode) {
+  if (captureMode && config) {
     return (
       <LookoutProvider
         token={config.lookoutToken}
@@ -610,7 +638,7 @@ export default function LookoutRecorder() {
         }
       >
         <LapseRecorder
-          timelapseId={config.timelapseId}
+          draftId={config.draftId}
           onShareFailed={() => { setCaptureMode(null); setCameraDeviceId(null); }}
         />
       </LookoutProvider>
@@ -657,9 +685,10 @@ export default function LookoutRecorder() {
 
             <button
               onClick={handleStart}
-              className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
+              disabled={isCreating}
+              className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {selectedMode === "desktop" ? "Open Lookout" : "Start Recording"}
+              {isCreating ? "Setting up..." : selectedMode === "desktop" ? "Open Lookout" : "Start Recording"}
             </button>
           </div>
         </ModalContent>
@@ -696,8 +725,8 @@ function CameraPreviewVideo({ stream }: { stream: MediaStream }) {
   );
 }
 
-function LapseRecorder({ timelapseId, onShareFailed }: {
-  timelapseId: string;
+function LapseRecorder({ draftId, onShareFailed }: {
+  draftId: string;
   onShareFailed: () => void;
 }) {
   const router = useRouter();
@@ -750,9 +779,9 @@ function LapseRecorder({ timelapseId, onShareFailed }: {
 
   useEffect(() => {
     if (state.status === "stopped" || state.status === "compiling" || state.status === "complete") {
-      router.push(`/timelapse/publish/${timelapseId}`);
+      router.push(`/timelapse/publish/${draftId}`);
     }
-  }, [state.status, timelapseId, router]);
+  }, [state.status, draftId, router]);
 
   function handleStartSharing() {
     actions.startSharing().then(() => {

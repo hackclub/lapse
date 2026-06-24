@@ -77,6 +77,7 @@ model User {
   serviceClientReviews  ServiceClientReview[]
   legacyTimelapses      LegacyUnpublishedTimelapse[]
   programKeysCreated    ProgramKey[]                 @relation("programKeysCreated")
+  lookoutDrafts         DraftLookoutTimelapse[]
 }
 
 /// Represents a timelapse created with a legacy version of Lapse. Such a timelapse is encrypted with a 6-digit passkey with a timelapse ID IV.
@@ -169,6 +170,19 @@ model DraftTimelapse {
 
   ownerId               String
   owner                 User               @relation(fields: [ownerId], references: [id])
+}
+
+/// A draft timelapse recorded via Lookout that has not yet been published.
+/// Created when a user starts a recording session; deleted on publish or discard.
+model DraftLookoutTimelapse {
+  id                  String   @id @default(nanoid(12))
+  createdAt           DateTime @default(now())
+
+  lookoutSessionId    String   @unique
+  lookoutToken        String
+
+  ownerId             String
+  owner               User     @relation(fields: [ownerId], references: [id])
 }
 
 /// Represents a published timelapse.

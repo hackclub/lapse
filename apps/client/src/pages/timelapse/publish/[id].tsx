@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/router";
 import type { TimelapseVisibility } from "@hackclub/lapse-api";
 import posthog from "posthog-js";
@@ -6,7 +6,7 @@ import posthog from "posthog-js";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
-import { getStoredSessions, removeStoredSession } from "@/components/lookout/sessions";
+import { removeStoredSession } from "@/components/lookout/sessions";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -22,12 +22,8 @@ export default function Page() {
   const router = useRouter();
   useAuth(true);
 
-  const timelapseId = router.query.id as string | undefined;
-
-  const storedSession = useMemo(
-    () => timelapseId ? getStoredSessions().find(s => s.timelapseId === timelapseId) : undefined,
-    [timelapseId]
-  );
+  const rawId = router.query.id as string | undefined;
+  const draftId = rawId && rawId !== "undefined" ? rawId : undefined;
 
   const [compilationStatus, setCompilationStatus] = useState<CompilationStatus>("waiting");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -43,15 +39,10 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
 
   useInterval(async () => {
-    if (compilationStatus !== "waiting") return;
-    if (!storedSession?.lookoutSessionId && !timelapseId) return;
+    if (!draftId || compilationStatus !== "waiting") return;
 
     try {
-      const res = await api.timelapse.pollLookoutStatus(
-        storedSession?.lookoutSessionId
-          ? { lookoutSessionId: storedSession.lookoutSessionId }
-          : { id: timelapseId }
-      );
+      const res = await api.timelapse.pollLookoutStatus({ draftId });
       if (!res.ok) {
         setError(res.message);
         return;
@@ -76,15 +67,13 @@ export default function Page() {
   }
 
   async function publish(hackatimeProject: string | null) {
-    if (!timelapseId || !visibility) return;
+    if (!draftId || !visibility) return;
 
     setIsPublishing(true);
 
     try {
       const res = await api.timelapse.publishFromLookout({
-        id: timelapseId,
-        ...(storedSession?.lookoutSessionId ? { lookoutSessionId: storedSession.lookoutSessionId } : {}),
-        ...(storedSession?.lookoutToken ? { lookoutToken: storedSession.lookoutToken } : {}),
+        draftId,
         name: name.trim() || `Timelapse at ${new Date().toLocaleString("en-US", { month: "long", day: "numeric", minute: "numeric", hour: "numeric" })}`,
         description: description.trim(),
         visibility,
@@ -97,7 +86,8 @@ export default function Page() {
         return;
       }
 
-      removeStoredSession(timelapseId);
+      removeStoredSession(draftId);
+      const timelapseId = res.data.timelapse.id;
       posthog.capture("timelapse_published_lookout", { timelapseId, hackatimeProject });
       location.href = `/timelapse/${timelapseId}`;
     } catch (err) {
@@ -107,7 +97,7 @@ export default function Page() {
   }
 
   async function handleDiscard() {
-    if (!timelapseId) return;
+    if (!draftId) return;
 
     if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
       return;
@@ -115,17 +105,17 @@ export default function Page() {
     setIsDiscarding(true);
 
     try {
-      await api.timelapse.delete({ id: timelapseId });
+      await api.timelapse.discardLookoutDraft({ id: draftId });
     } catch {
-      // No DB record to delete (new deferred-creation path) - that's fine
+      // Draft may already be gone
     }
 
-    removeStoredSession(timelapseId);
-    posthog.capture("timelapse_discarded_lookout", { timelapseId });
+    removeStoredSession(draftId);
+    posthog.capture("timelapse_discarded_lookout", { draftId });
     router.push("/");
   }
 
-  if (!timelapseId) {
+  if (!draftId) {
     return (
       <RootLayout>
         <LoadingModal isOpen title="Loading" message="Loading timelapse..." />

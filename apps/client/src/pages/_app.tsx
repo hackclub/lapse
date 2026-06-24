@@ -7,7 +7,6 @@ import { AuthProvider } from "@/context/AuthContext";
 import { KeyRelayProvider } from "@/context/KeyRelayContext";
 import { initLogBucket } from "@/logBucket";
 import { BYPASS_BROWSER_CHECK_KEY } from "@/pages/update-browser";
-import { getStoredSessions, removeStoredSession } from "@/components/lookout/sessions";
 import { api } from "@/api";
 
 initLogBucket();
@@ -33,34 +32,19 @@ const App: AppType = ({ Component, pageProps }) => {
     if (router.pathname.startsWith("/timelapse/publish") || router.pathname.startsWith("/timelapse/create"))
       return;
 
-    const sessions = getStoredSessions();
-    if (sessions.length === 0) return;
-
     (async () => {
-      for (const session of sessions) {
-        try {
-          const res = await api.timelapse.pollLookoutStatus(
-            session.lookoutSessionId
-              ? { lookoutSessionId: session.lookoutSessionId }
-              : { id: session.timelapseId }
-          );
-          if (!res.ok) {
-            removeStoredSession(session.timelapseId);
-            continue;
-          }
+      try {
+        const res = await api.timelapse.getLookoutDrafts({});
+        if (!res.ok) return;
 
-          const status = res.data.lookoutStatus;
-          if (status === "complete" || status === "stopped" || status === "compiling") {
-            router.replace(`/timelapse/publish/${session.timelapseId}`);
+        for (const draft of res.data.drafts) {
+          if (draft.lookoutStatus === "complete" || draft.lookoutStatus === "stopped" || draft.lookoutStatus === "compiling") {
+            router.replace(`/timelapse/publish/${draft.id}`);
             return;
           }
-
-          if (status === "failed") {
-            removeStoredSession(session.timelapseId);
-          }
-        } catch {
-          removeStoredSession(session.timelapseId);
         }
+      } catch {
+        // Not logged in or network error — ignore
       }
     })();
   }, [router]);

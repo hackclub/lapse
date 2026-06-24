@@ -1,10 +1,10 @@
 export const SESSIONS_KEY = "lapse:lookout_sessions";
 
 export interface StoredLookoutSession {
+  draftId: string;
   lookoutToken: string;
   lookoutApiBaseUrl: string;
   lookoutSessionId: string;
-  timelapseId: string;
   createdAt: number;
 }
 
@@ -13,20 +13,21 @@ export function getStoredSessions(): StoredLookoutSession[] {
     const raw = localStorage.getItem(SESSIONS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((s: Record<string, unknown>) => s.draftId);
   } catch {
     return [];
   }
 }
 
 export function storeSession(session: StoredLookoutSession): void {
-  const sessions = getStoredSessions().filter(s => s.timelapseId !== session.timelapseId);
+  const sessions = getStoredSessions().filter(s => s.draftId !== session.draftId);
   sessions.push(session);
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 
-export function removeStoredSession(timelapseId: string): void {
-  const sessions = getStoredSessions().filter(s => s.timelapseId !== timelapseId);
+export function removeStoredSession(draftId: string): void {
+  const sessions = getStoredSessions().filter(s => s.draftId !== draftId);
   if (sessions.length === 0) {
     localStorage.removeItem(SESSIONS_KEY);
   } else {

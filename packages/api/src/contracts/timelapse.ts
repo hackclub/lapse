@@ -213,31 +213,54 @@ export const timelapseRouterContract = {
         ),
 
     createRecordingSession: contract("POST", "/timelapse/createRecordingSession")
-        .route({ description: "Creates a new Lookout-backed recording session. Returns a Lookout token the client uses to initialize the Lookout SDK. No timelapse record is created until publishing." })
+        .route({ description: "Creates a new Lookout-backed recording session and a server-side draft. Returns a Lookout token the client uses to initialize the Lookout SDK." })
         .input(z.object({}))
         .output(
             apiResult({
+                draftId: LapseId
+                    .describe("The ID of the server-side draft."),
                 lookoutToken: z.string()
                     .describe("The Lookout session token to pass to the Lookout SDK."),
                 lookoutApiBaseUrl: z.string()
                     .describe("The base URL of the Lookout API."),
                 lookoutSessionId: z.string()
                     .describe("The Lookout session ID, used to poll status."),
-                timelapseId: LapseId
-                    .describe("A pre-generated timelapse ID to use when publishing."),
             })
         ),
 
-    publishFromLookout: contract("POST", "/timelapse/publishFromLookout")
-        .route({ description: "Publishes a Lookout-backed timelapse. The Lookout session must have status 'complete'. Creates the timelapse record, or updates it if one already exists for this session." })
+    getLookoutDrafts: contract("GET", "/timelapse/getLookoutDrafts")
+        .route({ description: "Lists all Lookout draft timelapses for the authenticated user, including their current Lookout session status." })
+        .input(z.object({}))
+        .output(
+            apiResult({
+                drafts: z.array(z.object({
+                    id: LapseId,
+                    createdAt: LapseDate,
+                    lookoutSessionId: z.string(),
+                    lookoutToken: z.string(),
+                    lookoutStatus: z.string(),
+                    videoUrl: z.string().nullable(),
+                    thumbnailUrl: z.string().nullable(),
+                })),
+                lookoutApiBaseUrl: z.string(),
+            })
+        ),
+
+    discardLookoutDraft: contract("DELETE", "/timelapse/discardLookoutDraft")
+        .route({ description: "Deletes a Lookout draft timelapse." })
         .input(
             z.object({
-                id: LapseId
-                    .describe("The timelapse ID (pre-generated or existing)."),
-                lookoutSessionId: z.string().optional()
-                    .describe("The Lookout session ID. If omitted, looked up from the existing timelapse record."),
-                lookoutToken: z.string().optional()
-                    .describe("The Lookout session token. If omitted, looked up from the existing timelapse record."),
+                id: LapseId,
+            })
+        )
+        .output(NO_OUTPUT),
+
+    publishFromLookout: contract("POST", "/timelapse/publishFromLookout")
+        .route({ description: "Publishes a Lookout-backed timelapse from a draft. The Lookout session must have status 'complete'. Creates the timelapse record and deletes the draft." })
+        .input(
+            z.object({
+                draftId: LapseId
+                    .describe("The ID of the Lookout draft to publish."),
                 name: TimelapseName,
                 description: TimelapseDescription.optional(),
                 visibility: TimelapseVisibilitySchema,
@@ -252,13 +275,11 @@ export const timelapseRouterContract = {
         ),
 
     pollLookoutStatus: contract("GET", "/timelapse/pollLookoutStatus")
-        .route({ description: "Polls the status of a Lookout-backed recording/compilation. Provide lookoutSessionId directly, or id to look it up from the database." })
+        .route({ description: "Polls the status of a Lookout-backed recording/compilation by draft ID." })
         .input(
             z.object({
-                lookoutSessionId: z.string().optional()
-                    .describe("The Lookout session ID to poll. Preferred over id."),
-                id: LapseId.optional()
-                    .describe("The timelapse ID. Used to look up the Lookout session ID from the database if lookoutSessionId is not provided."),
+                draftId: LapseId
+                    .describe("The draft ID to poll."),
             })
         )
         .output(

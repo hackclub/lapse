@@ -499,35 +499,83 @@ export default os.router({
                 source: "lapse",
             });
 
+            const draft = await database().draftLookoutTimelapse.create({
+                data: {
+                    lookoutSessionId: session.sessionId,
+                    lookoutToken: session.token,
+                    ownerId: caller.id,
+                }
+            });
+
             return apiOk({
+                draftId: draft.id,
                 lookoutToken: session.token,
                 lookoutApiBaseUrl: env.LOOKOUT_API_BASE_URL,
                 lookoutSessionId: session.sessionId,
-                timelapseId: lapseId(),
             });
+        }),
+
+    getLookoutDrafts: os.getLookoutDrafts
+        .use(requiredAuth())
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const drafts = await database().draftLookoutTimelapse.findMany({
+                where: { ownerId: caller.id },
+                orderBy: { createdAt: "desc" },
+            });
+
+            const results = await Promise.all(drafts.map(async (draft) => {
+                try {
+                    const session = await lookout.getSession(draft.lookoutSessionId);
+                    return {
+                        id: draft.id,
+                        createdAt: draft.createdAt.getTime(),
+                        lookoutSessionId: draft.lookoutSessionId,
+                        lookoutToken: draft.lookoutToken,
+                        lookoutStatus: session.session.status as string,
+                        videoUrl: session.session.videoUrl as string | null,
+                        thumbnailUrl: session.session.thumbnailUrl as string | null,
+                    };
+                } catch {
+                    await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
+                    return null;
+                }
+            }));
+
+            return apiOk({
+                drafts: results.filter((d): d is NonNullable<typeof d> => d !== null),
+                lookoutApiBaseUrl: env.LOOKOUT_API_BASE_URL,
+            });
+        }),
+
+    discardLookoutDraft: os.discardLookoutDraft
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            await database().draftLookoutTimelapse.deleteMany({
+                where: { id: req.input.id, ownerId: caller.id }
+            });
+
+            return apiOk({});
         }),
 
     pollLookoutStatus: os.pollLookoutStatus
         .use(requiredAuth())
         .use(requiredImplicitUser())
         .handler(async (req) => {
-            let lookoutSessionId = req.input.lookoutSessionId;
+            const draft = await database().draftLookoutTimelapse.findFirst({
+                where: { id: req.input.draftId, ownerId: req.context.user.id }
+            });
 
-            if (!lookoutSessionId) {
-                if (!req.input.id)
-                    return apiErr("ERROR", "Either lookoutSessionId or id must be provided.");
+            if (!draft)
+                return apiErr("NOT_FOUND", "Couldn't find that draft!");
 
-                const timelapse = await database().timelapse.findFirst({
-                    where: { id: req.input.id, ownerId: req.context.user.id }
-                });
-
-                if (!timelapse?.lookoutSessionId)
-                    return apiErr("NOT_FOUND", "Couldn't find that Lookout-backed timelapse!");
-
-                lookoutSessionId = timelapse.lookoutSessionId;
-            }
-
-            const session = await lookout.getSession(lookoutSessionId);
+            const session = await lookout.getSession(draft.lookoutSessionId);
 
             return apiOk({
                 lookoutStatus: session.session.status,
@@ -543,61 +591,49 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const existing = await database().timelapse.findFirst({
-                where: { id: req.input.id, ownerId: caller.id }
+            const draft = await database().draftLookoutTimelapse.findFirst({
+                where: { id: req.input.draftId, ownerId: caller.id }
             });
 
-            const lookoutSessionId = req.input.lookoutSessionId ?? existing?.lookoutSessionId;
-            const lookoutToken = req.input.lookoutToken ?? existing?.lookoutToken;
+            if (!draft)
+                return apiErr("NOT_FOUND", "Couldn't find that draft!");
 
-            if (!lookoutSessionId || !lookoutToken)
-                return apiErr("NOT_FOUND", "Couldn't find Lookout session info. Please start a new recording.");
-
-            const alreadyPublished = existing
-                ? existing.associatedJobId !== "lookout-pending"
-                : await database().timelapse.findFirst({ where: { lookoutSessionId } });
+            const alreadyPublished = await database().timelapse.findFirst({
+                where: { lookoutSessionId: draft.lookoutSessionId }
+            });
 
             if (alreadyPublished)
-                return apiErr("ERROR", "This Lookout session has already been published.");
+                return apiErr("ERROR", "This session has already been published.");
 
-            const session = await lookout.getSession(lookoutSessionId);
+            const session = await lookout.getSession(draft.lookoutSessionId);
 
             if (session.session.status !== "complete")
                 return apiErr("ERROR", `Lookout session is not ready yet (status: ${session.session.status}).`);
 
-            const timings = await lookout.getTimings(lookoutToken);
+            const timings = await lookout.getTimings(draft.lookoutToken);
             const snapshots = timings.timestamps.map(ts => new Date(ts));
             const duration = durationBySnapshots(snapshots);
 
-            const data = {
-                name: req.input.name,
-                description: req.input.description ?? "",
-                visibility: req.input.visibility,
-                lookoutSessionId,
-                lookoutToken,
-                lookoutVideoUrl: session.session.videoUrl,
-                lookoutThumbnailUrl: session.session.thumbnailUrl,
-                snapshots,
-                duration,
-                associatedJobId: null,
-                hackatimeProject: req.input.hackatimeProject ?? null,
-            };
+            const timelapse = await database().timelapse.create({
+                data: {
+                    id: lapseId(),
+                    createdAt: draft.createdAt,
+                    ownerId: caller.id,
+                    name: req.input.name,
+                    description: req.input.description ?? "",
+                    visibility: req.input.visibility,
+                    lookoutSessionId: draft.lookoutSessionId,
+                    lookoutToken: draft.lookoutToken,
+                    lookoutVideoUrl: session.session.videoUrl,
+                    lookoutThumbnailUrl: session.session.thumbnailUrl,
+                    snapshots,
+                    duration,
+                    hackatimeProject: req.input.hackatimeProject ?? null,
+                },
+                include: TIMELAPSE_INCLUDES
+            });
 
-            const timelapse = existing
-                ? await database().timelapse.update({
-                    where: { id: req.input.id },
-                    data,
-                    include: TIMELAPSE_INCLUDES
-                })
-                : await database().timelapse.create({
-                    data: {
-                        id: req.input.id,
-                        createdAt: new Date(),
-                        ownerId: caller.id,
-                        ...data,
-                    },
-                    include: TIMELAPSE_INCLUDES
-                });
+            await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
 
             if (req.input.hackatimeProject && caller.hackatimeId && caller.hackatimeAccessToken) {
                 try {
