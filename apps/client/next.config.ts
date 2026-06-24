@@ -7,7 +7,7 @@ import { withPostHogConfig } from "@posthog/nextjs-config";
 let config: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  transpilePackages: ["@lookout/react"],
+  transpilePackages: ["@lookout/react", "@squircle-js/react"],
   productionBrowserSourceMaps: true,
   poweredByHeader: false,
 
@@ -42,18 +42,6 @@ let config: NextConfig = {
       "react/jsx-dev-runtime": path.join(reactDir, "jsx-dev-runtime"),
     };
 
-    if (!isServer) {
-      config.resolve!.fallback = {
-        ...config.resolve!.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-        stream: false,
-        util: false,
-        buffer: false,
-      };
-    }
-    
     return config;
   },
 

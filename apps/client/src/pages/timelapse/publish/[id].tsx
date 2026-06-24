@@ -6,6 +6,7 @@ import posthog from "posthog-js";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
+import { removeStoredSession } from "@/components/lookout/LookoutRecorder";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -83,6 +84,7 @@ export default function Page() {
         return;
       }
 
+      removeStoredSession(timelapseId);
       posthog.capture("timelapse_published_lookout", { timelapseId, hackatimeProject });
       location.href = `/timelapse/${timelapseId}`;
     } catch (err) {
@@ -102,18 +104,16 @@ export default function Page() {
   return (
     <RootLayout>
       <div className="max-w-2xl mx-auto py-12 px-4">
-        <h1 className="text-3xl font-bold mb-2">Publish Timelapse</h1>
-
         {compilationStatus === "waiting" && (
-          <div className="flex flex-col items-center gap-4 py-16">
-            <div className="w-8 h-8 border-3 border-red border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted">Compiling your timelapse video...</p>
+          <div className="flex flex-col items-center justify-center gap-1 fixed inset-0">
+            <div className="w-8 h-8 border-3 border-red border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-white text-xl font-bold">Compiling your timelapse video...</p>
             <p className="text-secondary text-sm">This usually takes a minute or two.</p>
           </div>
         )}
 
         {compilationStatus === "ready" && (
-          <div className="flex flex-col gap-6 mt-6">
+          <div className="flex flex-col gap-6">
             {videoUrl && (
               <video
                 src={videoUrl}

@@ -1,13 +1,12 @@
 import dynamic from "next/dynamic";
 
 import RootLayout from "@/components/layout/RootLayout";
-import { LoadingModal } from "@/components/layout/LoadingModal";
 
 const LookoutRecorder = dynamic(() => import("@/components/lookout/LookoutRecorder"), {
   ssr: false,
   loading: () => (
     <RootLayout showHeader={false}>
-      <LoadingModal isOpen title="Setting up" message="Loading recorder..." />
+      <div className="flex items-center justify-center h-screen text-muted">Talking to Lookout...</div>
     </RootLayout>
   ),
 });
