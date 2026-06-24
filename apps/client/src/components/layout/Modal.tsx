@@ -1,4 +1,5 @@
 import { PropsWithChildren, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 
@@ -13,7 +14,7 @@ export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
 }>) {
   size ??= "REGULAR";
 
-  return (
+  const modal = (
     <div role="dialog" className={clsx(
       "flex fixed w-screen h-screen p-4 sm:p-8 top-0 left-0 text-text bg-[#00000088] duration-500 transition-colors justify-center items-center shadow z-20 overflow-y-auto",
       !isOpen && "hidden",
@@ -34,6 +35,9 @@ export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
       </section>
     </div>
   );
+
+  if (typeof document === "undefined") return modal;
+  return createPortal(modal, document.body);
 }
 
 export function ModalHeader({ icon, title, description, shortDescription, children, showCloseButton, onClose }: {

@@ -1,0 +1,4 @@
+[submodule "vendor/lookout"]
+	path = vendor/lookout
+	url = https://github.com/hackclub/lookout.git
+	branch = main

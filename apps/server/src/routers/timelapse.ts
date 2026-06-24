@@ -15,6 +15,7 @@ import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/hackatime.js";
 import { dtoComment, type DbComment } from "@/routers/comment.js";
 import { enqueueRealizeJob } from "@/job.js";
+import * as lookout from "@/lookout.js";
 
 const s3 = new S3Client({
     region: "auto",
@@ -46,8 +47,10 @@ export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
         description: entity.description,
         comments: entity.comments.map(dtoComment),
         visibility: entity.visibility,
-        playbackUrl: entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`,
-        thumbnailUrl: entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`,
+        playbackUrl: entity.lookoutVideoUrl
+            ?? (entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`),
+        thumbnailUrl: entity.lookoutThumbnailUrl
+            ?? (entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`),
         duration: entity.duration,
         isDraft: false
     };
@@ -481,5 +484,166 @@ export default os.router({
             });
 
             return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
-        })
+        }),
+
+    createRecordingSession: os.createRecordingSession
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const session = await lookout.createSession(undefined, {
+                lapseUserId: caller.id,
+                lapseUserHandle: caller.handle,
+                source: "lapse",
+            });
+
+            const draft = await database().draftLookoutTimelapse.create({
+                data: {
+                    lookoutSessionId: session.sessionId,
+                    lookoutToken: session.token,
+                    ownerId: caller.id,
+                }
+            });
+
+            return apiOk({
+                draftId: draft.id,
+                lookoutToken: session.token,
+                lookoutApiBaseUrl: env.LOOKOUT_API_BASE_URL,
+                lookoutSessionId: session.sessionId,
+            });
+        }),
+
+    getLookoutDrafts: os.getLookoutDrafts
+        .use(requiredAuth())
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const drafts = await database().draftLookoutTimelapse.findMany({
+                where: { ownerId: caller.id },
+                orderBy: { createdAt: "desc" },
+            });
+
+            const results = await Promise.all(drafts.map(async (draft) => {
+                try {
+                    const session = await lookout.getSession(draft.lookoutSessionId);
+                    return {
+                        id: draft.id,
+                        createdAt: draft.createdAt.getTime(),
+                        lookoutSessionId: draft.lookoutSessionId,
+                        lookoutToken: draft.lookoutToken,
+                        lookoutStatus: session.session.status as string,
+                        videoUrl: session.session.videoUrl as string | null,
+                        thumbnailUrl: session.session.thumbnailUrl as string | null,
+                    };
+                } catch {
+                    await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
+                    return null;
+                }
+            }));
+
+            return apiOk({
+                drafts: results.filter((d): d is NonNullable<typeof d> => d !== null),
+                lookoutApiBaseUrl: env.LOOKOUT_API_BASE_URL,
+            });
+        }),
+
+    discardLookoutDraft: os.discardLookoutDraft
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            await database().draftLookoutTimelapse.deleteMany({
+                where: { id: req.input.id, ownerId: caller.id }
+            });
+
+            return apiOk({});
+        }),
+
+    pollLookoutStatus: os.pollLookoutStatus
+        .use(requiredAuth())
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const draft = await database().draftLookoutTimelapse.findFirst({
+                where: { id: req.input.draftId, ownerId: req.context.user.id }
+            });
+
+            if (!draft)
+                return apiErr("NOT_FOUND", "Couldn't find that draft!");
+
+            const session = await lookout.getSession(draft.lookoutSessionId);
+
+            return apiOk({
+                lookoutStatus: session.session.status,
+                videoUrl: session.session.videoUrl,
+                thumbnailUrl: session.session.thumbnailUrl,
+            });
+        }),
+
+    publishFromLookout: os.publishFromLookout
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const draft = await database().draftLookoutTimelapse.findFirst({
+                where: { id: req.input.draftId, ownerId: caller.id }
+            });
+
+            if (!draft)
+                return apiErr("NOT_FOUND", "Couldn't find that draft!");
+
+            const alreadyPublished = await database().timelapse.findFirst({
+                where: { lookoutSessionId: draft.lookoutSessionId }
+            });
+
+            if (alreadyPublished)
+                return apiErr("ERROR", "This session has already been published.");
+
+            const session = await lookout.getSession(draft.lookoutSessionId);
+
+            if (session.session.status !== "complete")
+                return apiErr("ERROR", `Lookout session is not ready yet (status: ${session.session.status}).`);
+
+            const timings = await lookout.getTimings(draft.lookoutToken);
+            const snapshots = timings.timestamps.map(ts => new Date(ts));
+            const duration = durationBySnapshots(snapshots);
+
+            const timelapse = await database().timelapse.create({
+                data: {
+                    id: lapseId(),
+                    createdAt: draft.createdAt,
+                    ownerId: caller.id,
+                    name: req.input.name,
+                    description: req.input.description ?? "",
+                    visibility: req.input.visibility,
+                    lookoutSessionId: draft.lookoutSessionId,
+                    lookoutToken: draft.lookoutToken,
+                    lookoutVideoUrl: session.session.videoUrl,
+                    lookoutThumbnailUrl: session.session.thumbnailUrl,
+                    snapshots,
+                    duration,
+                    hackatimeProject: req.input.hackatimeProject ?? null,
+                },
+                include: TIMELAPSE_INCLUDES
+            });
+
+            await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
+
+            if (req.input.hackatimeProject && caller.hackatimeId && caller.hackatimeAccessToken) {
+                try {
+                    await syncTimelapseWithHackatime(timelapse, caller);
+                }
+                catch (err) {
+                    logError("Couldn't sync heartbeats during Lookout publish!", { err });
+                }
+            }
+
+            return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
+        }),
 });

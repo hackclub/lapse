@@ -2,11 +2,16 @@
 	"packageManager": "pnpm@10.25.0",
 	"pnpm": {
 		"overrides": {
-			"protobufjs": "7.5.5"
+			"protobufjs": "7.5.5",
+			"@lookout/shared": "workspace:*"
 		}
 	},
+	"devDependencies": {
+		"typescript": "^5.7.0",
+		"tsup": "^8.0.0"
+	},
 	"scripts": {
-		"build": "pnpm --parallel run build",
+		"build": "pnpm --filter @lookout/shared run build && pnpm -r run build",
 		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
 		"dev:watch-all": "pnpm --parallel run watch",
 		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env",

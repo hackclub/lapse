@@ -212,6 +212,87 @@ export const timelapseRouterContract = {
             })
         ),
 
+    createRecordingSession: contract("POST", "/timelapse/createRecordingSession")
+        .route({ description: "Creates a new Lookout-backed recording session and a server-side draft. Returns a Lookout token the client uses to initialize the Lookout SDK." })
+        .input(z.object({}))
+        .output(
+            apiResult({
+                draftId: LapseId
+                    .describe("The ID of the server-side draft."),
+                lookoutToken: z.string()
+                    .describe("The Lookout session token to pass to the Lookout SDK."),
+                lookoutApiBaseUrl: z.string()
+                    .describe("The base URL of the Lookout API."),
+                lookoutSessionId: z.string()
+                    .describe("The Lookout session ID, used to poll status."),
+            })
+        ),
+
+    getLookoutDrafts: contract("GET", "/timelapse/getLookoutDrafts")
+        .route({ description: "Lists all Lookout draft timelapses for the authenticated user, including their current Lookout session status." })
+        .input(z.object({}))
+        .output(
+            apiResult({
+                drafts: z.array(z.object({
+                    id: LapseId,
+                    createdAt: LapseDate,
+                    lookoutSessionId: z.string(),
+                    lookoutToken: z.string(),
+                    lookoutStatus: z.string(),
+                    videoUrl: z.string().nullable(),
+                    thumbnailUrl: z.string().nullable(),
+                })),
+                lookoutApiBaseUrl: z.string(),
+            })
+        ),
+
+    discardLookoutDraft: contract("DELETE", "/timelapse/discardLookoutDraft")
+        .route({ description: "Deletes a Lookout draft timelapse." })
+        .input(
+            z.object({
+                id: LapseId,
+            })
+        )
+        .output(NO_OUTPUT),
+
+    publishFromLookout: contract("POST", "/timelapse/publishFromLookout")
+        .route({ description: "Publishes a Lookout-backed timelapse from a draft. The Lookout session must have status 'complete'. Creates the timelapse record and deletes the draft." })
+        .input(
+            z.object({
+                draftId: LapseId
+                    .describe("The ID of the Lookout draft to publish."),
+                name: TimelapseName,
+                description: TimelapseDescription.optional(),
+                visibility: TimelapseVisibilitySchema,
+                hackatimeProject: z.string().min(1).max(128).optional()
+                    .describe("If provided, snapshots will be synced to this Hackatime project."),
+            })
+        )
+        .output(
+            apiResult({
+                timelapse: TimelapseSchema
+            })
+        ),
+
+    pollLookoutStatus: contract("GET", "/timelapse/pollLookoutStatus")
+        .route({ description: "Polls the status of a Lookout-backed recording/compilation by draft ID." })
+        .input(
+            z.object({
+                draftId: LapseId
+                    .describe("The draft ID to poll."),
+            })
+        )
+        .output(
+            apiResult({
+                lookoutStatus: z.string()
+                    .describe("The current Lookout session status (e.g. 'active', 'stopped', 'compiling', 'complete', 'failed')."),
+                videoUrl: z.string().nullable()
+                    .describe("The video URL, if compilation is complete."),
+                thumbnailUrl: z.string().nullable()
+                    .describe("The thumbnail URL, if compilation is complete."),
+            })
+        ),
+
     myPublishedTimelapses: contract("GET", "/timelapse/myPublishedTimelapses")
         .route({ description: "Lists all published timelapses owned by the authenticated user, with cursor-based pagination." })
         .input(

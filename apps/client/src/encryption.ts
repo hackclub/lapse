@@ -7,6 +7,7 @@ import { api } from "@/api";
 
 /**
  * Fetches the data associated with the current device. If such data doesn't exist, it securely generated and saved.
+ * @deprecated Only used for legacy encrypted draft thumbnails. New timelapses use Lookout which handles encryption server-side.
  */
 export async function getCurrentDevice() {
   const devices = await deviceStorage.getAllDevices();

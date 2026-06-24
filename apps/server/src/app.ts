@@ -19,7 +19,8 @@ import type { Context } from "@/router.js"
 import { database, initDatabase } from "@/db.js";
 import { env } from "@/env.js"
 import { logError } from "@/logging.js";
-import { attachUploadServer } from "@/upload.js";
+// tus upload server removed — Lookout handles uploads now.
+// import { attachUploadServer } from "@/upload.js";
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -168,7 +169,7 @@ server.all("/docs", async (req, reply) => {
     );
 });
 
-attachUploadServer(server);
+// attachUploadServer(server); — deprecated, Lookout handles uploads
 
 server.listen({ port: parseInt(env.PORT), host: env.HOST })
     .then(async (address) => {
