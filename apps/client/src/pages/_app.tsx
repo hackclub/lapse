@@ -7,7 +7,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { KeyRelayProvider } from "@/context/KeyRelayContext";
 import { initLogBucket } from "@/logBucket";
 import { BYPASS_BROWSER_CHECK_KEY } from "@/pages/update-browser";
-import { getStoredSessions, removeStoredSession } from "@/components/lookout/LookoutRecorder";
+import { getStoredSessions, removeStoredSession } from "@/components/lookout/sessions";
 import { api } from "@/api";
 
 initLogBucket();

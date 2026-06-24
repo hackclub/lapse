@@ -10,6 +10,12 @@ import type { IconGlyph } from "@/common";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
+import {
+  type StoredLookoutSession,
+  getStoredSessions,
+  storeSession,
+  removeStoredSession,
+} from "@/components/lookout/sessions";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
@@ -23,42 +29,6 @@ function formatTrackedTime(totalSeconds: number): string {
   if (h > 0 && m > 0) return `${h}h ${m}min`;
   if (h > 0) return `${h}h`;
   return `${m}min`;
-}
-
-export const SESSIONS_KEY = "lapse:lookout_sessions";
-
-export interface StoredLookoutSession {
-  lookoutToken: string;
-  lookoutApiBaseUrl: string;
-  lookoutSessionId: string;
-  timelapseId: string;
-  createdAt: number;
-}
-
-export function getStoredSessions(): StoredLookoutSession[] {
-  try {
-    const raw = localStorage.getItem(SESSIONS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function storeSession(session: StoredLookoutSession): void {
-  const sessions = getStoredSessions().filter(s => s.timelapseId !== session.timelapseId);
-  sessions.push(session);
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-}
-
-export function removeStoredSession(timelapseId: string): void {
-  const sessions = getStoredSessions().filter(s => s.timelapseId !== timelapseId);
-  if (sessions.length === 0) {
-    localStorage.removeItem(SESSIONS_KEY);
-  } else {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-  }
 }
 
 import RecordIcon from "@/assets/icons/record.svg";

@@ -6,7 +6,7 @@ import posthog from "posthog-js";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
-import { getStoredSessions, removeStoredSession } from "@/components/lookout/LookoutRecorder";
+import { getStoredSessions, removeStoredSession } from "@/components/lookout/sessions";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
