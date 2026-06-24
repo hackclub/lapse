@@ -12,7 +12,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
 import {
   type StoredLookoutSession,
-  getStoredSessions,
   storeSession,
   removeStoredSession,
 } from "@/components/lookout/sessions";
