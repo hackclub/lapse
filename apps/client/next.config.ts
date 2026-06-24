@@ -1,8 +1,36 @@
+import fs from "fs";
 import path from "path";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
 import TerserPlugin from "terser-webpack-plugin";
 import { withPostHogConfig } from "@posthog/nextjs-config";
+
+const root = path.resolve(__dirname, "..", "..");
+
+function resolveSquircle(): Record<string, string> {
+  const candidates = [
+    path.join(root, "vendor", "lookout", "node_modules", "@squircle-js", "react", "dist", "index.mjs"),
+    path.join(root, "vendor", "lookout", "clients", "react", "node_modules", "@squircle-js", "react", "dist", "index.mjs"),
+  ];
+
+  // Also check the pnpm store
+  const pnpmDir = path.join(root, "node_modules", ".pnpm");
+  if (fs.existsSync(pnpmDir)) {
+    for (const entry of fs.readdirSync(pnpmDir)) {
+      if (entry.startsWith("@squircle-js+react@")) {
+        candidates.push(path.join(pnpmDir, entry, "node_modules", "@squircle-js", "react", "dist", "index.mjs"));
+      }
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return { "@squircle-js/react": candidate };
+    }
+  }
+
+  return {};
+}
 
 let config: NextConfig = {
   reactStrictMode: true,
@@ -40,7 +68,7 @@ let config: NextConfig = {
       "react-dom": reactDomDir,
       "react/jsx-runtime": path.join(reactDir, "jsx-runtime"),
       "react/jsx-dev-runtime": path.join(reactDir, "jsx-dev-runtime"),
-      "@squircle-js/react": path.resolve(__dirname, "..", "..", "vendor", "lookout", "node_modules", "@squircle-js", "react", "dist", "index.mjs"),
+      ...resolveSquircle(),
     };
 
     return config;
