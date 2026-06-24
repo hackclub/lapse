@@ -9,6 +9,10 @@ RUN npm install -g pnpm@latest
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
+############################  lookout  ###########################
+FROM base AS lookout
+RUN git clone --depth 1 --branch v0.3.4 https://github.com/hackclub/lookout.git /lookout
+
 ############################  deps  ##############################
 FROM base AS deps
 WORKDIR /app
@@ -17,8 +21,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/client/package.json ./apps/client/
 COPY packages/api/package.json ./packages/api/
 COPY packages/shared/package.json ./packages/shared/
-COPY vendor/lookout/packages/shared/package.json ./vendor/lookout/packages/shared/
-COPY vendor/lookout/clients/react/package.json ./vendor/lookout/clients/react/
+COPY --from=lookout /lookout/packages/shared/package.json ./vendor/lookout/packages/shared/
+COPY --from=lookout /lookout/clients/react/package.json ./vendor/lookout/clients/react/
 
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     pnpm install --frozen-lockfile --ignore-scripts
@@ -33,9 +37,9 @@ ENV SOURCE_COMMIT=${SOURCE_COMMIT}
 COPY packages/shared/ ./packages/shared/
 COPY packages/api/ ./packages/api/
 COPY apps/client/ ./apps/client/
-COPY vendor/lookout/tsconfig.base.json ./vendor/lookout/
-COPY vendor/lookout/packages/shared/ ./vendor/lookout/packages/shared/
-COPY vendor/lookout/clients/react/ ./vendor/lookout/clients/react/
+COPY --from=lookout /lookout/tsconfig.base.json ./vendor/lookout/
+COPY --from=lookout /lookout/packages/shared/ ./vendor/lookout/packages/shared/
+COPY --from=lookout /lookout/clients/react/ ./vendor/lookout/clients/react/
 
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     pnpm --filter @lookout/shared run build && \
