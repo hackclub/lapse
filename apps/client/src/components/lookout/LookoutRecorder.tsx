@@ -290,7 +290,7 @@ function timeAgo(timestamp: number): string {
 
 type ServerDraft = {
   id: string;
-  createdAt: string;
+  createdAt: number;
   lookoutSessionId: string;
   lookoutToken: string;
   lookoutStatus: string;
@@ -323,7 +323,7 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
       lookoutToken: draft.lookoutToken,
       lookoutApiBaseUrl: lookoutApiBaseUrl,
       lookoutSessionId: draft.lookoutSessionId,
-      createdAt: new Date(draft.createdAt).getTime(),
+      createdAt: draft.createdAt,
     });
   }
 
@@ -377,7 +377,7 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
                     {isReady(draft) ? "Ready to publish" : "Recording in progress"}
                   </span>
                   <span className="text-sm text-muted">
-                    {timeAgo(new Date(draft.createdAt).getTime())}
+                    {timeAgo(draft.createdAt)}
                   </span>
                 </div>
 
