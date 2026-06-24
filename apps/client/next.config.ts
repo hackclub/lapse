@@ -40,6 +40,7 @@ let config: NextConfig = {
       "react-dom": reactDomDir,
       "react/jsx-runtime": path.join(reactDir, "jsx-runtime"),
       "react/jsx-dev-runtime": path.join(reactDir, "jsx-dev-runtime"),
+      "@squircle-js/react": path.resolve(__dirname, "..", "..", "vendor", "lookout", "node_modules", "@squircle-js", "react", "dist", "index.mjs"),
     };
 
     return config;
