@@ -5,10 +5,13 @@ import { InputField } from "@/components/ui/InputField";
 
 type InputType = "text" | "password" | "secret";
 
-export function TextInput({ field, value, placeholder, maxLength, onBlur, onChange, type = "text", autoComplete }: {
+import type { IconGlyph } from "@/common";
+
+export function TextInput({ field, value, placeholder, maxLength, onBlur, onChange, type = "text", autoComplete, mono }: {
   field?: {
     label: string,
-    description: string
+    description: string,
+    icon?: IconGlyph,
   },
   value: string,
   placeholder?: string,
@@ -16,7 +19,8 @@ export function TextInput({ field, value, placeholder, maxLength, onBlur, onChan
   onBlur?: () => void,
   onChange: (x: string) => void,
   type?: InputType,
-  autoComplete?: string
+  autoComplete?: string,
+  mono?: boolean,
 }) {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -45,7 +49,7 @@ export function TextInput({ field, value, placeholder, maxLength, onBlur, onChan
       onBlur={handleBlur}
       className={clsx(
         "border border-slate outline-red focus:outline-2 transition-all rounded-xl p-2 px-4 w-full",
-        isSecret && "font-mono"
+        (isSecret || mono) && "font-mono text-[0.9em]"
       )}
       type={inputType}
       value={displayValue}
@@ -58,7 +62,7 @@ export function TextInput({ field, value, placeholder, maxLength, onBlur, onChan
 
   if (field) {
     return (
-      <InputField label={field.label} description={field.description}>
+      <InputField label={field.label} description={field.description} icon={field.icon}>
         {input}
       </InputField>
     );
