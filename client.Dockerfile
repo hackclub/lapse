@@ -17,6 +17,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/client/package.json ./apps/client/
 COPY packages/api/package.json ./packages/api/
 COPY packages/shared/package.json ./packages/shared/
+COPY vendor/lookout/packages/shared/package.json ./vendor/lookout/packages/shared/
+COPY vendor/lookout/clients/react/package.json ./vendor/lookout/clients/react/
 
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     pnpm install --frozen-lockfile --ignore-scripts
@@ -31,8 +33,13 @@ ENV SOURCE_COMMIT=${SOURCE_COMMIT}
 COPY packages/shared/ ./packages/shared/
 COPY packages/api/ ./packages/api/
 COPY apps/client/ ./apps/client/
+COPY vendor/lookout/tsconfig.base.json ./vendor/lookout/
+COPY vendor/lookout/packages/shared/ ./vendor/lookout/packages/shared/
+COPY vendor/lookout/clients/react/ ./vendor/lookout/clients/react/
 
 RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
+    pnpm --filter @lookout/shared run build && \
+    pnpm --filter @lookout/react run build && \
     pnpm --filter @hackclub/lapse-shared run build && \
     pnpm --filter @hackclub/lapse-api run build && \
     pnpm --filter @lapse/lapse-client run build
