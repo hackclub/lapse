@@ -39,7 +39,11 @@ const App: AppType = ({ Component, pageProps }) => {
     (async () => {
       for (const session of sessions) {
         try {
-          const res = await api.timelapse.pollLookoutStatus({ id: session.timelapseId });
+          const res = await api.timelapse.pollLookoutStatus(
+            session.lookoutSessionId
+              ? { lookoutSessionId: session.lookoutSessionId }
+              : { id: session.timelapseId }
+          );
           if (!res.ok) {
             removeStoredSession(session.timelapseId);
             continue;

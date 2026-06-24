@@ -30,6 +30,7 @@ export const SESSIONS_KEY = "lapse:lookout_sessions";
 export interface StoredLookoutSession {
   lookoutToken: string;
   lookoutApiBaseUrl: string;
+  lookoutSessionId: string;
   timelapseId: string;
   createdAt: number;
 }
@@ -67,6 +68,7 @@ import StopIcon from "@/assets/icons/stop.svg";
 interface LookoutSessionConfig {
   lookoutToken: string;
   lookoutApiBaseUrl: string;
+  lookoutSessionId: string;
   timelapseId: string;
 }
 
@@ -328,7 +330,10 @@ function SessionSelector({ sessions, onSelectSession, onNewSession, onRemoveSess
 
   useEffect(() => {
     for (const session of sessions) {
-      api.timelapse.pollLookoutStatus({ id: session.timelapseId }).then(res => {
+      const pollInput = session.lookoutSessionId
+        ? { lookoutSessionId: session.lookoutSessionId }
+        : { id: session.timelapseId };
+      api.timelapse.pollLookoutStatus(pollInput).then(res => {
         if (res.ok && res.data.thumbnailUrl) {
           setThumbnails(prev => ({ ...prev, [session.timelapseId]: res.data.thumbnailUrl }));
         }
@@ -339,7 +344,11 @@ function SessionSelector({ sessions, onSelectSession, onNewSession, onRemoveSess
   async function handleSelect(session: StoredLookoutSession) {
     setValidating(session.timelapseId);
     try {
-      const res = await api.timelapse.pollLookoutStatus({ id: session.timelapseId });
+      const res = await api.timelapse.pollLookoutStatus(
+        session.lookoutSessionId
+          ? { lookoutSessionId: session.lookoutSessionId }
+          : { id: session.timelapseId }
+      );
       if (!res.ok) {
         onRemoveSession(session.timelapseId);
         return;
@@ -347,7 +356,6 @@ function SessionSelector({ sessions, onSelectSession, onNewSession, onRemoveSess
 
       const status = res.data.lookoutStatus;
       if (status === "complete" || status === "stopped" || status === "compiling") {
-        removeStoredSession(session.timelapseId);
         window.location.href = `/timelapse/publish/${session.timelapseId}`;
         return;
       }
@@ -475,6 +483,7 @@ export default function LookoutRecorder() {
       setConfig({
         lookoutToken: res.data.lookoutToken,
         lookoutApiBaseUrl: res.data.lookoutApiBaseUrl,
+        lookoutSessionId: res.data.lookoutSessionId,
         timelapseId: res.data.timelapseId,
       });
     }).catch(err => {
@@ -487,6 +496,7 @@ export default function LookoutRecorder() {
     storeSession({
       lookoutToken: config.lookoutToken,
       lookoutApiBaseUrl: config.lookoutApiBaseUrl,
+      lookoutSessionId: config.lookoutSessionId,
       timelapseId: config.timelapseId,
       createdAt: Date.now(),
     });
@@ -496,6 +506,7 @@ export default function LookoutRecorder() {
     setConfig({
       lookoutToken: session.lookoutToken,
       lookoutApiBaseUrl: session.lookoutApiBaseUrl,
+      lookoutSessionId: session.lookoutSessionId,
       timelapseId: session.timelapseId,
     });
     setPhase("ready");

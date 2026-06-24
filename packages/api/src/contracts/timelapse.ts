@@ -213,7 +213,7 @@ export const timelapseRouterContract = {
         ),
 
     createRecordingSession: contract("POST", "/timelapse/createRecordingSession")
-        .route({ description: "Creates a new Lookout-backed recording session. Returns a Lookout token the client uses to initialize the Lookout SDK." })
+        .route({ description: "Creates a new Lookout-backed recording session. Returns a Lookout token the client uses to initialize the Lookout SDK. No timelapse record is created until publishing." })
         .input(z.object({}))
         .output(
             apiResult({
@@ -221,17 +221,23 @@ export const timelapseRouterContract = {
                     .describe("The Lookout session token to pass to the Lookout SDK."),
                 lookoutApiBaseUrl: z.string()
                     .describe("The base URL of the Lookout API."),
+                lookoutSessionId: z.string()
+                    .describe("The Lookout session ID, used to poll status."),
                 timelapseId: LapseId
-                    .describe("The ID of the Lapse timelapse record created for this session."),
+                    .describe("A pre-generated timelapse ID to use when publishing."),
             })
         ),
 
     publishFromLookout: contract("POST", "/timelapse/publishFromLookout")
-        .route({ description: "Publishes a Lookout-backed timelapse. The Lookout session must have status 'complete'." })
+        .route({ description: "Publishes a Lookout-backed timelapse. The Lookout session must have status 'complete'. Creates the timelapse record, or updates it if one already exists for this session." })
         .input(
             z.object({
                 id: LapseId
-                    .describe("The ID of the timelapse to publish."),
+                    .describe("The timelapse ID (pre-generated or existing)."),
+                lookoutSessionId: z.string().optional()
+                    .describe("The Lookout session ID. If omitted, looked up from the existing timelapse record."),
+                lookoutToken: z.string().optional()
+                    .describe("The Lookout session token. If omitted, looked up from the existing timelapse record."),
                 name: TimelapseName,
                 description: TimelapseDescription.optional(),
                 visibility: TimelapseVisibilitySchema,
@@ -246,11 +252,13 @@ export const timelapseRouterContract = {
         ),
 
     pollLookoutStatus: contract("GET", "/timelapse/pollLookoutStatus")
-        .route({ description: "Polls the status of a Lookout-backed timelapse recording/compilation." })
+        .route({ description: "Polls the status of a Lookout-backed recording/compilation. Provide lookoutSessionId directly, or id to look it up from the database." })
         .input(
             z.object({
-                id: LapseId
-                    .describe("The ID of the timelapse to poll."),
+                lookoutSessionId: z.string().optional()
+                    .describe("The Lookout session ID to poll. Preferred over id."),
+                id: LapseId.optional()
+                    .describe("The timelapse ID. Used to look up the Lookout session ID from the database if lookoutSessionId is not provided."),
             })
         )
         .output(

@@ -499,27 +499,11 @@ export default os.router({
                 source: "lapse",
             });
 
-            const id = lapseId();
-
-            await database().timelapse.create({
-                data: {
-                    id,
-                    createdAt: new Date(),
-                    ownerId: caller.id,
-                    name: `Timelapse at ${new Date().toLocaleString("en-US", { month: "long", day: "numeric", minute: "numeric", hour: "numeric" })}`,
-                    visibility: "UNLISTED",
-                    snapshots: [],
-                    duration: 0,
-                    lookoutSessionId: session.sessionId,
-                    lookoutToken: session.token,
-                    associatedJobId: "lookout-pending",
-                }
-            });
-
             return apiOk({
                 lookoutToken: session.token,
                 lookoutApiBaseUrl: env.LOOKOUT_API_BASE_URL,
-                timelapseId: id,
+                lookoutSessionId: session.sessionId,
+                timelapseId: lapseId(),
             });
         }),
 
@@ -527,16 +511,23 @@ export default os.router({
         .use(requiredAuth())
         .use(requiredImplicitUser())
         .handler(async (req) => {
-            const caller = req.context.user;
+            let lookoutSessionId = req.input.lookoutSessionId;
 
-            const timelapse = await database().timelapse.findFirst({
-                where: { id: req.input.id, ownerId: caller.id }
-            });
+            if (!lookoutSessionId) {
+                if (!req.input.id)
+                    return apiErr("ERROR", "Either lookoutSessionId or id must be provided.");
 
-            if (!timelapse || !timelapse.lookoutSessionId)
-                return apiErr("NOT_FOUND", "Couldn't find that Lookout-backed timelapse!");
+                const timelapse = await database().timelapse.findFirst({
+                    where: { id: req.input.id, ownerId: req.context.user.id }
+                });
 
-            const session = await lookout.getSession(timelapse.lookoutSessionId);
+                if (!timelapse?.lookoutSessionId)
+                    return apiErr("NOT_FOUND", "Couldn't find that Lookout-backed timelapse!");
+
+                lookoutSessionId = timelapse.lookoutSessionId;
+            }
+
+            const session = await lookout.getSession(lookoutSessionId);
 
             return apiOk({
                 lookoutStatus: session.session.status,
@@ -552,48 +543,71 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const timelapse = await database().timelapse.findFirst({
-                where: { id: req.input.id, ownerId: caller.id },
-                include: { owner: true }
+            const existing = await database().timelapse.findFirst({
+                where: { id: req.input.id, ownerId: caller.id }
             });
 
-            if (!timelapse || !timelapse.lookoutSessionId || !timelapse.lookoutToken)
-                return apiErr("NOT_FOUND", "Couldn't find that Lookout-backed timelapse!");
+            const lookoutSessionId = req.input.lookoutSessionId ?? existing?.lookoutSessionId;
+            const lookoutToken = req.input.lookoutToken ?? existing?.lookoutToken;
 
-            const session = await lookout.getSession(timelapse.lookoutSessionId);
+            if (!lookoutSessionId || !lookoutToken)
+                return apiErr("NOT_FOUND", "Couldn't find Lookout session info. Please start a new recording.");
+
+            const alreadyPublished = existing
+                ? existing.associatedJobId !== "lookout-pending"
+                : await database().timelapse.findFirst({ where: { lookoutSessionId } });
+
+            if (alreadyPublished)
+                return apiErr("ERROR", "This Lookout session has already been published.");
+
+            const session = await lookout.getSession(lookoutSessionId);
 
             if (session.session.status !== "complete")
                 return apiErr("ERROR", `Lookout session is not ready yet (status: ${session.session.status}).`);
 
-            const timings = await lookout.getTimings(timelapse.lookoutToken);
+            const timings = await lookout.getTimings(lookoutToken);
             const snapshots = timings.timestamps.map(ts => new Date(ts));
             const duration = durationBySnapshots(snapshots);
 
-            const updatedTimelapse = await database().timelapse.update({
-                where: { id: req.input.id },
-                data: {
-                    name: req.input.name,
-                    description: req.input.description ?? "",
-                    visibility: req.input.visibility,
-                    lookoutVideoUrl: session.session.videoUrl,
-                    lookoutThumbnailUrl: session.session.thumbnailUrl,
-                    snapshots,
-                    duration,
-                    associatedJobId: null,
-                    hackatimeProject: req.input.hackatimeProject ?? null,
-                },
-                include: TIMELAPSE_INCLUDES
-            });
+            const data = {
+                name: req.input.name,
+                description: req.input.description ?? "",
+                visibility: req.input.visibility,
+                lookoutSessionId,
+                lookoutToken,
+                lookoutVideoUrl: session.session.videoUrl,
+                lookoutThumbnailUrl: session.session.thumbnailUrl,
+                snapshots,
+                duration,
+                associatedJobId: null,
+                hackatimeProject: req.input.hackatimeProject ?? null,
+            };
+
+            const timelapse = existing
+                ? await database().timelapse.update({
+                    where: { id: req.input.id },
+                    data,
+                    include: TIMELAPSE_INCLUDES
+                })
+                : await database().timelapse.create({
+                    data: {
+                        id: req.input.id,
+                        createdAt: new Date(),
+                        ownerId: caller.id,
+                        ...data,
+                    },
+                    include: TIMELAPSE_INCLUDES
+                });
 
             if (req.input.hackatimeProject && caller.hackatimeId && caller.hackatimeAccessToken) {
                 try {
-                    await syncTimelapseWithHackatime(updatedTimelapse, caller);
+                    await syncTimelapseWithHackatime(timelapse, caller);
                 }
                 catch (err) {
                     logError("Couldn't sync heartbeats during Lookout publish!", { err });
                 }
             }
 
-            return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
+            return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
         }),
 });

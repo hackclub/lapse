@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import type { TimelapseVisibility } from "@hackclub/lapse-api";
 import posthog from "posthog-js";
@@ -6,7 +6,7 @@ import posthog from "posthog-js";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
-import { removeStoredSession } from "@/components/lookout/LookoutRecorder";
+import { getStoredSessions, removeStoredSession } from "@/components/lookout/LookoutRecorder";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -24,6 +24,11 @@ export default function Page() {
 
   const timelapseId = router.query.id as string | undefined;
 
+  const storedSession = useMemo(
+    () => timelapseId ? getStoredSessions().find(s => s.timelapseId === timelapseId) : undefined,
+    [timelapseId]
+  );
+
   const [compilationStatus, setCompilationStatus] = useState<CompilationStatus>("waiting");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -34,13 +39,19 @@ export default function Page() {
 
   const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useInterval(async () => {
-    if (!timelapseId || compilationStatus !== "waiting") return;
+    if (compilationStatus !== "waiting") return;
+    if (!storedSession?.lookoutSessionId && !timelapseId) return;
 
     try {
-      const res = await api.timelapse.pollLookoutStatus({ id: timelapseId });
+      const res = await api.timelapse.pollLookoutStatus(
+        storedSession?.lookoutSessionId
+          ? { lookoutSessionId: storedSession.lookoutSessionId }
+          : { id: timelapseId }
+      );
       if (!res.ok) {
         setError(res.message);
         return;
@@ -72,6 +83,8 @@ export default function Page() {
     try {
       const res = await api.timelapse.publishFromLookout({
         id: timelapseId,
+        ...(storedSession?.lookoutSessionId ? { lookoutSessionId: storedSession.lookoutSessionId } : {}),
+        ...(storedSession?.lookoutToken ? { lookoutToken: storedSession.lookoutToken } : {}),
         name: name.trim() || `Timelapse at ${new Date().toLocaleString("en-US", { month: "long", day: "numeric", minute: "numeric", hour: "numeric" })}`,
         description: description.trim(),
         visibility,
@@ -93,6 +106,25 @@ export default function Page() {
     }
   }
 
+  async function handleDiscard() {
+    if (!timelapseId) return;
+
+    if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
+      return;
+
+    setIsDiscarding(true);
+
+    try {
+      await api.timelapse.delete({ id: timelapseId });
+    } catch {
+      // No DB record to delete (new deferred-creation path) - that's fine
+    }
+
+    removeStoredSession(timelapseId);
+    posthog.capture("timelapse_discarded_lookout", { timelapseId });
+    router.push("/");
+  }
+
   if (!timelapseId) {
     return (
       <RootLayout>
@@ -103,17 +135,19 @@ export default function Page() {
 
   return (
     <RootLayout>
-      <div className="max-w-2xl mx-auto py-12 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
         {compilationStatus === "waiting" && (
-          <div className="flex flex-col items-center justify-center gap-1 fixed inset-0">
-            <div className="w-8 h-8 border-3 border-red border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-white text-xl font-bold">Compiling your timelapse video...</p>
-            <p className="text-secondary text-sm">This usually takes a minute or two.</p>
+          <div className="flex flex-col items-center justify-center gap-4">
+            <div className="w-8 h-8 border-3 border-red border-t-transparent rounded-full animate-spin" />
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-white text-xl font-bold">Compiling your timelapse video...</p>
+              <p className="text-secondary text-sm">This usually takes a minute or two.</p>
+            </div>
           </div>
         )}
 
         {compilationStatus === "ready" && (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 w-full max-w-2xl">
             {videoUrl && (
               <video
                 src={videoUrl}
@@ -138,20 +172,31 @@ export default function Page() {
               maxLength={280}
             />
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col w-full">
               <label className="font-bold">Visibility</label>
-              <p className="text-muted mb-1">Choose who can see your timelapse.</p>
+              <p className="text-muted mb-2">Choose who can see your timelapse.</p>
               <VisibilityPicker value={visibility} onChange={setVisibility} />
             </div>
 
-            <Button
-              onClick={handleVisibilitySelect}
-              disabled={!visibility || isPublishing}
-              kind="primary"
-              className="w-full"
-            >
-              {isPublishing ? "Publishing..." : "Publish"}
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={handleVisibilitySelect}
+                disabled={!visibility || isPublishing || isDiscarding}
+                kind="primary"
+                className="w-full"
+              >
+                {isPublishing ? "Publishing..." : "Publish"}
+              </Button>
+
+              <Button
+                onClick={handleDiscard}
+                disabled={isDiscarding || isPublishing}
+                kind="destructive"
+                className="w-full"
+              >
+                {isDiscarding ? "Discarding..." : "Discard"}
+              </Button>
+            </div>
           </div>
         )}
       </div>

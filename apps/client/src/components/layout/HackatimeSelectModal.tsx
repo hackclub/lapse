@@ -57,7 +57,7 @@ export function HackatimeSelectModal({ isOpen, setIsOpen, onAccept, onError }: {
     <WindowedModal
       icon="history"
       title="Sync with Hackatime"
-      description="Import your timelapse snapshots to Hackatime as heartbeats. This can only be done once per timelapse."
+      description="Synchronize Lapse'd time to a Hackatime project"
       isOpen={isOpen}
       setIsOpen={setIsOpen}
     >
