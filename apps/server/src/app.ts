@@ -19,8 +19,9 @@ import type { Context } from "@/router.js"
 import { database, initDatabase } from "@/db.js";
 import { env } from "@/env.js"
 import { logError } from "@/logging.js";
-// tus upload server removed — Lookout handles uploads now.
-// import { attachUploadServer } from "@/upload.js";
+// New recordings go through Lookout, but the tus upload server is still needed so legacy drafts
+// (and unfinished OPFS recordings) can be recovered and published. See `legacyRecovery` on the client.
+import { attachUploadServer } from "@/upload.js";
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -169,7 +170,8 @@ server.all("/docs", async (req, reply) => {
     );
 });
 
-// attachUploadServer(server); — deprecated, Lookout handles uploads
+// Required for legacy draft recovery — lets clients upload encrypted sessions for unfinished recordings.
+attachUploadServer(server);
 
 server.listen({ port: parseInt(env.PORT), host: env.HOST })
     .then(async (address) => {

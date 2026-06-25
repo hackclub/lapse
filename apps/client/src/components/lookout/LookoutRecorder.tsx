@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
@@ -15,6 +15,8 @@ import {
   storeSession,
   removeStoredSession,
 } from "@/components/lookout/sessions";
+import { hasLegacyData } from "@/legacyRecovery";
+import { LegacyRecoveryView } from "@/components/legacy/LegacyRecoveryView";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
@@ -438,7 +440,7 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
 }
 
 export default function LookoutRecorder() {
-  useAuth(true);
+  const auth = useAuth(true);
 
   const router = useRouter();
   const [config, setConfig] = useState<LookoutSessionConfig | null>(null);
@@ -450,14 +452,12 @@ export default function LookoutRecorder() {
   const [desktopLaunched, setDesktopLaunched] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
-  const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
+  const [phase, setPhase] = useState<"checking" | "recovering" | "selecting" | "ready">("checking");
   const initialized = useRef(false);
 
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    api.timelapse.getLookoutDrafts({}).then(res => {
+  const checkLookoutDrafts = useCallback(async () => {
+    try {
+      const res = await api.timelapse.getLookoutDrafts({});
       if (res.ok && res.data.drafts.length > 0) {
         setHasDrafts(true);
         setPhase("selecting");
@@ -465,11 +465,35 @@ export default function LookoutRecorder() {
         setHasDrafts(false);
         setPhase("ready");
       }
-    }).catch(() => {
+    } catch {
       setHasDrafts(false);
       setPhase("ready");
-    });
+    }
   }, []);
+
+  useEffect(() => {
+    if (initialized.current) return;
+    if (auth.isLoading || !auth.currentUser) return;
+    initialized.current = true;
+
+    (async () => {
+      // Surface any legacy recordings (unfinished OPFS captures or unpublished drafts) for recovery first,
+      // unless the user already dismissed the prompt this session.
+      const dismissed = sessionStorage.getItem("lapse:recovery_dismissed") === "1";
+      if (!dismissed && await hasLegacyData(auth.currentUser!.id)) {
+        setPhase("recovering");
+        return;
+      }
+
+      await checkLookoutDrafts();
+    })();
+  }, [auth.isLoading, auth.currentUser, checkLookoutDrafts]);
+
+  function handleRecoveryDone() {
+    sessionStorage.setItem("lapse:recovery_dismissed", "1");
+    setPhase("checking");
+    checkLookoutDrafts();
+  }
 
   async function createSessionAndStart(onReady: (cfg: LookoutSessionConfig) => void) {
     setIsCreating(true);
@@ -558,6 +582,17 @@ export default function LookoutRecorder() {
     return (
       <RootLayout showHeader={false}>
         <div className="flex items-center justify-center h-screen text-muted">Checking for sessions...</div>
+      </RootLayout>
+    );
+  }
+
+  if (phase === "recovering" && auth.currentUser) {
+    return (
+      <RootLayout showHeader={false}>
+        <LegacyRecoveryView
+          userId={auth.currentUser.id}
+          onDone={handleRecoveryDone}
+        />
       </RootLayout>
     );
   }
