@@ -78,22 +78,46 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
   }
 }
 
+type LocalTimelapse = NonNullable<Awaited<ReturnType<typeof deviceStorage.getTimelapse>>>;
+
 /**
- * Returns whether there's an unfinished recording sitting in this device's local (OPFS) storage.
+ * Loads the local (OPFS) recording, but only if it meets every requirement the publish path enforces: usable OPFS,
+ * at least two snapshots (needed to derive a non-zero duration), and at least one session over the minimum size.
+ * Returns `null` otherwise.
+ *
+ * `hasLocalRecording` and `publishLocalRecording` share this check so the recovery banner never counts/lists a
+ * local recording that publishing would then refuse - which would otherwise leave a permanent "unmigrated
+ * timelapse" nag that only Discard could clear.
  */
-async function hasLocalRecording(): Promise<boolean> {
+async function getPublishableLocalRecording(): Promise<{ local: LocalTimelapse; sessions: Blob[] } | null> {
   // Browsers without usable OPFS never produced a local recording, so there's nothing to recover there. We use the
   // side-effect-free `DeviceStorage.isSupported` rather than touching `deviceStorage`, so merely probing for
   // recoverable data (e.g. on the homepage) doesn't bounce unsupported browsers to `/update-browser`.
   if (!DeviceStorage.isSupported())
-    return false;
+    return null;
 
   const local = await deviceStorage.getTimelapse();
   if (!local || local.sessions.length === 0)
-    return false;
+    return null;
 
-  // Guard against impossibly small / empty recordings left behind by a crashed session.
-  return (await deviceStorage.getTimelapseVideoSize()) > MIN_SESSION_SIZE_BYTES;
+  // The published timelapse's duration is derived from its snapshots (`durationBySnapshots` needs at least two).
+  if (local.snapshots.length < 2)
+    return null;
+
+  // Guard against impossibly small / empty sessions left behind by a crashed recording.
+  const sessions = (await deviceStorage.getTimelapseVideoSessions())
+    .filter(x => x.size > MIN_SESSION_SIZE_BYTES);
+  if (sessions.length === 0)
+    return null;
+
+  return { local, sessions };
+}
+
+/**
+ * Returns whether there's a publishable unfinished recording sitting in this device's local (OPFS) storage.
+ */
+async function hasLocalRecording(): Promise<boolean> {
+  return (await getPublishableLocalRecording()) !== null;
 }
 
 /**
@@ -173,18 +197,13 @@ async function publishDraft(draft: DraftTimelapse): Promise<void> {
 async function publishLocalRecording(): Promise<void> {
   await deviceStorage.sync();
 
-  const sessions = (await deviceStorage.getTimelapseVideoSessions())
-    .filter(x => x.size > MIN_SESSION_SIZE_BYTES);
+  // Refusing here (rather than after `create`) keeps the local copy intact instead of publishing a degenerate
+  // timelapse and then deleting the only source of the recording. Mirrors exactly what `hasLocalRecording` counts.
+  const publishable = await getPublishableLocalRecording();
+  if (!publishable)
+    throw new Error("This recording is too short or incomplete to publish.");
 
-  const local = await deviceStorage.getTimelapse();
-  if (!local || sessions.length === 0)
-    throw new Error("No local recording was found to publish.");
-
-  // The published timelapse's duration is derived from its snapshots (`durationBySnapshots` needs at least two).
-  // Refusing here keeps the local copy intact instead of publishing a degenerate 0-duration timelapse and then
-  // deleting the only source of the recording.
-  if (local.snapshots.length < 2)
-    throw new Error("This recording is too short to publish.");
+  const { local, sessions } = publishable;
 
   const thumbnail = await videoGenerateThumbnail(sessions[0]);
   const device = await getCurrentDevice();
@@ -200,26 +219,39 @@ async function publishLocalRecording(): Promise<void> {
   if (!createRes.ok)
     throw new Error(createRes.message);
 
-  const { iv } = createRes.data.draftTimelapse;
-  const key = fromHex(device.passkey).buffer;
-  const ivBuffer = fromHex(iv).buffer;
+  const draftId = createRes.data.draftTimelapse.id;
 
-  for (const [i, session] of sessions.entries()) {
-    const encrypted = await encryptData(key, ivBuffer, session);
-    await apiUpload(createRes.data.sessionUploadTokens[i], new Blob([encrypted], { type: "video/webm" }));
+  try {
+    const { iv } = createRes.data.draftTimelapse;
+    const key = fromHex(device.passkey).buffer;
+    const ivBuffer = fromHex(iv).buffer;
+
+    for (const [i, session] of sessions.entries()) {
+      const encrypted = await encryptData(key, ivBuffer, session);
+      await apiUpload(createRes.data.sessionUploadTokens[i], new Blob([encrypted], { type: "video/webm" }));
+    }
+
+    const encryptedThumbnail = await encryptData(key, ivBuffer, thumbnail);
+    await apiUpload(createRes.data.thumbnailUploadToken, new Blob([encryptedThumbnail], { type: "image/webp" }));
+
+    const publishRes = await api.timelapse.publish({
+      id: draftId,
+      visibility: "UNLISTED",
+      deviceKey: device.passkey,
+    });
+
+    if (!publishRes.ok)
+      throw new Error(publishRes.message);
   }
-
-  const encryptedThumbnail = await encryptData(key, ivBuffer, thumbnail);
-  await apiUpload(createRes.data.thumbnailUploadToken, new Blob([encryptedThumbnail], { type: "image/webp" }));
-
-  const publishRes = await api.timelapse.publish({
-    id: createRes.data.draftTimelapse.id,
-    visibility: "UNLISTED",
-    deviceKey: device.passkey,
-  });
-
-  if (!publishRes.ok)
-    throw new Error(publishRes.message);
+  catch (err) {
+    // The draft record exists server-side, but we never finished uploading/publishing it. Left behind, it would
+    // resurface as an orphan "draft" recoverable item (no associated timelapse), so it - and every failed retry -
+    // would pile up in the recovery list and banner count. Delete it so a retry starts clean; keep the local copy.
+    await api.draftTimelapse.delete({ id: draftId }).catch(delErr => {
+      console.warn("(legacyRecovery.ts) failed to clean up partially-created draft after a publish error", delErr);
+    });
+    throw err;
+  }
 
   // Only once the recording is safely published do we drop the local copy.
   await deviceStorage.deleteTimelapse();

@@ -131,13 +131,10 @@ export function ThumbnailImage({ timelapseId, thumbnailUrl, isPublished, iv, dev
       .then(res => setDecryptedThumbnail(res.url))
       .finally(() => setIsLoading(false));
 
-    // Cleanup blob URL when component unmounts or thumbnail changes
-    return () => {
-      if (decryptedThumbnail?.startsWith("blob:")) {
-        URL.revokeObjectURL(decryptedThumbnail);
-      }
-    };
-  }, [timelapseId, thumbnailUrl, isPublished, iv, deviceId, decryptedThumbnail]);
+    // NB: we deliberately don't revoke the blob URL on unmount. `decryptThumbnail` memoizes it in a shared cache
+    // (keyed by id+url) and hands the same URL to every consumer (incl. `useDecryptedThumbnail`), so revoking it
+    // here would break the cached entry - the next mount would get a dead `blob:` URL and a broken thumbnail.
+  }, [timelapseId, thumbnailUrl, isPublished, iv, deviceId]);
 
   if (isLoading) {
     return (
