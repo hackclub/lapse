@@ -16,6 +16,14 @@ import { getCurrentDevice } from "@/encryption";
 // recording either of them - the legacy capture pipeline no longer exists.
 
 /**
+ * Version of the local-recording restore logic. On a successful publish we keep the OPFS copy as a safety net and
+ * tag it with this version rather than deleting it. If a restore turns out to be faulty, bump this constant: copies
+ * tagged with an older version are no longer considered "restored" and resurface in the recovery banner/list for
+ * re-publish. A later sweep (`deviceStorage.cleanupRestoredTimelapse`) reclaims the space once we're confident.
+ */
+export const CURRENT_RESTORE_VERSION = 1;
+
+/**
  * A single recoverable legacy recording. There is at most one `opfs` item (local storage only holds one
  * in-progress recording), plus any number of `draft` items.
  */
@@ -98,6 +106,12 @@ async function getPublishableLocalRecording(): Promise<{ local: LocalTimelapse; 
 
   const local = await deviceStorage.getTimelapse();
   if (!local || local.sessions.length === 0)
+    return null;
+
+  // Already restored under the current logic: kept only as a safety net, not something to offer/publish again. If
+  // CURRENT_RESTORE_VERSION is later bumped (a restore was found faulty), older-versioned copies fall through here
+  // and resurface for re-publish.
+  if (local.restoredVersion != null && local.restoredVersion >= CURRENT_RESTORE_VERSION)
     return null;
 
   // The published timelapse's duration is derived from its snapshots (`durationBySnapshots` needs at least two).
@@ -253,8 +267,9 @@ async function publishLocalRecording(): Promise<void> {
     throw err;
   }
 
-  // Only once the recording is safely published do we drop the local copy.
-  await deviceStorage.deleteTimelapse();
+  // The recording is safely published. We keep the local copy as a safety net (in case server-side processing is
+  // faulty) and just mark it restored, so the banner/list stop offering it. A later sweep reclaims the space.
+  await deviceStorage.markTimelapseRestored(CURRENT_RESTORE_VERSION);
 }
 
 /**

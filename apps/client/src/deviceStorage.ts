@@ -12,6 +12,12 @@ export interface StoredTimelapse {
   startedAt: number;
   snapshots: number[];
   sessions: number[];
+
+  /** When this recording was restored (published). Unset while it's still unpublished. */
+  restoredAt?: number;
+
+  /** The restore-logic version it was restored under. Lets us resurface it if a newer version supersedes it. */
+  restoredVersion?: number;
 }
 
 /**
@@ -33,7 +39,9 @@ export type LocalTimelapse = v.InferInput<typeof LocalTimelapseSchema>;
 const LocalTimelapseSchema = v.object({
   startedAt: v.number(),
   snapshots: v.array(v.number()),
-  sessions: v.array(v.number())
+  sessions: v.array(v.number()),
+  restoredAt: v.optional(v.number()),
+  restoredVersion: v.optional(v.number())
 });
 
 const DeviceSchema = v.object({
@@ -451,26 +459,85 @@ export class DeviceStorage {
     });
   }
 
+  /**
+   * Drops the stored timelapse's metadata and removes all of its session files. Internal: the caller must already
+   * be inside an `operation` block (this does not serialize or `ensureInit` on its own).
+   */
+  private async removeStoredTimelapse(): Promise<void> {
+    const store = await this.readStore();
+    const sessions = store.timelapse?.sessions ?? [];
+    store.timelapse = null;
+    await this.writeStore(store);
+
+    const dir = await this.getLapseDir();
+    for (const sessionId of sessions) {
+      try {
+        await dir.removeEntry(`session-${sessionId}.webm`);
+      }
+      catch (err) {
+        console.warn(`(deviceStorage.ts) could not delete session ${sessionId}`, err);
+      }
+    }
+  }
+
   async deleteTimelapse(): Promise<void> {
+    return await this.operation(async () => {
+      await this.ensureInit();
+      await this.removeStoredTimelapse();
+      console.log("(deviceStorage.ts) locally stored timelapse deleted");
+    });
+  }
+
+  /**
+   * Marks the locally stored timelapse as restored (published) under restore-logic version `version`, WITHOUT
+   * deleting it. We keep the recording in OPFS as a safety net in case server-side processing turns out to be
+   * faulty - bumping the restore version then resurfaces it for re-publish. `cleanupRestoredTimelapse` reclaims
+   * the space later, once we're confident.
+   */
+  async markTimelapseRestored(version: number): Promise<void> {
     return await this.operation(async () => {
       await this.ensureInit();
 
       const store = await this.readStore();
-      const sessions = store.timelapse?.sessions ?? [];
-      store.timelapse = null;
-      await this.writeStore(store);
-
-      const dir = await this.getLapseDir();
-      for (const sessionId of sessions) {
-        try {
-          await dir.removeEntry(`session-${sessionId}.webm`);
-        }
-        catch (err) {
-          console.warn(`(deviceStorage.ts) could not delete session ${sessionId}`, err);
-        }
+      if (!store.timelapse) {
+        console.warn("(deviceStorage.ts) markTimelapseRestored called, but no timelapse is registered");
+        return;
       }
 
-      console.log("(deviceStorage.ts) locally stored timelapse deleted");
+      store.timelapse.restoredAt = Date.now();
+      store.timelapse.restoredVersion = version;
+      await this.writeStore(store);
+
+      console.log(`(deviceStorage.ts) locally stored timelapse marked restored (v${version})`);
+    });
+  }
+
+  /**
+   * Sweeps the locally stored timelapse only if it was restored at least `maxAgeMs` ago under restore-logic version
+   * `version` (or newer), reclaiming the OPFS space kept as a post-restore safety net. No-op otherwise - in
+   * particular, a copy whose `restoredVersion` is older than `version` is pending re-recovery and is left intact.
+   *
+   * NOTE: deliberately not wired to any caller yet - the sweep ships in a later change.
+   */
+  async cleanupRestoredTimelapse(version: number, maxAgeMs: number): Promise<void> {
+    return await this.operation(async () => {
+      await this.ensureInit();
+
+      const store = await this.readStore();
+      const local = store.timelapse;
+      if (!local || local.restoredAt == null || local.restoredVersion == null)
+        return;
+
+      // A copy restored under an older version is pending re-recovery (the version was bumped because that restore
+      // was deemed faulty) - never sweep it.
+      if (local.restoredVersion < version)
+        return;
+
+      if (Date.now() - local.restoredAt < maxAgeMs)
+        return;
+
+      await this.removeStoredTimelapse();
+      console.log("(deviceStorage.ts) swept restored timelapse from local storage");
     });
   }
 
