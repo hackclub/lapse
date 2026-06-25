@@ -30,6 +30,9 @@ export default function Home() {
     percentage: number // [0.0, 1.0], relative to top project. topUserProjects[0].percentage is always 1.0
   }[]>([]);
 
+  // Legacy recordings (unfinished OPFS captures or unpublished drafts) can no longer be recorded, only recovered.
+  // The site-wide banner (see RootLayout) nudges the user to `/timelapse/recover` whenever they have any.
+
   useEffect(() => {
     (async () => {
       if (!auth.currentUser)

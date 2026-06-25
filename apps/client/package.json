@@ -40,6 +40,7 @@
     "posthog-node": "^5.35.2",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "tus-js-client": "^4.3.1",
     "valibot": "^1.4.1",
     "webpack": "^5.107.2"
   },

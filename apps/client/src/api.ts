@@ -3,6 +3,7 @@ import type { ContractRouterClient } from "@orpc/contract";
 import { createORPCClient, onError } from "@orpc/client";
 import { OpenAPILink } from "@orpc/openapi-client/fetch";
 import { compositeRouterContract } from "@hackclub/lapse-api";
+import * as tus from "tus-js-client";
 import { sfetch } from "@/safety";
 import posthog from "posthog-js";
 
@@ -43,4 +44,33 @@ const link = new OpenAPILink(compositeRouterContract, {
  * The main API client.
  */
 export const api: JsonifiedClient<ContractRouterClient<typeof compositeRouterContract>> = createORPCClient(link);
+
+/**
+ * Uploads `data` to the server via `tus`, authorized by an upload `token` issued by an endpoint such as
+ * `draftTimelapse.create`. Used to recover unfinished (OPFS-stored) legacy recordings by uploading their
+ * encrypted sessions and thumbnail.
+ */
+export async function apiUpload(
+  token: string,
+  data: File | Blob,
+  onProgress?: (uploaded: number, total: number) => void
+) {
+  return new Promise<void>((resolve, reject) => {
+    const upload = new tus.Upload(data, {
+      endpoint: `${API_URL}/upload`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      onProgress,
+      onSuccess() { resolve(); },
+      onError(error) {
+        console.error("(api.ts) upload failed!", error, data);
+        reject(error);
+      },
+    });
+
+    upload.start();
+  });
+}
 
