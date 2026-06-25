@@ -10,21 +10,41 @@ import { sfetch } from "@/safety";
 
 const thumbnailCache = new Map<string, string>();
 
-async function decryptThumbnail(timelapseId: string, encryptedThumbnailUrl: string, iv: string, deviceId?: string): Promise<string | null> {
-  const cacheKey = `${timelapseId}${encryptedThumbnailUrl}`;
+/**
+ * Result of decrypting an encrypted thumbnail: a blob-URL on success, or `missingDevice` set when the key needed
+ * to decrypt it isn't on this device (a distinct, recoverable case from a generic failure).
+ */
+export interface DecryptedThumbnail {
+  url: string | null;
+  missingDevice: boolean;
+}
+
+/**
+ * Fetches and decrypts a client-encrypted thumbnail, returning a cached blob-URL. The result is memoized per
+ * `(id, url)` so callers can re-mount without re-fetching/re-decrypting (and without leaking a blob-URL each time).
+ * `mimeType` defaults to JPEG, but legacy recordings store WebP thumbnails.
+ */
+export async function decryptThumbnail(
+  id: string,
+  encryptedThumbnailUrl: string,
+  iv: string,
+  deviceId?: string,
+  mimeType: string = "image/jpeg"
+): Promise<DecryptedThumbnail> {
+  const cacheKey = `${id}${encryptedThumbnailUrl}`;
   if (thumbnailCache.has(cacheKey))
-    return thumbnailCache.get(cacheKey)!;
+    return { url: thumbnailCache.get(cacheKey)!, missingDevice: false };
 
   try {
     const device = deviceId ? await deviceStorage.getDevice(deviceId) : await getCurrentDevice();
     if (!device) {
-      console.warn(`(ThumbnailImage.tsx) no device found for timelapse ${timelapseId}!`);
-      return null;
+      console.warn(`(ThumbnailImage.tsx) no device found for thumbnail ${id}!`);
+      return { url: null, missingDevice: true };
     }
 
     const response = await sfetch(encryptedThumbnailUrl);
     if (!response.ok)
-      throw new Error(`Failed to fetch encrypted thumbnail for ${timelapseId}: ${response.statusText}`);
+      throw new Error(`Failed to fetch encrypted thumbnail for ${id}: ${response.statusText}`);
 
     const url = URL.createObjectURL(
       new Blob([
@@ -33,17 +53,58 @@ async function decryptThumbnail(timelapseId: string, encryptedThumbnailUrl: stri
           fromHex(iv).buffer,
           await response.arrayBuffer()
         )
-      ], { type: "image/jpeg" })
+      ], { type: mimeType })
     );
 
     thumbnailCache.set(cacheKey, url);
-    return url;
+    return { url, missingDevice: false };
   }
   catch (error) {
-    posthog.capture("thumbnail_decrypt_fail", { error, timelapseId, encryptedThumbnailUrl });
-    console.warn(`(ThumbnailImage.tsx) failed to decrypt thumbnail for timelapse ${timelapseId}:`, error);
-    return null;
+    posthog.capture("thumbnail_decrypt_fail", { error, timelapseId: id, encryptedThumbnailUrl });
+    console.warn(`(ThumbnailImage.tsx) failed to decrypt thumbnail for ${id}:`, error);
+    return { url: null, missingDevice: false };
   }
+}
+
+/**
+ * Decrypts an encrypted thumbnail for display. Returns the blob-URL once ready, whether it's still `loading`, and
+ * `missingKey` when the recording's device key isn't on this device. Memoized via `decryptThumbnail`, so it neither
+ * re-fetches nor leaks a blob-URL across re-mounts.
+ */
+export function useDecryptedThumbnail(opts: {
+  id: string;
+  url: string | null | undefined;
+  iv: string;
+  deviceId?: string;
+  mimeType?: string;
+  enabled?: boolean;
+}): { thumbnail: string | null; missingKey: boolean; loading: boolean } {
+  const { id, url, iv, deviceId, mimeType, enabled = true } = opts;
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [missingKey, setMissingKey] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || !url) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setMissingKey(false);
+
+    decryptThumbnail(id, url, iv, deviceId, mimeType)
+      .then(res => {
+        if (cancelled) return;
+        setThumbnail(res.url);
+        setMissingKey(res.missingDevice);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [id, url, iv, deviceId, mimeType, enabled]);
+
+  return { thumbnail, missingKey, loading };
 }
 
 export function ThumbnailImage({ timelapseId, thumbnailUrl, isPublished, iv, deviceId, alt, className, onError }: {
@@ -67,7 +128,7 @@ export function ThumbnailImage({ timelapseId, thumbnailUrl, isPublished, iv, dev
 
     setIsLoading(true);
     decryptThumbnail(timelapseId, thumbnailUrl, iv, deviceId)
-      .then(setDecryptedThumbnail)
+      .then(res => setDecryptedThumbnail(res.url))
       .finally(() => setIsLoading(false));
 
     // Cleanup blob URL when component unmounts or thumbnail changes

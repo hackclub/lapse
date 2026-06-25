@@ -2,10 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import type { DraftTimelapse } from "@hackclub/lapse-api";
-import { decryptData, fromHex } from "@hackclub/lapse-shared";
 
-import { deviceStorage } from "@/deviceStorage";
-import { retryable, sfetch } from "@/safety";
 import {
   type RecoverableItem,
   loadRecoverableItems,
@@ -13,6 +10,7 @@ import {
   discardItem,
 } from "@/legacyRecovery";
 
+import { useDecryptedThumbnail } from "@/components/entity/ThumbnailImage";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
@@ -32,40 +30,16 @@ function timeAgo(timestamp: number): string {
  * Decrypts and renders a draft's preview thumbnail (or a placeholder when the key isn't on this device).
  */
 function DraftThumbnail({ draft }: { draft: DraftTimelapse }) {
-  const [thumb, setThumb] = useState<string | null>(null);
-  const [missingKey, setMissingKey] = useState(false);
+  const { thumbnail, missingKey } = useDecryptedThumbnail({
+    id: draft.id,
+    url: draft.previewThumbnail,
+    iv: draft.iv,
+    deviceId: draft.deviceId,
+    mimeType: "image/webp",
+  });
 
-  useEffect(() => {
-    let objectUrl: string | null = null;
-
-    retryable("recovery draft thumbnail", async () => {
-      const device = await deviceStorage.getDevice(draft.deviceId);
-      if (!device) {
-        setMissingKey(true);
-        return;
-      }
-
-      const res = await sfetch(draft.previewThumbnail);
-      if (!res.ok)
-        throw new Error(`HTTP ${res.status} while fetching draft thumbnail`);
-
-      const decrypted = await decryptData(
-        fromHex(device.passkey).buffer,
-        fromHex(draft.iv).buffer,
-        await res.arrayBuffer()
-      );
-
-      objectUrl = URL.createObjectURL(new Blob([decrypted], { type: "image/webp" }));
-      setThumb(objectUrl);
-    });
-
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [draft]);
-
-  if (thumb)
-    return <img src={thumb} alt="" className="w-full aspect-video rounded-md object-cover" />;
+  if (thumbnail)
+    return <img src={thumbnail} alt="" className="w-full aspect-video rounded-md object-cover" />;
 
   return (
     <div className="w-full aspect-video rounded-md bg-darker flex items-center justify-center">

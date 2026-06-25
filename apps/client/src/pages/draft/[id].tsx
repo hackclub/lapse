@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import type { DraftTimelapse, TimelapseVisibility } from "@hackclub/lapse-api";
-import { decryptData, fromHex } from "@hackclub/lapse-shared";
 import Icon from "@hackclub/icons";
 import posthog from "posthog-js";
 
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { deviceStorage } from "@/deviceStorage";
-import { retryable, sfetch } from "@/safety";
 
+import { useDecryptedThumbnail } from "@/components/entity/ThumbnailImage";
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
@@ -37,9 +36,19 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
-  // `true` when the draft was recorded on a device whose key isn't available locally - we can't publish it here.
-  const [missingKey, setMissingKey] = useState(false);
+  // Decrypt the (client-encrypted) preview thumbnail so the user can recognise the draft. `missingKey` is set when
+  // the draft was recorded on a device whose key isn't available locally - we can't publish it from here.
+  const { thumbnail, missingKey: thumbMissingKey } = useDecryptedThumbnail({
+    id: draft?.id ?? "",
+    url: draft?.previewThumbnail,
+    iv: draft?.iv ?? "",
+    deviceId: draft?.deviceId,
+    mimeType: "image/webp",
+    enabled: !!draft,
+  });
+  // The publish path re-checks for the device key and can flip this on too.
+  const [missingKeyAtPublish, setMissingKeyAtPublish] = useState(false);
+  const missingKey = thumbMissingKey || missingKeyAtPublish;
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -84,39 +93,6 @@ export default function Page() {
     load();
   }, [router.isReady, load]);
 
-  // Decrypt the (client-encrypted) preview thumbnail so the user can recognise the draft.
-  useEffect(() => {
-    if (!draft) return;
-
-    let objectUrl: string | null = null;
-
-    retryable("decrypting legacy draft thumbnail", async () => {
-      const device = await deviceStorage.getDevice(draft.deviceId);
-      if (!device) {
-        setMissingKey(true);
-        return;
-      }
-
-      const res = await sfetch(draft.previewThumbnail);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} while fetching draft thumbnail`);
-      }
-
-      const decrypted = await decryptData(
-        fromHex(device.passkey).buffer,
-        fromHex(draft.iv).buffer,
-        await res.arrayBuffer()
-      );
-
-      objectUrl = URL.createObjectURL(new Blob([decrypted], { type: "image/webp" }));
-      setThumbnail(objectUrl);
-    });
-
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [draft]);
-
   function handlePublishClick() {
     if (!visibility) return;
     setHackatimeModalOpen(true);
@@ -132,16 +108,18 @@ export default function Page() {
     try {
       const device = await deviceStorage.getDevice(draft.deviceId);
       if (!device) {
-        setMissingKey(true);
+        setMissingKeyAtPublish(true);
         setError("This draft was recorded on a different device, so it can't be published from here.");
         return;
       }
 
-      // Persist the metadata edits the user made before kicking off the (irreversible) publish.
+      // Persist the metadata edits the user made before kicking off the (irreversible) publish. The server requires
+      // a title of at least 2 characters, so anything shorter is treated as "no title" (the server generates one).
+      const trimmedName = name.trim();
       const updateRes = await api.draftTimelapse.update({
         id: draft.id,
         changes: {
-          name: name.trim() || undefined,
+          name: trimmedName.length >= 2 ? trimmedName : undefined,
           description: description.trim(),
           editList: draft.editList,
         },

@@ -4,8 +4,22 @@ import { encryptData, fromHex, MIN_SESSION_SIZE_BYTES } from "@hackclub/lapse-sh
 import posthog from "posthog-js";
 
 import { api, apiUpload } from "@/api";
-import { deviceStorage } from "@/deviceStorage";
+import { deviceStorage, DeviceStorage } from "@/deviceStorage";
 import { getCurrentDevice } from "@/encryption";
+
+// Set once the user dismisses the recovery prompt, so we stop nudging them to it for the rest of the session.
+const RECOVERY_DISMISSED_KEY = "lapse:recovery_dismissed";
+
+/** Whether the user has dismissed the legacy-recovery prompt this session. */
+export function isRecoveryDismissed(): boolean {
+  return typeof sessionStorage !== "undefined" && sessionStorage.getItem(RECOVERY_DISMISSED_KEY) === "1";
+}
+
+/** Remembers (for this session) that the user dismissed the legacy-recovery prompt. */
+export function dismissRecovery(): void {
+  if (typeof sessionStorage !== "undefined")
+    sessionStorage.setItem(RECOVERY_DISMISSED_KEY, "1");
+}
 
 // Recovery of recordings made with the pre-Lookout pipeline. There are two leftover sources:
 //
@@ -79,24 +93,13 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
 }
 
 /**
- * Whether this browser can use OPFS. Mirrors `deviceStorage`'s own gating, but WITHOUT its side effect of
- * redirecting unsupported browsers to `/update-browser` - we don't want merely probing for recoverable data
- * (e.g. on the homepage) to bounce Firefox/old-browser users off the page.
- */
-function opfsAvailable(): boolean {
-  return typeof navigator !== "undefined"
-    && !!navigator.storage?.getDirectory
-    && typeof FileSystemFileHandle !== "undefined"
-    && "createWritable" in FileSystemFileHandle.prototype
-    && !/firefox\//i.test(navigator.userAgent);
-}
-
-/**
  * Returns whether there's an unfinished recording sitting in this device's local (OPFS) storage.
  */
 async function hasLocalRecording(): Promise<boolean> {
-  // Browsers without usable OPFS never produced a local recording, so there's nothing to recover there.
-  if (!opfsAvailable())
+  // Browsers without usable OPFS never produced a local recording, so there's nothing to recover there. We use the
+  // side-effect-free `DeviceStorage.isSupported` rather than touching `deviceStorage`, so merely probing for
+  // recoverable data (e.g. on the homepage) doesn't bounce unsupported browsers to `/update-browser`.
+  if (!DeviceStorage.isSupported())
     return false;
 
   const local = await deviceStorage.getTimelapse();
@@ -189,6 +192,12 @@ async function publishLocalRecording(): Promise<void> {
   const local = await deviceStorage.getTimelapse();
   if (!local || sessions.length === 0)
     throw new Error("No local recording was found to publish.");
+
+  // The published timelapse's duration is derived from its snapshots (`durationBySnapshots` needs at least two).
+  // Refusing here keeps the local copy intact instead of publishing a degenerate 0-duration timelapse and then
+  // deleting the only source of the recording.
+  if (local.snapshots.length < 2)
+    throw new Error("This recording is too short to publish.");
 
   const thumbnail = await videoGenerateThumbnail(sessions[0]);
   const device = await getCurrentDevice();

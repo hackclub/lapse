@@ -15,7 +15,7 @@ import {
   storeSession,
   removeStoredSession,
 } from "@/components/lookout/sessions";
-import { hasLegacyData } from "@/legacyRecovery";
+import { hasLegacyData, isRecoveryDismissed, dismissRecovery } from "@/legacyRecovery";
 import { LegacyRecoveryView } from "@/components/legacy/LegacyRecoveryView";
 
 import RootLayout from "@/components/layout/RootLayout";
@@ -479,8 +479,7 @@ export default function LookoutRecorder() {
     (async () => {
       // Surface any legacy recordings (unfinished OPFS captures or unpublished drafts) for recovery first,
       // unless the user already dismissed the prompt this session.
-      const dismissed = sessionStorage.getItem("lapse:recovery_dismissed") === "1";
-      if (!dismissed && await hasLegacyData(auth.currentUser!.id)) {
+      if (!isRecoveryDismissed() && await hasLegacyData(auth.currentUser!.id)) {
         setPhase("recovering");
         return;
       }
@@ -490,7 +489,7 @@ export default function LookoutRecorder() {
   }, [auth.isLoading, auth.currentUser, checkLookoutDrafts]);
 
   function handleRecoveryDone() {
-    sessionStorage.setItem("lapse:recovery_dismissed", "1");
+    dismissRecovery();
     setPhase("checking");
     checkLookoutDrafts();
   }

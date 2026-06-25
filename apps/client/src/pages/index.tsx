@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 
 import { api } from "@/api";
-import { hasLegacyData } from "@/legacyRecovery";
+import { hasLegacyData, isRecoveryDismissed } from "@/legacyRecovery";
 import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
@@ -37,7 +37,7 @@ export default function Home() {
     if (!auth.currentUser)
       return;
 
-    if (sessionStorage.getItem("lapse:recovery_dismissed") === "1")
+    if (isRecoveryDismissed())
       return;
 
     let cancelled = false;

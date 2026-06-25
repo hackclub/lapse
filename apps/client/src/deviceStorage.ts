@@ -97,17 +97,23 @@ export class DeviceStorage {
   private root: FileSystemDirectoryHandle | null = null;
   private serialQueue = new AsyncQueue();
 
+  /**
+   * Whether this browser exposes the OPFS APIs `DeviceStorage` relies on. Side-effect free, so it can be used to
+   * merely probe for recoverable data without triggering `ensureInit`'s redirect to `/update-browser`.
+   */
+  static isSupported(): boolean {
+    return typeof navigator !== "undefined"
+      && !!navigator.storage?.getDirectory
+      && typeof FileSystemFileHandle !== "undefined"
+      && "createWritable" in FileSystemFileHandle.prototype
+      && !/firefox\//i.test(navigator.userAgent);
+  }
+
   private async ensureInit(): Promise<void> {
     if (this.root)
       return;
 
-    if (/firefox\//i.test(navigator.userAgent)) {
-      handleMissingApi();
-      await sleep(1000);
-      return;
-    }
-
-    if (!("createWritable" in FileSystemFileHandle.prototype)) {
+    if (!DeviceStorage.isSupported()) {
       handleMissingApi();
       await sleep(1000);
       return;
