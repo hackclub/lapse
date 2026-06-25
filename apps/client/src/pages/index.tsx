@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/Button";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 
 import { api } from "@/api";
-import { hasLegacyData, isRecoveryDismissed } from "@/legacyRecovery";
 import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
@@ -32,23 +31,7 @@ export default function Home() {
   }[]>([]);
 
   // Legacy recordings (unfinished OPFS captures or unpublished drafts) can no longer be recorded, only recovered.
-  // If the user has any, send them to the create page, which surfaces the keep/discard recovery flow.
-  useEffect(() => {
-    if (!auth.currentUser)
-      return;
-
-    if (isRecoveryDismissed())
-      return;
-
-    let cancelled = false;
-    (async () => {
-      if (!cancelled && await hasLegacyData(auth.currentUser!.id)) {
-        router.replace("/timelapse/create");
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [auth.currentUser, router]);
+  // The site-wide banner (see RootLayout) nudges the user to `/timelapse/recover` whenever they have any.
 
   useEffect(() => {
     (async () => {

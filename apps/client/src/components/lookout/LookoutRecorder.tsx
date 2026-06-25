@@ -15,9 +15,6 @@ import {
   storeSession,
   removeStoredSession,
 } from "@/components/lookout/sessions";
-import { hasLegacyData, isRecoveryDismissed, dismissRecovery } from "@/legacyRecovery";
-import { LegacyRecoveryView } from "@/components/legacy/LegacyRecoveryView";
-
 import RootLayout from "@/components/layout/RootLayout";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
@@ -452,7 +449,7 @@ export default function LookoutRecorder() {
   const [desktopLaunched, setDesktopLaunched] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
-  const [phase, setPhase] = useState<"checking" | "recovering" | "selecting" | "ready">("checking");
+  const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
   const initialized = useRef(false);
 
   const checkLookoutDrafts = useCallback(async () => {
@@ -476,23 +473,10 @@ export default function LookoutRecorder() {
     if (auth.isLoading || !auth.currentUser) return;
     initialized.current = true;
 
-    (async () => {
-      // Surface any legacy recordings (unfinished OPFS captures or unpublished drafts) for recovery first,
-      // unless the user already dismissed the prompt this session.
-      if (!isRecoveryDismissed() && await hasLegacyData(auth.currentUser!.id)) {
-        setPhase("recovering");
-        return;
-      }
-
-      await checkLookoutDrafts();
-    })();
-  }, [auth.isLoading, auth.currentUser, checkLookoutDrafts]);
-
-  function handleRecoveryDone() {
-    dismissRecovery();
-    setPhase("checking");
+    // Legacy recordings (unfinished OPFS captures or unpublished drafts) are recovered from the dedicated
+    // `/timelapse/recover` page, surfaced by the site-wide banner - not from the create flow.
     checkLookoutDrafts();
-  }
+  }, [auth.isLoading, auth.currentUser, checkLookoutDrafts]);
 
   async function createSessionAndStart(onReady: (cfg: LookoutSessionConfig) => void) {
     setIsCreating(true);
@@ -581,17 +565,6 @@ export default function LookoutRecorder() {
     return (
       <RootLayout showHeader={false}>
         <div className="flex items-center justify-center h-screen text-muted">Checking for sessions...</div>
-      </RootLayout>
-    );
-  }
-
-  if (phase === "recovering" && auth.currentUser) {
-    return (
-      <RootLayout showHeader={false}>
-        <LegacyRecoveryView
-          userId={auth.currentUser.id}
-          onDone={handleRecoveryDone}
-        />
       </RootLayout>
     );
   }

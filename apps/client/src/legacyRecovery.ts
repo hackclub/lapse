@@ -7,20 +7,6 @@ import { api, apiUpload } from "@/api";
 import { deviceStorage, DeviceStorage } from "@/deviceStorage";
 import { getCurrentDevice } from "@/encryption";
 
-// Set once the user dismisses the recovery prompt, so we stop nudging them to it for the rest of the session.
-const RECOVERY_DISMISSED_KEY = "lapse:recovery_dismissed";
-
-/** Whether the user has dismissed the legacy-recovery prompt this session. */
-export function isRecoveryDismissed(): boolean {
-  return typeof sessionStorage !== "undefined" && sessionStorage.getItem(RECOVERY_DISMISSED_KEY) === "1";
-}
-
-/** Remembers (for this session) that the user dismissed the legacy-recovery prompt. */
-export function dismissRecovery(): void {
-  if (typeof sessionStorage !== "undefined")
-    sessionStorage.setItem(RECOVERY_DISMISSED_KEY, "1");
-}
-
 // Recovery of recordings made with the pre-Lookout pipeline. There are two leftover sources:
 //
 //   1. "opfs"  - unfinished recordings still sitting in this device's local storage (OPFS), never uploaded.
@@ -149,15 +135,16 @@ export async function loadRecoverableItems(userId: string): Promise<RecoverableI
 }
 
 /**
- * Quick check for whether `userId` has any recoverable legacy data. Used to decide whether to prompt the user.
+ * Counts how many recoverable legacy recordings `userId` has. Used to drive the "unmigrated timelapses" banner.
+ * Returns 0 (rather than throwing) if the check fails, so a transient error never surfaces a misleading prompt.
  */
-export async function hasLegacyData(userId: string): Promise<boolean> {
+export async function countRecoverableItems(userId: string): Promise<number> {
   try {
-    return (await loadRecoverableItems(userId)).length > 0;
+    return (await loadRecoverableItems(userId)).length;
   }
   catch (err) {
-    console.warn("(legacyRecovery.ts) hasLegacyData check failed", err);
-    return false;
+    console.warn("(legacyRecovery.ts) countRecoverableItems check failed", err);
+    return 0;
   }
 }
 
