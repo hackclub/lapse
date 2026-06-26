@@ -30,7 +30,21 @@ const link = new OpenAPILink(compositeRouterContract, {
   interceptors: [
     onError((error: unknown) => {
       if (error && typeof error === "object" && "code" in error && error.code === "UNAUTHORIZED") {
-        location.href = "/auth";
+        // Our session is invalid (expired/absent token), so send the user to sign in. But NEVER do this
+        // while we're already in the auth flow: this `onError` fires for *any* unauthorized request,
+        // including background probes (see `_app.tsx`). On `/auth` — especially mid-callback, when the URL
+        // carries `?code=...` — a hard redirect to `/auth` wipes the in-flight code exchange and restarts
+        // OAuth, trapping the user in an endless redirect loop. We also preserve where they were so they
+        // land back there after authenticating instead of getting dumped on the home page.
+        if (typeof window === "undefined")
+          return;
+
+        const path = window.location.pathname;
+        if (path === "/auth" || path.startsWith("/oauth/"))
+          return;
+
+        const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+        location.href = `/auth?redirect=${redirect}`;
       }
       else {
         console.error(error);

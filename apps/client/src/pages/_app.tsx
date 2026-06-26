@@ -32,6 +32,16 @@ const App: AppType = ({ Component, pageProps }) => {
     if (router.pathname.startsWith("/timelapse/publish") || router.pathname.startsWith("/timelapse/create"))
       return;
 
+    // Never probe a protected endpoint on the auth pages or without a session. The request would 401 and
+    // trip the global redirect-to-/auth interceptor in `api.ts` — which, on the auth callback, wipes the
+    // in-flight `?code=` exchange and bounces the user back into OAuth, looping forever. Logged-out users
+    // also shouldn't be force-redirected to sign in just for opening a public page.
+    if (router.pathname === "/auth" || router.pathname.startsWith("/oauth/"))
+      return;
+
+    if (!localStorage.getItem("lapse:token"))
+      return;
+
     (async () => {
       try {
         const res = await api.timelapse.getLookoutDrafts({});
