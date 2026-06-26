@@ -31,8 +31,15 @@ export default function Auth() {
   const { currentUser, isLoading, refreshUser } = useAuthContext();
   const [status, setStatus] = useState<"loading" | "error">("loading");
   const oauthInitiated = useRef(false);
+  const exchangeInitiated = useRef(false);
 
   useEffect(() => {
+    // `router.query` is only populated once `router.isReady` is true. If we act before then,
+    // a callback from Hackatime (`/auth?code=...&state=...`) looks identical to a fresh visit,
+    // so we'd discard the code and re-run `initOAuth`, bouncing back to Hackatime forever.
+    if (!router.isReady)
+      return;
+
     if (isLoading)
       return;
 
@@ -48,6 +55,12 @@ export default function Auth() {
       return;
 
     if (typeof code === "string" && typeof state === "string") {
+      // The effect can re-run while the exchange is in flight (e.g. router updates). Guard against
+      // a second call, which would fail on the now-consumed code/cleared verifier and flash an error.
+      if (exchangeInitiated.current)
+        return;
+
+      exchangeInitiated.current = true;
       exchangeToken(code, state);
       return;
     }
