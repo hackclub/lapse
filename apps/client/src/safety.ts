@@ -61,3 +61,14 @@ export const sfetch = fetchRetry(fetch, {
     return delay;
   }
 });
+
+/**
+ * A version of `fetch` for non-critical media (thumbnails, previews) where the worst case is a placeholder. It retries
+ * at most *once* on a network error, so a single transient blip is still tolerated, but an unreachable or missing
+ * resource degrades immediately to a placeholder instead of producing a 5-deep exponential-backoff retry storm
+ * (which, fanned out across a grid of thumbnails, floods the console and hammers the CDN for no benefit).
+ */
+export const mediaFetch = fetchRetry(fetch, {
+  retries: 1,
+  retryDelay: 500
+});

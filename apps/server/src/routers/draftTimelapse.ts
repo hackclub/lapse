@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { oneOf, range, toHex } from "@hackclub/lapse-shared";
 
@@ -11,7 +11,7 @@ import { env } from "@/env.js";
 import { database } from "@/db.js";
 
 import { apiOk, apiErr, lapseId, Err } from "@/common.js";
-import { logInfo } from "@/logging.js";
+import { logInfo, logWarning } from "@/logging.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { actorEntitledTo, stringifyActor, type Actor } from "@/ownership.js";
 import { dtoPublicUser } from "@/routers/user.js";
@@ -25,6 +25,60 @@ const s3 = new S3Client({
         secretAccessKey: env.S3_SECRET_ACCESS_KEY,
     },
 });
+
+/**
+ * Whether `key` exists in the encrypted bucket.
+ *
+ * Fails *open*: a non-404 error (network blip, throttling, ...) returns `true` so we never hide a draft that might be
+ * fine - we only treat a key as missing when S3 affirmatively reports 404.
+ */
+async function objectExists(key: string): Promise<boolean> {
+    try {
+        await s3.send(new HeadObjectCommand({ Bucket: env.S3_ENCRYPTED_BUCKET_NAME, Key: key }));
+        return true;
+    }
+    catch (error) {
+        const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+        const name = (error as { name?: string })?.name;
+        if (status === 404 || name === "NotFound" || name === "NoSuchKey")
+            return false;
+
+        logWarning(`HeadObject for ${key} failed with a non-404 error; assuming the object exists`, { error });
+        return true;
+    }
+}
+
+/**
+ * Filters out "orphaned" drafts - rows that `draftTimelapse.create` persisted up-front (it writes the row and hands
+ * back tus upload tokens) but whose session bytes were never actually uploaded (e.g. the tab was closed mid-upload).
+ * These leave a permanent DB row with no backing S3 objects, which can't be played or published and would only surface
+ * as a broken card in the client.
+ *
+ * A draft is "recoverable" iff *all* of its sessions exist - the same condition `timelapse.publish` enforces. We
+ * deliberately do *not* require the thumbnail (a draft can miss only its thumbnail yet still be publishable; the client
+ * just shows a placeholder). Checks run concurrently in bounded batches so a large draft history doesn't fire hundreds
+ * of HEADs at once.
+ */
+async function withExistingObjects<T extends { sessions: string[] }>(drafts: T[]): Promise<T[]> {
+    const BATCH = 16;
+    const kept: T[] = [];
+
+    for (let i = 0; i < drafts.length; i += BATCH) {
+        const batch = drafts.slice(i, i + BATCH);
+        const recoverable = await Promise.all(
+            batch.map(async d => {
+                if (d.sessions.length === 0)
+                    return false;
+
+                const exists = await Promise.all(d.sessions.map(objectExists));
+                return exists.every(Boolean);
+            })
+        );
+        batch.forEach((d, j) => { if (recoverable[j]) kept.push(d); });
+    }
+
+    return kept;
+}
 
 const os = implement(draftTimelapseRouterContract)
     .$context<Context>()
@@ -130,7 +184,10 @@ export default os.router({
                 where: { ownerId: req.input.user }
             });
 
-            return apiOk({ timelapses: drafts.map(x => dtoDraftTimelapse(x)) });
+            // Hide "orphaned" drafts whose backing objects were never uploaded - they'd only render as broken thumbnails.
+            const recoverable = await withExistingObjects(drafts);
+
+            return apiOk({ timelapses: recoverable.map(x => dtoDraftTimelapse(x)) });
         }),
 
     create: os.create

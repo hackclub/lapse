@@ -7,7 +7,7 @@ import clsx from "clsx";
 import posthog from "posthog-js";
 
 import { deviceStorage } from "@/deviceStorage";
-import { retryable, sfetch } from "@/safety";
+import { mediaFetch } from "@/safety";
 
 import { ProfilePicture } from "@/components/entity/ProfilePicture"
 import { Bullet } from "@/components/ui/Bullet";
@@ -25,8 +25,11 @@ export function TimelapseCard({ timelapse }: {
 
   useEffect(() => {
     if (timelapse.isDraft) {
-      // If this is a draft, the thumbnail is encrypted.
-      retryable("fetching draft thumbnail", async () => {
+      // If this is a draft, the thumbnail is encrypted. We deliberately don't retry aggressively here: a missing
+      // object (an orphaned draft whose bytes were never uploaded) or a blocked CDN would otherwise turn every card
+      // into a retry storm. `mediaFetch` tolerates a single transient blip, and anything past that degrades to a
+      // placeholder.
+      (async () => {
         if (thumbnailCache.has(timelapse.previewThumbnail)) {
           setThumb(thumbnailCache.get(timelapse.previewThumbnail)!);
           return;
@@ -38,27 +41,32 @@ export function TimelapseCard({ timelapse }: {
           return;
         }
 
-        const res = await sfetch(timelapse.previewThumbnail);
-        if (!res.ok) {
-          posthog.capture("draft_thumbnail_fail", { res, timelapse, thumbnail: timelapse.previewThumbnail });
-          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        try {
+          const res = await mediaFetch(timelapse.previewThumbnail);
+          if (!res.ok) {
+            posthog.capture("draft_thumbnail_fail", { status: res.status, timelapse, thumbnail: timelapse.previewThumbnail });
+            return;
+          }
+
+          const encryptedThumb = await res.arrayBuffer();
+
+          const url = URL.createObjectURL(
+            new Blob([
+              await decryptData(
+                fromHex(device.passkey).buffer,
+                fromHex(timelapse.iv).buffer,
+                encryptedThumb
+              )
+            ], { type: "image/webp" })
+          );
+
+          thumbnailCache.set(timelapse.previewThumbnail, url);
+          setThumb(url);
         }
-
-        const encryptedThumb = await res.arrayBuffer();
-
-        const url = URL.createObjectURL(
-          new Blob([
-            await decryptData(
-              fromHex(device.passkey).buffer,
-              fromHex(timelapse.iv).buffer,
-              encryptedThumb
-            )
-          ], { type: "image/webp" })
-        );
-
-        thumbnailCache.set(timelapse.previewThumbnail, url);
-        setThumb(url);
-      });
+        catch (error) {
+          posthog.capture("draft_thumbnail_fail", { error, timelapse, thumbnail: timelapse.previewThumbnail });
+        }
+      })();
 
       return;
     }

@@ -6,7 +6,7 @@ import { decryptData, fromHex } from "@hackclub/lapse-shared";
 
 import { getCurrentDevice } from "@/encryption";
 import { deviceStorage } from "@/deviceStorage";
-import { sfetch } from "@/safety";
+import { mediaFetch } from "@/safety";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -42,7 +42,7 @@ export async function decryptThumbnail(
       return { url: null, missingDevice: true };
     }
 
-    const response = await sfetch(encryptedThumbnailUrl);
+    const response = await mediaFetch(encryptedThumbnailUrl);
     if (!response.ok)
       throw new Error(`Failed to fetch encrypted thumbnail for ${id}: ${response.statusText}`);
 
