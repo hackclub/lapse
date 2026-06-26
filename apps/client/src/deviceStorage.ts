@@ -113,8 +113,7 @@ export class DeviceStorage {
     return typeof navigator !== "undefined"
       && !!navigator.storage?.getDirectory
       && typeof FileSystemFileHandle !== "undefined"
-      && "createWritable" in FileSystemFileHandle.prototype
-      && !/firefox\//i.test(navigator.userAgent);
+      && "createWritable" in FileSystemFileHandle.prototype;
   }
 
   private async ensureInit(): Promise<void> {

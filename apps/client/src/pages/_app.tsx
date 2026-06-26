@@ -7,11 +7,10 @@ import { AuthProvider } from "@/context/AuthContext";
 import { KeyRelayProvider } from "@/context/KeyRelayContext";
 import { initLogBucket } from "@/logBucket";
 import { BYPASS_BROWSER_CHECK_KEY } from "@/pages/update-browser";
+import { DeviceStorage } from "@/deviceStorage";
 import { api } from "@/api";
 
 initLogBucket();
-
-const UNSUPPORTED_BROWSER_PATTERNS = [/firefox\//i];
 
 const App: AppType = ({ Component, pageProps }) => {
   const router = useRouter();
@@ -23,8 +22,11 @@ const App: AppType = ({ Component, pageProps }) => {
     if (localStorage.getItem(BYPASS_BROWSER_CHECK_KEY) === "1")
       return;
 
-    const ua = navigator.userAgent;
-    if (UNSUPPORTED_BROWSER_PATTERNS.some(pattern => pattern.test(ua)))
+    // Redirect only when the browser genuinely lacks the OPFS APIs Lapse needs — never on a blanket
+    // user-agent match. Firefox (and any other browser) that exposes the required APIs works fine, so
+    // sniffing the UA bounced every Firefox user to /update-browser unconditionally. `isSupported` is
+    // side-effect free and safe to call here.
+    if (!DeviceStorage.isSupported())
       router.replace("/update-browser");
   }, [router]);
 
