@@ -1,5 +1,4 @@
 import platform from "platform";
-import posthog from "posthog-js";
 import { ENCRYPTION_KEY_LENGTH, toHex } from "@hackclub/lapse-shared";
 
 import { deviceStorage, LocalDevice } from "@/deviceStorage";
@@ -41,7 +40,6 @@ export async function getCurrentDevice() {
   });
 
   if (!res.ok) {
-    posthog.capture("device_register_error", { res, error: res.message });
     throw new Error(`Couldn't register device; ${res.error}: ${res.message}`);
   }
 

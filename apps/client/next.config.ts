@@ -3,7 +3,6 @@ import path from "path";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
 import TerserPlugin from "terser-webpack-plugin";
-import { withPostHogConfig } from "@posthog/nextjs-config";
 
 const root = path.resolve(__dirname, "..", "..");
 
@@ -32,7 +31,7 @@ function resolveSquircle(): Record<string, string> {
   return {};
 }
 
-let config: NextConfig = {
+const config: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
   transpilePackages: ["@lookout/react", "@squircle-js/react"],
@@ -74,22 +73,6 @@ let config: NextConfig = {
     return config;
   },
 
-  async rewrites() {
-    return [
-      {
-        source: "/ingest/static/:path*",
-        destination: "https://us-assets.i.posthog.com/static/:path*",
-      },
-      {
-        source: "/ingest/:path*",
-        destination: "https://us.i.posthog.com/:path*",
-      },
-    ];
-  },
-
-  // Required to support PostHog trailing slash API requests
-  skipTrailingSlashRedirect: true,
-
   async headers() {
     return [
       {
@@ -108,20 +91,5 @@ let config: NextConfig = {
     ];
   },
 };
-
-if (process.env.POSTHOG_PERSONAL_API_KEY && process.env.POSTHOG_ENV_ID) {
-  config = withPostHogConfig(config, {
-    personalApiKey: process.env.POSTHOG_PERSONAL_API_KEY,
-    envId: process.env.POSTHOG_ENV_ID,
-    host: "https://us.i.posthog.com",
-    sourcemaps: {
-      enabled: true,
-      deleteAfterUpload: false
-    }
-  });
-}
-else {
-  console.log("Not initializing PostHog config - this is fine for development environments, but in production, this might be a problem.");
-}
 
 export default config;

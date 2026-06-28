@@ -5,7 +5,6 @@ import { OpenAPILink } from "@orpc/openapi-client/fetch";
 import { compositeRouterContract } from "@hackclub/lapse-api";
 import * as tus from "tus-js-client";
 import { sfetch } from "@/safety";
-import posthog from "posthog-js";
 
 /**
  * The absolute URL at which the API is hosted at.
@@ -48,7 +47,6 @@ const link = new OpenAPILink(compositeRouterContract, {
       }
       else {
         console.error(error);
-        posthog.capture("api_error", { error });
       }
     })
   ],

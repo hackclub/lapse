@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
-import posthog from "posthog-js";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -22,7 +21,6 @@ export default function BrowserUpdatePage() {
     setUserAgent(navigator.userAgent.toLowerCase());
     setPlatform(navigator.platform.toLowerCase());
 
-    posthog.capture("outdated_browser_detected", { userAgent: navigator.userAgent });
     console.log(`(update-browser.tsx) outdated browser: ${navigator.userAgent}`);
   }, []);
 
@@ -33,7 +31,6 @@ export default function BrowserUpdatePage() {
     }
 
     localStorage.setItem(BYPASS_BROWSER_CHECK_KEY, "1");
-    posthog.capture("outdated_browser_bypass", { userAgent: navigator.userAgent });
     router.push("/");
   }
 

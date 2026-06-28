@@ -1,7 +1,6 @@
 import type { DraftTimelapse } from "@hackclub/lapse-api";
 import { THUMBNAIL_SIZE } from "@hackclub/lapse-api";
 import { encryptData, fromHex, MIN_SESSION_SIZE_BYTES } from "@hackclub/lapse-shared";
-import posthog from "posthog-js";
 
 import { api, apiUpload } from "@/api";
 import { deviceStorage, DeviceStorage } from "@/deviceStorage";
@@ -75,7 +74,6 @@ export async function videoGenerateThumbnail(videoBlob: Blob): Promise<Blob> {
     return blob;
   }
   catch (err) {
-    posthog.capture("legacy_recovery_thumbnail_failed", { err, size: videoBlob.size });
     console.warn("(legacyRecovery.ts) could not generate thumbnail - using fallback", err);
     return await fetch(FALLBACK_THUMBNAIL).then(x => x.blob());
   }
@@ -278,12 +276,10 @@ async function publishLocalRecording(): Promise<void> {
 export async function publishItem(item: RecoverableItem): Promise<void> {
   if (item.kind === "opfs") {
     await publishLocalRecording();
-    posthog.capture("legacy_recovery_published", { kind: "opfs" });
     return;
   }
 
   await publishDraft(item.draft);
-  posthog.capture("legacy_recovery_published", { kind: "draft", draftId: item.id });
 }
 
 /**
@@ -292,13 +288,10 @@ export async function publishItem(item: RecoverableItem): Promise<void> {
 export async function discardItem(item: RecoverableItem): Promise<void> {
   if (item.kind === "opfs") {
     await deviceStorage.deleteTimelapse();
-    posthog.capture("legacy_recovery_discarded", { kind: "opfs" });
     return;
   }
 
   const res = await api.draftTimelapse.delete({ id: item.id });
   if (!res.ok)
     throw new Error(res.message);
-
-  posthog.capture("legacy_recovery_discarded", { kind: "draft", draftId: item.id });
 }

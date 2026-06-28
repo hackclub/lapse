@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import type { TimelapseVisibility } from "@hackclub/lapse-api";
-import posthog from "posthog-js";
 
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -88,7 +87,6 @@ export default function Page() {
 
       removeStoredSession(draftId);
       const timelapseId = res.data.timelapse.id;
-      posthog.capture("timelapse_published_lookout", { timelapseId, hackatimeProject });
       location.href = `/timelapse/${timelapseId}`;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to publish timelapse");
@@ -111,7 +109,6 @@ export default function Page() {
     }
 
     removeStoredSession(draftId);
-    posthog.capture("timelapse_discarded_lookout", { draftId });
     router.push("/");
   }
 

@@ -1,7 +1,6 @@
 import NextLink from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import posthog from "posthog-js";
 import Icon from "@hackclub/icons";
 import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-api";
 
@@ -100,7 +99,6 @@ export default function Page() {
       }
     }
     catch (error) {
-      posthog.capture("timelapse_load_fail", { error, timelapse });
       console.error("([id].tsx) error loading timelapse:", error);
       setError(error instanceof Error ? error.message : "An unknown error occurred while loading the timelapse");
       setErrorIsCritical(true);
@@ -142,7 +140,6 @@ export default function Page() {
       }
     } 
     catch (error) {
-      posthog.capture("timelapse_update_fail", { error, timelapse, editName, editDescription, editVisibility });
       console.error("([id].tsx) error updating timelapse:", error);
       setError(error instanceof Error ? error.message : "An error occurred while updating the timelapse.");
     } 
@@ -165,7 +162,6 @@ export default function Page() {
       router.push(`/draft/${draftId}`);
     }
     catch (error) {
-      posthog.capture("timelapse_fp_delete_fail", { error, timelapse });
       console.error("([id].tsx) error deleting failed timelapse:", error);
       setError(error instanceof Error ? error.message : "An error occurred while deleting the timelapse.");
       setIsDeleting(false);
@@ -192,7 +188,6 @@ export default function Page() {
       }
     }
     catch (error) {
-      posthog.capture("timelapse_delete_fail", { error, timelapse });
       console.error("([id].tsx) error deleting timelapse:", error);
       setError(error instanceof Error ? error.message : "An error occurred while deleting the timelapse.");
     }

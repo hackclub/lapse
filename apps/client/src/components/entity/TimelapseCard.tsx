@@ -4,7 +4,6 @@ import Icon from "@hackclub/icons";
 import type { DraftTimelapse, Timelapse } from "@hackclub/lapse-api"
 import { decryptData, fromHex } from "@hackclub/lapse-shared";
 import clsx from "clsx";
-import posthog from "posthog-js";
 
 import { deviceStorage } from "@/deviceStorage";
 import { mediaFetch } from "@/safety";
@@ -44,7 +43,6 @@ export function TimelapseCard({ timelapse }: {
         try {
           const res = await mediaFetch(timelapse.previewThumbnail);
           if (!res.ok) {
-            posthog.capture("draft_thumbnail_fail", { status: res.status, timelapse, thumbnail: timelapse.previewThumbnail });
             return;
           }
 
@@ -63,8 +61,7 @@ export function TimelapseCard({ timelapse }: {
           thumbnailCache.set(timelapse.previewThumbnail, url);
           setThumb(url);
         }
-        catch (error) {
-          posthog.capture("draft_thumbnail_fail", { error, timelapse, thumbnail: timelapse.previewThumbnail });
+        catch {
         }
       })();
 

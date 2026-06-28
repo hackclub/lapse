@@ -1,7 +1,6 @@
 import * as v from "valibot";
 import { jsonrepair } from "jsonrepair";
 
-import posthog from "posthog-js";
 import { ascending, sleep } from "@hackclub/lapse-shared";
 import { retryable } from "@/safety";
 
@@ -169,8 +168,6 @@ export class DeviceStorage {
       return v.parse(StoreSchema, JSON.parse(contents));
     }
     catch (err) {
-      posthog.capture("json_datastore_recovery_started", { contents, err });
-
       console.error(`(deviceStorage.ts) JSON store corrupted - rebuilding! ${contents}`, err);
       localStorage.setItem("lapse:corruptedStoreBackup", contents); // just in case...
       
@@ -233,7 +230,6 @@ export class DeviceStorage {
       }
 
       if (sessions.length == 0) {
-        posthog.capture("json_datastore_recovery_no_timelapse", { contents, devices });
         console.warn("(deviceStorage.ts) no sessions found while restoring timelapse. no timelapse has been started...?");
         
         const store = {
@@ -246,8 +242,6 @@ export class DeviceStorage {
       }
 
       sessions.sort(ascending());
-
-      posthog.capture("json_datastore_recovery_success", { contents, devices, snapshots, startedAt, sessions });
 
       console.log("(deviceStorage.ts) existing timelapse successfully recovered from corrupted JSON!");
       console.log("(deviceStorage.ts) recovery payload:", devices, snapshots, startedAt, sessions);
@@ -290,13 +284,6 @@ export class DeviceStorage {
           }
           catch (error) {
             if (error instanceof DOMException) {
-              posthog.capture("devicestorage_domexception", {
-                error,
-                stack: error.stack,
-                message: error.message,
-                name: error.name
-              });
-
               if (error.name === "NotFoundError") {
                 throw error;
               }
@@ -305,12 +292,6 @@ export class DeviceStorage {
               continue;
             }
 
-            posthog.capture("devicestorage_uncaught_exception", {
-              error,
-              stack: error instanceof Error ? error.stack : undefined,
-              message: error instanceof Error ? error.message : undefined
-            });
-
             throw error;
           }
         }
@@ -318,7 +299,6 @@ export class DeviceStorage {
     });
 
     if (result instanceof Error) {
-      posthog.captureException(result);
       throw result;
     }
 
