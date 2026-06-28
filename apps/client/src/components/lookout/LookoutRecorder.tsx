@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
-import posthog from "posthog-js";
 import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
 
@@ -42,20 +41,22 @@ interface LookoutSessionConfig {
 
 type RecordingMode = "desktop" | "screen" | "camera";
 
-function RecordingModeOption({ icon, title, description, selected, onClick, recommended }: {
+function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed }: {
   icon: IconGlyph;
   title: string;
   description: string;
   selected: boolean;
   onClick: () => void;
   recommended?: boolean;
+  dimmed?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={clsx(
         "relative flex flex-col items-center gap-3 p-6 w-full cursor-pointer transition-colors rounded-lg border",
-        selected ? "bg-red text-white border-red" : "border-slate hover:bg-darkless"
+        selected ? "bg-red text-white border-red" : "border-slate hover:bg-darkless",
+        dimmed && !selected && "opacity-40"
       )}
     >
       {recommended && (
@@ -450,6 +451,10 @@ export default function LookoutRecorder() {
   const [isCreating, setIsCreating] = useState(false);
   const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
+  // Set when a previous Browser (screen) capture failed. Drives the warning blurb,
+  // the dimmed Browser option, and the "are you sure?" confirmation on the selector.
+  const [browserError, setBrowserError] = useState<string | null>(null);
+  const [confirmingBrowser, setConfirmingBrowser] = useState(false);
   const initialized = useRef(false);
 
   const checkLookoutDrafts = useCallback(async () => {
@@ -528,6 +533,13 @@ export default function LookoutRecorder() {
   }
 
   function handleStart() {
+    // If Browser failed last time, make the user actively confirm before retrying it.
+    if (selectedMode === "screen" && browserError && !confirmingBrowser) {
+      setConfirmingBrowser(true);
+      return;
+    }
+    setConfirmingBrowser(false);
+
     if (config) {
       startWithConfig(config);
       return;
@@ -646,6 +658,15 @@ export default function LookoutRecorder() {
         <LapseRecorder
           draftId={config.draftId}
           onShareFailed={() => { setCaptureMode(null); setCameraDeviceId(null); }}
+          onBrowserError={(message) => {
+            // Browser capture failed — return to the selector (the "picker") and remember why,
+            // so we can warn the user and steer them toward Desktop. Pre-select Desktop so the
+            // Browser tile reads as dimmed/de-emphasized (we don't launch anything).
+            setCaptureMode(null);
+            setCameraDeviceId(null);
+            setBrowserError(message);
+            setSelectedMode("desktop");
+          }}
         />
       </LookoutProvider>
     );
@@ -664,13 +685,25 @@ export default function LookoutRecorder() {
         />
         <ModalContent>
           <div className="flex flex-col gap-6">
+            {browserError && (
+              <div className="flex items-start gap-3 text-sm bg-red/10 border border-red/30 text-red rounded-lg p-3">
+                <Icon glyph="important" size={20} className="shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-1 leading-relaxed">
+                  <span>
+                    Hey! Your browser didn&apos;t properly capture your screen, so recording couldn&apos;t start. We recommend using Desktop instead.
+                  </span>
+                  <span className="text-red/70 text-xs">Reason: {browserError}</span>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-4 w-full">
               <RecordingModeOption
                 icon="laptop"
                 title="Desktop"
                 description="Open in Lookout app"
                 selected={selectedMode === "desktop"}
-                onClick={() => setSelectedMode("desktop")}
+                onClick={() => { setSelectedMode("desktop"); setConfirmingBrowser(false); }}
                 recommended
               />
               <RecordingModeOption
@@ -678,24 +711,48 @@ export default function LookoutRecorder() {
                 title="Browser"
                 description="Share your screen"
                 selected={selectedMode === "screen"}
-                onClick={() => setSelectedMode("screen")}
+                dimmed={!!browserError}
+                onClick={() => { setSelectedMode("screen"); setConfirmingBrowser(false); }}
               />
               <RecordingModeOption
                 icon="camera"
                 title="Camera"
                 description="Use your webcam"
                 selected={selectedMode === "camera"}
-                onClick={() => setSelectedMode("camera")}
+                onClick={() => { setSelectedMode("camera"); setConfirmingBrowser(false); }}
               />
             </div>
 
-            <button
-              onClick={handleStart}
-              disabled={isCreating}
-              className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreating ? "Setting up..." : selectedMode === "desktop" ? "Open Lookout" : "Start Recording"}
-            </button>
+            {confirmingBrowser ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-center text-muted">
+                  Are you sure? This didn&apos;t work last time!
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setSelectedMode("desktop"); setConfirmingBrowser(false); }}
+                    className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Use Desktop
+                  </button>
+                  <button
+                    onClick={handleStart}
+                    disabled={isCreating}
+                    className="flex-1 border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreating ? "Setting up..." : "Try Browser anyway"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleStart}
+                disabled={isCreating}
+                className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreating ? "Setting up..." : selectedMode === "desktop" ? "Open Lookout" : "Start Recording"}
+              </button>
+            )}
           </div>
         </ModalContent>
       </Modal>
@@ -731,21 +788,29 @@ function CameraPreviewVideo({ stream }: { stream: MediaStream }) {
   );
 }
 
-function LapseRecorder({ draftId, onShareFailed }: {
+// The browser screen picker reports a deliberate user cancellation with this exact
+// message (from getDisplayMedia's AbortError, mapped in the Lookout SDK). We treat
+// it as "go back to mode selection" rather than a scary error — see the error effect.
+const SCREEN_CANCELLED_MESSAGE = "Screen sharing was cancelled.";
+
+function LapseRecorder({ draftId, onShareFailed, onBrowserError }: {
   draftId: string;
   onShareFailed: () => void;
+  onBrowserError: (message: string) => void;
 }) {
   const router = useRouter();
   const { state, actions } = useLookout();
   const [error, setError] = useState<string | null>(null);
-  const [captureFailed, setCaptureFailed] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const screenStarted = useRef(false);
   const isCamera = state.captureMode === "camera";
 
   // Camera: auto-start preview (mirrors Fallout's BrowserRecorderUI)
   useEffect(() => {
     if (isCamera && !state.isPreviewing && !state.isSharing) {
-      actions.startPreview().catch(() => setCaptureFailed(true));
+      actions.startPreview().catch((err) =>
+        setCaptureError(err instanceof Error ? err.message : "Could not start your camera.")
+      );
     }
   }, [isCamera, state.status, state.isPreviewing, state.isSharing]);
 
@@ -754,22 +819,32 @@ function LapseRecorder({ draftId, onShareFailed }: {
     if (isCamera) return;
     if (screenStarted.current) return;
     screenStarted.current = true;
-    actions.startSharing().then(() => {
-      posthog.capture("lookout_recording_started");
-    });
+    actions.startSharing();
   }, [isCamera, actions]);
 
-  // Detect SDK-level errors
+  // Surface capture errors to the user instead of silently restarting the flow.
+  //
+  // `state.error` is set by the Lookout SDK both when screen sharing fails to start
+  // *after* the user picked a source (e.g. the OS never hands us a stream — common on
+  // Linux) and when the initial session load fails. Previously any such error silently
+  // bounced the user back to mode selection, which read as "selecting a source restarts
+  // the whole flow". Now we show a clear message. The one exception is a deliberate
+  // cancellation of the OS screen picker, which should just quietly return to selection.
   useEffect(() => {
-    if (state.status === "error") setCaptureFailed(true);
-  }, [state.status]);
-
-  // Return to mode selection on failure (screen mode only — camera shows inline error)
-  useEffect(() => {
-    if (!isCamera && state.error && !state.isSharing) {
-      onShareFailed();
+    if (!state.error) return;
+    if (!isCamera) {
+      // Screen capture failed. A deliberate cancel of the OS picker just returns to the
+      // selector with no fuss; anything else is a real failure, which we hand back to the
+      // selector (the "picker") along with the reason so it can warn and steer to Desktop.
+      if (state.error === SCREEN_CANCELLED_MESSAGE) {
+        onShareFailed();
+      } else {
+        onBrowserError(state.error);
+      }
+      return;
     }
-  }, [isCamera, state.error, state.isSharing, onShareFailed]);
+    setCaptureError(state.error);
+  }, [isCamera, state.error, onShareFailed, onBrowserError]);
 
   useEffect(() => {
     document.title = state.status === "paused" ? "⏸️ PAUSED"
@@ -790,9 +865,9 @@ function LapseRecorder({ draftId, onShareFailed }: {
   }, [state.status, draftId, router]);
 
   function handleStartSharing() {
-    actions.startSharing().then(() => {
-      posthog.capture("lookout_recording_started");
-    }).catch(() => setCaptureFailed(true));
+    actions.startSharing().catch((err) =>
+      setCaptureError(err instanceof Error ? err.message : "Could not start recording.")
+    );
   }
 
   async function togglePause() {
@@ -806,20 +881,25 @@ function LapseRecorder({ draftId, onShareFailed }: {
   async function stopRecording() {
     try {
       await actions.stop();
-      posthog.capture("lookout_recording_stopped");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop recording");
     }
   }
 
-  if (captureFailed) {
+  // Camera failures show an inline modal; screen failures are handled by the effect above,
+  // which sends the user back to the selector with the error recorded.
+  if (captureError) {
     return (
       <RootLayout showHeader={false}>
         <ErrorModal
           isOpen
-          message="Capture failed. Please check your permissions and try again."
           setIsOpen={() => {}}
+          title="Couldn't start your camera"
+          message={`${captureError} Please check your browser's camera permissions and try again.`}
           onClose={onShareFailed}
+          buttons={[
+            { label: "Try again", onClick: onShareFailed, kind: "primary" },
+          ]}
         />
       </RootLayout>
     );
