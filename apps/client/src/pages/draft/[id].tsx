@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import type { DraftTimelapse, TimelapseVisibility } from "@hackclub/lapse-api";
 import Icon from "@hackclub/icons";
-import posthog from "posthog-js";
 
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -142,12 +141,6 @@ export default function Page() {
         return;
       }
 
-      posthog.capture("legacy_timelapse_published", {
-        timelapseId: res.data.timelapse.id,
-        visibility,
-        hackatimeProject,
-      });
-
       location.href = `/timelapse/${res.data.timelapse.id}`;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to publish timelapse");
@@ -172,7 +165,6 @@ export default function Page() {
         return;
       }
 
-      posthog.capture("legacy_timelapse_discarded", { draftId: draft.id });
       router.push(`/user/@${draft.owner.handle}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to discard draft");

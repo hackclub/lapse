@@ -1,6 +1,5 @@
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
-import posthog from "posthog-js";
 
 import { matchOrDefault } from "@hackclub/lapse-shared";
 import type { OAuthErrorCode } from "@hackclub/lapse-api";
@@ -138,14 +137,11 @@ export default function Auth() {
       localStorage.setItem("lapse:token", data.access_token);
       await refreshUser();
 
-      posthog.capture("user_signed_in");
-
       const redirect = sessionStorage.getItem("lapse:oauth_redirect");
       sessionStorage.removeItem("lapse:oauth_redirect");
       router.push(redirect ?? "/");
     }
     catch (err) {
-      posthog.capture("auth_token_exchange_error", { err, query: location.search });
       console.error("(auth.tsx) error during token exchange!", err);
       setStatus("error");
       router.replace("/auth?error=token_exchange_failed");

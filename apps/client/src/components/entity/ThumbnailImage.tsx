@@ -1,6 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
-import posthog from "posthog-js";
 import Icon from "@hackclub/icons";
 import { decryptData, fromHex } from "@hackclub/lapse-shared";
 
@@ -60,7 +59,6 @@ export async function decryptThumbnail(
     return { url, missingDevice: false };
   }
   catch (error) {
-    posthog.capture("thumbnail_decrypt_fail", { error, timelapseId: id, encryptedThumbnailUrl });
     console.warn(`(ThumbnailImage.tsx) failed to decrypt thumbnail for ${id}:`, error);
     return { url: null, missingDevice: false };
   }
