@@ -155,7 +155,7 @@ export default function Home() {
           {
             auth.currentUser ? (
               topUserProjects.map(x => (
-                <div id={x.name} className="flex gap-2.5">
+                <div key={x.name} className="flex gap-2.5">
                   <span className="tracking-tight text-nowrap">{x.name}</span>
                   <div className="w-full bg-darkless relative rounded-2xl overflow-hidden">
                     <div
