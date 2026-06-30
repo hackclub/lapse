@@ -39,8 +39,23 @@ export function containerTypeToExtension(container: TimelapseVideoContainer) {
     });
 }
 
-export const TimelapseName = z.string().min(2).max(60);
-export const TimelapseDescription = z.string().max(280).default("");
+/**
+ * The minimum length for a timelapse name.
+ */
+export const MIN_TIMELAPSE_NAME_LENGTH = 2;
+
+/**
+ * The maximum length for a timelapse name.
+ */
+export const MAX_TIMELAPSE_NAME_LENGTH = 60;
+
+/**
+ * The maximum length for a timelapse description.
+ */
+export const MAX_TIMELAPSE_DESCRIPTION_LENGTH = 280;
+
+export const TimelapseName = z.string().min(MIN_TIMELAPSE_NAME_LENGTH).max(MAX_TIMELAPSE_NAME_LENGTH);
+export const TimelapseDescription = z.string().max(MAX_TIMELAPSE_DESCRIPTION_LENGTH).default("");
 
 /**
  * Represents the user-modifiable fields of a `Timelapse`.

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { HeadObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { oneOf } from "@hackclub/lapse-shared";
-import { EditListEntrySchema, timelapseRouterContract, type OwnedTimelapse, type Timelapse } from "@hackclub/lapse-api";
+import { EditListEntrySchema, timelapseRouterContract, type OwnedTimelapse, type Timelapse, MIN_TIMELAPSE_NAME_LENGTH, MAX_TIMELAPSE_NAME_LENGTH, MAX_TIMELAPSE_DESCRIPTION_LENGTH } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
 import { logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes, type Context } from "@/router.js";
@@ -34,6 +34,17 @@ const os = implement(timelapseRouterContract)
     .use(logMiddleware);
 
 /**
+ * Clamps a stored timelapse name to the contract's bounds on read. Legacy rows (e.g. from the old
+ * pre-Lookout pipeline) can hold names that violate `TimelapseName`; returning one raw fails output
+ * validation and 500s every request that includes the timelapse, breaking entire listings. Over-long
+ * names are truncated; names shorter than the minimum fall back to a generic placeholder.
+ */
+function clampTimelapseName(name: string): string {
+    const clamped = name.slice(0, MAX_TIMELAPSE_NAME_LENGTH);
+    return clamped.length >= MIN_TIMELAPSE_NAME_LENGTH ? clamped : "Untitled timelapse";
+}
+
+/**
  * Converts a database representation of a timelapse to a runtime (API) one. This excludes private fields.
  */
 export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
@@ -43,8 +54,8 @@ export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
         owner: dtoPublicUser(entity.owner),
-        name: entity.name,
-        description: entity.description,
+        name: clampTimelapseName(entity.name),
+        description: entity.description.slice(0, MAX_TIMELAPSE_DESCRIPTION_LENGTH),
         comments: entity.comments.map(dtoComment),
         visibility: entity.visibility,
         playbackUrl: entity.lookoutVideoUrl

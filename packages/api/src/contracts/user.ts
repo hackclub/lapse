@@ -133,7 +133,9 @@ export const PublicUserSchema = z.object({
     /**
      * The ID of the user in the Hack Club Slack.
      */
-    slackId: z.string().regex(/^U[A-Z0-9]+$/).nullable()
+    // Slack user IDs start with `U`, or `W` on Enterprise Grid workspaces. Rejecting `W` here would 500
+    // every request that returns such a user (output validation failure), locking them out entirely.
+    slackId: z.string().regex(/^[UW][A-Z0-9]+$/).nullable()
 });
 
 /**
