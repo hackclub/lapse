@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.0.1",
     "tsc-alias": "^1.8.17",
     "typescript": "^6.0.3"
   }
