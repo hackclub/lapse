@@ -1,6 +1,6 @@
 import { implement } from "@orpc/server"
 import { deleteCookie } from "@orpc/server/helpers"
-import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS, MAX_BIO_LENGTH } from "@hackclub/lapse-api"
+import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS, MAX_BIO_LENGTH, MAX_DISPLAY_NAME_LENGTH } from "@hackclub/lapse-api"
 import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
 import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
@@ -51,11 +51,12 @@ export function dtoPublicUser(entity: db.User): PublicUser {
     return {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
-        displayName: entity.displayName,
+        // Clamp display name and bio to the contract maximums on read: legacy rows can hold longer values
+        // (e.g. a Slack display name or profile title copied in at signup before truncation existed). An
+        // over-long value fails output validation and 500s every request that returns this user, locking
+        // them out entirely - so we defensively truncate here. `|| "User"` guards the `min(1)` on an empty name.
+        displayName: entity.displayName.slice(0, MAX_DISPLAY_NAME_LENGTH) || "User",
         profilePictureUrl: entity.profilePictureUrl,
-        // Clamp to the contract's max: legacy rows can hold longer bios (e.g. a Slack profile title copied
-        // in at signup before truncation existed). An over-long bio fails output validation and 500s every
-        // request that returns this user, locking them out entirely - so we defensively truncate on read.
         bio: entity.bio.slice(0, MAX_BIO_LENGTH),
         handle: entity.handle,
         urls: entity.urls,

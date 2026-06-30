@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { globalRouterContract, type LeaderboardUserEntry } from "@hackclub/lapse-api";
+import { globalRouterContract, type LeaderboardUserEntry, MAX_DISPLAY_NAME_LENGTH } from "@hackclub/lapse-api";
 import { daysAgo, descending } from "@hackclub/lapse-shared";
 
 import { logMiddleware, type Context } from "@/router.js";
@@ -63,7 +63,9 @@ export default os.router({
                     return {
                         id: user.id,
                         handle: user.handle,
-                        displayName: user.displayName,
+                        // Clamp on read like the user DTO does: a legacy display name over the contract max
+                        // would fail output validation and 500 the entire leaderboard for everyone.
+                        displayName: user.displayName.slice(0, MAX_DISPLAY_NAME_LENGTH) || "User",
                         pfp: user.profilePictureUrl,
                         secondsThisWeek: aggregate._sum.duration
                     } satisfies LeaderboardUserEntry;

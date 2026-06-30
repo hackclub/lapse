@@ -54,8 +54,13 @@ export const MAX_HANDLE_LENGTH = 16;
  */
 export const MAX_BIO_LENGTH = 160;
 
+/**
+ * The maximum length for a user display name.
+ */
+export const MAX_DISPLAY_NAME_LENGTH = 24;
+
 export const UserHandle = z.string().min(MIN_HANDLE_LENGTH).max(MAX_HANDLE_LENGTH);
-export const UserDisplayName = z.string().min(1).max(24);
+export const UserDisplayName = z.string().min(1).max(MAX_DISPLAY_NAME_LENGTH);
 export const UserBio = z.string().max(MAX_BIO_LENGTH).default("");
 export const UserUrlList = z.array(z.url().max(64).min(1)).max(4);
 
