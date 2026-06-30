@@ -24,40 +24,43 @@ export function AuthProvider({ children }: {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useOnce(async () => {
-    console.log("(AuthContext.tsx) authenticating...");
-    const req = await api.user.myself({});
+  // Loads the current user from the API. A thrown error here MUST end with `isLoading` cleared:
+  // if it stays true, every consumer is frozen on its loading screen forever (on `/auth` that's a
+  // permanent "Redirecting to Hackatime for authentication..." with no redirect). `api.user.myself`
+  // resolves to `{ user: null }` for a missing/invalid token, but it can still *reject* on a
+  // transport-level failure (5xx, network/CORS blip, or any ORPCError surfaced as an exception). We
+  // treat any such failure as "not authenticated" so the auth flow can recover by re-authenticating.
+  const loadUser = useCallback(async () => {
+    try {
+      const req = await api.user.myself({});
 
-    console.log("(AuthContext.tsx) response:", req);
+      if (!req.ok || req.data.user === null) {
+        setUserCache(null);
+        setCurrentUser(null);
+        return;
+      }
 
-    if (!req.ok || req.data.user === null) {
-      console.log("(AuthContext.tsx) user is not authenticated");
-      setUserCache(null);
-      setIsLoading(false);
-      return;
+      setUserCache(req.data.user);
+      setCurrentUser(req.data.user);
     }
+    catch (err) {
+      console.error("(AuthContext.tsx) failed to load the current user; treating as unauthenticated", err);
+      setUserCache(null);
+      setCurrentUser(null);
+    }
+    finally {
+      setIsLoading(false);
+    }
+  }, [setUserCache]);
 
-    console.log("(AuthContext.tsx) user is authenticated");
-    setUserCache(req.data.user);
-    setCurrentUser(req.data.user);
-    setIsLoading(false);
+  useOnce(() => {
+    void loadUser();
   });
 
   const refreshUser = useCallback(async () => {
     setIsLoading(true);
-    const req = await api.user.myself({});
-
-    if (!req.ok || req.data.user === null) {
-      setUserCache(null);
-      setCurrentUser(null);
-      setIsLoading(false);
-      return;
-    }
-
-    setUserCache(req.data.user);
-    setCurrentUser(req.data.user);
-    setIsLoading(false);
-  }, [setUserCache]);
+    await loadUser();
+  }, [loadUser]);
 
   const signOut = useCallback(async () => {
     console.log("(AuthContext.tsx) signing out...");

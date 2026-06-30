@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { implement, ORPCError } from "@orpc/server";
-import { authRouterContract, MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH, type OAuthErrorCode } from "@hackclub/lapse-api";
+import { authRouterContract, MAX_BIO_LENGTH, MAX_HANDLE_LENGTH, MIN_HANDLE_LENGTH, type OAuthErrorCode } from "@hackclub/lapse-api";
 import { createHash, randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
 import OAuth2Server from "@node-oauth/oauth2-server";
@@ -341,7 +341,7 @@ export default os.router({
                         handle: handle,
                         displayName: ((slack?.profile.display_name || slack?.profile.real_name) || baseHandle).slice(0, 24) || "User",
                         profilePictureUrl: pfp,
-                        bio: slack?.profile.title ?? "",
+                        bio: (slack?.profile.title ?? "").slice(0, MAX_BIO_LENGTH),
                         urls: [],
                         permissionLevel: "USER"
                     },

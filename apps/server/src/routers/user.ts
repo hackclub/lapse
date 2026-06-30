@@ -1,6 +1,6 @@
 import { implement } from "@orpc/server"
 import { deleteCookie } from "@orpc/server/helpers"
-import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS } from "@hackclub/lapse-api"
+import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS, MAX_BIO_LENGTH } from "@hackclub/lapse-api"
 import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
 import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
@@ -53,7 +53,10 @@ export function dtoPublicUser(entity: db.User): PublicUser {
         createdAt: entity.createdAt.getTime(),
         displayName: entity.displayName,
         profilePictureUrl: entity.profilePictureUrl,
-        bio: entity.bio,
+        // Clamp to the contract's max: legacy rows can hold longer bios (e.g. a Slack profile title copied
+        // in at signup before truncation existed). An over-long bio fails output validation and 500s every
+        // request that returns this user, locking them out entirely - so we defensively truncate on read.
+        bio: entity.bio.slice(0, MAX_BIO_LENGTH),
         handle: entity.handle,
         urls: entity.urls,
         hackatimeId: entity.hackatimeId,
