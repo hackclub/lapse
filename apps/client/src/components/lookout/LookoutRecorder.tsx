@@ -602,6 +602,8 @@ export default function LookoutRecorder() {
   }
 
   if (desktopLaunched && config) {
+    const deepLink = `lookout://session?token=${config.lookoutToken}`;
+
     return (
       <RootLayout showHeader={false}>
         <div className="flex w-screen h-screen items-center justify-center p-8">
@@ -622,6 +624,12 @@ export default function LookoutRecorder() {
               >
                 Get Lookout
               </a>
+              <p className="text-sm text-muted break-all">
+                Lookout opening but not working? Try entering this deep link{" "}
+                <a href={deepLink} className="text-red hover:underline">
+                  {deepLink}
+                </a>
+              </p>
               <button
                 onClick={() => setDesktopLaunched(false)}
                 className="w-full border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
