@@ -277,3 +277,69 @@ function handleCallback() {
   });
 }
 ```
+
+## Detection Evidence API
+
+`POST /api/admin/detections` is a narrow, read-only server-to-server endpoint for reviewing the provenance of published timelapses. It is authenticated only by `LAPSE_ADMIN_API_KEY`; this key does not authorize any other Lapse admin endpoint or mutation.
+
+```http
+POST /api/admin/detections
+Authorization: Bearer <LAPSE_ADMIN_API_KEY>
+Content-Type: application/json
+
+{ "timelapseIds": ["abc123", "def456"] }
+```
+
+The request accepts at most 25 unique, non-empty IDs. Duplicate IDs are removed while preserving first-seen order. The response contains one result for each unique requested ID, in that same order:
+
+```json
+{
+  "results": [
+    {
+      "timelapseId": "abc123",
+      "status": "found",
+      "recording": {
+        "title": "Build session",
+        "createdAt": 1784548800000,
+        "visibility": "UNLISTED",
+        "duration": 3600,
+        "playbackUrl": "https://...",
+        "thumbnailUrl": "https://...",
+        "hackatimeProject": "my-project",
+        "snapshotTimestamps": [1784548800000, 1784548860000]
+      },
+      "owner": {
+        "lapseId": "user123",
+        "handle": "builder",
+        "displayName": "Builder",
+        "hackatimeId": "42"
+      },
+      "provenance": "lookout",
+      "lookoutEvidence": {
+        "state": "available",
+        "status": "complete",
+        "trackingMode": "credit",
+        "trackedSeconds": 3540,
+        "activeSeconds": 3700,
+        "screenshotCount": 60,
+        "captureRange": {
+          "first": 1784548800000,
+          "last": 1784552340000
+        },
+        "captureTimestamps": [1784548800000, 1784548860000],
+        "clientInfo": "lapse-desktop/2.0 macOS"
+      }
+    },
+    {
+      "timelapseId": "def456",
+      "status": "not_found"
+    }
+  ]
+}
+```
+
+All timestamps are Unix milliseconds. `provenance: "lookout"` means the recording has a retained Lookout session reference. Its server-validated timing telemetry is evidence about capture timing, not proof of what the recording depicts. `provenance: "legacy"` means Lookout telemetry was never recorded; `lookoutEvidence` is `null` in that case.
+
+For a Lookout-backed recording, `lookoutEvidence.state` is `"available"` when both the existing Lookout session and timings reads succeed. It is `{ "state": "unavailable" }` if either upstream read fails. This state is deliberately different from legacy provenance so an outage is never presented as absent evidence.
+
+The endpoint never returns account email, Slack ID, Lookout session tokens, arbitrary session metadata, storage-key fields, raw screenshots, or internal upstream error details. It returns `401` for missing or incorrect credentials, `503` when `LAPSE_ADMIN_API_KEY` is unset, and `400` for an invalid or oversized body. Unlike the OAuth API described above, this endpoint uses a direct evidence response rather than the `{ "ok", "data" }` envelope.
