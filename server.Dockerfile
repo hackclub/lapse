@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7-labs
+# syntax=docker/dockerfile:1
 
 ############################  base  ##############################
 FROM --platform=$TARGETPLATFORM node:26-alpine AS base
