@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { DetectionEvidenceResult, DetectionEvidenceResponse } from "@hackclub/lapse-api";
 
@@ -50,8 +50,10 @@ type DetectionReply = {
 
 function authenticated(header: string | undefined, key: string): boolean {
     const supplied = header?.startsWith("Bearer ") ? header.slice(7) : "";
-    const digest = (value: string) => createHash("sha256").update(value).digest();
-    return timingSafeEqual(digest(supplied), digest(key));
+    const suppliedBuffer = Buffer.from(supplied, "utf8");
+    const keyBuffer = Buffer.from(key, "utf8");
+    return suppliedBuffer.length === keyBuffer.length
+        && timingSafeEqual(suppliedBuffer, keyBuffer);
 }
 
 function parseTimelapseIds(body: unknown): string[] | null {

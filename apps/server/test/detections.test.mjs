@@ -86,7 +86,13 @@ test("requires a configured narrow bearer credential", async () => {
     );
     assert.equal(unconfigured.statusCode, 503);
 
-    for (const header of [undefined, "Bearer wrong", adminApiKey]) {
+    for (const header of [
+        undefined,
+        "Bearer wrong",
+        `Bearer ${"x".repeat(adminApiKey.length)}`,
+        `Bearer ${adminApiKey}extra`,
+        adminApiKey
+    ]) {
         const response = await handleDetectionRequest(
             { authorization: header, body: { timelapseIds: [] } },
             dependencies()
