@@ -4,7 +4,8 @@
     "./prisma.config.ts",
     "./prisma/**/*.ts",
     "./dist",
-    "./etc"
+    "./etc",
+    "./test"
   ],
   "compilerOptions": {
     "ignoreDeprecations": "6.0",

@@ -16,13 +16,15 @@ interface LookoutSessionDetails {
         trackedSeconds: number;
         videoUrl: string | null;
         thumbnailUrl: string | null;
+        trackingMode: string;
+        totalActiveSeconds: number;
     };
     trackedSeconds: number;
     screenshotCount: number;
     clientInfo: string | null;
 }
 
-interface LookoutTimings {
+export interface LookoutTimings {
     status: string;
     count: number;
     first: string | null;

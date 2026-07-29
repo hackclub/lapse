@@ -22,6 +22,7 @@ import { logError } from "@/logging.js";
 // New recordings go through Lookout, but the tus upload server is still needed so legacy drafts
 // (and unfinished OPFS recordings) can be recovered and published. See `legacyRecovery` on the client.
 import { attachUploadServer } from "@/upload.js";
+import { registerDetectionRoutes } from "@/detections.js";
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -82,10 +83,27 @@ server.register(fastifyCors, {
 });
 
 server.addContentTypeParser("*", (request, payload, done) => {
-  // Fully utilize oRPC feature by allowing any content type
-  // And let oRPC parse the body manually by passing `undefined`
-  done(null, undefined);
+    if (request.url === "/api/admin/detections") {
+        let body = "";
+        payload.setEncoding("utf8");
+        payload.on("data", chunk => body += chunk);
+        payload.on("end", () => {
+            try {
+                done(null, JSON.parse(body));
+            }
+            catch (err) {
+                done(err instanceof Error ? err : new Error("Invalid JSON"), undefined);
+            }
+        });
+        return;
+    }
+
+    // Fully utilize oRPC feature by allowing any content type
+    // And let oRPC parse the body manually by passing `undefined`
+    done(null, undefined);
 });
+
+registerDetectionRoutes(server);
 
 server.all("/api/*", async (req, reply) => {
     const actor = await getAuthenticatedUser(req);
