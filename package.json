@@ -4,11 +4,22 @@
 		"overrides": {
 			"protobufjs": "7.5.5",
 			"@lookout/shared": "workspace:*"
-		}
+		},
+		"onlyBuiltDependencies": [
+			"@prisma/client",
+			"@prisma/engines",
+			"@sentry/cli",
+			"esbuild",
+			"msgpackr-extract",
+			"msw",
+			"prisma",
+			"sharp",
+			"unrs-resolver"
+		]
 	},
 	"devDependencies": {
-		"typescript": "^5.7.0",
-		"tsup": "^8.0.0"
+		"tsup": "^8.0.0",
+		"typescript": "^5.7.0"
 	},
 	"scripts": {
 		"build": "pnpm --filter @lookout/shared run build && pnpm -r run build",
