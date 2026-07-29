@@ -87,6 +87,11 @@ export const env = {
     get LOOKOUT_API_KEY() { return required("LOOKOUT_API_KEY") },
 
     /**
+     * Narrow read-only bearer credential for the detection evidence endpoint.
+     */
+    get LAPSE_ADMIN_API_KEY() { return optional("LAPSE_ADMIN_API_KEY") },
+
+    /**
      * Passed to `Sentry.init`.
      */
     get SENTRY_DSN() { return optional("SENTRY_DSN") },

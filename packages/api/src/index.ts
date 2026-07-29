@@ -13,6 +13,7 @@ export * from "./contracts/global.js";
 export * from "./contracts/hackatime.js";
 export * from "./contracts/auth.js";
 export * from "./contracts/admin.js";
+export * from "./contracts/detection.js";
 
 import { userRouterContract } from "./contracts/user.js";
 import { timelapseRouterContract } from "./contracts/timelapse.js";
