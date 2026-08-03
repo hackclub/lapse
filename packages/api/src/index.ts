@@ -14,6 +14,7 @@ export * from "./contracts/hackatime.js";
 export * from "./contracts/auth.js";
 export * from "./contracts/admin.js";
 export * from "./contracts/detection.js";
+export * from "./contracts/userSearch.js";
 
 import { userRouterContract } from "./contracts/user.js";
 import { timelapseRouterContract } from "./contracts/timelapse.js";

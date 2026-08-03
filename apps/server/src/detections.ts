@@ -1,7 +1,7 @@
-import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { DetectionEvidenceResult, DetectionEvidenceResponse } from "@hackclub/lapse-api";
 
+import { authenticatedWithAdminKey } from "@/adminKey.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import * as lookout from "@/lookout.js";
@@ -47,14 +47,6 @@ type DetectionReply = {
     statusCode: number;
     body: DetectionEvidenceResponse | { error: string };
 };
-
-function authenticated(header: string | undefined, key: string): boolean {
-    const supplied = header?.startsWith("Bearer ") ? header.slice(7) : "";
-    const suppliedBuffer = Buffer.from(supplied, "utf8");
-    const keyBuffer = Buffer.from(key, "utf8");
-    return suppliedBuffer.length === keyBuffer.length
-        && timingSafeEqual(suppliedBuffer, keyBuffer);
-}
 
 function parseTimelapseIds(body: unknown): string[] | null {
     if (!body || typeof body !== "object" || !("timelapseIds" in body))
@@ -142,7 +134,7 @@ export async function handleDetectionRequest(
 ): Promise<DetectionReply> {
     if (!deps.adminApiKey)
         return { statusCode: 503, body: { error: "Detection evidence API is not configured" } };
-    if (!authenticated(request.authorization, deps.adminApiKey))
+    if (!authenticatedWithAdminKey(request.authorization, deps.adminApiKey))
         return { statusCode: 401, body: { error: "Unauthorized" } };
 
     const ids = parseTimelapseIds(request.body);
