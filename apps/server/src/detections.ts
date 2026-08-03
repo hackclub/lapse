@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { DetectionEvidenceResult, DetectionEvidenceResponse } from "@hackclub/lapse-api";
 
-import { authenticatedWithAdminKey } from "@/adminKey.js";
+import { ADMIN_ROUTES, registerAdminRoute, type AdminReply } from "@/adminKey.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import * as lookout from "@/lookout.js";
@@ -31,21 +31,10 @@ type DetectionTimelapse = {
 };
 
 type DetectionDependencies = {
-    adminApiKey: string | undefined;
     findTimelapses(ids: string[]): Promise<DetectionTimelapse[]>;
     getSession: typeof lookout.getSession;
     getTimings: typeof lookout.getTimings;
     publicStorageUrl: string;
-};
-
-type DetectionRequest = {
-    authorization: string | undefined;
-    body: unknown;
-};
-
-type DetectionReply = {
-    statusCode: number;
-    body: DetectionEvidenceResponse | { error: string };
 };
 
 function parseTimelapseIds(body: unknown): string[] | null {
@@ -129,15 +118,10 @@ async function foundResult(
 }
 
 export async function handleDetectionRequest(
-    request: DetectionRequest,
+    body: unknown,
     deps: DetectionDependencies
-): Promise<DetectionReply> {
-    if (!deps.adminApiKey)
-        return { statusCode: 503, body: { error: "Detection evidence API is not configured" } };
-    if (!authenticatedWithAdminKey(request.authorization, deps.adminApiKey))
-        return { statusCode: 401, body: { error: "Unauthorized" } };
-
-    const ids = parseTimelapseIds(request.body);
+): Promise<AdminReply<DetectionEvidenceResponse>> {
+    const ids = parseTimelapseIds(body);
     if (!ids)
         return { statusCode: 400, body: { error: `timelapseIds must contain at most ${MAX_TIMELAPSE_IDS} non-empty strings` } };
 
@@ -151,7 +135,6 @@ export async function handleDetectionRequest(
 }
 
 const dependencies = (): DetectionDependencies => ({
-    adminApiKey: env.LAPSE_ADMIN_API_KEY,
     findTimelapses: ids => database().timelapse.findMany({
         where: { id: { in: ids } },
         include: { owner: true }
@@ -162,11 +145,6 @@ const dependencies = (): DetectionDependencies => ({
 });
 
 export function registerDetectionRoutes(server: FastifyInstance): void {
-    server.post("/api/admin/detections", async (request, reply) => {
-        const result = await handleDetectionRequest({
-            authorization: request.headers.authorization,
-            body: request.body
-        }, dependencies());
-        return reply.code(result.statusCode).send(result.body);
-    });
+    registerAdminRoute(server, ADMIN_ROUTES.detections, body =>
+        handleDetectionRequest(body, dependencies()));
 }

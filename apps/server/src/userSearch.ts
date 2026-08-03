@@ -2,9 +2,8 @@ import type { FastifyInstance } from "fastify";
 import type { UserSearchMatchField, UserSearchResponse, UserSearchResult } from "@hackclub/lapse-api";
 import { USER_SEARCH_DEFAULT_LIMIT, USER_SEARCH_MAX_LIMIT } from "@hackclub/lapse-api";
 
-import { authenticatedWithAdminKey } from "@/adminKey.js";
+import { ADMIN_ROUTES, registerAdminRoute, type AdminReply } from "@/adminKey.js";
 import { database } from "@/db.js";
-import { env } from "@/env.js";
 
 const FUZZY_FALLBACK_CANDIDATES = 5_000;
 
@@ -32,22 +31,10 @@ type SearchableUser = {
 };
 
 type UserSearchDependencies = {
-    adminApiKey: string | undefined;
-
     findExact(query: string): Promise<SearchableUser[]>;
 
     findSubstring(query: string, take: number): Promise<SearchableUser[]>;
     findRecent(take: number): Promise<SearchableUser[]>;
-};
-
-type UserSearchRequest = {
-    authorization: string | undefined;
-    body: unknown;
-};
-
-type UserSearchReply = {
-    statusCode: number;
-    body: UserSearchResponse | { error: string };
 };
 
 type ParsedInput = {
@@ -198,15 +185,10 @@ function ranked(
 }
 
 export async function handleUserSearchRequest(
-    request: UserSearchRequest,
+    body: unknown,
     deps: UserSearchDependencies
-): Promise<UserSearchReply> {
-    if (!deps.adminApiKey)
-        return { statusCode: 503, body: { error: "Admin user search API is not configured" } };
-    if (!authenticatedWithAdminKey(request.authorization, deps.adminApiKey))
-        return { statusCode: 401, body: { error: "Unauthorized" } };
-
-    const input = parseInput(request.body);
+): Promise<AdminReply<UserSearchResponse>> {
+    const input = parseInput(body);
     if (!input)
         return { statusCode: 400, body: { error: `query must be a non-empty string and limit an integer between 1 and ${USER_SEARCH_MAX_LIMIT}` } };
 
@@ -242,8 +224,6 @@ const SELECTION = {
 } as const;
 
 const dependencies = (): UserSearchDependencies => ({
-    adminApiKey: env.LAPSE_ADMIN_API_KEY,
-
     findExact: query => database().user.findMany({
         where: {
             OR: [
@@ -277,11 +257,6 @@ const dependencies = (): UserSearchDependencies => ({
 });
 
 export function registerUserSearchRoutes(server: FastifyInstance): void {
-    server.post("/api/admin/users/search", async (request, reply) => {
-        const result = await handleUserSearchRequest({
-            authorization: request.headers.authorization,
-            body: request.body
-        }, dependencies());
-        return reply.code(result.statusCode).send(result.body);
-    });
+    registerAdminRoute(server, ADMIN_ROUTES.userSearch, body =>
+        handleUserSearchRequest(body, dependencies()));
 }

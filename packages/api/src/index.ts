@@ -15,6 +15,7 @@ export * from "./contracts/auth.js";
 export * from "./contracts/admin.js";
 export * from "./contracts/detection.js";
 export * from "./contracts/userSearch.js";
+export * from "./contracts/userTimelapses.js";
 
 import { userRouterContract } from "./contracts/user.js";
 import { timelapseRouterContract } from "./contracts/timelapse.js";
