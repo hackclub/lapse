@@ -10,7 +10,13 @@ import { OwnedTimelapseSchema, TimelapseSchema } from "@/contracts/timelapse";
 export type HackatimeProject = z.infer<typeof HackatimeProjectSchema>;
 export const HackatimeProjectSchema = z.object({
     name: z.string(),
-    totalSeconds: z.number()
+    totalSeconds: z.number(),
+
+    languages: z.array(z.string())
+        .describe(`
+            All languages Hackatime has seen in the project, in no particular order. This is a distinct set - it does
+            not convey how much time was spent in any given language.
+        `)
 });
 
 export const hackatimeRouterContract = {

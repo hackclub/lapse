@@ -47,7 +47,8 @@ export default os.router({
                     })
                     .map(p => ({
                         name: p.name,
-                        totalSeconds: p.total_seconds
+                        totalSeconds: p.total_seconds,
+                        languages: (p.languages ?? []).filter(x => typeof x === "string" && x.trim().length > 0)
                     }));
 
                 return apiOk({ projects: filteredProjects });
