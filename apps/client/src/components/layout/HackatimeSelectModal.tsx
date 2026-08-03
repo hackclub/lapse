@@ -1,14 +1,8 @@
-import { useEffect, useState } from "react";
-import Icon from "@hackclub/icons";
-import { formatDuration } from "@hackclub/lapse-shared";
-import type { HackatimeProject } from "@hackclub/lapse-api";
+import { useState } from "react";
 
-import { api } from "@/api";
 import { WindowedModal } from "@/components/layout/WindowedModal";
-import { DropdownInput } from "@/components/ui/DropdownInput";
+import { HackatimeProjectPicker } from "@/components/entity/HackatimeProjectPicker";
 import { Button } from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { InputField } from "@/components/ui/InputField";
 
 export function HackatimeSelectModal({ isOpen, setIsOpen, onAccept, onError }: {
   isOpen: boolean;
@@ -16,32 +10,23 @@ export function HackatimeSelectModal({ isOpen, setIsOpen, onAccept, onError }: {
   onAccept: (hackatimeProjectName: string | null) => void;
   onError: (message: string) => void;
 }) {
-  const [hackatimeProject, setHackatimeProject] = useState("");
-  const [hackatimeProjects, setHackatimeProjects] = useState<HackatimeProject[]>([]);
+  const [chosenProject, setChosenProject] = useState<string | null>(null);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  const isPublishDisabled = isPublishing;
+  function handleClose() {
+    onAccept(null);
+    setIsOpen(false);
+  }
 
-  useEffect(() => {
-    if (!isOpen)
+  function handleConfirm() {
+    if (!chosenProject)
       return;
 
-    setHackatimeProject("");
-    setIsLoadingProjects(true);
-
-    api.hackatime.allProjects({})
-      .then(res => setHackatimeProjects(res.ok ? res.data.projects : []))
-      .catch(() => setHackatimeProjects([]))
-      .finally(() => setIsLoadingProjects(false));
-  }, [isOpen]);
-
-  async function handleConfirmPublish() {
     try {
       setIsPublishing(true);
-      onAccept(hackatimeProject.trim() || null);
+      onAccept(chosenProject);
       setIsOpen(false);
-      setHackatimeProject("");
     }
     catch (error) {
       onError(error instanceof Error ? error.message : "An error occurred while publishing.");
@@ -55,68 +40,33 @@ export function HackatimeSelectModal({ isOpen, setIsOpen, onAccept, onError }: {
     <WindowedModal
       icon="history"
       title="Sync with Hackatime"
-      description="Synchronize Lapse'd time to a Hackatime project"
+      description="Synchronize timelapsed time to a Hackatime project"
       isOpen={isOpen}
       setIsOpen={setIsOpen}
     >
       <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow/10 border border-yellow/20">
-          <Icon glyph="important" size={24} className="text-yellow shrink-0" />
-          <div>
-            <p className="font-bold text-yellow">One-time sync</p>
-            <p className="text-smoke">You can only sync a timelapse with Hackatime once. Make sure you choose the correct project name.</p>
-          </div>
-        </div>
+        <HackatimeProjectPicker
+          isActive={isOpen}
+          onChange={setChosenProject}
+          onLoadingChange={setIsLoadingProjects}
+        />
 
-        {isLoadingProjects ? (
-          <>
-            <InputField
-              label="Project Name"
-              description="Loading projects - hold on..."
-            >
-              <Skeleton className="w-full h-10.5" />
-            </InputField>
-          </>
-        ) : isOpen && (
-          <>
-            <DropdownInput
-              label="Project Name"
-              description="Select an existing Hackatime project or type to create a new one."
-              value={hackatimeProject}
-              onChange={setHackatimeProject}
-              options={
-                hackatimeProjects.map(project => ({
-                  value: project.name,
-                  searchLabel: project.name,
-                  label: (
-                    <div className="flex justify-between w-full">
-                      <span>{project.name}</span>
-                      <span className="text-secondary">{formatDuration(project.totalSeconds)}</span>
-                    </div>
-                  )
-                }))
-              }
-              allowUserCustom
-              placeholder="Click here to select or search..."
-            />
-          </>
-        )}
-
-        <div className="flex gap-3">
-          <Button onClick={handleConfirmPublish} disabled={isPublishDisabled || isLoadingProjects} kind="primary" className="w-full">
-            {isPublishing ? "Publishing..." : "Sync with Hackatime"}
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
+          <Button
+            disabled={isPublishing}
+            className="w-full"
+            onClick={handleClose}
+          >
+            Sync later
           </Button>
 
           <Button
-            disabled={isPublishDisabled}
+            onClick={handleConfirm}
+            disabled={isPublishing || isLoadingProjects || !chosenProject}
+            kind="primary"
             className="w-full"
-            onClick={() => {
-              onAccept(null);
-              setIsOpen(false);
-              setHackatimeProject("");
-            }}
           >
-            Sync later
+            {isPublishing ? "Syncing..." : "Sync with Hackatime"}
           </Button>
         </div>
       </div>
