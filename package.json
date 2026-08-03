@@ -1,25 +1,8 @@
 {
-	"packageManager": "pnpm@10.25.0",
-	"pnpm": {
-		"overrides": {
-			"protobufjs": "7.5.5",
-			"@lookout/shared": "workspace:*"
-		},
-		"onlyBuiltDependencies": [
-			"@prisma/client",
-			"@prisma/engines",
-			"@sentry/cli",
-			"esbuild",
-			"msgpackr-extract",
-			"msw",
-			"prisma",
-			"sharp",
-			"unrs-resolver"
-		]
-	},
+	"packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c",
 	"devDependencies": {
-		"tsup": "^8.0.0",
-		"typescript": "^5.7.0"
+		"tsup": "^8.5.1",
+		"typescript": "^6.0.3"
 	},
 	"scripts": {
 		"build": "pnpm --filter @lookout/shared run build && pnpm -r run build",

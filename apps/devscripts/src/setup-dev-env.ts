@@ -3,7 +3,7 @@ import { execa } from "execa";
 import { input, select } from "@inquirer/prompts";
 import chalk from "chalk";
 import ora from "ora";
-import yaml from "js-yaml";
+import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 import { resolve } from "node:path";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -288,7 +288,7 @@ async function updateEnvFiles(envVars: {
  * Adds a Localstack service to an existing Docker Compose file.
  */
 function buildLocalstackDockerComposeSection(composeFileContent: string, localstackImage: string) {
-	const composeObject = yaml.load(composeFileContent) as any;
+	const composeObject = yamlLoad(composeFileContent) as any;
 
 	if (!composeObject.services) {
 		composeObject.services = {};
@@ -312,7 +312,7 @@ function buildLocalstackDockerComposeSection(composeFileContent: string, localst
 		],
 	};
 
-	return yaml.dump(composeObject, {
+	return yamlDump(composeObject, {
 		indent: 2,
 		lineWidth: -1,
 		noRefs: true,
@@ -324,7 +324,7 @@ async function updateDockerComposeFile(localstackImage: string | null) {
 	spinner.start(chalk.gray(`Updating docker-compose.dev.yaml...`));
 
 	let composeContent = await fs.readFile(composeFile, "utf-8");
-	const composeObject = yaml.load(composeContent) as Record<string, unknown>;
+	const composeObject = yamlLoad(composeContent) as Record<string, unknown>;
 
 	const services = (composeObject["services"] ?? {}) as Record<string, Record<string, unknown>>;
 
@@ -344,7 +344,7 @@ async function updateDockerComposeFile(localstackImage: string | null) {
 	volumes["redis-data"] = null;
 	composeObject["volumes"] = volumes;
 
-	composeContent = yaml.dump(composeObject, {
+	composeContent = yamlDump(composeObject, {
 		indent: 2,
 		lineWidth: -1,
 		noRefs: true,

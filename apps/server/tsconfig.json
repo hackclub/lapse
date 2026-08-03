@@ -8,14 +8,12 @@
     "./test"
   ],
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     // File Layout
     "rootDir": "./src",
     "outDir": "./dist",
 
-    "baseUrl": "./src",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["./src/*"]
     },
 
     // Environment Settings

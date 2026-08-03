@@ -17,7 +17,11 @@ export function database(): PrismaClient {
 
 export function redis(): Redis {
     if (!_redis) {
-        _redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+        _redis = new Redis(env.REDIS_URL, {
+            maxRetriesPerRequest: null,
+            // ioredis 6 defaults to RESP3; keep RESP2 until Redis/BullMQ soak tests pass
+            protocol: 2,
+        });
         logInfo("Successfully connected to Redis.");
     }
 
