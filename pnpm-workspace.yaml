@@ -4,11 +4,22 @@ packages:
   - vendor/lookout/packages/shared
   - vendor/lookout/clients/react
 
-onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@prisma/engines'
-  - '@sentry/cli'
-  - esbuild
-  - prisma
-  - sharp
-  - unrs-resolver
+overrides:
+  protobufjs: "7.5.5"
+  "@lookout/shared": "workspace:*"
+
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  "@sentry/cli": true
+  esbuild: true
+  msgpackr-extract: true
+  msw: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - bullmq@6.0.6
+  - fastify@5.11.2
+  - nanoid@6.0.1

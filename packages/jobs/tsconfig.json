@@ -2,10 +2,8 @@
   "extends": "@tsconfig/node24/tsconfig.json",
   "include": ["src"],
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
-    "baseUrl": "./src",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["./src/*"]
     },
 
     // File Layout

@@ -17,14 +17,14 @@
     "watch": "tsc -b --watch",
     "prepare": "pnpm run build"
   },
-  "packageManager": "pnpm@10.25.0",
+  "packageManager": "pnpm@11.18.0",
   "dependencies": {
     "@hackclub/lapse-api": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
-    "tsc-alias": "^1.8.17",
+    "tsc-alias": "^1.9.1",
     "typescript": "^6.0.3"
   }
 }

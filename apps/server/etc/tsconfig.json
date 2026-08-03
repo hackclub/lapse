@@ -6,13 +6,11 @@
   ],
   "exclude": [],
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     // File Layout
     "outDir": "./dist",
 
-    "baseUrl": "./etc",
     "paths": {
-      "@server/*": ["../../src/*"]
+      "@server/*": ["../src/*"]
     },
 
     // Environment Settings
