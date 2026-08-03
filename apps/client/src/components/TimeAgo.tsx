@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 function extractDateComponents(seconds: number) {
   seconds = Math.floor(seconds);
@@ -32,13 +32,17 @@ function extractDateComponents(seconds: number) {
   };
 }
 
-function formatTimeElapsed(date: Date) {
-  const secondsPast = (new Date().getTime() - date.getTime()) / 1000;
-  const { y, mo, d, h, m, s } = extractDateComponents(secondsPast);
+function formatTimeElapsed(date: Date, now: number) {
+  const secondsPast = (now - date.getTime()) / 1000;
+
+  // Every component is the remainder of the one above it - weeks have to be spelled out, or three weeks ago would
+  // read as "6 days ago".
+  const { y, mo, w, d, h, m, s } = extractDateComponents(secondsPast);
 
   return (
     (y >= 1) ? `${y} year${y > 1 ? 's' : ''} ago` :
     (mo >= 1) ? `${mo} month${mo > 1 ? 's' : ''} ago` :
+    (w >= 1) ? `${w} week${w > 1 ? 's' : ''} ago` :
     (d >= 1) ? `${d} day${d > 1 ? 's' : ''} ago` :
     (h >= 1) ? `${h} hour${h > 1 ? 's' : ''} ago` :
     (m >= 1) ? `${m} minute${m > 1 ? 's' : ''} ago` :
@@ -47,38 +51,87 @@ function formatTimeElapsed(date: Date) {
   );
 }
 
+function formatExactDate(date: Date) {
+  return date.toLocaleDateString("en-us", {
+    day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "numeric"
+  });
+}
+
+/**
+ * A clock shared by every elapsed-time label on the page, so that a list of a hundred of them keeps one timer
+ * between them rather than a hundred. The snapshot only ever changes on a tick, as `useSyncExternalStore` requires.
+ */
+const CLOCK_INTERVAL_MS = 10 * 1000;
+
+const clockListeners = new Set<() => void>();
+let clockNow: number | null = null;
+let clockTimer: ReturnType<typeof setInterval> | null = null;
+
+function subscribeToClock(onStoreChange: () => void) {
+  clockListeners.add(onStoreChange);
+
+  clockTimer ??= setInterval(() => {
+    clockNow = Date.now();
+
+    for (const listener of clockListeners) {
+      listener();
+    }
+  }, CLOCK_INTERVAL_MS);
+
+  return () => {
+    clockListeners.delete(onStoreChange);
+
+    if (clockListeners.size === 0 && clockTimer !== null) {
+      clearInterval(clockTimer);
+      clockTimer = null;
+    }
+  };
+}
+
+function getClockSnapshot() {
+  clockNow ??= Date.now();
+  return clockNow;
+}
+
+/**
+ * There is no meaningful "now" while server-rendering - whatever we picked would be stale by the time anyone read
+ * it. Returning `null` is how a label knows to fall back to an absolute date.
+ */
+function getServerClockSnapshot(): number | null {
+  return null;
+}
+
 export function TimeAgo({ date, className }: {
   date: Date | number;
   className?: string;
 }) {
-  if (typeof date === "number") {
-    date = new Date(date);
-  }
+  const timestamp = typeof date === "number" ? date : date.getTime();
+  const exact = new Date(timestamp);
 
-  // We default to a deterministic state to avoid any hydration errors.
-  const [display, setDisplay] = useState(
-    date.toLocaleDateString("en-us", { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "numeric" })
-  );
+  /*
+    Neither of the two things we could render survives SSR on its own: "3 hours ago" depends on when the page is
+    being looked at, and an exact date is formatted in whatever timezone the renderer happens to be in - the
+    server's, which is rarely the reader's.
 
-  useEffect(() => {
-    const delta = (new Date().getTime() - date.getTime()) / 1000;
-    const delay =
-      (delta < 60) ? 1000 : // if this happened less than a minute ago, update every second
-      (delta < 60 * 60) ? 60 * 1000 : // if this happened less than an hour ago, update every minute
-      (delta < 24 * 60 * 60) ? 60 * 60 * 1000 : // if this happened less than a day ago, update every hour
-      0; // don't update at all if this happened more than a day ago
+    Hence the clock: it reads as `null` while server-rendering *and* through hydration, so both sides render the
+    same shape of thing and React re-renders with the real clock the moment hydration is over. The two absolute
+    dates can still disagree - they're written in different timezones - which is what the suppression below is for;
+    the re-render replaces the text with elapsed time regardless.
 
-    if (delay == 0)
-      return;
-
-    const timer = setInterval(() => {
-      setDisplay(formatTimeElapsed(date));
-    }, delay);
-
-    return () => clearInterval(timer);
-  }, [date]);
+    Labels that were never server-rendered - cards fetched client-side, say - get the real clock on their very
+    first render, and so never flash an absolute date at anyone.
+  */
+  const now = useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot);
 
   return (
-    <time dateTime={date.toISOString()} className={className}>{display}</time>
+    <time
+      // Always UTC, and so identical on both sides of the wire.
+      dateTime={exact.toISOString()}
+      title={now === null ? undefined : formatExactDate(exact)}
+      className={className}
+      suppressHydrationWarning
+    >
+      {now === null ? formatExactDate(exact) : formatTimeElapsed(exact, now)}
+    </time>
   );
 }
