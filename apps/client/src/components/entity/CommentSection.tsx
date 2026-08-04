@@ -29,18 +29,19 @@ export function CommentSection({ comments, setComments, timelapseId }: {
   }, [textareaRef.current, commentComposerText]);
 
   return (
-    <div className="flex flex-col gap-6 border border-black rounded-2xl p-6 max-h-full flex-1 overflow-y-auto">
+    <div className="flex flex-col gap-6">
       {
         auth.currentUser &&
           <div className="flex gap-2.5">
-            <ProfilePicture user={auth.currentUser} size="xs" className="translate-y-1" />
+            {/* Lines up with the composer's first line of text: its top padding, plus half a line, less half the picture. */}
+            <ProfilePicture user={auth.currentUser} size="xs" className="mt-2.5 shrink-0" />
 
             <div className="flex flex-col items-end w-full gap-2">
               <textarea
                 maxLength={280}
                 ref={textareaRef}
                 className={clsx(
-                  "overflow-y-hidden rounded-lg border border-black text-white placeholder:text-secondary px-2 py-1 resize-none w-full outline-none",
+                  "overflow-y-hidden rounded-xl border border-black text-white placeholder:text-secondary px-4 py-2.5 resize-none w-full outline-none",
                   "transition-colors hover:border-slate focus:border-red"
                 )}
                 value={commentComposerText}
@@ -86,19 +87,27 @@ export function CommentSection({ comments, setComments, timelapseId }: {
           </div>
       }
 
-      <div className="flex flex-col gap-4">
-        {
-          comments.map(x => (
-            <CommentRenderer
-              comment={x}
-              key={x.id}
-              onDelete={(commentId) => {
-                setComments(prev => prev.filter(c => c.id !== commentId));
-              }}
-            />
-          ))
-        }
-      </div>
+      { comments.length === 0 ? (
+        <p className="text-secondary">
+          { auth.currentUser
+            ? "No comments yet - be the first one to say something."
+            : "No comments yet." }
+        </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {
+            comments.map(x => (
+              <CommentRenderer
+                comment={x}
+                key={x.id}
+                onDelete={(commentId) => {
+                  setComments(prev => prev.filter(c => c.id !== commentId));
+                }}
+              />
+            ))
+          }
+        </div>
+      ) }
     </div>
   );
 }

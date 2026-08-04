@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-
-function formatDuration(seconds: number): string {
-  if (seconds < 0) {
+/**
+ * Formats a number of seconds as a clock reading (`1:02:03`), the way a video player writes a position.
+ */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) {
     seconds = 0;
   }
 
@@ -20,15 +21,36 @@ function formatDuration(seconds: number): string {
   }
 }
 
-export function Duration({ seconds, className }: {
+/**
+ * Formats a number of seconds as a spelled-out span (`2h 34m`). Used for amounts of time that aren't positions in a
+ * video - a clock reading of the hours someone worked reads like a timestamp, which is exactly what it isn't.
+ */
+export function formatDurationLong(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    seconds = 0;
+  }
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  else if (minutes > 0) {
+    return `${minutes}m`;
+  }
+  else {
+    return `${secs}s`;
+  }
+}
+
+export function Duration({ seconds, format = "clock", className }: {
   seconds: number;
+  format?: "clock" | "long";
   className?: string;
 }) {
-  const [display, setDisplay] = useState(formatDuration(seconds));
-
-  useEffect(() => {
-    setDisplay(formatDuration(seconds));
-  }, [seconds]);
+  const display = format === "long" ? formatDurationLong(seconds) : formatDuration(seconds);
 
   return (
     <div className={`inline-flex items-center gap-1 ${className || ""}`}>

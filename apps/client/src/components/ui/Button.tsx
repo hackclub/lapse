@@ -11,12 +11,15 @@ export type ButtonKind =
   "destructive" |
   "error";
 
-export function Button({ children, kind, disabled, onClick, href, className, icon }: PropsWithChildren<
+export function Button({ children, kind, disabled, onClick, href, className, icon, title }: PropsWithChildren<
   {
     kind?: ButtonKind,
     disabled?: boolean,
     className?: string,
-    icon?: IconGlyph | JSX.Element
+    icon?: IconGlyph | JSX.Element,
+
+    /** A tooltip for the button. Doubles as the accessible name for buttons that are nothing but an icon. */
+    title?: string
   } & (
     { href?: undefined, onClick: () => void } |
     { href: string, onClick?: undefined }
@@ -33,6 +36,8 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
   return (
     <button
       onClick={disabled ? undefined : onClick}
+      title={title}
+      aria-label={!children ? title : undefined}
       className={clsx(
         "flex items-center gap-2 justify-center rounded-2xl h-12 font-bold text-nowrap flex-nowrap",
         children ? "px-8" : "w-12",
