@@ -41,7 +41,7 @@ export function Header() {
         "w-full"
       )}>
         {/* desktop */}
-        <div className="hidden sm:flex px-16 py-8 pt-12 w-full justify-between">
+        <div className="hidden sm:flex px-12 py-5 pt-6 w-full justify-between">
           <div className="flex gap-6 items-center">
             <NextLink href="/">
               <LapseLogo className="w-12 h-12 transition-transform hover:scale-105 active:scale-95" />
