@@ -14,6 +14,7 @@ import { TextInput } from "@/components/ui/TextInput";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
+import { NOT_FOUND_STATUS, PageStatus, StatusPage, statusForApiError } from "@/components/layout/StatusPage";
 import { HackatimeSelectModal } from "@/components/layout/HackatimeSelectModal";
 
 /**
@@ -33,6 +34,10 @@ export default function Page() {
 
   const [draft, setDraft] = useState<DraftTimelapse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // A draft that won't load has no page to sit on; publishing failures afterwards stay modals, as the user can
+  // still fix those from here.
+  const [loadStatus, setLoadStatus] = useState<PageStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Decrypt the (client-encrypted) preview thumbnail so the user can recognise the draft. `missingKey` is set when
@@ -65,7 +70,7 @@ export default function Page() {
     try {
       const res = await api.draftTimelapse.query({ id: draftId });
       if (!res.ok) {
-        setError(res.message);
+        setLoadStatus(statusForApiError(res.error, res.message));
         return;
       }
 
@@ -170,6 +175,15 @@ export default function Page() {
       setError(err instanceof Error ? err.message : "Failed to discard draft");
       setIsDiscarding(false);
     }
+  }
+
+  if (loadStatus) {
+    return <StatusPage {...loadStatus} />;
+  }
+
+  // The router hands us query parameters a render late, so an ID that never arrives is a malformed URL.
+  if (!draftId && router.isReady) {
+    return <StatusPage {...NOT_FOUND_STATUS} />;
   }
 
   if (!draftId || loading) {

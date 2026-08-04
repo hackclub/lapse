@@ -11,6 +11,7 @@ import { markdownToJsx } from "@/markdown";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { ErrorModal } from "@/components/layout/ErrorModal";
+import { NOT_FOUND_STATUS, PageStatus, SERVER_ERROR_STATUS, StatusPage, statusForApiError } from "@/components/layout/StatusPage";
 import { ProfilePicture } from "@/components/entity/ProfilePicture";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
@@ -32,8 +33,11 @@ export default function Page() {
   const { currentUser } = useAuth(false);
 
   const [timelapse, setTimelapse] = useState<Timelapse | null>(null);
+
+  // A timelapse we can't load leaves nothing to show, so it takes over the page. Everything past that point is
+  // recoverable, and stays a modal over the timelapse the user is already looking at.
+  const [loadStatus, setLoadStatus] = useState<PageStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [errorIsCritical, setErrorIsCritical] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -62,8 +66,7 @@ export default function Page() {
       const { id } = router.query;
 
       if (!id || typeof id !== "string") {
-        setError("Invalid timelapse ID provided");
-        setErrorIsCritical(true);
+        setLoadStatus(NOT_FOUND_STATUS);
         return;
       }
 
@@ -76,8 +79,7 @@ export default function Page() {
         if (!res.ok) {
           if (!timelapse) {
             console.error("([id].tsx) couldn't fetch that timelapse!", res);
-            setError(res.message);
-            setErrorIsCritical(true);
+            setLoadStatus(statusForApiError(res.error, res.message));
             break;
           }
 
@@ -100,8 +102,7 @@ export default function Page() {
     }
     catch (error) {
       console.error("([id].tsx) error loading timelapse:", error);
-      setError(error instanceof Error ? error.message : "An unknown error occurred while loading the timelapse");
-      setErrorIsCritical(true);
+      setLoadStatus(SERVER_ERROR_STATUS);
     }
   }, [router, router.isReady]);
 
@@ -194,6 +195,10 @@ export default function Page() {
     finally {
       setIsDeleting(false);
     }
+  }
+
+  if (loadStatus) {
+    return <StatusPage {...loadStatus} />;
   }
 
   return (
@@ -404,7 +409,6 @@ export default function Page() {
         isOpen={!!error}
         setIsOpen={(open) => !open && setError(null)}
         message={error || ""}
-        onClose={errorIsCritical ? () => router.back() : undefined}
       />
     </RootLayout>
   );

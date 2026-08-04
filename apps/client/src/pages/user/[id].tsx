@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextInput } from "@/components/ui/TextInput";
 import { ErrorModal } from "@/components/layout/ErrorModal";
+import { NOT_FOUND_STATUS, PageStatus, SERVER_ERROR_STATUS, StatusPage, statusForApiError } from "@/components/layout/StatusPage";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 import { WindowedModal } from "@/components/layout/WindowedModal";
 import { TextareaInput } from "@/components/ui/TextareaInput";
@@ -29,6 +30,10 @@ export default function Page() {
   const [user, setUser] = useState<User | PublicUser | null>(null);
   const [drafts, setDrafts] = useState<DraftTimelapse[] | null>(null);
   const [timelapses, setTimelapses] = useState<Timelapse[] | null>(null);
+
+  // A profile that won't load is a dead end, and gets a page of its own - anything that goes wrong afterwards is
+  // something the user can retry from where they are, and stays a modal.
+  const [loadStatus, setLoadStatus] = useState<PageStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -53,12 +58,12 @@ export default function Page() {
       );
 
       if (!userRes.ok) {
-        setError(userRes.message);
+        setLoadStatus(statusForApiError(userRes.error, userRes.message));
         return;
       }
 
       if (!userRes.data.user) {
-        setError("User not found");
+        setLoadStatus(NOT_FOUND_STATUS);
         return;
       }
 
@@ -66,7 +71,7 @@ export default function Page() {
 
       const timelapsesRes = await api.timelapse.findByUser({ user: userRes.data.user.id });
       if (!timelapsesRes.ok) {
-        setError(timelapsesRes.message);
+        setLoadStatus(statusForApiError(timelapsesRes.error, timelapsesRes.message));
         return;
       }
 
@@ -84,7 +89,7 @@ export default function Page() {
     }
     catch (error) {
       console.error("([id].tsx) Error fetching user data:", error);
-      setError("Failed to load user profile");
+      setLoadStatus(SERVER_ERROR_STATUS);
     }
   }, [router.isReady, router.query]);
 
@@ -153,16 +158,8 @@ export default function Page() {
     });
   };
 
-  if (error) {
-    return (
-      <RootLayout showHeader={true} title="Error - Lapse">
-        <ErrorModal
-          isOpen={true}
-          setIsOpen={(open) => !open && setError(null)}
-          message={error || "User not found"}
-        />
-      </RootLayout>
-    );
+  if (loadStatus) {
+    return <StatusPage {...loadStatus} />;
   }
 
   return (

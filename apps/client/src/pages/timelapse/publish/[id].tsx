@@ -15,6 +15,7 @@ import { TextInput } from "@/components/ui/TextInput";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
+import { NOT_FOUND_STATUS, PageStatus, StatusPage, statusForApiError } from "@/components/layout/StatusPage";
 import { HackatimeProjectPicker, prefetchHackatimeProjects } from "@/components/entity/HackatimeProjectPicker";
 
 type CompilationStatus = "waiting" | "ready" | "failed";
@@ -61,6 +62,7 @@ export default function Page() {
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<TimelapseVisibility | null>(null);
 
+  const [loadStatus, setLoadStatus] = useState<PageStatus | null>(null);
   const [step, setStep] = useState<PublishStep>("details");
   const [hackatimeProject, setHackatimeProject] = useState<string | null>(null);
   const [isLoadingHackatime, setIsLoadingHackatime] = useState(false);
@@ -79,7 +81,9 @@ export default function Page() {
     try {
       const res = await api.timelapse.pollLookoutStatus({ draftId });
       if (!res.ok) {
-        setError(res.message);
+        // There's no form to show if the draft behind it is gone - and polling a draft that isn't there would
+        // otherwise just keep raising the same modal every few seconds.
+        setLoadStatus(statusForApiError(res.error, res.message));
         return;
       }
 
@@ -148,12 +152,19 @@ export default function Page() {
     router.push("/");
   }
 
+  if (loadStatus) {
+    return <StatusPage {...loadStatus} />;
+  }
+
+  // The router hands us query parameters a render late, so an ID that never arrives is a malformed URL.
   if (!draftId) {
-    return (
-      <RootLayout>
-        <LoadingModal isOpen title="Loading" message="Loading timelapse..." />
-      </RootLayout>
-    );
+    return router.isReady
+      ? <StatusPage {...NOT_FOUND_STATUS} />
+      : (
+        <RootLayout>
+          <LoadingModal isOpen title="Loading" message="Loading timelapse..." />
+        </RootLayout>
+      );
   }
 
   return (
