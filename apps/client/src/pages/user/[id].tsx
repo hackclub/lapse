@@ -264,7 +264,39 @@ export default function Page() {
           )
         }
 
-        <TimelapseGrid timelapses={timelapses ?? []} className="gap-y-16 py-16 px-0 sm:px-16" />
+        {
+          // `timelapses` is null until the request lands, so an empty profile doesn't flash this while loading.
+          (timelapses && timelapses.length === 0) ? (
+            // Sized to what's left of the viewport under the profile header, so the notice sits in the middle of
+            // the empty space rather than right below the bio.
+            <div className="flex flex-col items-center justify-center gap-4 py-16 px-0 sm:px-16 min-h-[50vh] sm:min-h-[calc(100vh-24rem)]">
+              {!isMyself && (
+                <NextImage
+                  src="/images/waaaah_dino.png" alt=""
+                  width={128} height={106}
+                  className="w-24 h-auto"
+                />
+              )}
+
+              <p className="text-muted text-center wrap-break-word">
+                {
+                  isMyself
+                    ? <>Looks like you don&apos;t have any timelapses. Go make one!</>
+                    : <>Looks like this user hasn&apos;t made any timelapses yet.</>
+                }
+              </p>
+
+              {/* Only the owner of the profile has anything to do about it. */}
+              {isMyself && (
+                <Button href="/timelapse/create" kind="primary" icon="plus-fill">
+                  Create
+                </Button>
+              )}
+            </div>
+          ) : (
+            <TimelapseGrid timelapses={timelapses ?? []} className="gap-y-16 py-16 px-0 sm:px-16" />
+          )
+        }
       </div>
 
       <WindowedModal
