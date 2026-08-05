@@ -437,54 +437,6 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
   );
 }
 
-/**
- * Request the screen-share stream *now*, from within a user gesture, and make
- * the Lookout SDK reuse it.
- *
- * WebKit/Safari rejects getDisplayMedia unless the call itself originates
- * directly from a user gesture — it does not honour the transient-activation
- * window Chrome allows. But the SDK calls getDisplayMedia from a mount effect,
- * which only runs after we've created a session over the network — long past
- * the gesture. So instead of blocking on session creation, we fire
- * getDisplayMedia here on the click (kicking off the OS picker immediately,
- * while the session request flies in parallel) and briefly shim
- * navigator.mediaDevices.getDisplayMedia so the SDK's later call resolves to
- * the stream we already requested. The shim is one-shot and self-restoring.
- *
- * Returns a cleanup() that restores the original getDisplayMedia and stops the
- * stream — call it if recording never actually starts (e.g. session creation
- * failed) so we don't leak a live screen-share or a dangling override.
- */
-function primeScreenShare(): () => void {
-  const md = navigator.mediaDevices;
-  const real = md.getDisplayMedia.bind(md);
-
-  // Plain { video: true } so the call never rejects with a TypeError on older
-  // Safari (which chokes on nested frameRate constraints). The SDK downscales
-  // captured frames itself, so we don't lose any output fidelity here.
-  const streamPromise = real({ video: true, audio: false });
-  // The SDK may never consume this (cancelled flow) — swallow so a rejected
-  // picker doesn't surface as an unhandled promise rejection.
-  streamPromise.catch(() => {});
-
-  let restored = false;
-  const restore = () => {
-    if (restored) return;
-    restored = true;
-    if (md.getDisplayMedia === shim) md.getDisplayMedia = real;
-  };
-  const shim: MediaDevices["getDisplayMedia"] = () => {
-    restore();
-    return streamPromise;
-  };
-  md.getDisplayMedia = shim;
-
-  return () => {
-    restore();
-    streamPromise.then((s) => s.getTracks().forEach((t) => t.stop())).catch(() => {});
-  };
-}
-
 export default function LookoutRecorder() {
   const auth = useAuth(true);
 
@@ -504,14 +456,6 @@ export default function LookoutRecorder() {
   const [browserError, setBrowserError] = useState<string | null>(null);
   const [confirmingBrowser, setConfirmingBrowser] = useState(false);
   const initialized = useRef(false);
-  // Cleanup for an in-gesture screen-share primed by primeScreenShare(): stops
-  // the stream and restores getDisplayMedia if the SDK never consumed it.
-  const primeCleanupRef = useRef<(() => void) | null>(null);
-
-  const releasePendingStream = useCallback(() => {
-    primeCleanupRef.current?.();
-    primeCleanupRef.current = null;
-  }, []);
 
   const checkLookoutDrafts = useCallback(async () => {
     try {
@@ -545,12 +489,10 @@ export default function LookoutRecorder() {
       const res = await api.timelapse.createRecordingSession({});
       if (!res.ok) {
         setInitError(res.message);
-        releasePendingStream();
         return;
       }
       if (!res.data.draftId) {
         setInitError("Server returned no draft ID. Please restart the server.");
-        releasePendingStream();
         return;
       }
       const cfg: LookoutSessionConfig = {
@@ -570,7 +512,6 @@ export default function LookoutRecorder() {
       onReady(cfg);
     } catch (err) {
       setInitError(err instanceof Error ? err.message : "Failed to create recording session");
-      releasePendingStream();
     } finally {
       setIsCreating(false);
     }
@@ -598,21 +539,6 @@ export default function LookoutRecorder() {
       return;
     }
     setConfirmingBrowser(false);
-
-    // For Browser (screen) mode, request the screen-share *synchronously* here
-    // in the click — Safari requires getDisplayMedia to fire from the gesture
-    // itself. primeScreenShare pops the OS picker now and hands the stream to
-    // the SDK when it asks; meanwhile session creation runs in the background.
-    if (selectedMode === "screen") {
-      try {
-        primeCleanupRef.current = primeScreenShare();
-      } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
-        setBrowserError(e.message || "Failed to start screen sharing.");
-        setSelectedMode("desktop");
-        return;
-      }
-    }
 
     if (config) {
       startWithConfig(config);
@@ -676,6 +602,8 @@ export default function LookoutRecorder() {
   }
 
   if (desktopLaunched && config) {
+    const deepLink = `lookout://session?token=${config.lookoutToken}`;
+
     return (
       <RootLayout showHeader={false}>
         <div className="flex w-screen h-screen items-center justify-center p-8">
@@ -696,6 +624,12 @@ export default function LookoutRecorder() {
               >
                 Get Lookout
               </a>
+              <p className="text-sm text-muted break-all">
+                Lookout opening but not working? Try entering this deep link{" "}
+                <a href={deepLink} className="text-red hover:underline">
+                  {deepLink}
+                </a>
+              </p>
               <button
                 onClick={() => setDesktopLaunched(false)}
                 className="w-full border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
@@ -731,12 +665,11 @@ export default function LookoutRecorder() {
       >
         <LapseRecorder
           draftId={config.draftId}
-          onShareFailed={() => { releasePendingStream(); setCaptureMode(null); setCameraDeviceId(null); }}
+          onShareFailed={() => { setCaptureMode(null); setCameraDeviceId(null); }}
           onBrowserError={(message) => {
             // Browser capture failed — return to the selector (the "picker") and remember why,
             // so we can warn the user and steer them toward Desktop. Pre-select Desktop so the
             // Browser tile reads as dimmed/de-emphasized (we don't launch anything).
-            releasePendingStream();
             setCaptureMode(null);
             setCameraDeviceId(null);
             setBrowserError(message);
@@ -889,10 +822,7 @@ function LapseRecorder({ draftId, onShareFailed, onBrowserError }: {
     }
   }, [isCamera, state.status, state.isPreviewing, state.isSharing]);
 
-  // Screen: auto-start sharing on mount. The screen stream was already
-  // requested from the click gesture (see primeScreenShare) and a one-shot
-  // getDisplayMedia shim hands it to the SDK here, satisfying Safari's
-  // gesture requirement even though this runs from an effect.
+  // Screen: auto-start sharing on mount
   useEffect(() => {
     if (isCamera) return;
     if (screenStarted.current) return;
