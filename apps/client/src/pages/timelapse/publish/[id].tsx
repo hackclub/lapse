@@ -7,7 +7,8 @@ import type { TimelapseVisibility } from "@hackclub/lapse-api";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
-import { removeStoredSession } from "@/components/lookout/sessions";
+import { getStoredSessions, removeStoredSession, type StoredLookoutSession } from "@/components/lookout/sessions";
+import { EditorModal } from "@/components/lookout/EditorModal";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -64,6 +65,20 @@ export default function Page() {
 
   const [loadStatus, setLoadStatus] = useState<PageStatus | null>(null);
   const [step, setStep] = useState<PublishStep>("details");
+
+  // Resuming an interrupted edit: if this page loads (e.g. after a refresh) while the
+  // session's edit hold is still live, the cut/edit modal reopens instead of leaving
+  // the user staring at the compile spinner until the hold lapses. The Lookout token
+  // for the draft is only known on this device, via the recorder's stored sessions.
+  const [storedSession, setStoredSession] = useState<StoredLookoutSession | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDone, setEditorDone] = useState(false);
+
+  useEffect(() => {
+    // localStorage is client-only, so this can't run during render.
+    if (!draftId) return;
+    setStoredSession(getStoredSessions().find(s => s.draftId === draftId) ?? null);
+  }, [draftId]);
   const [hackatimeProject, setHackatimeProject] = useState<string | null>(null);
   const [isLoadingHackatime, setIsLoadingHackatime] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -77,6 +92,28 @@ export default function Page() {
 
   useInterval(async () => {
     if (!draftId || compilationStatus !== "waiting") return;
+
+    // While the session's edit hold is live, offer to resume editing instead of
+    // waiting out the hold. Asked directly of Lookout (the hold isn't visible through
+    // Lapse's status poll), and only until a definitive answer: a live hold opens the
+    // editor; a session past its hold can never become editable again, so stop asking.
+    if (storedSession && !editorOpen && !editorDone) {
+      try {
+        const res = await fetch(
+          `${storedSession.lookoutApiBaseUrl}/api/sessions/${storedSession.lookoutToken}/status`
+        );
+        if (res.ok) {
+          const status: { editable?: boolean; editHoldUntil?: string } = await res.json();
+          if (status.editable || status.editHoldUntil) {
+            setEditorOpen(true);
+          } else {
+            setEditorDone(true);
+          }
+        }
+      } catch (err) {
+        console.warn("(publish.tsx) edit-hold probe error:", err);
+      }
+    }
 
     try {
       const res = await api.timelapse.pollLookoutStatus({ draftId });
@@ -322,6 +359,14 @@ export default function Page() {
           </div>
         )}
       </div>
+
+      {editorOpen && storedSession && (
+        <EditorModal
+          token={storedSession.lookoutToken}
+          apiBaseUrl={storedSession.lookoutApiBaseUrl}
+          onDone={() => { setEditorOpen(false); setEditorDone(true); }}
+        />
+      )}
 
       <LoadingModal
         isOpen={isPublishing}

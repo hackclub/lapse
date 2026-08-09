@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
-import { LookoutProvider, useLookout, TimelapseEditor } from "@lookout/react";
+import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
 
 import type { IconGlyph } from "@/common";
@@ -15,6 +15,7 @@ import {
   removeStoredSession,
 } from "@/components/lookout/sessions";
 import RootLayout from "@/components/layout/RootLayout";
+import { EditorModal } from "@/components/lookout/EditorModal";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
@@ -40,10 +41,6 @@ interface LookoutSessionConfig {
 }
 
 type RecordingMode = "desktop" | "screen" | "camera";
-
-// Lapse's brand red (mirrors --color-red in globals.css). Passed to the Lookout SDK's
-// accentColor so its components match the rest of the app.
-const LAPSE_ACCENT = "#ec3750";
 
 function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed }: {
   icon: IconGlyph;
@@ -728,10 +725,6 @@ export default function LookoutRecorder() {
         token={config.lookoutToken}
         apiBaseUrl={config.lookoutApiBaseUrl}
         appName="Lapse"
-        // Recolor the Lookout SDK's controls, focus rings, and the editor to Lapse's
-        // red (--color-red). Applied to the document root, so it also reaches the
-        // editor even though our Modal portals to <body>.
-        accentColor={LAPSE_ACCENT}
         capture={captureMode === "camera"
           ? { mode: "camera", camera: cameraDeviceId ? { deviceId: cameraDeviceId } : undefined }
           : undefined
@@ -1000,25 +993,11 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
   if (editorOpen && lookoutToken) {
     return (
       <RootLayout showHeader={false}>
-        <Modal isOpen size="FULL">
-          <ModalHeader
-            icon="edit"
-            title="Edit your timelapse"
-            description="Trim out any parts you don't want to keep."
-            showCloseButton
-            onClose={() => { setEditorOpen(false); setEditorDone(true); }}
-          />
-          <ModalContent className="p-0 flex-1 min-h-0">
-            <div className="h-[70vh] min-h-125">
-              <TimelapseEditor
-                token={lookoutToken}
-                apiBaseUrl={apiBaseUrl}
-                onApplied={() => { setEditorOpen(false); setEditorDone(true); }}
-                onCancel={() => { setEditorOpen(false); setEditorDone(true); }}
-              />
-            </div>
-          </ModalContent>
-        </Modal>
+        <EditorModal
+          token={lookoutToken}
+          apiBaseUrl={apiBaseUrl}
+          onDone={() => { setEditorOpen(false); setEditorDone(true); }}
+        />
       </RootLayout>
     );
   }
