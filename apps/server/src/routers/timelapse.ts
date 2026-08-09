@@ -508,7 +508,7 @@ export default os.router({
                 lapseUserId: caller.id,
                 lapseUserHandle: caller.handle,
                 source: "lapse",
-            });
+            }, { clips: true });
 
             const draft = await database().draftLookoutTimelapse.create({
                 data: {

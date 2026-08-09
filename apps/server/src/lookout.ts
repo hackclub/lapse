@@ -56,11 +56,14 @@ async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> 
 
 export async function createSession(
     name?: string,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
+    options?: { clips?: boolean }
 ): Promise<LookoutSessionCreated> {
     const result = await lookoutFetch<LookoutSessionCreated>("/api/internal/sessions", {
         method: "POST",
-        body: JSON.stringify({ name, metadata }),
+        // `clips` (not `clip`/`clipsEnabled`) is the field that flips `clipsEnabled` on
+        // the session, unlocking the cut/edit flow.
+        body: JSON.stringify({ name, metadata, clips: options?.clips }),
     });
 
     logInfo(`Created Lookout session ${result.sessionId}`);

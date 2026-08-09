@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
-import { LookoutProvider, useLookout } from "@lookout/react";
+import { LookoutProvider, useLookout, TimelapseEditor } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
 
 import type { IconGlyph } from "@/common";
@@ -40,6 +40,10 @@ interface LookoutSessionConfig {
 }
 
 type RecordingMode = "desktop" | "screen" | "camera";
+
+// Lapse's brand red (mirrors --color-red in globals.css). Passed to the Lookout SDK's
+// accentColor so its components match the rest of the app.
+const LAPSE_ACCENT = "#ec3750";
 
 function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed }: {
   icon: IconGlyph;
@@ -724,6 +728,10 @@ export default function LookoutRecorder() {
         token={config.lookoutToken}
         apiBaseUrl={config.lookoutApiBaseUrl}
         appName="Lapse"
+        // Recolor the Lookout SDK's controls, focus rings, and the editor to Lapse's
+        // red (--color-red). Applied to the document root, so it also reaches the
+        // editor even though our Modal portals to <body>.
+        accentColor={LAPSE_ACCENT}
         capture={captureMode === "camera"
           ? { mode: "camera", camera: cameraDeviceId ? { deviceId: cameraDeviceId } : undefined }
           : undefined
@@ -731,6 +739,8 @@ export default function LookoutRecorder() {
       >
         <LapseRecorder
           draftId={config.draftId}
+          lookoutToken={config.lookoutToken}
+          apiBaseUrl={config.lookoutApiBaseUrl}
           onShareFailed={() => { releasePendingStream(); setCaptureMode(null); setCameraDeviceId(null); }}
           onBrowserError={(message) => {
             // Browser capture failed — return to the selector (the "picker") and remember why,
@@ -868,8 +878,10 @@ function CameraPreviewVideo({ stream }: { stream: MediaStream }) {
 // it as "go back to mode selection" rather than a scary error — see the error effect.
 const SCREEN_CANCELLED_MESSAGE = "Screen sharing was cancelled.";
 
-function LapseRecorder({ draftId, onShareFailed, onBrowserError }: {
+function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBrowserError }: {
   draftId: string;
+  lookoutToken: string;
+  apiBaseUrl: string;
   onShareFailed: () => void;
   onBrowserError: (message: string) => void;
 }) {
@@ -877,6 +889,11 @@ function LapseRecorder({ draftId, onShareFailed, onBrowserError }: {
   const { state, actions } = useLookout();
   const [error, setError] = useState<string | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  // Once recording stops we offer the cut/edit step before handing off to the publish
+  // page. `editorDone` flips when the user saves or dismisses the editor, which is what
+  // actually releases them to publish.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDone, setEditorDone] = useState(false);
   const screenStarted = useRef(false);
   const isCamera = state.captureMode === "camera";
 
@@ -937,10 +954,18 @@ function LapseRecorder({ draftId, onShareFailed, onBrowserError }: {
   }, 30 * 1000);
 
   useEffect(() => {
-    if (state.status === "stopped" || state.status === "compiling" || state.status === "complete") {
+    const recordingEnded = state.status === "stopped" || state.status === "compiling" || state.status === "complete";
+    if (!recordingEnded) return;
+
+    // The user has finished with the editor (saved cuts or dismissed it) — hand off to
+    // the existing publish page. Without a token to edit against, skip straight there so
+    // the flow never gets stuck.
+    if (editorDone || !lookoutToken) {
       router.push(`/timelapse/publish/${draftId}`);
+    } else {
+      setEditorOpen(true);
     }
-  }, [state.status, draftId, router]);
+  }, [state.status, editorDone, lookoutToken, draftId, router]);
 
   function handleStartSharing() {
     actions.startSharing().catch((err) =>
@@ -958,10 +983,44 @@ function LapseRecorder({ draftId, onShareFailed, onBrowserError }: {
 
   async function stopRecording() {
     try {
-      await actions.stop();
+      // `edit: true` asks the server to hold the session open for editing after stop
+      // instead of compiling straight to `complete`. Without it the cut/edit step below
+      // gets a `not_ready` session ("isn't available for editing").
+      await actions.stop({ edit: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop recording");
     }
+  }
+
+  // After recording stops, the cut/edit step is offered in a Lapse-styled modal. This
+  // must precede the capture-state branches below (once stopped, `state.isSharing` is
+  // false, which would otherwise render the empty placeholder). Dismissing or saving
+  // sets `editorDone`, which the effect above turns into the publish-page handoff — the
+  // editor itself publishes the (possibly cut) session; we just continue Lapse's flow.
+  if (editorOpen && lookoutToken) {
+    return (
+      <RootLayout showHeader={false}>
+        <Modal isOpen size="FULL">
+          <ModalHeader
+            icon="edit"
+            title="Edit your timelapse"
+            description="Trim out any parts you don't want to keep."
+            showCloseButton
+            onClose={() => { setEditorOpen(false); setEditorDone(true); }}
+          />
+          <ModalContent className="p-0 flex-1 min-h-0">
+            <div className="h-[70vh] min-h-125">
+              <TimelapseEditor
+                token={lookoutToken}
+                apiBaseUrl={apiBaseUrl}
+                onApplied={() => { setEditorOpen(false); setEditorDone(true); }}
+                onCancel={() => { setEditorOpen(false); setEditorDone(true); }}
+              />
+            </div>
+          </ModalContent>
+        </Modal>
+      </RootLayout>
+    );
   }
 
   // Camera failures show an inline modal; screen failures are handled by the effect above,
