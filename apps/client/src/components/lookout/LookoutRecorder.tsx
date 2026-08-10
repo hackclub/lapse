@@ -19,7 +19,13 @@ import { EditorModal } from "@/components/lookout/EditorModal";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
+import { CopyField } from "@/components/ui/CopyField";
 import { PillControlButton } from "@/components/ui/PillControlButton";
+
+/** The deep link that hands a recording session to the Lookout desktop app. */
+function desktopSessionLink(token: string): string {
+  return `lookout://session?token=${token}`;
+}
 
 function formatTrackedTime(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -625,7 +631,7 @@ export default function LookoutRecorder() {
 
   function startWithConfig(cfg: LookoutSessionConfig) {
     if (selectedMode === "desktop") {
-      window.location.href = `lookout://session?token=${cfg.lookoutToken}`;
+      window.location.href = desktopSessionLink(cfg.lookoutToken);
       setDesktopLaunched(true);
       return;
     }
@@ -677,9 +683,11 @@ export default function LookoutRecorder() {
   }
 
   if (desktopLaunched && config) {
+    const sessionLink = desktopSessionLink(config.lookoutToken);
+
     return (
       <RootLayout showHeader={false}>
-        <div className="flex w-screen h-screen items-center justify-center p-8">
+        <div className="min-h-screen flex items-center justify-center px-4 py-12">
           <div className="flex flex-col items-center text-center gap-6 max-w-md">
             <img src="/images/lookout-icon.png" alt="Lookout" className="w-16 h-16 rounded-2xl" />
             <div className="flex flex-col gap-2">
@@ -687,8 +695,12 @@ export default function LookoutRecorder() {
               <p className="text-muted">
                 The Lookout app should have opened on your desktop. If nothing happened, you may need to install it first.
               </p>
+              <p className="text-muted">
+                We&apos;ll bring you back here to publish once your timelapse is done.
+              </p>
             </div>
             <div className="flex flex-col gap-3 w-full">
+              {/* Installing is the way out of this screen for most people who end up reading it, so it leads. */}
               <a
                 href="https://lookout.hackclub.com/"
                 target="_blank"
@@ -697,12 +709,35 @@ export default function LookoutRecorder() {
               >
                 Get Lookout
               </a>
-              <button
-                onClick={() => setDesktopLaunched(false)}
-                className="w-full border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
-              >
-                Go back
-              </button>
+
+              <div className="flex items-center gap-3 w-full">
+                <button
+                  onClick={() => setDesktopLaunched(false)}
+                  title="Go back"
+                  aria-label="Go back"
+                  className="shrink-0 flex items-center justify-center w-12 h-12 border border-slate hover:bg-darkless rounded-lg transition-colors cursor-pointer"
+                >
+                  <Icon glyph="back" size={24} />
+                </button>
+                <a
+                  href={sessionLink}
+                  className="flex-1 border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors text-center"
+                >
+                  Open Lookout again
+                </a>
+              </div>
+            </div>
+
+            {/*
+              The deep link, in the flesh. Lookout has a "paste a lookout:// link" box precisely for when the
+              handoff doesn't fire on its own (a browser that swallows unknown schemes, a fresh install that
+              hasn't registered one yet), and this is the only place the link exists to be copied from.
+            */}
+            <div className="flex flex-col gap-2 w-full pt-2 border-t border-slate">
+              <p className="text-sm text-muted">
+                Still nothing? Copy this link and paste it into Lookout.
+              </p>
+              <CopyField value={sessionLink} label="Recording session link" />
             </div>
           </div>
         </div>

@@ -305,6 +305,9 @@ export const timelapseRouterContract = {
                     .describe("The video URL, if compilation is complete."),
                 thumbnailUrl: z.string().nullable()
                     .describe("The thumbnail URL, if compilation is complete."),
+
+                recordedOnDesktop: z.boolean()
+                    .describe("Whether the session was recorded through the Lookout desktop app. Editing such a session belongs to the desktop app's own editor, so Lapse leaves it alone."),
             })
         ),
 

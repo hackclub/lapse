@@ -73,6 +73,9 @@ export default function Page() {
   const [storedSession, setStoredSession] = useState<StoredLookoutSession | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorDone, setEditorDone] = useState(false);
+  // Set from the status poll. Desktop recordings are edited in the desktop app, never here. `null` until a poll
+  // says either way - the editor stays shut while we don't know, rather than guessing and opening it.
+  const [recordedOnDesktop, setRecordedOnDesktop] = useState<boolean | null>(null);
 
   useEffect(() => {
     // localStorage is client-only, so this can't run during render.
@@ -93,11 +96,44 @@ export default function Page() {
   useInterval(async () => {
     if (!draftId || compilationStatus !== "waiting") return;
 
+    // The status poll comes first: it's what tells us whether this session was recorded on the desktop, which
+    // the edit-hold probe below needs to know before it decides to open anything.
+    let onDesktop = recordedOnDesktop;
+
+    try {
+      const res = await api.timelapse.pollLookoutStatus({ draftId });
+      if (!res.ok) {
+        // There's no form to show if the draft behind it is gone - and polling a draft that isn't there would
+        // otherwise just keep raising the same modal every few seconds.
+        setLoadStatus(statusForApiError(res.error, res.message));
+        return;
+      }
+
+      onDesktop = res.data.recordedOnDesktop;
+      setRecordedOnDesktop(onDesktop);
+
+      if (res.data.lookoutStatus === "complete") {
+        setCompilationStatus("ready");
+        setVideoUrl(res.data.videoUrl);
+        setThumbnailUrl(res.data.thumbnailUrl);
+      } else if (res.data.lookoutStatus === "failed") {
+        setCompilationStatus("failed");
+        setError("Video compilation failed. Please try recording again.");
+      }
+    } catch (err) {
+      console.warn("(publish.tsx) poll error:", err);
+    }
+
     // While the session's edit hold is live, offer to resume editing instead of
     // waiting out the hold. Asked directly of Lookout (the hold isn't visible through
     // Lapse's status poll), and only until a definitive answer: a live hold opens the
     // editor; a session past its hold can never become editable again, so stop asking.
-    if (storedSession && !editorOpen && !editorDone) {
+    //
+    // Desktop recordings are the exception. Their hold belongs to the desktop app's own editor window, which
+    // is very likely open on this exact session right now - a second editor here would have both surfaces
+    // renewing the same lease and racing to write cuts, last one winning. So we stay out of it and just wait
+    // for the compile, which is what the user is watching the app finish anyway.
+    if (storedSession && onDesktop === false && !editorOpen && !editorDone) {
       try {
         const res = await fetch(
           `${storedSession.lookoutApiBaseUrl}/api/sessions/${storedSession.lookoutToken}/status`
@@ -113,27 +149,6 @@ export default function Page() {
       } catch (err) {
         console.warn("(publish.tsx) edit-hold probe error:", err);
       }
-    }
-
-    try {
-      const res = await api.timelapse.pollLookoutStatus({ draftId });
-      if (!res.ok) {
-        // There's no form to show if the draft behind it is gone - and polling a draft that isn't there would
-        // otherwise just keep raising the same modal every few seconds.
-        setLoadStatus(statusForApiError(res.error, res.message));
-        return;
-      }
-
-      if (res.data.lookoutStatus === "complete") {
-        setCompilationStatus("ready");
-        setVideoUrl(res.data.videoUrl);
-        setThumbnailUrl(res.data.thumbnailUrl);
-      } else if (res.data.lookoutStatus === "failed") {
-        setCompilationStatus("failed");
-        setError("Video compilation failed. Please try recording again.");
-      }
-    } catch (err) {
-      console.warn("(publish.tsx) poll error:", err);
     }
   }, 3000);
 

@@ -504,14 +504,27 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
+            // Lookout's redirect hook has to be set at creation and can never be changed, so the draft's ID - which
+            // the hook's URL points at - has to exist before the session does. Mint it here instead of letting the
+            // database default do it; `lapseId()` is the same 12-character NanoID the schema would have generated.
+            const draftId = lapseId();
+
             const session = await lookout.createSession(undefined, {
                 lapseUserId: caller.id,
                 lapseUserHandle: caller.handle,
                 source: "lapse",
-            }, { clips: true });
+            }, {
+                clips: true,
+                // Recording in the desktop app leaves this tab with no way of knowing the timelapse is done, so we ask
+                // Lookout to send the user back to us the moment it compiles. Built here rather than accepted from the
+                // caller: any client holding `timelapse:write` could otherwise have the desktop app open an arbitrary
+                // URL in the user's default browser.
+                redirectUrl: `${env.WEB_BASE_URL}/timelapse/handoff/${draftId}`,
+            });
 
             const draft = await database().draftLookoutTimelapse.create({
                 data: {
+                    id: draftId,
                     lookoutSessionId: session.sessionId,
                     lookoutToken: session.token,
                     ownerId: caller.id,
@@ -592,6 +605,7 @@ export default os.router({
                 lookoutStatus: session.session.status,
                 videoUrl: session.session.videoUrl,
                 thumbnailUrl: session.session.thumbnailUrl,
+                recordedOnDesktop: lookout.isDesktopClient(session.clientInfo),
             });
         }),
 
