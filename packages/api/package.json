@@ -25,7 +25,7 @@
   "packageManager": "pnpm@11.18.0",
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.2.0",
     "tsc-alias": "^1.9.1",
     "typescript": "^6.0.3"
   },
