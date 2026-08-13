@@ -20,7 +20,7 @@
     "execa": "^10.0.1",
     "js-yaml": "^5.2.3",
     "ora": "^9.4.1",
-    "tsx": "^4.23.4"
+    "tsx": "^4.23.12"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
