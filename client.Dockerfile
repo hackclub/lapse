@@ -11,7 +11,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 
 ############################  lookout  ###########################
 FROM base AS lookout
-RUN git clone --depth 1 --branch v0.3.4 https://github.com/hackclub/lookout.git /lookout
+RUN git clone --depth 1 --branch v0.3.7 https://github.com/hackclub/lookout.git /lookout
 
 ############################  deps  ##############################
 FROM base AS deps
