@@ -8,6 +8,13 @@ export const env = {
     get BASE_URL() { return required("BASE_URL") },
 
     /**
+     * The base URL the canonical web client is hosted on (no trailing slash). Unlike `BASE_URL`, this points at the
+     * frontend - it's what we hand to external services that send the *user* (not a request) somewhere in Lapse, such
+     * as Lookout's redirect hook.
+     */
+    get WEB_BASE_URL() { return required("WEB_BASE_URL") },
+
+    /**
      * The S3 name for the bucket that stores encrypted (private) user content.
      */
     get S3_ENCRYPTED_BUCKET_NAME() { return required("S3_ENCRYPTED_BUCKET_NAME") },

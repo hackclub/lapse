@@ -7,7 +7,8 @@ import type { TimelapseVisibility } from "@hackclub/lapse-api";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
-import { removeStoredSession } from "@/components/lookout/sessions";
+import { getStoredSessions, removeStoredSession, type StoredLookoutSession } from "@/components/lookout/sessions";
+import { EditorModal } from "@/components/lookout/EditorModal";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -64,6 +65,23 @@ export default function Page() {
 
   const [loadStatus, setLoadStatus] = useState<PageStatus | null>(null);
   const [step, setStep] = useState<PublishStep>("details");
+
+  // Resuming an interrupted edit: if this page loads (e.g. after a refresh) while the
+  // session's edit hold is still live, the cut/edit modal reopens instead of leaving
+  // the user staring at the compile spinner until the hold lapses. The Lookout token
+  // for the draft is only known on this device, via the recorder's stored sessions.
+  const [storedSession, setStoredSession] = useState<StoredLookoutSession | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDone, setEditorDone] = useState(false);
+  // Set from the status poll. Desktop recordings are edited in the desktop app, never here. `null` until a poll
+  // says either way - the editor stays shut while we don't know, rather than guessing and opening it.
+  const [recordedOnDesktop, setRecordedOnDesktop] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // localStorage is client-only, so this can't run during render.
+    if (!draftId) return;
+    setStoredSession(getStoredSessions().find(s => s.draftId === draftId) ?? null);
+  }, [draftId]);
   const [hackatimeProject, setHackatimeProject] = useState<string | null>(null);
   const [isLoadingHackatime, setIsLoadingHackatime] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -78,6 +96,10 @@ export default function Page() {
   useInterval(async () => {
     if (!draftId || compilationStatus !== "waiting") return;
 
+    // The status poll comes first: it's what tells us whether this session was recorded on the desktop, which
+    // the edit-hold probe below needs to know before it decides to open anything.
+    let onDesktop = recordedOnDesktop;
+
     try {
       const res = await api.timelapse.pollLookoutStatus({ draftId });
       if (!res.ok) {
@@ -86,6 +108,9 @@ export default function Page() {
         setLoadStatus(statusForApiError(res.error, res.message));
         return;
       }
+
+      onDesktop = res.data.recordedOnDesktop;
+      setRecordedOnDesktop(onDesktop);
 
       if (res.data.lookoutStatus === "complete") {
         setCompilationStatus("ready");
@@ -97,6 +122,33 @@ export default function Page() {
       }
     } catch (err) {
       console.warn("(publish.tsx) poll error:", err);
+    }
+
+    // While the session's edit hold is live, offer to resume editing instead of
+    // waiting out the hold. Asked directly of Lookout (the hold isn't visible through
+    // Lapse's status poll), and only until a definitive answer: a live hold opens the
+    // editor; a session past its hold can never become editable again, so stop asking.
+    //
+    // Desktop recordings are the exception. Their hold belongs to the desktop app's own editor window, which
+    // is very likely open on this exact session right now - a second editor here would have both surfaces
+    // renewing the same lease and racing to write cuts, last one winning. So we stay out of it and just wait
+    // for the compile, which is what the user is watching the app finish anyway.
+    if (storedSession && onDesktop === false && !editorOpen && !editorDone) {
+      try {
+        const res = await fetch(
+          `${storedSession.lookoutApiBaseUrl}/api/sessions/${storedSession.lookoutToken}/status`
+        );
+        if (res.ok) {
+          const status: { editable?: boolean; editHoldUntil?: string } = await res.json();
+          if (status.editable || status.editHoldUntil) {
+            setEditorOpen(true);
+          } else {
+            setEditorDone(true);
+          }
+        }
+      } catch (err) {
+        console.warn("(publish.tsx) edit-hold probe error:", err);
+      }
     }
   }, 3000);
 
@@ -322,6 +374,14 @@ export default function Page() {
           </div>
         )}
       </div>
+
+      {editorOpen && storedSession && (
+        <EditorModal
+          token={storedSession.lookoutToken}
+          apiBaseUrl={storedSession.lookoutApiBaseUrl}
+          onDone={() => { setEditorOpen(false); setEditorDone(true); }}
+        />
+      )}
 
       <LoadingModal
         isOpen={isPublishing}

@@ -31,7 +31,11 @@ const App: AppType = ({ Component, pageProps }) => {
   }, [router]);
 
   useEffect(() => {
-    if (router.pathname.startsWith("/timelapse/publish") || router.pathname.startsWith("/timelapse/create"))
+    // `/timelapse/handoff` is exempt for the same reason as the other two: it's already taking the user to
+    // publish, and it has an unauthenticated state to show first that this redirect would trample.
+    if (router.pathname.startsWith("/timelapse/publish")
+      || router.pathname.startsWith("/timelapse/create")
+      || router.pathname.startsWith("/timelapse/handoff"))
       return;
 
     // Never probe a protected endpoint on the auth pages or without a session. The request would 401 and
