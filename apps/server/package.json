@@ -52,7 +52,7 @@
     "@prisma/client": "^7.9.1",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.2.0",
     "fastify-cli": "^8.0.0",
     "require-in-the-middle": "^8.0.1",
     "tsc-alias": "^1.9.1",
