@@ -441,6 +441,7 @@ async function runSetup() {
 				"S3_SECRET_ACCESS_KEY": S3_SECRET_ACCESS_KEY,
 				"S3_PUBLIC_URL_PUBLIC": S3_PUBLIC_URL_PUBLIC,
 				"S3_PUBLIC_URL_ENCRYPTED": S3_PUBLIC_URL_ENCRYPTED,
+				"WEB_BASE_URL": `http://localhost:3000`,
 			},
 			client: {
 				"NEXT_PUBLIC_API_URL": `http://localhost:${serverPort}`,
