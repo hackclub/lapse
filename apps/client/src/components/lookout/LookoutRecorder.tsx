@@ -693,10 +693,7 @@ export default function LookoutRecorder() {
             <div className="flex flex-col gap-2">
               <h1 className="text-2xl font-bold">Opening Lookout</h1>
               <p className="text-muted">
-                The Lookout app should have opened on your desktop. If nothing happened, you may need to install it first.
-              </p>
-              <p className="text-muted">
-                We&apos;ll bring you back here to publish once your timelapse is done.
+                The Lookout desktop app should open automatically — if it has&apos;t yet, you made need to install it. We&apos;ll bring you back here to publish your timelapse once you&apos;ve finished recording.
               </p>
             </div>
             <div className="flex flex-col gap-3 w-full">
@@ -733,7 +730,7 @@ export default function LookoutRecorder() {
               handoff doesn't fire on its own (a browser that swallows unknown schemes, a fresh install that
               hasn't registered one yet), and this is the only place the link exists to be copied from.
             */}
-            <div className="flex flex-col gap-2 w-full pt-2 border-t border-slate">
+            <div className="flex flex-col gap-2 w-full pt-4 border-t border-slate">
               <p className="text-sm text-muted">
                 Still nothing? Copy this link and paste it into Lookout.
               </p>
