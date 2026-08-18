@@ -35,8 +35,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tsconfig/node24": "^24.0.4",
-    "@types/node": "^26.1.2",
+    "@tsconfig/node24": "^24.0.5",
+    "@types/node": "^26.2.0",
     "tsc-alias": "^1.9.1",
     "typescript": "^6.0.3"
   }
