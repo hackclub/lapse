@@ -599,6 +599,8 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
+            const mayPublish = req.context.scopes.includes("timelapse:write") || req.context.scopes.includes("elevated");
+
             const drafts = await database().draftLookoutTimelapse.findMany({
                 where: { ownerId: caller.id },
                 orderBy: { createdAt: "desc" },
@@ -609,9 +611,16 @@ export default os.router({
                     // A draft the user already answered in the desktop panel publishes as soon as its
                     // video is ready. This runs at login, which is the first thing that happens after
                     // someone closes the app mid-compile - so it is the likeliest place to notice.
-                    const finalized = await finalizeIfPending(draft);
-                    if (finalized?.kind === "published")
-                        return null;
+                    //
+                    // Gated on write scope: publishing creates a (possibly public) timelapse and pushes
+                    // Hackatime heartbeats, and this procedure is readable by tokens that hold neither.
+                    // A read-only caller just doesn't get the shortcut; the sweeper does it within a
+                    // minute regardless.
+                    if (mayPublish) {
+                        const finalized = await finalizeIfPending(draft);
+                        if (finalized?.kind === "published")
+                            return null;
+                    }
 
                     const session = await lookout.getSession(draft.lookoutSessionId);
                     return {
@@ -663,7 +672,11 @@ export default os.router({
             // A draft with answers already in it (the user filled the panel in the desktop app)
             // publishes the moment we notice the video is ready. This poll is where a returning
             // user notices first, so take the chance rather than waiting for the next sweep.
-            const finalized = await finalizeIfPending(draft);
+            //
+            // Write scope required, for the same reason as in getLookoutDrafts: this creates a
+            // timelapse and pushes heartbeats, and polling status is otherwise a read.
+            const mayPublish = req.context.scopes.includes("timelapse:write") || req.context.scopes.includes("elevated");
+            const finalized = mayPublish ? await finalizeIfPending(draft) : null;
             if (finalized?.kind === "published") {
                 return apiOk({
                     lookoutStatus: "complete",

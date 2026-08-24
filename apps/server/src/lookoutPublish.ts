@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import * as db from "@/generated/prisma/client.js";
 
 import { database, redis } from "@/db.js";
@@ -193,7 +195,12 @@ const SWEEP_LOCK_TTL_MS = 5 * 60_000;
 export async function sweepPendingLookoutPublishes(): Promise<void> {
     // One replica per sweep. The insert is idempotent regardless, but there is no reason for every
     // instance to hammer Lookout with the same status requests.
-    const held = await redis().set(SWEEP_LOCK_KEY, "1", "PX", SWEEP_LOCK_TTL_MS, "NX");
+    //
+    // The token matters: a sweep that outlives the TTL would otherwise delete whichever replica's
+    // lock came next on its way out, admitting a third. Release is a compare-and-delete on our own
+    // token instead.
+    const token = randomBytes(16).toString("hex");
+    const held = await redis().set(SWEEP_LOCK_KEY, token, "PX", SWEEP_LOCK_TTL_MS, "NX");
     if (held !== "OK")
         return;
 
@@ -215,7 +222,24 @@ export async function sweepPendingLookoutPublishes(): Promise<void> {
         }
     }
     finally {
-        await redis().del(SWEEP_LOCK_KEY);
+        await releaseSweepLock(token);
+    }
+}
+
+const RELEASE_SWEEP_LOCK = `
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+    end
+    return 0
+`;
+
+async function releaseSweepLock(token: string): Promise<void> {
+    try {
+        await redis().eval(RELEASE_SWEEP_LOCK, 1, SWEEP_LOCK_KEY, token);
+    }
+    catch (err) {
+        // Not releasing is safe - the TTL clears it - so never let this mask the sweep's own result.
+        logWarning("Couldn't release the Lookout publish sweep lock.", { err });
     }
 }
 

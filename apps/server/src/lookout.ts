@@ -1,5 +1,5 @@
 import { env } from "@/env.js";
-import { logError, logInfo } from "@/logging.js";
+import { logError, logInfo, logWarning } from "@/logging.js";
 
 interface LookoutSessionCreated {
     token: string;
@@ -59,7 +59,55 @@ export async function createSession(
     metadata?: Record<string, unknown>,
     options?: { clips?: boolean; redirectUrl?: string; panelUrl?: string }
 ): Promise<LookoutSessionCreated> {
-    const result = await lookoutFetch<LookoutSessionCreated>("/api/internal/sessions", {
+    const body = {
+        name,
+        metadata,
+        clips: options?.clips,
+        redirectUrl: options?.redirectUrl,
+        panelUrl: options?.panelUrl,
+    };
+
+    const result = await createSessionWithFallback(body);
+
+    logInfo(`Created Lookout session ${result.sessionId}`);
+    return result;
+}
+
+type CreateSessionBody = {
+    name: string | undefined;
+    metadata: Record<string, unknown> | undefined;
+    clips: boolean | undefined;
+    redirectUrl: string | undefined;
+    panelUrl: string | undefined;
+};
+
+/**
+ * Creates the session, dropping `panelUrl` and retrying if Lookout rejects it.
+ *
+ * Lookout's create endpoint refuses unknown fields outright, so a Lookout that predates panels
+ * answers a 400 rather than ignoring the one field it doesn't recognise - which would take recording
+ * down entirely for the window between our deploy and theirs. Losing the in-app publish panel for
+ * that window is a fair price; losing recording is not. The redirect hook still covers the flow.
+ */
+async function createSessionWithFallback(body: CreateSessionBody): Promise<LookoutSessionCreated> {
+    try {
+        return await postCreateSession(body);
+    }
+    catch (err) {
+        if (!body.panelUrl || !isBadRequest(err))
+            throw err;
+
+        logWarning("Lookout rejected panelUrl on session creation; retrying without it. The server is probably older than this build.");
+        return await postCreateSession({ ...body, panelUrl: undefined });
+    }
+}
+
+function isBadRequest(err: unknown): boolean {
+    return err instanceof Error && /Lookout API error: 400\b/.test(err.message);
+}
+
+async function postCreateSession(body: CreateSessionBody): Promise<LookoutSessionCreated> {
+    return await lookoutFetch<LookoutSessionCreated>("/api/internal/sessions", {
         method: "POST",
         // `clips` (not `clip`/`clipsEnabled`) is the field that flips `clipsEnabled` on
         // the session, unlocking the cut/edit flow.
@@ -72,17 +120,8 @@ export async function createSession(
         // Also immutable, https only, and it must be unguessable: a third-party iframe receives none of
         // our cookies, so the URL is the only credential the panel has. Lookout opens it as soon as the
         // recording is saved, so it loads while the session is still compiling.
-        body: JSON.stringify({
-            name,
-            metadata,
-            clips: options?.clips,
-            redirectUrl: options?.redirectUrl,
-            panelUrl: options?.panelUrl,
-        }),
+        body: JSON.stringify(body),
     });
-
-    logInfo(`Created Lookout session ${result.sessionId}`);
-    return result;
 }
 
 /**
@@ -110,6 +149,16 @@ export async function setViewUrl(sessionId: string, viewUrl: string | null): Pro
         method: "POST",
         body: JSON.stringify({ viewUrl }),
     });
+}
+
+/**
+ * Whether a Lookout session name is just Lookout's placeholder rather than something the user typed.
+ *
+ * Lookout names a session `untitled-YYYY-MM-DD` when nobody supplies one, and we never supply one at
+ * creation - so a name in that shape carries no intent and must not be offered back as a suggestion.
+ */
+export function isPlaceholderSessionName(name: string): boolean {
+    return /^untitled-\d{4}-\d{2}-\d{2}$/.test(name.trim());
 }
 
 export async function getSession(sessionId: string): Promise<LookoutSessionDetails> {

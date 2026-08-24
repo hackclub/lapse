@@ -247,11 +247,29 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
 
         const intent = intentOf(draft);
 
+        // The desktop app asks for a title when the user stops recording and writes it to the
+        // Lookout session, so by the time the panel opens we usually already know what they want
+        // this called. Offering it back beats making them type it twice.
+        let suggestedName: string | null = null;
+
+        try {
+            const session = await lookout.getSession(draft.lookoutSessionId);
+            const name = session.session.name?.trim();
+
+            if (name && !lookout.isPlaceholderSessionName(name))
+                suggestedName = name.slice(0, 60);
+        }
+        catch (err) {
+            // A prefill is a nicety; the panel still works without one.
+            logWarning("Couldn't read the Lookout session name for a panel.", { err, draftId: draft.id });
+        }
+
         return reply.send({
             draftId: draft.id,
             createdAt: draft.createdAt.toISOString(),
             handle: draft.owner.handle,
             hackatimeLinked: Boolean(draft.owner.hackatimeId && draft.owner.hackatimeAccessToken),
+            suggestedName,
             // Non-null when the user has already answered: the panel then has nothing to ask and
             // reports itself done rather than showing the form a second time.
             submitted: intent,
@@ -271,6 +289,13 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
         const draft = await database().draftLookoutTimelapse.findFirst({ where: { panelToken } });
         if (!draft)
             return reply.code(404).send({ error: "no draft for that panel" });
+
+        // Answered once, and that's it. The intent stays live for minutes while the video compiles,
+        // and without this the panel URL could be replayed to rewrite it - flipping an UNLISTED
+        // choice to PUBLIC, say. The panel checks `submitted` on load and closes itself, so a
+        // legitimate reopen never gets here.
+        if (intentOf(draft))
+            return reply.code(409).send({ error: "this timelapse has already been submitted" });
 
         const name = str(body["name"], 60);
         const visibility = body["visibility"];

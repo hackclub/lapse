@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
@@ -33,6 +33,7 @@ type PanelContext = {
     createdAt: string;
     handle: string;
     hackatimeLinked: boolean;
+    suggestedName: string | null;
     submitted: { name: string; description: string; visibility: TimelapseVisibility; hackatimeProject: string | null } | null;
 };
 
@@ -96,6 +97,18 @@ export default function Page() {
     const rawToken = router.query["panelToken"];
     const panelToken = typeof rawToken === "string" ? rawToken : undefined;
 
+    // Lookout puts its own light/dark state in the URL rather than sending it after
+    // load, so we can pick colours before the first paint instead of flashing the
+    // wrong ones. Read straight off `location` because `router.query` is empty on
+    // the first render.
+    const [theme, setTheme] = useState<"light" | "dark">("dark");
+    useEffect(() => {
+        const fromUrl = new URLSearchParams(window.location.search).get("lookout_theme");
+        if (fromUrl === "light" || fromUrl === "dark")
+            setTheme(fromUrl);
+    }, []);
+    const light = theme === "light";
+
     const [context, setContext] = useState<PanelContext | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -142,6 +155,11 @@ export default function Page() {
                     tellHost("lookout:done");
                     return;
                 }
+
+                // The user already typed a title into the desktop app's stop dialog; don't make
+                // them do it again. Only seeds the field - they can still change it.
+                if (data.suggestedName)
+                    setName(data.suggestedName);
 
                 setContext(data);
             }
@@ -199,21 +217,31 @@ export default function Page() {
         }
     }, [panelToken, name, description, visibility, hackatimeProject]);
 
-    // Never render page chrome: the sheet is the surface. Also stops a flash of our dark background
-    // over the host's own material while this mounts.
-    const bodyRef = useRef(false);
-    useEffect(() => {
-        if (bodyRef.current)
-            return;
-
-        bodyRef.current = true;
-        document.documentElement.style.background = "transparent";
-        document.body.style.background = "transparent";
-    }, []);
+    // `globals.css` gives html/body/#__next a dark background, `min-height: 100vh`
+    // and `display: flex` - all three wrong inside a sheet. The background paints a
+    // slab over the host's own material (and the wrong colour outright in light
+    // mode), and the 100vh floor breaks height reporting: `body` could never
+    // measure shorter than the frame, so the sheet could only ever grow.
+    //
+    // A styled-jsx global block rather than a `useEffect`: Next inlines this into
+    // the head when the page is rendered, so it is in force at first paint. Clearing
+    // it from an effect is always one paint too late, which is the flash.
+    const reset = (
+        <style jsx global>{`
+            html, body, #__next {
+                background: transparent !important;
+                min-height: 0 !important;
+                display: block !important;
+                width: auto !important;
+                overscroll-behavior: none;
+            }
+        `}</style>
+    );
 
     if (loadError) {
         return (
-            <div className="flex flex-col gap-4 p-5 text-white">
+            <div className={clsx("flex flex-col gap-4 p-5", light ? "text-black" : "text-white")}>
+                {reset}
                 <p className="text-muted">{loadError}</p>
                 <Button onClick={() => tellHost("lookout:cancel")} className="w-full">Close</Button>
             </div>
@@ -223,6 +251,7 @@ export default function Page() {
     if (!context) {
         return (
             <div className="flex items-center justify-center gap-2 p-8 text-muted">
+                {reset}
                 <Icon glyph="clock" size={20} />
                 <span>Loading…</span>
             </div>
@@ -230,10 +259,11 @@ export default function Page() {
     }
 
     return (
-        <div className="flex flex-col gap-6 px-5 pt-1 pb-5 text-white">
+        <div className={clsx("flex flex-col gap-6 px-5 pt-1 pb-5", light ? "text-black" : "text-white")}>
+            {reset}
             <div className="flex items-center gap-3">
                 <StepMarker index={1} label="Details" state={step === "details" ? "current" : "done"} />
-                <div className="h-px flex-1 bg-darkless" />
+                <div className={clsx("h-px flex-1", light ? "bg-smoke" : "bg-darkless")} />
                 <StepMarker index={2} label="Hackatime" state={step === "hackatime" ? "current" : "upcoming"} />
             </div>
 
