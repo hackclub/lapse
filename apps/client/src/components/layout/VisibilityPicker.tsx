@@ -27,7 +27,7 @@ function VisibilityOption({ icon, title, description, selected, onClick, positio
       )}
     >
       <Icon glyph={icon} size={compact ? 26 : 48} className="shrink-0" />
-      <div className={clsx("flex flex-col text-left min-w-0", compact ? "pr-0" : "pr-2")}>
+      <div className={clsx("flex flex-col text-left", compact ? "min-w-0 pr-0" : "pr-2")}>
         <span className={clsx("font-bold", compact && "text-sm")}>{title}</span>
         <span className={clsx(compact ? "text-xs" : "text-sm", selected ? "text-white/80" : "text-muted")}>{description}</span>
       </div>
