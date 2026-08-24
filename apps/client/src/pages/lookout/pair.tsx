@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
+import { CopyField } from "@/components/ui/CopyField";
 
 /**
  * Approving a Lookout desktop install to record as you.
@@ -30,6 +31,7 @@ export default function Page() {
 
     const [isApproving, setIsApproving] = useState(false);
     const [handedOff, setHandedOff] = useState(false);
+    const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const approve = useCallback(async () => {
@@ -49,8 +51,10 @@ export default function Page() {
 
         // `state` goes back exactly as it arrived: the app drops any callback whose state it doesn't
         // recognise, which is what stops a link someone else crafted from pairing anything.
+        const url = `lookout://pair?code=${encodeURIComponent(res.data.code)}&state=${encodeURIComponent(state)}`;
+        setHandoffUrl(url);
         setHandedOff(true);
-        window.location.href = `lookout://pair?code=${encodeURIComponent(res.data.code)}&state=${encodeURIComponent(state)}`;
+        window.location.href = url;
     }, [challenge, state, device]);
 
     useEffect(() => {
@@ -75,13 +79,23 @@ export default function Page() {
     if (handedOff) {
         return (
             <RootLayout title="Device linked">
-                <div className="flex flex-col items-center gap-4 py-16 text-center">
+                <div className="flex flex-col items-center gap-4 py-12 text-center max-w-md mx-auto">
                     <Icon glyph="checkmark" size={48} className="text-green" />
                     <h1 className="text-2xl font-bold">Linked!</h1>
-                    <p className="text-muted max-w-md">
+                    <p className="text-muted">
                         {device} can now start timelapses as you. You can close this tab - and if the app didn&apos;t come
                         back to the front, switch to it yourself.
                     </p>
+
+                    {/* Fallback for when the OS never fires the deep link (some Windows setups drop `lookout://`
+                        entirely). The code is single-use and short-lived, so pasting the URL into Lookout&apos;s
+                        + menu is the manual escape hatch - same shape as the fallback on the recording page. */}
+{handoffUrl && (
+                        <div className="w-full flex flex-col gap-2 mt-6">
+                            <p className="text-muted text-sm">Still nothing? Copy this link and paste it into Lookout.</p>
+                            <CopyField value={handoffUrl} label="Pairing handoff link" />
+                        </div>
+                    )}
                 </div>
             </RootLayout>
         );
