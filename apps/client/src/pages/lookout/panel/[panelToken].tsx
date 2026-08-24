@@ -50,14 +50,19 @@ function useReportHeight(deps: unknown[]) {
             return;
 
         const report = () => {
-            // `body`'s own box, measured after layout. `documentElement.scrollHeight` is floored at
-            // the frame's current height, so the sheet could only ever grow - step two could never be
-            // shorter than step one. `body.scrollHeight` drops the last child's bottom margin and
-            // leaves the frame a few pixels short of its content, which shows up as a scrollbar.
-            requestAnimationFrame(() => {
+            // `body`'s own box. `documentElement.scrollHeight` is floored at the frame's current
+            // height, so the sheet could only ever grow - step two could never be shorter than step
+            // one. `body.scrollHeight` drops the last child's bottom margin and leaves the frame a
+            // few pixels short of its content, which shows up as a scrollbar.
+            //
+            // Measured in a timeout rather than requestAnimationFrame: the host reveals us only
+            // once we report, so we start out not being painted, and a frame that is not painted
+            // does not animate - rAF simply never fired and the sheet sat at its minimum forever.
+            // A timeout runs regardless of whether anyone can see us.
+            setTimeout(() => {
                 const height = Math.ceil(document.body.getBoundingClientRect().height);
                 window.parent.postMessage({ type: "lookout:resize", height }, "*");
-            });
+            }, 0);
         };
 
         report();
