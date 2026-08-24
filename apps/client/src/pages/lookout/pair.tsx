@@ -93,8 +93,7 @@ export default function Page() {
                 <div className="flex flex-col gap-2">
                     <h1 className="text-2xl font-bold">Link {device}?</h1>
                     <p className="text-muted">
-                        It will be able to start timelapses on your account without sending you back here every time.
-                        Recordings still show up as drafts for you to publish.
+                        After linking, the {device} app will be able to start timelapses on your account directly.
                     </p>
                 </div>
 
@@ -102,10 +101,6 @@ export default function Page() {
                     <li className="flex items-start gap-2">
                         <Icon glyph="checkmark" size={20} className="text-green shrink-0" />
                         <span>Start a timelapse straight from the app.</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                        <Icon glyph="checkmark" size={20} className="text-green shrink-0" />
-                        <span>Nothing else - it can&apos;t read, publish or delete anything on its own.</span>
                     </li>
                     <li className="flex items-start gap-2">
                         <Icon glyph="settings" size={20} className="shrink-0" />

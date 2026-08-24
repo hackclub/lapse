@@ -19,6 +19,14 @@ const App: AppType = ({ Component, pageProps }) => {
     if (router.pathname === "/update-browser")
       return;
 
+    // The Lookout panel and pairing pages need none of the storage APIs this gate is
+    // about - the panel is a form, embedded in another application's window, and it
+    // records nothing. Bouncing it to /update-browser means an embedded webview
+    // without OPFS can't publish a timelapse it already recorded, which is the one
+    // thing it is there to do.
+    if (router.pathname.startsWith("/lookout/"))
+      return;
+
     if (localStorage.getItem(BYPASS_BROWSER_CHECK_KEY) === "1")
       return;
 
@@ -35,7 +43,10 @@ const App: AppType = ({ Component, pageProps }) => {
     // publish, and it has an unauthenticated state to show first that this redirect would trample.
     if (router.pathname.startsWith("/timelapse/publish")
       || router.pathname.startsWith("/timelapse/create")
-      || router.pathname.startsWith("/timelapse/handoff"))
+      || router.pathname.startsWith("/timelapse/handoff")
+      // Same reasoning, and more so: the panel IS the publish step for its own draft,
+      // so redirecting it to some other draft's publish page is nonsense.
+      || router.pathname.startsWith("/lookout/"))
       return;
 
     // Never probe a protected endpoint on the auth pages or without a session. The request would 401 and

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import type { HackatimeProject, TimelapseVisibility } from "@hackclub/lapse-api";
@@ -8,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 import { HackatimeProjectPicker } from "@/components/entity/HackatimeProjectPicker";
+import { phantomSans } from "@/fonts";
 
 /**
  * The publish flow, rendered inside the Lookout desktop app.
@@ -37,7 +37,11 @@ type PanelContext = {
     submitted: { name: string; description: string; visibility: TimelapseVisibility; hackatimeProject: string | null } | null;
 };
 
-const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "https://api.lapse.hackclub.com";
+// Dot access, deliberately: Next substitutes `process.env.NEXT_PUBLIC_*` at build
+// time by literal match, and the bracket form is not reliably replaced - which
+// silently sends every request to production instead of wherever this build points.
+// Same expression as `api.ts` for exactly that reason.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com";
 
 /** Tell the host sheet how tall we are, so it can grow and shrink with the form. */
 function useReportHeight(deps: unknown[]) {
@@ -57,16 +61,22 @@ function useReportHeight(deps: unknown[]) {
         };
 
         report();
+        // The step swap changes what is in flow; re-measure after the transition
+        // so a taller or shorter step lands at its real height.
+        const settle = setTimeout(report, 320);
 
         const observer = new ResizeObserver(report);
         observer.observe(document.body);
 
-        return () => observer.disconnect();
+        return () => {
+            clearTimeout(settle);
+            observer.disconnect();
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, deps);
 }
 
-function tellHost(type: "lookout:done" | "lookout:cancel") {
+function tellHost(type: "lookout:done" | "lookout:cancel" | "lookout:ready") {
     if (typeof window !== "undefined" && window.parent !== window)
         window.parent.postMessage({ type }, "*");
 }
@@ -93,9 +103,20 @@ function StepMarker({ index, label, state }: {
 }
 
 export default function Page() {
-    const router = useRouter();
-    const rawToken = router.query["panelToken"];
-    const panelToken = typeof rawToken === "string" ? rawToken : undefined;
+    // Read the token out of the URL rather than waiting on `router.query`.
+    //
+    // A dynamic pages route leaves `query` empty until the router reports ready,
+    // and this page can be loaded in contexts where that never happens - it is
+    // framed by another application, and it is also opened standalone by the
+    // host's fallback paths. Depending on router readiness meant the fetch never
+    // fired at all and the panel rendered nothing, forever. The path is right
+    // there in `location` on the first render, so use that.
+    const [panelToken, setPanelToken] = useState<string | undefined>(undefined);
+    useEffect(() => {
+        const fromPath = window.location.pathname.match(/\/lookout\/panel\/([^/?#]+)/);
+        if (fromPath?.[1])
+            setPanelToken(decodeURIComponent(fromPath[1]));
+    }, []);
 
     // Lookout puts its own light/dark state in the URL rather than sending it after
     // load, so we can pick colours before the first paint instead of flashing the
@@ -111,11 +132,18 @@ export default function Page() {
 
     const [context, setContext] = useState<PanelContext | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    // There is genuinely nothing to ask. In a sheet we have already told the host to
+    // close, but the same URL can be opened in a real browser (the host's fallback
+    // paths do exactly that), and there "nothing to ask" must not render as a blank page.
+    const [settled, setSettled] = useState<"submitted" | "gone" | null>(null);
 
     const [step, setStep] = useState<PanelStep>("details");
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    const [visibility, setVisibility] = useState<TimelapseVisibility | null>("PUBLIC");
+    // Nothing preselected, matching the website's publish flow: visibility is a
+    // deliberate choice about who can see this, not something to default past.
+    // `Continue` stays disabled until they pick.
+    const [visibility, setVisibility] = useState<TimelapseVisibility | null>(null);
     const [hackatimeProject, setHackatimeProject] = useState<string | null>(null);
     const [isLoadingHackatime, setIsLoadingHackatime] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -136,8 +164,10 @@ export default function Page() {
                 if (res.status === 404) {
                     // The draft is gone: already published, or discarded. Nothing left to ask, so
                     // close rather than showing the user a dead form.
-                    if (!isStale)
+                    if (!isStale) {
                         tellHost("lookout:done");
+                        setSettled("gone");
+                    }
 
                     return;
                 }
@@ -153,6 +183,7 @@ export default function Page() {
                 // this same panel. Don't ask twice.
                 if (data.submitted) {
                     tellHost("lookout:done");
+                    setSettled("submitted");
                     return;
                 }
 
@@ -162,6 +193,7 @@ export default function Page() {
                     setName(data.suggestedName);
 
                 setContext(data);
+                tellHost("lookout:ready");
             }
             catch {
                 if (!isStale)
@@ -233,14 +265,19 @@ export default function Page() {
                 min-height: 0 !important;
                 display: block !important;
                 width: auto !important;
+                max-width: 100% !important;
+                /* The sheet scrolls, not us: its scrollbar is styleable and ours
+                   is not, and having both is what produced two of them. */
+                overflow: hidden !important;
                 overscroll-behavior: none;
             }
         `}</style>
     );
 
     if (loadError) {
+        tellHost("lookout:ready");
         return (
-            <div className={clsx("flex flex-col gap-4 p-5", light ? "text-black" : "text-white")}>
+            <div className={clsx(phantomSans.className, "flex flex-col gap-4 p-5", light ? "text-black" : "text-white")}>
                 {reset}
                 <p className="text-muted">{loadError}</p>
                 <Button onClick={() => tellHost("lookout:cancel")} className="w-full">Close</Button>
@@ -248,18 +285,33 @@ export default function Page() {
         );
     }
 
-    if (!context) {
+    if (settled) {
         return (
-            <div className="flex items-center justify-center gap-2 p-8 text-muted">
+            <div className={clsx(phantomSans.className, "flex flex-col items-center gap-2 px-4 py-8 text-center text-sm", light ? "text-black" : "text-white")}>
                 {reset}
-                <Icon glyph="clock" size={20} />
-                <span>Loading…</span>
+                <Icon glyph="checkmark" size={32} className="text-green" />
+                <p className="font-bold">All done</p>
+                <p className="text-muted text-xs">
+                    {
+                        settled === "submitted"
+                            ? "You've already filled this in - nothing else is needed."
+                            : "This timelapse has already been published."
+                    }
+                </p>
             </div>
         );
     }
 
+    // A real element, even with nothing in it. Returning just the styled-jsx
+    // <style> contributes no DOM, and with nothing to attach to the page never
+    // hydrated - so the fetch below never ran and the panel stayed blank for
+    // good. It still draws nothing visible: the sheet is holding its own
+    // spinner, and a second one inside the frame only competes with it.
+    if (!context)
+        return <div className={phantomSans.className} aria-busy="true">{reset}</div>;
+
     return (
-        <div className={clsx("flex flex-col gap-6 px-5 pt-1 pb-5", light ? "text-black" : "text-white")}>
+        <div className={clsx(phantomSans.className, "flex flex-col gap-3 px-4 pt-1 pb-4 text-sm", light ? "text-black" : "text-white")}>
             {reset}
             <div className="flex items-center gap-3">
                 <StepMarker index={1} label="Details" state={step === "details" ? "current" : "done"} />
@@ -267,12 +319,18 @@ export default function Page() {
                 <StepMarker index={2} label="Hackatime" state={step === "hackatime" ? "current" : "upcoming"} />
             </div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)]">
+            {/* `relative`, with the inactive step taken out of flow. Both steps used to
+                share a grid cell, which makes the container as tall as the taller of the
+                two - so the reported height never changed between them and the sheet sat
+                at the Details height while showing Hackatime. */}
+            <div className="relative">
                 <div
                     inert={step !== "details"}
                     className={clsx(
-                        "col-start-1 row-start-1 min-w-0 flex flex-col gap-6 transition-[translate,opacity] duration-300 ease-out",
-                        step === "details" ? "translate-x-0 opacity-100" : "-translate-x-8 opacity-0"
+                        "min-w-0 flex flex-col gap-3 transition-[translate,opacity] duration-300 ease-out",
+                        step === "details"
+                            ? "relative translate-x-0 opacity-100"
+                            : "absolute inset-x-0 top-0 pointer-events-none -translate-x-8 opacity-0"
                     )}
                 >
                     <TextInput
@@ -293,42 +351,35 @@ export default function Page() {
 
                     <div className="flex flex-col w-full">
                         <label className="font-bold">Visibility</label>
-                        <p className="text-muted mb-2">Choose who can see your timelapse.</p>
-                        <VisibilityPicker value={visibility} onChange={setVisibility} />
+                        <p className="text-muted mb-1.5 text-xs">Choose who can see your timelapse.</p>
+                        <VisibilityPicker value={visibility} onChange={setVisibility} compact />
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                        <Button
-                            onClick={() => setStep("hackatime")}
-                            disabled={!visibility || isPublishing}
-                            kind="primary"
-                            className="w-full"
-                        >
-                            Continue
-                        </Button>
-
-                        {/* Not "Discard": closing the sheet throws nothing away. The recording keeps
-                            compiling and the desktop app offers this again from the session page. */}
-                        <Button
-                            onClick={() => tellHost("lookout:cancel")}
-                            disabled={isPublishing}
-                            className="w-full"
-                        >
-                            Not now
-                        </Button>
-                    </div>
+                    {/* No "not now" of our own: the sheet's own close control already
+                        does that, and closing throws nothing away - the recording keeps
+                        compiling and the app offers this again from the session page. */}
+                    <Button
+                        onClick={() => setStep("hackatime")}
+                        disabled={!visibility || isPublishing}
+                        kind="primary"
+                        className="w-full !h-10"
+                    >
+                        Continue
+                    </Button>
                 </div>
 
                 <div
                     inert={step !== "hackatime"}
                     className={clsx(
-                        "col-start-1 row-start-1 min-w-0 flex flex-col gap-6 transition-[translate,opacity] duration-300 ease-out",
-                        step === "hackatime" ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"
+                        "min-w-0 flex flex-col gap-3 transition-[translate,opacity] duration-300 ease-out",
+                        step === "hackatime"
+                            ? "relative translate-x-0 opacity-100"
+                            : "absolute inset-x-0 top-0 pointer-events-none translate-x-8 opacity-0"
                     )}
                 >
                     <div className="flex flex-col w-full">
                         <label className="font-bold">Sync with Hackatime</label>
-                        <p className="text-muted">
+                        <p className="text-muted text-xs">
                             Pick the project your timelapsed time should be added to, or leave it unpicked to publish
                             without syncing.
                         </p>
@@ -357,7 +408,7 @@ export default function Page() {
                             onClick={publish}
                             disabled={isLoadingHackatime || isPublishing}
                             kind="primary"
-                            className="w-full"
+                            className="w-full !h-10"
                         >
                             {
                                 isPublishing ? "Publishing..." :
@@ -370,7 +421,7 @@ export default function Page() {
                             onClick={() => setStep("details")}
                             disabled={isPublishing}
                             icon="view-back"
-                            className="w-full"
+                            className={clsx("w-full !h-10", light && "!bg-snow !text-black hover:!bg-smoke")}
                         >
                             Back
                         </Button>
