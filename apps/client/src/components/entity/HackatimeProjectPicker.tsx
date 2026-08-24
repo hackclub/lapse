@@ -169,9 +169,10 @@ export function prefetchHackatimeProjects() {
   return pendingProjects;
 }
 
-function PickerRow({ icon, selected, onClick, className, children }: {
+function PickerRow({ icon, selected, compact, onClick, className, children }: {
   icon?: IconGlyph;
   selected: boolean;
+  compact?: boolean;
   onClick: () => void;
   className?: string;
   children: ReactNode;
@@ -185,7 +186,8 @@ function PickerRow({ icon, selected, onClick, className, children }: {
       aria-checked={selected}
       onClick={onClick}
       className={clsx(
-        "flex items-center gap-2 w-full text-left px-4 py-2 cursor-pointer transition-colors",
+        "flex items-center gap-2 w-full text-left cursor-pointer transition-colors",
+        compact ? "px-3 py-1" : "px-4 py-2",
         selected ? "bg-red text-white" : "hover:bg-darkless",
         className
       )}
@@ -200,15 +202,16 @@ function PickerRow({ icon, selected, onClick, className, children }: {
   );
 }
 
-function ProjectRow({ project, selected, onClick }: {
+function ProjectRow({ project, selected, compact, onClick }: {
   project: HackatimeProject;
   selected: boolean;
+  compact?: boolean;
   onClick: () => void;
 }) {
   const { pills, hiddenCount } = summarizeLanguages(project.languages);
 
   return (
-    <PickerRow selected={selected} onClick={onClick}>
+    <PickerRow selected={selected} compact={compact} onClick={onClick}>
       <span className="flex-1 min-w-0 flex items-center gap-2">
         <span className="font-bold truncate" title={project.name}>{project.name}</span>
 
@@ -247,7 +250,7 @@ function ProjectRow({ project, selected, onClick }: {
  * `onChange` and `onLoadingChange` are expected to be stable across renders (a `useState` setter is ideal); they are
  * called from effects, so an inline lambda would fire them on every render.
  */
-export function HackatimeProjectPicker({ isActive, initialProject, onChange, onLoadingChange, loadProjects }: {
+export function HackatimeProjectPicker({ isActive, initialProject, onChange, onLoadingChange, loadProjects, compact }: {
   /** Whether the picker is currently on-screen. Switching this on refreshes the picker's state. */
   isActive: boolean;
 
@@ -266,6 +269,14 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
    * belongs to the signed-in user.
    */
   loadProjects?: () => Promise<HackatimeProject[]>;
+
+  /**
+   * Tighten the rows and shorten the scroll list.
+   *
+   * For the Lookout panel, whose whole height is a sheet over the desktop app's window - the list
+   * being one row shorter costs a scroll, while the sheet being too tall costs the video behind it.
+   */
+  compact?: boolean;
 }) {
   const usesOwnLoader = Boolean(loadProjects);
   const [projects, setProjects] = useState<HackatimeProject[]>(() => usesOwnLoader ? [] : cachedProjects ?? []);
@@ -478,7 +489,7 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
                   onKeyDown={handleSearchKeyDown}
                   aria-label="Search your Hackatime projects"
                   placeholder="Search your projects..."
-                  className="flex-1 min-w-0 bg-transparent outline-none py-2 pl-1 placeholder:text-secondary"
+                  className={clsx("flex-1 min-w-0 bg-transparent outline-none pl-1 placeholder:text-secondary", compact ? "py-1" : "py-2")}
                 />
                 {query && (
                   <button
@@ -498,9 +509,9 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
               aria-label="Hackatime project"
               className="flex flex-col border border-slate rounded-xl overflow-hidden"
             >
-              <div className="flex flex-col max-h-64 overflow-y-auto overscroll-contain">
+              <div className={clsx("flex flex-col overflow-y-auto overscroll-contain", compact ? "max-h-40" : "max-h-64")}>
                 {filteredProjects.length === 0 ? (
-                  <p className="px-4 py-2 text-muted">
+                  <p className={clsx("text-muted", compact ? "px-3 py-1" : "px-4 py-2")}>
                     No existing projects matched &ldquo;{query.trim()}&rdquo;.
                   </p>
                 ) : (
@@ -509,6 +520,7 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
                       key={project.name}
                       project={project}
                       selected={effectiveMode === "existing" && selectedProject === project.name}
+                      compact={compact}
                       onClick={() => handleToggleExisting(project.name)}
                     />
                   ))
@@ -519,8 +531,9 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
                 <PickerRow
                   icon="plus"
                   selected={effectiveMode === "new"}
+                  compact={compact}
                   onClick={handleToggleNew}
-                  className="py-3!"
+                  className={compact ? "py-2!" : "py-3!"}
                 >
                   <span className="flex-1 font-bold">
                     {

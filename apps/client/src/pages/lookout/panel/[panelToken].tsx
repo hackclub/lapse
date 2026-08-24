@@ -398,6 +398,7 @@ export default function Page() {
                                 onChange={setHackatimeProject}
                                 onLoadingChange={setIsLoadingHackatime}
                                 loadProjects={loadHackatimeProjects}
+                                compact
                             />
                         ) : (
                             <p className="text-muted">
