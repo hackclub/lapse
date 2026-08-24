@@ -84,10 +84,15 @@ type CreateSessionBody = {
 /**
  * Creates the session, dropping `panelUrl` and retrying if Lookout rejects it.
  *
- * Lookout's create endpoint refuses unknown fields outright, so a Lookout that predates panels
- * answers a 400 rather than ignoring the one field it doesn't recognise - which would take recording
- * down entirely for the window between our deploy and theirs. Losing the in-app publish panel for
- * that window is a fair price; losing recording is not. The redirect hook still covers the flow.
+ * Not actually needed against Lookout as it stands: its create endpoint declares
+ * `additionalProperties: false`, and Fastify's Ajv defaults to *removing* unknown properties rather
+ * than erroring - so a Lookout that predates panels silently ignores `panelUrl` and creates the
+ * session anyway (verified against a real pre-panel-shaped request, which returns 201). Deploying
+ * this side first is therefore already safe.
+ *
+ * Kept because that graceful behaviour is a default we do not control, one config change away from
+ * becoming a 400 that would take recording down for everyone until the other side deployed. Losing
+ * the in-app panel for that window is a fair price; losing recording is not.
  */
 async function createSessionWithFallback(body: CreateSessionBody): Promise<LookoutSessionCreated> {
     try {
@@ -135,6 +140,11 @@ async function postCreateSession(body: CreateSessionBody): Promise<LookoutSessio
 export async function markPanelResolved(sessionId: string): Promise<void> {
     await lookoutFetch<{ panelResolved: boolean }>(`/api/internal/sessions/${sessionId}/panel-resolved`, {
         method: "POST",
+        // `{}` rather than nothing: `lookoutFetch` always sends a JSON content type, and Fastify
+        // rejects that with an empty body before the route is ever reached. Without this the call
+        // 400s every single time - which is silent here, because a failed resolve is only logged,
+        // and shows up much later as the desktop app still asking for details already given.
+        body: "{}",
     });
 }
 
