@@ -520,6 +520,8 @@ export default function LookoutRecorder() {
     primeCleanupRef.current = null;
   }, []);
 
+  const desktopOnly = router.query.desktop === "true";
+
   const checkLookoutDrafts = useCallback(async () => {
     try {
       const res = await api.timelapse.getLookoutDrafts({});
@@ -538,13 +540,20 @@ export default function LookoutRecorder() {
 
   useEffect(() => {
     if (initialized.current) return;
+    if (!router.isReady) return;
     if (auth.isLoading || !auth.currentUser) return;
     initialized.current = true;
+
+    if (desktopOnly) {
+      setHasDrafts(false);
+      setPhase("ready");
+      return;
+    }
 
     // Legacy recordings (unfinished OPFS captures or unpublished drafts) are recovered from the dedicated
     // `/timelapse/recover` page, surfaced by the site-wide banner - not from the create flow.
     checkLookoutDrafts();
-  }, [auth.isLoading, auth.currentUser, checkLookoutDrafts]);
+  }, [router.isReady, desktopOnly, auth.isLoading, auth.currentUser, checkLookoutDrafts]);
 
   async function createSessionAndStart(onReady: (cfg: LookoutSessionConfig) => void) {
     setIsCreating(true);
