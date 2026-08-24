@@ -276,13 +276,70 @@ export default function Page() {
                 overflow: hidden !important;
                 overscroll-behavior: none;
             }
+
+            /* Lapse is a dark-only site - globals.css defines one palette, on
+               :root. The panel is the one place that has to follow someone
+               else's chrome, so light mode is a scoped redefinition of those
+               same variables rather than a second set of classes. Tailwind
+               compiles every utility to a var() read, so the shared components
+               inside here follow it without knowing the panel exists. */
+            .lookout-light {
+                --text: #1f2d3d;
+                --background: #ffffff;
+                --elevated: #ffffff;
+                --sheet: #ffffff;
+                --sunken: #f1f3f7;
+                --border: #e0e6ed;
+                --placeholder: #8492a6;
+                --secondary: #5f6f83;
+
+                /* Spelled out rather than left to the --color-x: var(--x)
+                   aliases in the theme. A var() in a custom property is
+                   substituted where it is DECLARED, so those aliases resolved
+                   against :root once and inherit the dark value no matter what
+                   this block says about --text. */
+                --color-text: #1f2d3d;
+                --color-background: #ffffff;
+                --color-elevated: #ffffff;
+                --color-sheet: #ffffff;
+                --color-sunken: #f1f3f7;
+                --color-border: #e0e6ed;
+                --color-placeholder: #8492a6;
+                --color-secondary: #5f6f83;
+
+                --color-dark: #ffffff;
+                --color-darker: #f1f3f7;
+                --color-darkless: #f1f3f7;
+                --color-steel: #e0e6ed;
+                --color-slate: #d3dae4;
+                --color-muted: #5f6f83;
+            }
+
+            /* text-white is baked into shared components, where it is right on
+               a red or green fill and wrong on anything the block above just
+               turned light. Both cases are a neutral fill: the "regular" button
+               kind, and any disabled button - which Button fills with darkless
+               and leaves white-on-white here. A disabled control reading as
+               muted is what it should have looked like anyway. */
+            .lookout-light .bg-dark.text-white {
+                color: var(--text);
+            }
+
+            /* An attribute match, because the class really is named
+               "bg-darkless!" and a CSS escape for that has to survive both this
+               template literal and styled-jsx. Button never sets the disabled
+               attribute either - it just drops the handler - so :disabled would
+               match nothing. */
+            .lookout-light [class~="bg-darkless!"].text-white {
+                color: var(--color-muted);
+            }
         `}</style>
     );
 
     if (loadError) {
         tellHost("lookout:ready");
         return (
-            <div className={clsx(phantomSans.className, "flex flex-col gap-4 p-5", light ? "text-black" : "text-white")}>
+            <div className={clsx(phantomSans.className, light && "lookout-light", "flex flex-col gap-4 p-5 text-text")}>
                 {reset}
                 <p className="text-muted">{loadError}</p>
                 <Button onClick={() => tellHost("lookout:cancel")} className="w-full">Close</Button>
@@ -292,7 +349,7 @@ export default function Page() {
 
     if (settled) {
         return (
-            <div className={clsx(phantomSans.className, "flex flex-col items-center gap-2 px-4 py-8 text-center text-sm", light ? "text-black" : "text-white")}>
+            <div className={clsx(phantomSans.className, light && "lookout-light", "flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-text")}>
                 {reset}
                 <Icon glyph="checkmark" size={32} className="text-green" />
                 <p className="font-bold">All done</p>
@@ -316,11 +373,11 @@ export default function Page() {
         return <div className={phantomSans.className} aria-busy="true">{reset}</div>;
 
     return (
-        <div className={clsx(phantomSans.className, "flex flex-col gap-3 px-4 pt-1 pb-4 text-sm", light ? "text-black" : "text-white")}>
+        <div className={clsx(phantomSans.className, light && "lookout-light", "flex flex-col gap-3 px-4 pt-1 pb-4 text-sm text-text")}>
             {reset}
             <div className="flex items-center gap-3">
                 <StepMarker index={1} label="Details" state={step === "details" ? "current" : "done"} />
-                <div className={clsx("h-px flex-1", light ? "bg-smoke" : "bg-darkless")} />
+                <div className="h-px flex-1 bg-border" />
                 <StepMarker index={2} label="Hackatime" state={step === "hackatime" ? "current" : "upcoming"} />
             </div>
 
@@ -427,7 +484,7 @@ export default function Page() {
                             onClick={() => setStep("details")}
                             disabled={isPublishing}
                             icon="view-back"
-                            className={clsx("w-full !h-10", light && "!bg-snow !text-black hover:!bg-smoke")}
+                            className="w-full !h-10 bg-elevated text-text border border-slate"
                         >
                             Back
                         </Button>
