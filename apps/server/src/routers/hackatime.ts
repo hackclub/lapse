@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { hackatimeRouterContract } from "@hackclub/lapse-api";
+import { hackatimeRouterContract, type HackatimeProject } from "@hackclub/lapse-api";
 
 import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
 import { dtoOwnedTimelapse, dtoTimelapse, TIMELAPSE_INCLUDES } from "@/routers/timelapse.js";
@@ -10,6 +10,35 @@ import { logError } from "@/logging.js";
 import { apiErr } from "@/common.js";
 import { HackatimeApiError, HackatimeOAuthApi } from "@/hackatime.js";
 import { maybe } from "@hackclub/lapse-shared";
+
+import * as db from "@/generated/prisma/client.js";
+
+/**
+ * The user's Hackatime projects, most recently worked on first.
+ *
+ * Extracted from `allProjects` so the Lookout publish panel can offer the same picker. The panel is
+ * authenticated by its own URL rather than by a signed-in user, so it cannot call the procedure.
+ */
+export async function hackatimeProjectsForUser(user: db.User): Promise<HackatimeProject[]> {
+    if (!user.hackatimeId || !user.hackatimeAccessToken)
+        return [];
+
+    const oauthApi = new HackatimeOAuthApi(user.hackatimeAccessToken);
+    const projects = await oauthApi.getProjects();
+
+    return projects
+        .filter(p => typeof p.name === "string" && p.name.trim().length > 0)
+        .sort((a, b) => {
+            const aTime = a.most_recent_heartbeat ? new Date(a.most_recent_heartbeat).getTime() : 0;
+            const bTime = b.most_recent_heartbeat ? new Date(b.most_recent_heartbeat).getTime() : 0;
+            return bTime - aTime;
+        })
+        .map(p => ({
+            name: p.name,
+            totalSeconds: p.total_seconds,
+            languages: (p.languages ?? []).filter(x => typeof x === "string" && x.trim().length > 0)
+        }));
+}
 
 const os = implement(hackatimeRouterContract)
     .$context<Context>()
@@ -33,25 +62,8 @@ export default os.router({
             if (!dbUser.hackatimeId || !dbUser.hackatimeAccessToken)
                 return apiErr("ERROR", "You must have a linked Hackatime account!");
 
-            const oauthApi = new HackatimeOAuthApi(dbUser.hackatimeAccessToken);
-            
             try {
-                const projects = await oauthApi.getProjects();
-
-                const filteredProjects = projects
-                    .filter(p => typeof p.name === "string" && p.name.trim().length > 0)
-                    .sort((a, b) => {
-                        const aTime = a.most_recent_heartbeat ? new Date(a.most_recent_heartbeat).getTime() : 0;
-                        const bTime = b.most_recent_heartbeat ? new Date(b.most_recent_heartbeat).getTime() : 0;
-                        return bTime - aTime;
-                    })
-                    .map(p => ({
-                        name: p.name,
-                        totalSeconds: p.total_seconds,
-                        languages: (p.languages ?? []).filter(x => typeof x === "string" && x.trim().length > 0)
-                    }));
-
-                return apiOk({ projects: filteredProjects });
+                return apiOk({ projects: await hackatimeProjectsForUser(dbUser) });
             }
             catch (error) {
                 logError("Failed to fetch Hackatime projects", { error, userId: caller.id });

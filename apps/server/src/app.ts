@@ -26,6 +26,8 @@ import { ADMIN_ROUTE_PATHS } from "@/adminKey.js";
 import { registerDetectionRoutes } from "@/detections.js";
 import { registerUserSearchRoutes } from "@/userSearch.js";
 import { registerUserTimelapseRoutes } from "@/userTimelapses.js";
+import { registerLookoutDesktopRoutes } from "@/lookoutDesktop.js";
+import { startLookoutPublishSweeper } from "@/lookoutPublish.js";
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -109,6 +111,14 @@ server.addContentTypeParser("*", (request, payload, done) => {
 registerDetectionRoutes(server);
 registerUserSearchRoutes(server);
 registerUserTimelapseRoutes(server);
+
+// Lookout's desktop app talks to these directly - device pairing, starting a recording without a
+// browser, and the publish panel it renders in-app. See `lookoutDesktop.ts`.
+registerLookoutDesktopRoutes(server);
+
+// Lookout has no webhook, so a recording whose publish details were filled in before it finished
+// compiling needs someone to notice it is ready. See `lookoutPublish.ts`.
+startLookoutPublishSweeper();
 
 server.all("/api/*", async (req, reply) => {
     const actor = await getAuthenticatedUser(req);

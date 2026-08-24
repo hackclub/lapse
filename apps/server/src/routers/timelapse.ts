@@ -16,6 +16,8 @@ import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/h
 import { dtoComment, type DbComment } from "@/routers/comment.js";
 import { enqueueRealizeJob } from "@/job.js";
 import * as lookout from "@/lookout.js";
+import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
+import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
 
 const s3 = new S3Client({
     region: "auto",
@@ -502,6 +504,47 @@ export default os.router({
             return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
         }),
 
+    approveDesktopPairing: os.approveDesktopPairing
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const code = await createPairingCode(req.context.user.id, req.input.challenge, req.input.label);
+            return apiOk({ code });
+        }),
+
+    listDesktopDevices: os.listDesktopDevices
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const devices = await database().lookoutDevice.findMany({
+                where: { ownerId: req.context.user.id },
+                orderBy: { createdAt: "desc" },
+            });
+
+            return apiOk({
+                devices: devices.map(d => ({
+                    id: d.id,
+                    label: d.label,
+                    createdAt: d.createdAt.toISOString(),
+                    lastUsedAt: d.lastUsedAt?.toISOString() ?? null,
+                })),
+            });
+        }),
+
+    revokeDesktopDevice: os.revokeDesktopDevice
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const deleted = await database().lookoutDevice.deleteMany({
+                where: { id: req.input.id, ownerId: req.context.user.id },
+            });
+
+            return apiOk({ revoked: deleted.count > 0 });
+        }),
+
     createRecordingSession: os.createRecordingSession
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
@@ -513,6 +556,7 @@ export default os.router({
             // the hook's URL points at - has to exist before the session does. Mint it here instead of letting the
             // database default do it; `lapseId()` is the same 12-character NanoID the schema would have generated.
             const draftId = lapseId();
+            const panelToken = generatePanelToken();
 
             const session = await lookout.createSession(undefined, {
                 lapseUserId: caller.id,
@@ -525,6 +569,10 @@ export default os.router({
                 // caller: any client holding `timelapse:write` could otherwise have the desktop app open an arbitrary
                 // URL in the user's default browser.
                 redirectUrl: `${env.WEB_BASE_URL}/timelapse/handoff/${draftId}`,
+                // Where the desktop app renders our publish flow, in place of that redirect. Unguessable because a
+                // third-party iframe receives none of our cookies: this URL is all the panel has to prove which draft
+                // it belongs to.
+                panelUrl: `${env.WEB_BASE_URL}/lookout/panel/${panelToken}`,
             });
 
             const draft = await database().draftLookoutTimelapse.create({
@@ -532,6 +580,7 @@ export default os.router({
                     id: draftId,
                     lookoutSessionId: session.sessionId,
                     lookoutToken: session.token,
+                    panelToken,
                     ownerId: caller.id,
                 }
             });
@@ -557,6 +606,13 @@ export default os.router({
 
             const results = await Promise.all(drafts.map(async (draft) => {
                 try {
+                    // A draft the user already answered in the desktop panel publishes as soon as its
+                    // video is ready. This runs at login, which is the first thing that happens after
+                    // someone closes the app mid-compile - so it is the likeliest place to notice.
+                    const finalized = await finalizeIfPending(draft);
+                    if (finalized?.kind === "published")
+                        return null;
+
                     const session = await lookout.getSession(draft.lookoutSessionId);
                     return {
                         id: draft.id,
@@ -604,6 +660,20 @@ export default os.router({
             if (!draft)
                 return apiErr("NOT_FOUND", "Couldn't find that draft!");
 
+            // A draft with answers already in it (the user filled the panel in the desktop app)
+            // publishes the moment we notice the video is ready. This poll is where a returning
+            // user notices first, so take the chance rather than waiting for the next sweep.
+            const finalized = await finalizeIfPending(draft);
+            if (finalized?.kind === "published") {
+                return apiOk({
+                    lookoutStatus: "complete",
+                    videoUrl: finalized.timelapse.lookoutVideoUrl,
+                    thumbnailUrl: finalized.timelapse.lookoutThumbnailUrl,
+                    recordedOnDesktop: true,
+                    publishedTimelapseId: finalized.timelapse.id,
+                });
+            }
+
             const session = await lookout.getSession(draft.lookoutSessionId);
 
             return apiOk({
@@ -611,6 +681,9 @@ export default os.router({
                 videoUrl: session.session.videoUrl,
                 thumbnailUrl: session.session.thumbnailUrl,
                 recordedOnDesktop: lookout.isDesktopClient(session.clientInfo),
+                // Non-null when the desktop panel has already taken the user's answers, so the
+                // website knows not to ask again.
+                publishedTimelapseId: null,
             });
         }),
 
@@ -635,45 +708,25 @@ export default os.router({
             if (alreadyPublished)
                 return apiErr("ERROR", "This session has already been published.");
 
-            const session = await lookout.getSession(draft.lookoutSessionId);
-
-            if (session.session.status !== "complete")
-                return apiErr("ERROR", `Lookout session is not ready yet (status: ${session.session.status}).`);
-
-            const timings = await lookout.getTimings(draft.lookoutToken);
-            const snapshots = timings.timestamps.map(ts => new Date(ts));
-            const duration = durationBySnapshots(snapshots);
-
-            const timelapse = await database().timelapse.create({
-                data: {
-                    id: lapseId(),
-                    createdAt: draft.createdAt,
-                    ownerId: caller.id,
-                    name: req.input.name,
-                    description: req.input.description ?? "",
-                    visibility: req.input.visibility,
-                    lookoutSessionId: draft.lookoutSessionId,
-                    lookoutToken: draft.lookoutToken,
-                    lookoutVideoUrl: session.session.videoUrl,
-                    lookoutThumbnailUrl: session.session.thumbnailUrl,
-                    snapshots,
-                    duration,
-                    hackatimeProject: req.input.hackatimeProject ?? null,
-                },
-                include: TIMELAPSE_INCLUDES
+            // Store the answers, then publish - the same two steps the desktop panel takes, so a
+            // timelapse published from here and one published from the app cannot drift apart. If
+            // the compile turns out not to be finished, the answers are already safe and the
+            // sweeper finishes the job without the user.
+            const pending = await storePublishIntent(draft, {
+                name: req.input.name,
+                description: req.input.description ?? "",
+                visibility: req.input.visibility,
+                hackatimeProject: req.input.hackatimeProject ?? null,
             });
 
-            await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
+            const outcome = await finalizeLookoutDraft(pending);
 
-            if (req.input.hackatimeProject && caller.hackatimeId && caller.hackatimeAccessToken) {
-                try {
-                    await syncTimelapseWithHackatime(timelapse, caller);
-                }
-                catch (err) {
-                    logError("Couldn't sync heartbeats during Lookout publish!", { err });
-                }
-            }
+            if (outcome.kind === "failed")
+                return apiErr("ERROR", "Lookout couldn't compile this recording.");
 
-            return apiOk({ timelapse: dtoOwnedTimelapse(timelapse) });
+            if (outcome.kind === "waiting")
+                return apiErr("ERROR", `Lookout session is not ready yet (status: ${outcome.status}). Your details are saved and it will publish itself once the video is ready.`);
+
+            return apiOk({ timelapse: dtoOwnedTimelapse(outcome.timelapse) });
         }),
 });

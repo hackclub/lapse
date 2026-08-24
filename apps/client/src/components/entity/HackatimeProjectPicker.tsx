@@ -247,7 +247,7 @@ function ProjectRow({ project, selected, onClick }: {
  * `onChange` and `onLoadingChange` are expected to be stable across renders (a `useState` setter is ideal); they are
  * called from effects, so an inline lambda would fire them on every render.
  */
-export function HackatimeProjectPicker({ isActive, initialProject, onChange, onLoadingChange }: {
+export function HackatimeProjectPicker({ isActive, initialProject, onChange, onLoadingChange, loadProjects }: {
   /** Whether the picker is currently on-screen. Switching this on refreshes the picker's state. */
   isActive: boolean;
 
@@ -256,12 +256,20 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
 
   onChange: (hackatimeProject: string | null) => void;
   onLoadingChange?: (isLoading: boolean) => void;
-}) {
-  const router = useRouter();
-  const needsRelink = useHackatimeRelink();
 
-  const [projects, setProjects] = useState<HackatimeProject[]>(() => cachedProjects ?? []);
-  const [isLoadingProjects, setIsLoadingProjects] = useState(cachedProjects === null);
+  /**
+   * Where to get the project list from, when it cannot come from the signed-in user.
+   *
+   * The Lookout publish panel renders inside the desktop app as a third-party iframe, so it has none
+   * of our cookies and cannot call `hackatime.allProjects` at all - it reads the list through its own
+   * panel token instead. Results from here are deliberately not put in the module cache, which
+   * belongs to the signed-in user.
+   */
+  loadProjects?: () => Promise<HackatimeProject[]>;
+}) {
+  const usesOwnLoader = Boolean(loadProjects);
+  const [projects, setProjects] = useState<HackatimeProject[]>(() => usesOwnLoader ? [] : cachedProjects ?? []);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(usesOwnLoader || cachedProjects === null);
 
   function reconnect() {
     router.push(`/auth?force=1&redirect=${encodeURIComponent(router.asPath)}`);
@@ -281,13 +289,20 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
   const isSeededRef = useRef(false);
 
   // The list loads even while the picker is off-screen, so that whoever renders it can reserve its height upfront.
+  const loadProjectsRef = useRef(loadProjects);
+  useEffect(() => { loadProjectsRef.current = loadProjects; }, [loadProjects]);
+
   useEffect(() => {
-    if (cachedProjects)
+    const loader = loadProjectsRef.current;
+
+    if (!loader && cachedProjects)
       return;
 
     let isStale = false;
 
-    prefetchHackatimeProjects().then(loaded => {
+    const request = loader ? loader().catch(() => [] as HackatimeProject[]) : prefetchHackatimeProjects();
+
+    request.then(loaded => {
       if (isStale)
         return;
 
