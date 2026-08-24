@@ -187,7 +187,7 @@ function PickerRow({ icon, selected, compact, onClick, className, children }: {
       onClick={onClick}
       className={clsx(
         "flex items-center gap-2 w-full text-left cursor-pointer transition-colors",
-        compact ? "px-3 py-1" : "px-4 py-2",
+        compact ? "px-3 py-1.5" : "px-4 py-2",
         selected ? "bg-red text-white" : "hover:bg-darkless",
         className
       )}
@@ -463,6 +463,11 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
     handleSelectExisting(filteredProjects[0].name);
   }
 
+  // Once "make a new project" is the answer, the list of existing ones is just height - and in the
+  // Lookout panel that height is a sheet sitting over the video. The row stays, so the choice is
+  // still visible and still reversible.
+  const listCollapsed = compact && effectiveMode === "new";
+
   if (isLoadingProjects) {
     return (
       <div className="flex flex-col gap-3">
@@ -479,7 +484,7 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
       <div className="flex flex-col gap-3">
         {hasProjects ? (
           <>
-            {projects.length >= SEARCH_THRESHOLD && (
+            {projects.length >= SEARCH_THRESHOLD && !listCollapsed && (
               <div className="flex items-center px-3 rounded-xl border border-slate focus-within:outline-2 focus-within:outline-red">
                 <Icon glyph="search" size={20} className="text-muted shrink-0" />
                 <input
@@ -509,25 +514,27 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
               aria-label="Hackatime project"
               className="flex flex-col border border-slate rounded-xl overflow-hidden"
             >
-              <div className={clsx("flex flex-col overflow-y-auto overscroll-contain", compact ? "max-h-40" : "max-h-64")}>
-                {filteredProjects.length === 0 ? (
-                  <p className={clsx("text-muted", compact ? "px-3 py-1" : "px-4 py-2")}>
-                    No existing projects matched &ldquo;{query.trim()}&rdquo;.
-                  </p>
-                ) : (
-                  filteredProjects.map(project => (
-                    <ProjectRow
-                      key={project.name}
-                      project={project}
-                      selected={effectiveMode === "existing" && selectedProject === project.name}
-                      compact={compact}
-                      onClick={() => handleToggleExisting(project.name)}
-                    />
-                  ))
-                )}
-              </div>
+              {!listCollapsed && (
+                <div className={clsx("flex flex-col overflow-y-auto overscroll-contain", compact ? "max-h-32" : "max-h-64")}>
+                  {filteredProjects.length === 0 ? (
+                    <p className={clsx("text-muted", compact ? "px-3 py-1.5" : "px-4 py-2")}>
+                      No existing projects matched &ldquo;{query.trim()}&rdquo;.
+                    </p>
+                  ) : (
+                    filteredProjects.map(project => (
+                      <ProjectRow
+                        key={project.name}
+                        project={project}
+                        selected={effectiveMode === "existing" && selectedProject === project.name}
+                        compact={compact}
+                        onClick={() => handleToggleExisting(project.name)}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
 
-              <div className="border-t border-slate">
+              <div className={clsx(!listCollapsed && "border-t border-slate")}>
                 <PickerRow
                   icon="plus"
                   selected={effectiveMode === "new"}
