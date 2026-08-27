@@ -276,7 +276,8 @@ export const adminRouterContract = {
             pushed: z.number().int().nonnegative(),
             failed: z.number().int().nonnegative(),
             sampleIds: z.array(LapseId),
-            nextCursor: LapseId.nullable()
+            nextCursor: LapseId.nullable(),
+            rateLimited: z.boolean()
         })),
 
     programKey: {

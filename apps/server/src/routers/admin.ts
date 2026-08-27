@@ -7,6 +7,7 @@ import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { logError, logInfo } from "@/logging.js";
+import { HackatimeApiError } from "@/hackatime.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
 import { durationBySnapshots, hackatimeApiKeyFor, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
@@ -595,11 +596,13 @@ export default os.router({
             }
 
             if (dryRun) {
-                return apiOk({ scanned: pending.length, pushed: 0, failed: 0, sampleIds, nextCursor });
+                return apiOk({ scanned: pending.length, pushed: 0, failed: 0, sampleIds, nextCursor, rateLimited: false });
             }
 
             let pushed = 0;
             let failed = 0;
+            let rateLimited = false;
+            let lastProcessedId: string | null = null;
 
             // One token exchange per owner rather than per timelapse, which Hackatime rate limits.
             const apiKeys = new Map<string, string>();
@@ -615,16 +618,32 @@ export default os.router({
 
                     await syncTimelapseWithHackatime(timelapse, timelapse.owner, apiKey);
                     pushed++;
+                    lastProcessedId = timelapse.id;
                 }
                 catch (err) {
+                    // Once Hackatime is refusing us there is nothing to gain from working through the rest of
+                    // the page - stop and hand the caller a cursor to resume from after a pause.
+                    if (err instanceof HackatimeApiError && err.status === 429) {
+                        rateLimited = true;
+                        break;
+                    }
+
                     failed++;
+                    lastProcessedId = timelapse.id;
                     logError(`Hackatime resync failed for timelapse ${timelapse.id}.`, { err });
                 }
             }
 
-            logInfo(`Hackatime resync pushed ${pushed}/${pending.length} timelapses (${failed} failed).`);
+            logInfo(`Hackatime resync pushed ${pushed}/${pending.length} timelapses (${failed} failed${rateLimited ? ", rate limited" : ""}).`);
 
-            return apiOk({ scanned: pending.length, pushed, failed, sampleIds, nextCursor });
+            return apiOk({
+                scanned: pushed + failed,
+                pushed,
+                failed,
+                sampleIds,
+                nextCursor: rateLimited ? (lastProcessedId ?? after ?? null) : nextCursor,
+                rateLimited
+            });
         }),
 
     programKey: os.programKey.router({

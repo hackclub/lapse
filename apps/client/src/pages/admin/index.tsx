@@ -1190,6 +1190,11 @@ function AdminAppsTable() {
   );
 }
 
+const COUNT_PAGE_SIZE = 500;
+const PUSH_PAGE_SIZE = 5;
+const RATE_LIMIT_PAUSE_SECONDS = 20;
+const MAX_RATE_LIMIT_PAUSES = 20;
+
 function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   entity: AdminEntity;
   query: QueryState;
@@ -1325,7 +1330,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         let countCursor: string | null = null;
 
         do {
-          const res = await api.admin.resyncHackatime({ ...target, dryRun: true, ...(countCursor ? { after: countCursor } : {}) });
+          const res = await api.admin.resyncHackatime({ ...target, dryRun: true, limit: COUNT_PAGE_SIZE, ...(countCursor ? { after: countCursor } : {}) });
           if (!res.ok)
             throw new Error(res.message);
 
@@ -1340,9 +1345,16 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
       let scanned = 0;
       let pushed = 0;
       let failed = 0;
+      let pauses = 0;
 
-      do {
-        const res = await api.admin.resyncHackatime({ ...target, dryRun, ...(cursor ? { after: cursor } : {}) });
+      for (;;) {
+        const res = await api.admin.resyncHackatime({
+          ...target,
+          dryRun,
+          limit: dryRun ? COUNT_PAGE_SIZE : PUSH_PAGE_SIZE,
+          ...(cursor ? { after: cursor } : {})
+        });
+
         if (!res.ok)
           throw new Error(res.message);
 
@@ -1352,12 +1364,28 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         cursor = res.data.nextCursor;
 
         if (!dryRun)
-          setResyncProgress({ processed: scanned, total });
+          setResyncProgress({ processed: pushed + failed, total });
+
+        if (res.data.rateLimited) {
+          pauses++;
+
+          if (pauses > MAX_RATE_LIMIT_PAUSES) {
+            setResyncError(`Hackatime is still rate limiting. ${pushed} synced so far - re-run to pick up where this left off.`);
+            break;
+          }
+
+          setResyncStatus(`Rate limited by Hackatime. Waiting ${RATE_LIMIT_PAUSE_SECONDS}s before continuing (${pushed} synced so far).`);
+          await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_PAUSE_SECONDS * 1000));
+          continue;
+        }
 
         setResyncStatus(dryRun
           ? `${scanned} timelapse(s) would be resynced${cursor ? ", still counting..." : "."}`
-          : `Resynced ${pushed} of ${scanned} timelapse(s)${failed > 0 ? `, ${failed} failed` : ""}${cursor ? "..." : "."}`);
-      } while (cursor);
+          : `Resynced ${pushed} of ${total || scanned} timelapse(s)${failed > 0 ? `, ${failed} failed` : ""}${cursor ? "..." : "."}`);
+
+        if (!cursor)
+          break;
+      }
     }
     catch (err) {
       setResyncError(err instanceof Error ? err.message : "Failed to resync with Hackatime.");

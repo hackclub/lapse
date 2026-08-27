@@ -94,7 +94,7 @@ export default function Page() {
   }, []);
 
   useInterval(async () => {
-    if (!draftId || compilationStatus !== "waiting") return;
+    if (!draftId || loadStatus || compilationStatus !== "waiting") return;
 
     // The status poll comes first: it's what tells us whether this session was recorded on the desktop, which
     // the edit-hold probe below needs to know before it decides to open anything.

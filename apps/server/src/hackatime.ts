@@ -181,6 +181,15 @@ export interface CreatedWakaTimeHeartbeat {
 
 export type WakaTimeResponse<T> = { data: T }
 
+export class HackatimeApiError extends Error {
+    readonly status: number;
+
+    constructor(status: number) {
+        super(`Hackatime API request failed with HTTP ${status}`);
+        this.status = status;
+    }
+}
+
 class HackatimeBase {
     private token: string;
 
@@ -201,7 +210,7 @@ class HackatimeBase {
 
         if (!req.ok) {
             logError("API request failed!", { req, method, params });
-            throw new Error(`Hackatime API request failed with HTTP ${req.status}`);
+            throw new HackatimeApiError(req.status);
         }
 
         return await req.json() as T;
@@ -209,6 +218,7 @@ class HackatimeBase {
 
     protected async queryWithRetry<T>(method: "GET" | "POST", endpoint: string, params: object = {}) {
         const MAX_RETRIES = 3;
+        const MAX_BACKOFF_SECONDS = 10;
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             const req = await fetch(`https://hackatime.hackclub.com/api/${endpoint}`, {
@@ -223,19 +233,19 @@ class HackatimeBase {
 
             if (req.status === 429 && attempt < MAX_RETRIES) {
                 const retryAfter = parseInt(req.headers.get("Retry-After") ?? "") || (2 ** attempt);
-                await sleep(retryAfter * 1000);
+                await sleep(Math.min(retryAfter, MAX_BACKOFF_SECONDS) * 1000);
                 continue;
             }
 
             if (!req.ok) {
                 logError("API request failed!", { req, method, params });
-                throw new Error(`Hackatime API request failed with HTTP ${req.status}`);
+                throw new HackatimeApiError(req.status);
             }
 
             return await req.json() as T;
         }
 
-        throw new Error("Hackatime API request failed: max retries exceeded");
+        throw new HackatimeApiError(429);
     }
 }
 
