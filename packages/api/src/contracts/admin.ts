@@ -248,6 +248,37 @@ export const adminRouterContract = {
             updated: z.number().int().nonnegative()
         })),
 
+    resyncHackatime: contract("POST", "/admin/resyncHackatime")
+        .route({ description: "Re-pushes Hackatime heartbeats for timelapses created within a window, for recovering from a Hackatime outage. Only affects timelapses that have a Hackatime project set. Hackatime discards heartbeats it already holds, so timelapses that synced normally are left untouched. Requires administrator permissions and an `elevated` grant." })
+        .input(
+            z.object({
+                id: LapseId.optional()
+                    .describe("Resyncs only this timelapse. Takes precedence over the window."),
+
+                from: LapseDate.optional()
+                    .describe("Start of the window, matched against the timelapse's creation date."),
+
+                to: LapseDate.optional()
+                    .describe("End of the window, matched against the timelapse's creation date."),
+
+                dryRun: z.boolean().default(true)
+                    .describe("When set, reports how many timelapses match without contacting Hackatime."),
+
+                limit: z.number().int().positive().max(500).default(100)
+                    .describe("The maximum number of timelapses to process in one request."),
+
+                after: LapseId.optional()
+                    .describe("Continues after this timelapse ID, using the `nextCursor` of a previous response."),
+            })
+        )
+        .output(apiResult({
+            scanned: z.number().int().nonnegative(),
+            pushed: z.number().int().nonnegative(),
+            failed: z.number().int().nonnegative(),
+            sampleIds: z.array(LapseId),
+            nextCursor: LapseId.nullable()
+        })),
+
     programKey: {
         create: contract()
             .route({ description: "Creates a new program key. The raw key is only returned with this response or when rotating. Requires ROOT access." })

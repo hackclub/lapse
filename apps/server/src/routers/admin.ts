@@ -6,9 +6,9 @@ import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requir
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
-import { logInfo } from "@/logging.js";
+import { logError, logInfo } from "@/logging.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
-import { durationBySnapshots } from "@/routers/timelapse.js";
+import { durationBySnapshots, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -555,6 +555,66 @@ export default os.router({
             logInfo(`Recalculated durations for ${updated} unrealized timelapses (skipped realized timelapses).`);
 
             return apiOk({ updated });
+        }),
+
+    resyncHackatime: os.resyncHackatime
+        .use(requiredAuth("ADMIN"))
+        .use(requiredScopes("elevated"))
+        .handler(async (req) => {
+            const { id, from, to, dryRun, limit, after } = req.input;
+
+            if (!id && (from == null || to == null))
+                return apiErr("MISSING_PARAMS", "Provide either a timelapse ID or both ends of a window.");
+
+            const candidates = await database().timelapse.findMany({
+                where: {
+                    ...(id
+                        ? { id }
+                        : { createdAt: { gte: new Date(from!), lte: new Date(to!) } }),
+                    hackatimeProject: { not: null },
+                    associatedJobId: null,
+                    visibility: { not: "FAILED_PROCESSING" },
+                    owner: {
+                        hackatimeId: { not: null },
+                        hackatimeAccessToken: { not: null }
+                    }
+                },
+                include: { owner: true },
+                orderBy: { id: "asc" },
+                take: limit,
+                ...(after ? { skip: 1, cursor: { id: after } } : {})
+            });
+
+            // Without snapshots there are no heartbeats to send, and the sync reports success regardless.
+            const pending = candidates.filter(x => x.snapshots.length > 0);
+            const sampleIds = pending.slice(0, 10).map(x => x.id);
+            const nextCursor = candidates.length === limit ? candidates[candidates.length - 1].id : null;
+
+            if (id && pending.length === 0) {
+                return apiErr("NOT_FOUND", "That timelapse can't be resynced: it needs a Hackatime project, snapshots, a linked Hackatime account, and to have finished processing.");
+            }
+
+            if (dryRun) {
+                return apiOk({ scanned: pending.length, pushed: 0, failed: 0, sampleIds, nextCursor });
+            }
+
+            let pushed = 0;
+            let failed = 0;
+
+            for (const timelapse of pending) {
+                try {
+                    await syncTimelapseWithHackatime(timelapse, timelapse.owner);
+                    pushed++;
+                }
+                catch (err) {
+                    failed++;
+                    logError(`Hackatime resync failed for timelapse ${timelapse.id}.`, { err });
+                }
+            }
+
+            logInfo(`Hackatime resync pushed ${pushed}/${pending.length} timelapses (${failed} failed).`);
+
+            return apiOk({ scanned: pending.length, pushed, failed, sampleIds, nextCursor });
         }),
 
     programKey: os.programKey.router({

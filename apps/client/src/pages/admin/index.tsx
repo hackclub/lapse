@@ -1204,6 +1204,13 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actionStatus, setActionStatus] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const [resyncOpen, setResyncOpen] = useState(false);
+  const [resyncId, setResyncId] = useState("");
+  const [resyncFrom, setResyncFrom] = useState(() => new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString());
+  const [resyncTo, setResyncTo] = useState(() => new Date().toISOString());
+  const [resyncError, setResyncError] = useState<string | null>(null);
+  const [resyncStatus, setResyncStatus] = useState<string | null>(null);
+  const [isResyncing, setIsResyncing] = useState(false);
 
   const fields = ADMIN_ENTITY_FIELDS[entity] as Record<string, AdminFieldDef>;
   const fieldKeys = Object.keys(fields);
@@ -1270,6 +1277,72 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
     }
     catch {
       setActionStatus({ message: "Failed to recalculate durations.", kind: "error" });
+    }
+  }
+
+  function openResync() {
+    setActionsOpen(false);
+    setResyncError(null);
+    setResyncStatus(null);
+    setResyncId("");
+    setResyncOpen(true);
+  }
+
+  async function handleResyncHackatime(dryRun: boolean) {
+    const targeted = resyncId.trim();
+    let window: { from: number; to: number } | null = null;
+
+    if (!targeted) {
+      const from = Date.parse(resyncFrom);
+      const to = Date.parse(resyncTo);
+
+      if (Number.isNaN(from) || Number.isNaN(to)) {
+        setResyncError("Both dates need to be valid ISO timestamps.");
+        return;
+      }
+
+      if (from > to) {
+        setResyncError("The start of the window has to come before the end.");
+        return;
+      }
+
+      window = { from, to };
+    }
+
+    setResyncError(null);
+    setResyncStatus(null);
+    setIsResyncing(true);
+
+    try {
+      let cursor: string | null = null;
+      let scanned = 0;
+      let pushed = 0;
+      let failed = 0;
+
+      do {
+        const res = await api.admin.resyncHackatime({
+          ...(targeted ? { id: targeted } : window!),
+          dryRun,
+          ...(cursor ? { after: cursor } : {})
+        });
+        if (!res.ok)
+          throw new Error(res.message);
+
+        scanned += res.data.scanned;
+        pushed += res.data.pushed;
+        failed += res.data.failed;
+        cursor = res.data.nextCursor;
+
+        setResyncStatus(dryRun
+          ? `${scanned} timelapse(s) would be resynced${cursor ? ", still counting..." : "."}`
+          : `Resynced ${pushed} of ${scanned} timelapse(s)${failed > 0 ? `, ${failed} failed` : ""}${cursor ? "..." : "."}`);
+      } while (cursor);
+    }
+    catch (err) {
+      setResyncError(err instanceof Error ? err.message : "Failed to resync with Hackatime.");
+    }
+    finally {
+      setIsResyncing(false);
     }
   }
 
@@ -1350,6 +1423,54 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         isSaving={isSaving}
       />
 
+      <Modal isOpen={resyncOpen} size="REGULAR">
+        <ModalHeader
+          title="Resync Hackatime"
+          description="Re-pushes heartbeats for timelapses created in this window"
+          showCloseButton
+          onClose={() => setResyncOpen(false)}
+          icon="view-reload"
+        />
+
+        <ModalContent className="gap-4 text-base">
+          <AdminFieldRow label="Timelapse ID">
+            <TextInput type="text" value={resyncId} onChange={setResyncId} />
+          </AdminFieldRow>
+
+          <AdminFieldRow label="From">
+            <TextInput type="text" value={resyncFrom} onChange={setResyncFrom} />
+          </AdminFieldRow>
+
+          <AdminFieldRow label="To">
+            <TextInput type="text" value={resyncTo} onChange={setResyncTo} />
+          </AdminFieldRow>
+
+          <p className="text-sm text-muted">
+            Only timelapses with a Hackatime project are affected. Hackatime discards heartbeats it already
+            holds, so timelapses that synced normally are left alone. Dry run first. Filling in an ID
+            resyncs just that timelapse and ignores the window.
+          </p>
+
+          <ModalError error={resyncError} />
+
+          {resyncStatus && (
+            <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-3 text-sm text-green-400">
+              {resyncStatus}
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-end pt-4">
+            <Button kind="regular" onClick={() => setResyncOpen(false)} disabled={isResyncing}>Cancel</Button>
+            <Button kind="regular" onClick={() => handleResyncHackatime(true)} disabled={isResyncing}>
+              {isResyncing ? "Working..." : "Dry run"}
+            </Button>
+            <Button kind="primary" onClick={() => handleResyncHackatime(false)} disabled={isResyncing}>
+              Push heartbeats
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 flex-wrap">
@@ -1375,6 +1496,14 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
                     >
                       <Icon glyph="clock" size={18} />
                       Recalculate durations
+                    </button>
+
+                    <button
+                      onClick={openResync}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-white transition-colors hover:bg-darkless rounded-lg cursor-pointer"
+                    >
+                      <Icon glyph="view-reload" size={18} />
+                      Resync Hackatime
                     </button>
                   </div>
                 )}
