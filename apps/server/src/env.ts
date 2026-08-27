@@ -110,6 +110,12 @@ export const env = {
     get DEV_HACKATIME_FALLBACK_KEY() { return optional("DEV_HACKATIME_FALLBACK_KEY") },
 
     /**
+     * A Hackatime Rack::Attack bypass token, sent as the `Rack-Attack-Bypass` header on every Hackatime request.
+     * Without it, bulk work like an admin resync gets rate limited partway through.
+     */
+    get HACKATIME_RATE_LIMIT_BYPASS() { return optional("HACKATIME_RATE_LIMIT_BYPASS") },
+
+    /**
      * The Slack bot token used to fetch user profile information.
      */
     get SLACK_BOT_TOKEN() { return required("SLACK_BOT_TOKEN") },

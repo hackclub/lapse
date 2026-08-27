@@ -1,4 +1,5 @@
 import { chunked, sleep } from "@hackclub/lapse-shared";
+import { env } from "@/env.js";
 import { logError } from "@/logging.js";
 
 export interface WakaTimeCategorizedStat {
@@ -197,15 +198,26 @@ class HackatimeBase {
         this.token = token;
     }
 
+    private headers() {
+        const headers = new Headers({
+            "Authorization": `Bearer ${this.token}`,
+            "User-Agent": "lapse/2.0.0",
+            "Content-Type": "application/json"
+        });
+
+        const bypass = env.HACKATIME_RATE_LIMIT_BYPASS?.trim();
+
+        if (bypass)
+            headers.set("Rack-Attack-Bypass", bypass);
+
+        return headers;
+    }
+
     protected async query<T>(method: "GET" | "POST", endpoint: string, params: object = {}) {
         const req = await fetch(`https://hackatime.hackclub.com/api/${endpoint}`, {
             method,
             body: (method === "GET" || !params) ? undefined : JSON.stringify(params),
-            headers: new Headers({
-                "Authorization": `Bearer ${this.token}`,
-                "User-Agent": "lapse/2.0.0",
-                "Content-Type": "application/json"
-            })
+            headers: this.headers()
         });
 
         if (!req.ok) {
@@ -224,11 +236,7 @@ class HackatimeBase {
             const req = await fetch(`https://hackatime.hackclub.com/api/${endpoint}`, {
                 method,
                 body: (method === "GET" || !params) ? undefined : JSON.stringify(params),
-                headers: new Headers({
-                    "Authorization": `Bearer ${this.token}`,
-                    "User-Agent": "lapse/2.0.0",
-                    "Content-Type": "application/json"
-                })
+                headers: this.headers()
             });
 
             if (req.status === 429 && attempt < MAX_RETRIES) {
