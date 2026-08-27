@@ -1211,6 +1211,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   const [resyncError, setResyncError] = useState<string | null>(null);
   const [resyncStatus, setResyncStatus] = useState<string | null>(null);
   const [isResyncing, setIsResyncing] = useState(false);
+  const [resyncProgress, setResyncProgress] = useState<{ processed: number; total: number } | null>(null);
 
   const fields = ADMIN_ENTITY_FIELDS[entity] as Record<string, AdminFieldDef>;
   const fieldKeys = Object.keys(fields);
@@ -1284,13 +1285,14 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
     setActionsOpen(false);
     setResyncError(null);
     setResyncStatus(null);
+    setResyncProgress(null);
     setResyncId("");
     setResyncOpen(true);
   }
 
   async function handleResyncHackatime(dryRun: boolean) {
     const targeted = resyncId.trim();
-    let window: { from: number; to: number } | null = null;
+    let range: { from: number; to: number } | null = null;
 
     if (!targeted) {
       const from = Date.parse(resyncFrom);
@@ -1306,25 +1308,41 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         return;
       }
 
-      window = { from, to };
+      range = { from, to };
     }
 
     setResyncError(null);
     setResyncStatus(null);
+    setResyncProgress(null);
     setIsResyncing(true);
 
+    const target = targeted ? { id: targeted } : range!;
+
     try {
+      let total = 0;
+
+      if (!dryRun) {
+        let countCursor: string | null = null;
+
+        do {
+          const res = await api.admin.resyncHackatime({ ...target, dryRun: true, ...(countCursor ? { after: countCursor } : {}) });
+          if (!res.ok)
+            throw new Error(res.message);
+
+          total += res.data.scanned;
+          countCursor = res.data.nextCursor;
+        } while (countCursor);
+
+        setResyncProgress({ processed: 0, total });
+      }
+
       let cursor: string | null = null;
       let scanned = 0;
       let pushed = 0;
       let failed = 0;
 
       do {
-        const res = await api.admin.resyncHackatime({
-          ...(targeted ? { id: targeted } : window!),
-          dryRun,
-          ...(cursor ? { after: cursor } : {})
-        });
+        const res = await api.admin.resyncHackatime({ ...target, dryRun, ...(cursor ? { after: cursor } : {}) });
         if (!res.ok)
           throw new Error(res.message);
 
@@ -1332,6 +1350,9 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         pushed += res.data.pushed;
         failed += res.data.failed;
         cursor = res.data.nextCursor;
+
+        if (!dryRun)
+          setResyncProgress({ processed: scanned, total });
 
         setResyncStatus(dryRun
           ? `${scanned} timelapse(s) would be resynced${cursor ? ", still counting..." : "."}`
@@ -1452,6 +1473,18 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
           </p>
 
           <ModalError error={resyncError} />
+
+          {resyncProgress && (
+            <div className="flex flex-col gap-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-darkless">
+                <div
+                  className="h-full bg-red transition-all"
+                  style={{ width: `${resyncProgress.total > 0 ? Math.round((resyncProgress.processed / resyncProgress.total) * 100) : 0}%` }}
+                />
+              </div>
+              <span className="text-sm text-muted">{resyncProgress.processed} / {resyncProgress.total}</span>
+            </div>
+          )}
 
           {resyncStatus && (
             <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-3 text-sm text-green-400">

@@ -8,7 +8,7 @@ import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { logError, logInfo } from "@/logging.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
-import { durationBySnapshots, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
+import { durationBySnapshots, hackatimeApiKeyFor, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -601,9 +601,19 @@ export default os.router({
             let pushed = 0;
             let failed = 0;
 
+            // One token exchange per owner rather than per timelapse, which Hackatime rate limits.
+            const apiKeys = new Map<string, string>();
+
             for (const timelapse of pending) {
                 try {
-                    await syncTimelapseWithHackatime(timelapse, timelapse.owner);
+                    let apiKey = apiKeys.get(timelapse.ownerId);
+
+                    if (!apiKey) {
+                        apiKey = await hackatimeApiKeyFor(timelapse.owner);
+                        apiKeys.set(timelapse.ownerId, apiKey);
+                    }
+
+                    await syncTimelapseWithHackatime(timelapse, timelapse.owner, apiKey);
                     pushed++;
                 }
                 catch (err) {

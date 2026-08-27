@@ -287,7 +287,7 @@ export class HackatimeOAuthApi extends HackatimeBase {
      * This can be used to instantiate a HackatimeUserApi for pushing heartbeats.
      */
     async apiKey() {
-        const res = await this.query<{ token: string }>("GET", "v1/authenticated/api_keys");
+        const res = await this.queryWithRetry<{ token: string }>("GET", "v1/authenticated/api_keys");
         return res.token;
     }
 

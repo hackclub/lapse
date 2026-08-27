@@ -94,30 +94,35 @@ export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Acto
 }
 
 /**
- * Performs the Hackatime sync for a timelapse that already has `hackatimeProject` set.
- * This pushes all snapshots as heartbeats to the user's Hackatime account.
+ * Resolves the Hackatime API key belonging to a user.
  */
-export async function syncTimelapseWithHackatime(timelapse: db.Timelapse & { owner: db.User }, owner: db.User) {
-    if (!timelapse.hackatimeProject)
-        throw new Error(`Timelapse ${timelapse.id} has no hackatimeProject set.`);
-
+export async function hackatimeApiKeyFor(owner: db.User): Promise<string> {
     if (!owner.hackatimeId || !owner.hackatimeAccessToken)
         throw new Error(`User ${owner.id} does not have a linked Hackatime account.`);
 
-    let userApiKey: string | null;
+    if (process.env["NODE_ENV"] !== "production" && env.DEV_HACKATIME_FALLBACK_KEY)
+        return env.DEV_HACKATIME_FALLBACK_KEY;
 
-    if (process.env["NODE_ENV"] !== "production" && env.DEV_HACKATIME_FALLBACK_KEY) {
-        userApiKey = env.DEV_HACKATIME_FALLBACK_KEY;
-    }
-    else {
-        const oauthApi = new HackatimeOAuthApi(owner.hackatimeAccessToken);
-        userApiKey = await oauthApi.apiKey();
-    }
+    const oauthApi = new HackatimeOAuthApi(owner.hackatimeAccessToken);
+    const userApiKey = await oauthApi.apiKey();
 
     if (!userApiKey)
         throw new Error(`User ${owner.id} does not have a Hackatime API key.`);
 
-    const hackatime = new HackatimeUserApi(userApiKey);
+    return userApiKey;
+}
+
+/**
+ * Performs the Hackatime sync for a timelapse that already has `hackatimeProject` set.
+ * This pushes all snapshots as heartbeats to the user's Hackatime account.
+ *
+ * `apiKey` may be supplied to avoid one token exchange per timelapse when syncing many at once.
+ */
+export async function syncTimelapseWithHackatime(timelapse: db.Timelapse & { owner: db.User }, owner: db.User, apiKey?: string) {
+    if (!timelapse.hackatimeProject)
+        throw new Error(`Timelapse ${timelapse.id} has no hackatimeProject set.`);
+
+    const hackatime = new HackatimeUserApi(apiKey ?? await hackatimeApiKeyFor(owner));
 
     const heartbeats: WakaTimeHeartbeat[] = timelapse.snapshots.map(x => ({
         entity: `${timelapse.name} (${timelapse.id})`,
