@@ -8,7 +8,7 @@ import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
 import { apiErr } from "@/common.js";
-import { HackatimeOAuthApi } from "@/hackatime.js";
+import { HackatimeApiError, HackatimeOAuthApi } from "@/hackatime.js";
 import { maybe } from "@hackclub/lapse-shared";
 
 const os = implement(hackatimeRouterContract)
@@ -56,6 +56,39 @@ export default os.router({
             catch (error) {
                 logError("Failed to fetch Hackatime projects", { error, userId: caller.id });
                 return apiOk({ projects: [] });
+            }
+        }),
+
+    linkStatus: os.linkStatus
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const caller = req.context.user;
+
+            const dbUser = await database().user.findFirst({
+                where: { id: caller.id }
+            });
+
+            if (!dbUser?.hackatimeId || !dbUser.hackatimeAccessToken)
+                return apiOk({ needsRelink: false });
+
+            const oauthApi = new HackatimeOAuthApi(dbUser.hackatimeAccessToken);
+
+            try {
+                await oauthApi.getProjects();
+                return apiOk({ needsRelink: false });
+            }
+            catch (error) {
+                // 403 is Hackatime refusing a token minted before we asked for `read`; 401 is one that has stopped
+                // working altogether. Signing in again fixes both. Anything else is Hackatime's problem, not the
+                // user's, and nagging them about it would not help.
+                const status = error instanceof HackatimeApiError ? error.status : null;
+
+                if (status !== 401 && status !== 403)
+                    logError("Couldn't check the Hackatime link status", { error, userId: caller.id });
+
+                return apiOk({ needsRelink: status === 401 || status === 403 });
             }
         }),
 

@@ -4,10 +4,14 @@ import clsx from "clsx";
 import { formatDuration } from "@hackclub/lapse-shared";
 import type { HackatimeProject } from "@hackclub/lapse-api";
 
+import { useRouter } from "next/router";
+
 import { api } from "@/api";
 import type { IconGlyph } from "@/common";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { RELINK_SESSION_KEY, useHackatimeRelink } from "@/hooks/useHackatimeRelink";
 
 /** The maximum length of a Hackatime project name, as enforced by the API contract. */
 const MAX_PROJECT_NAME_LENGTH = 128;
@@ -253,8 +257,16 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
   onChange: (hackatimeProject: string | null) => void;
   onLoadingChange?: (isLoading: boolean) => void;
 }) {
+  const router = useRouter();
+  const needsRelink = useHackatimeRelink();
+
   const [projects, setProjects] = useState<HackatimeProject[]>(() => cachedProjects ?? []);
   const [isLoadingProjects, setIsLoadingProjects] = useState(cachedProjects === null);
+
+  function reconnect() {
+    sessionStorage.removeItem(RELINK_SESSION_KEY);
+    router.push(`/auth?force=1&redirect=${encodeURIComponent(router.asPath)}`);
+  }
 
   const [mode, setMode] = useState<SyncMode>("existing");
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -507,6 +519,18 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
               </div>
             </div>
           </>
+        ) : needsRelink ? (
+          <Alert variant="warning" icon="private">
+            <div className="flex flex-col gap-3">
+              <p className="font-bold">Relink Hackatime to sync</p>
+              <p>
+                Hackatime won&apos;t let us read your projects until you authorize Lapse again, so this list is
+                empty even if you have projects. Naming a new one here would sync your time somewhere unexpected.
+              </p>
+
+              <Button kind="primary" onClick={reconnect}>Relink Hackatime</Button>
+            </div>
+          </Alert>
         ) : (
           <Alert variant="info" icon="idea">
             <p>We couldn&apos;t find any projects on your Hackatime account. Give this one a name below - we&apos;ll create it for you.</p>

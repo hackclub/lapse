@@ -42,7 +42,7 @@ export default function Auth() {
     if (isLoading)
       return;
 
-    if (currentUser && !currentUser.private.needsReauth) {
+    if (currentUser && !currentUser.private.needsReauth && router.query.force !== "1") {
       const redirect = typeof router.query.redirect === "string" ? router.query.redirect : "/";
       router.push(redirect);
       return;

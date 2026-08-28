@@ -27,6 +27,13 @@ export const hackatimeRouterContract = {
             projects: z.array(HackatimeProjectSchema)
         })),
 
+    linkStatus: contract("GET", "/hackatime/linkStatus")
+        .route({ description: "Reports whether the user's Hackatime authorization has to be renewed. Tokens issued before Lapse requested the `read` scope can still push heartbeats but can no longer list projects." })
+        .input(NO_INPUT)
+        .output(apiResult({
+            needsRelink: z.boolean()
+        })),
+
     myTimelapsesForProject: contract("GET", "/hackatime/myTimelapsesForProject")
         .route({ description: "Gets the authenticated user's public and unlisted timelapses associated with the given Hackatime project key." })
         .input(z.object({

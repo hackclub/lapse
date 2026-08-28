@@ -3,6 +3,8 @@ import { PropsWithChildren } from "react";
 import clsx from "clsx";
 
 import { Header } from "@/components/layout/Header";
+import { HackatimeRelinkBanner } from "@/components/layout/HackatimeRelinkBanner";
+import { HackatimeRelinkModal } from "@/components/layout/HackatimeRelinkModal";
 import { LegacyRecoveryBanner } from "@/components/legacy/LegacyRecoveryBanner";
 import { jetBrainsMono, phantomSans } from "@/fonts";
 
@@ -25,6 +27,8 @@ export default function RootLayout({ children, title = "Lapse", description = "T
         jetBrainsMono.variable,
         phantomSans.className
       )}>
+        <HackatimeRelinkModal />
+        <HackatimeRelinkBanner />
         <LegacyRecoveryBanner />
 
         { showHeader && <Header /> }
