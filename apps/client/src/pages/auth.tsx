@@ -6,6 +6,7 @@ import type { OAuthErrorCode } from "@hackclub/lapse-api";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { useAuthContext } from "@/context/AuthContext";
+import { RELINK_SESSION_KEY } from "@/hooks/useHackatimeRelink";
 import { sfetch } from "@/safety";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com";
@@ -135,6 +136,7 @@ export default function Auth() {
 
       const data = await response.json();
       localStorage.setItem("lapse:token", data.access_token);
+      sessionStorage.removeItem(RELINK_SESSION_KEY);
       await refreshUser();
 
       const redirect = sessionStorage.getItem("lapse:oauth_redirect");

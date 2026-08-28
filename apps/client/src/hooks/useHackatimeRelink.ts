@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,11 +11,15 @@ export const RELINK_SESSION_KEY = "lapse:hackatimeNeedsRelink";
  * in, and checking costs a request to Hackatime, so it is cached for the browser session.
  */
 export function useHackatimeRelink(): boolean {
+  const router = useRouter();
   const auth = useAuth(false);
   const [needsRelink, setNeedsRelink] = useState(false);
 
+  // Nothing renders this on /auth anyway, and checking there would ask about the token being replaced.
+  const isReauthenticating = router.pathname === "/auth";
+
   useEffect(() => {
-    if (!auth.currentUser) {
+    if (!auth.currentUser || isReauthenticating) {
       setNeedsRelink(false);
       return;
     }
@@ -36,7 +41,7 @@ export function useHackatimeRelink(): boolean {
     })();
 
     return () => { cancelled = true; };
-  }, [auth.currentUser]);
+  }, [auth.currentUser, isReauthenticating]);
 
   return needsRelink;
 }

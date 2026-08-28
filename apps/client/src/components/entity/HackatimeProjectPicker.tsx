@@ -11,7 +11,7 @@ import type { IconGlyph } from "@/common";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { RELINK_SESSION_KEY, useHackatimeRelink } from "@/hooks/useHackatimeRelink";
+import { useHackatimeRelink } from "@/hooks/useHackatimeRelink";
 
 /** The maximum length of a Hackatime project name, as enforced by the API contract. */
 const MAX_PROJECT_NAME_LENGTH = 128;
@@ -264,7 +264,6 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
   const [isLoadingProjects, setIsLoadingProjects] = useState(cachedProjects === null);
 
   function reconnect() {
-    sessionStorage.removeItem(RELINK_SESSION_KEY);
     router.push(`/auth?force=1&redirect=${encodeURIComponent(router.asPath)}`);
   }
 

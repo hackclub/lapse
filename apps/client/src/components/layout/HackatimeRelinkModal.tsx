@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { Button } from "@/components/ui/Button";
-import { RELINK_SESSION_KEY, useHackatimeRelink } from "@/hooks/useHackatimeRelink";
+import { useHackatimeRelink } from "@/hooks/useHackatimeRelink";
 
 const AUTH_ROUTE = "/auth";
 const DISMISSED_SESSION_KEY = "lapse:hackatimeRelinkDismissed";
@@ -27,7 +27,6 @@ export function HackatimeRelinkModal() {
   }
 
   function reconnect() {
-    sessionStorage.removeItem(RELINK_SESSION_KEY);
     router.push(`${AUTH_ROUTE}?force=1&redirect=${encodeURIComponent(router.asPath)}`);
   }
 
@@ -45,12 +44,11 @@ export function HackatimeRelinkModal() {
 
       <ModalContent className="gap-4 text-base">
         <p>
-          Hackatime changed what it lets Lapse read, so we can&apos;t load your project list anymore. Your
-          timelapses still sync - the picker just shows up empty, as though you had no projects.
+          Your timelapses still sync! The picker shows up empty, as if you had no projects.
         </p>
 
         <p className="text-muted">
-          Signing in again fixes it. It takes a couple of seconds and brings you right back here.
+          Reconnecting Hackatime fixes this issue. It only takes a few seconds.
         </p>
 
         <Button kind="primary" onClick={reconnect} className="w-full">
