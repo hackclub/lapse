@@ -11,12 +11,12 @@
     "build": "prisma generate && pnpm tsc && tsc-alias",
     "start": "pnpm run build && pnpm exec fastify start -l info dist/app.js",
     "watch": "tsc -w",
-    "dev": "pnpm run build && pnpm run dev:start",
+    "dev": "pnpm -w run dev:start-env && pnpm run build && pnpm run dev:start",
     "dev:start": "pnpm exec node ./dist/app.js",
     "dev:console": "tsx ./etc/scripts/console.ts",
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
+    "db:push": "prisma db push --accept-data-loss",
     "db:seed": "prisma db seed"
   },
   "dependencies": {
