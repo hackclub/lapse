@@ -23,16 +23,16 @@
     "dev:start": "pnpm exec node ./dist/app.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1101.0",
-    "@aws-sdk/lib-storage": "^3.1101.0",
+    "@aws-sdk/client-s3": "^3.1121.0",
+    "@aws-sdk/lib-storage": "^3.1121.0",
     "@hackclub/lapse-api": "workspace:*",
     "@hackclub/lapse-jobs": "workspace:*",
     "@hackclub/lapse-shared": "workspace:*",
-    "@sentry/node": "^10.69.0",
-    "bullmq": "^6.0.6",
+    "@sentry/node": "^10.72.0",
+    "bullmq": "^6.3.2",
     "dotenv": "^17.4.2",
     "ioredis": "^6.0.0",
-    "zod": "^4.4.3"
+    "zod": "^4.5.2"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
