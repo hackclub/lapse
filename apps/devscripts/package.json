@@ -14,13 +14,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@inquirer/prompts": "^8.5.2",
+    "@inquirer/prompts": "^8.7.0",
     "chalk": "^6.0.0",
     "commander": "^15.0.0",
     "execa": "^10.0.1",
-    "js-yaml": "^5.2.3",
+    "js-yaml": "^5.4.1",
     "ora": "^9.4.1",
-    "tsx": "^4.23.4"
+    "tsx": "^4.23.12"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

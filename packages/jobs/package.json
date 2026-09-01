@@ -20,7 +20,7 @@
   "packageManager": "pnpm@11.18.0",
   "dependencies": {
     "@hackclub/lapse-api": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.2"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
