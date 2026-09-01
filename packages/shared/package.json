@@ -19,8 +19,8 @@
   },
   "packageManager": "pnpm@11.18.0",
   "devDependencies": {
-    "@tsconfig/node24": "^24.0.4",
-    "tsc-alias": "^1.9.1",
+    "@tsconfig/node24": "^24.0.5",
+    "tsc-alias": "^1.9.2",
     "typescript": "^6.0.3"
   }
 }
