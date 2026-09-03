@@ -40,8 +40,11 @@ export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
   return createPortal(modal, document.body);
 }
 
-export function ModalHeader({ icon, title, description, shortDescription, children, showCloseButton, onClose }: {
+export function ModalHeader({ icon, image, title, description, shortDescription, children, showCloseButton, onClose }: {
   icon?: IconGlyph;
+
+  /** An image shown in place of `icon`, e.g. `/images/orpheus-cool.png`. */
+  image?: string;
   title?: string;
   description?: string;
   shortDescription?: string;
@@ -55,11 +58,13 @@ export function ModalHeader({ icon, title, description, shortDescription, childr
     <header className="flex justify-between sm:p-6 p-8 pb-4 border-b border-black border-dashed">
       <div className="flex gap-4 flex-1">
         {
-          icon && (
-            <div className="p-2 border border-black rounded-md w-12 h-12 justify-center flex">
-              <Icon glyph={icon} size={32} />
-            </div>
-          )
+          image
+            ? <img src={image} alt="" className="w-16 h-16 shrink-0 object-contain" />
+            : icon && (
+              <div className="p-2 border border-black rounded-md w-12 h-12 justify-center flex">
+                <Icon glyph={icon} size={32} />
+              </div>
+            )
         }
 
         <div className="flex flex-col flex-1">

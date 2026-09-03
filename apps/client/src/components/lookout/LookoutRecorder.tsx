@@ -16,6 +16,7 @@ import {
 } from "@/components/lookout/sessions";
 import RootLayout from "@/components/layout/RootLayout";
 import { EditorModal } from "@/components/lookout/EditorModal";
+import { CodeNoticeModal, isCodeNoticeDismissed } from "@/components/lookout/CodeNoticeModal";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
@@ -506,6 +507,8 @@ export default function LookoutRecorder() {
   const [isCreating, setIsCreating] = useState(false);
   const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
+  // Reviewers can't make sense of a timelapse of an editor, so we say so before every recording.
+  const [showCodeNotice, setShowCodeNotice] = useState(() => !isCodeNoticeDismissed());
   // Set when a previous Browser (screen) capture failed. Drives the warning blurb,
   // the dimmed Browser option, and the "are you sure?" confirmation on the selector.
   const [browserError, setBrowserError] = useState<string | null>(null);
@@ -661,6 +664,17 @@ export default function LookoutRecorder() {
     } else {
       createSessionAndStart(() => setCaptureMode("camera"));
     }
+  }
+
+  if (showCodeNotice) {
+    return (
+      <RootLayout showHeader={false}>
+        <CodeNoticeModal
+          onAcknowledge={() => setShowCodeNotice(false)}
+          onClose={() => router.back()}
+        />
+      </RootLayout>
+    );
   }
 
   if (phase === "checking") {
