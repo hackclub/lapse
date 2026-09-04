@@ -169,9 +169,10 @@ export function prefetchHackatimeProjects() {
   return pendingProjects;
 }
 
-function PickerRow({ icon, selected, onClick, className, children }: {
+function PickerRow({ icon, selected, compact, onClick, className, children }: {
   icon?: IconGlyph;
   selected: boolean;
+  compact?: boolean;
   onClick: () => void;
   className?: string;
   children: ReactNode;
@@ -185,7 +186,8 @@ function PickerRow({ icon, selected, onClick, className, children }: {
       aria-checked={selected}
       onClick={onClick}
       className={clsx(
-        "flex items-center gap-2 w-full text-left px-4 py-2 cursor-pointer transition-colors",
+        "flex items-center gap-2 w-full text-left cursor-pointer transition-colors",
+        compact ? "px-3 py-1.5" : "px-4 py-2",
         selected ? "bg-red text-white" : "hover:bg-darkless",
         className
       )}
@@ -200,15 +202,16 @@ function PickerRow({ icon, selected, onClick, className, children }: {
   );
 }
 
-function ProjectRow({ project, selected, onClick }: {
+function ProjectRow({ project, selected, compact, onClick }: {
   project: HackatimeProject;
   selected: boolean;
+  compact?: boolean;
   onClick: () => void;
 }) {
   const { pills, hiddenCount } = summarizeLanguages(project.languages);
 
   return (
-    <PickerRow selected={selected} onClick={onClick}>
+    <PickerRow selected={selected} compact={compact} onClick={onClick}>
       <span className="flex-1 min-w-0 flex items-center gap-2">
         <span className="font-bold truncate" title={project.name}>{project.name}</span>
 
@@ -247,7 +250,7 @@ function ProjectRow({ project, selected, onClick }: {
  * `onChange` and `onLoadingChange` are expected to be stable across renders (a `useState` setter is ideal); they are
  * called from effects, so an inline lambda would fire them on every render.
  */
-export function HackatimeProjectPicker({ isActive, initialProject, onChange, onLoadingChange }: {
+export function HackatimeProjectPicker({ isActive, initialProject, onChange, onLoadingChange, loadProjects, compact }: {
   /** Whether the picker is currently on-screen. Switching this on refreshes the picker's state. */
   isActive: boolean;
 
@@ -256,12 +259,28 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
 
   onChange: (hackatimeProject: string | null) => void;
   onLoadingChange?: (isLoading: boolean) => void;
-}) {
-  const router = useRouter();
-  const needsRelink = useHackatimeRelink();
 
-  const [projects, setProjects] = useState<HackatimeProject[]>(() => cachedProjects ?? []);
-  const [isLoadingProjects, setIsLoadingProjects] = useState(cachedProjects === null);
+  /**
+   * Where to get the project list from, when it cannot come from the signed-in user.
+   *
+   * The Lookout publish panel renders inside the desktop app as a third-party iframe, so it has none
+   * of our cookies and cannot call `hackatime.allProjects` at all - it reads the list through its own
+   * panel token instead. Results from here are deliberately not put in the module cache, which
+   * belongs to the signed-in user.
+   */
+  loadProjects?: () => Promise<HackatimeProject[]>;
+
+  /**
+   * Tighten the rows and shorten the scroll list.
+   *
+   * For the Lookout panel, whose whole height is a sheet over the desktop app's window - the list
+   * being one row shorter costs a scroll, while the sheet being too tall costs the video behind it.
+   */
+  compact?: boolean;
+}) {
+  const usesOwnLoader = Boolean(loadProjects);
+  const [projects, setProjects] = useState<HackatimeProject[]>(() => usesOwnLoader ? [] : cachedProjects ?? []);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(usesOwnLoader || cachedProjects === null);
 
   function reconnect() {
     router.push(`/auth?force=1&redirect=${encodeURIComponent(router.asPath)}`);
@@ -281,13 +300,20 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
   const isSeededRef = useRef(false);
 
   // The list loads even while the picker is off-screen, so that whoever renders it can reserve its height upfront.
+  const loadProjectsRef = useRef(loadProjects);
+  useEffect(() => { loadProjectsRef.current = loadProjects; }, [loadProjects]);
+
   useEffect(() => {
-    if (cachedProjects)
+    const loader = loadProjectsRef.current;
+
+    if (!loader && cachedProjects)
       return;
 
     let isStale = false;
 
-    prefetchHackatimeProjects().then(loaded => {
+    const request = loader ? loader().catch(() => [] as HackatimeProject[]) : prefetchHackatimeProjects();
+
+    request.then(loaded => {
       if (isStale)
         return;
 
@@ -437,6 +463,11 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
     handleSelectExisting(filteredProjects[0].name);
   }
 
+  // Once "make a new project" is the answer, the list of existing ones is just height - and in the
+  // Lookout panel that height is a sheet sitting over the video. The row stays, so the choice is
+  // still visible and still reversible.
+  const listCollapsed = compact && effectiveMode === "new";
+
   if (isLoadingProjects) {
     return (
       <div className="flex flex-col gap-3">
@@ -453,7 +484,7 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
       <div className="flex flex-col gap-3">
         {hasProjects ? (
           <>
-            {projects.length >= SEARCH_THRESHOLD && (
+            {projects.length >= SEARCH_THRESHOLD && !listCollapsed && (
               <div className="flex items-center px-3 rounded-xl border border-slate focus-within:outline-2 focus-within:outline-red">
                 <Icon glyph="search" size={20} className="text-muted shrink-0" />
                 <input
@@ -463,7 +494,7 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
                   onKeyDown={handleSearchKeyDown}
                   aria-label="Search your Hackatime projects"
                   placeholder="Search your projects..."
-                  className="flex-1 min-w-0 bg-transparent outline-none py-2 pl-1 placeholder:text-secondary"
+                  className={clsx("flex-1 min-w-0 bg-transparent outline-none pl-1 placeholder:text-secondary", compact ? "py-1" : "py-2")}
                 />
                 {query && (
                   <button
@@ -483,29 +514,33 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
               aria-label="Hackatime project"
               className="flex flex-col border border-slate rounded-xl overflow-hidden"
             >
-              <div className="flex flex-col max-h-64 overflow-y-auto overscroll-contain">
-                {filteredProjects.length === 0 ? (
-                  <p className="px-4 py-2 text-muted">
-                    No existing projects matched &ldquo;{query.trim()}&rdquo;.
-                  </p>
-                ) : (
-                  filteredProjects.map(project => (
-                    <ProjectRow
-                      key={project.name}
-                      project={project}
-                      selected={effectiveMode === "existing" && selectedProject === project.name}
-                      onClick={() => handleToggleExisting(project.name)}
-                    />
-                  ))
-                )}
-              </div>
+              {!listCollapsed && (
+                <div className={clsx("flex flex-col overflow-y-auto overscroll-contain", compact ? "max-h-32" : "max-h-64")}>
+                  {filteredProjects.length === 0 ? (
+                    <p className={clsx("text-muted", compact ? "px-3 py-1.5" : "px-4 py-2")}>
+                      No existing projects matched &ldquo;{query.trim()}&rdquo;.
+                    </p>
+                  ) : (
+                    filteredProjects.map(project => (
+                      <ProjectRow
+                        key={project.name}
+                        project={project}
+                        selected={effectiveMode === "existing" && selectedProject === project.name}
+                        compact={compact}
+                        onClick={() => handleToggleExisting(project.name)}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
 
-              <div className="border-t border-slate">
+              <div className={clsx(!listCollapsed && "border-t border-slate")}>
                 <PickerRow
                   icon="plus"
                   selected={effectiveMode === "new"}
+                  compact={compact}
                   onClick={handleToggleNew}
-                  className="py-3!"
+                  className={compact ? "py-2!" : "py-3!"}
                 >
                   <span className="flex-1 font-bold">
                     {

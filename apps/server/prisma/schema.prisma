@@ -78,6 +78,8 @@ model User {
   legacyTimelapses      LegacyUnpublishedTimelapse[]
   programKeysCreated    ProgramKey[]                 @relation("programKeysCreated")
   lookoutDrafts         DraftLookoutTimelapse[]
+  lookoutDevices        LookoutDevice[]
+  lookoutPairingCodes   LookoutPairingCode[]
 }
 
 /// Represents a timelapse created with a legacy version of Lapse. Such a timelapse is encrypted with a 6-digit passkey with a timelapse ID IV.
@@ -181,8 +183,53 @@ model DraftLookoutTimelapse {
   lookoutSessionId    String   @unique
   lookoutToken        String
 
+  /// Secret backing this draft's Lookout panel URL. The panel renders in an iframe inside
+  /// the desktop app, which is a third-party context with no access to our cookies - so the
+  /// URL itself is the credential, and it must be unguessable.
+  panelToken          String   @unique
+
+  /// What the user asked for in the panel, held until the Lookout session finishes compiling.
+  /// The panel opens as soon as the recording is saved, so we take the answers long before
+  /// there is a video to attach them to; `pendingAt` marks that an intent is waiting.
+  pendingName             String?
+  pendingDescription      String?
+  pendingVisibility       TimelapseVisibility?
+  pendingHackatimeProject String?
+  pendingAt               DateTime?
+
   ownerId             String
   owner               User     @relation(fields: [ownerId], references: [id])
+}
+
+/// A Lookout desktop install paired to a user, letting it start recordings without sending
+/// them through a browser first. The token is only ever stored hashed: it authorizes creating
+/// sessions as this user, so a database leak must not hand that out.
+model LookoutDevice {
+  id          String    @id @default(nanoid(12))
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+
+  /// Human-readable device label, supplied by the desktop app at pairing time and shown to
+  /// the user when they manage or revoke it.
+  label       String
+  tokenHash   String    @unique
+
+  ownerId     String
+  owner       User      @relation(fields: [ownerId], references: [id])
+}
+
+/// A single-use code bridging the pairing consent page and the desktop app's token exchange.
+/// `challenge` is the PKCE challenge the app sent us; the app proves it holds the matching
+/// verifier when it redeems the code, so intercepting the code alone is useless.
+model LookoutPairingCode {
+  code        String   @id
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  challenge   String
+  label       String
+
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
 }
 
 /// Represents a published timelapse.

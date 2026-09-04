@@ -227,6 +227,42 @@ export const timelapseRouterContract = {
             })
         ),
 
+    approveDesktopPairing: contract("POST", "/timelapse/approveDesktopPairing")
+        .route({ description: "Approves a Lookout desktop install to start recordings as the authenticated user, returning a one-time code for it to redeem." })
+        .input(z.object({
+            challenge: z.string().min(1).max(512)
+                .describe("The PKCE challenge the desktop app generated. It proves it holds the matching verifier when redeeming the code, so an intercepted code is useless on its own."),
+            label: z.string().min(1).max(120)
+                .describe("Human-readable name for the device, shown to the user when they manage or revoke it."),
+        }))
+        .output(
+            apiResult({
+                code: z.string()
+                    .describe("Single-use pairing code, valid for five minutes. Hand it back to the desktop app via its `lookout://pair` callback."),
+            })
+        ),
+
+    listDesktopDevices: contract("GET", "/timelapse/listDesktopDevices")
+        .route({ description: "Lists the Lookout desktop installs paired to the authenticated user." })
+        .input(z.object({}))
+        .output(
+            apiResult({
+                devices: z.array(z.object({
+                    id: LapseId,
+                    label: z.string(),
+                    createdAt: z.string(),
+                    lastUsedAt: z.string().nullable(),
+                })),
+            })
+        ),
+
+    revokeDesktopDevice: contract("POST", "/timelapse/revokeDesktopDevice")
+        .route({ description: "Revokes a paired Lookout desktop install. It will have to be approved again before it can start recordings." })
+        .input(z.object({
+            id: LapseId.describe("The device to revoke."),
+        }))
+        .output(apiResult({ revoked: z.boolean() })),
+
     createRecordingSession: contract("POST", "/timelapse/createRecordingSession")
         .route({ description: "Creates a new Lookout-backed recording session and a server-side draft. Returns a Lookout token the client uses to initialize the Lookout SDK." })
         .input(z.object({}))
@@ -308,6 +344,13 @@ export const timelapseRouterContract = {
 
                 recordedOnDesktop: z.boolean()
                     .describe("Whether the session was recorded through the Lookout desktop app. Editing such a session belongs to the desktop app's own editor, so Lapse leaves it alone."),
+
+                publishedTimelapseId: LapseId.nullable()
+                    .describe(`
+                        Set when this draft has just been published on our side, which happens without the user when
+                        they filled in the details in the desktop app's publish panel before the video had finished
+                        compiling. Clients seeing this should go straight to the timelapse instead of asking again.
+                    `),
             })
         ),
 
