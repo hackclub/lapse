@@ -7,7 +7,13 @@ import { WindowedModal } from "@/components/layout/WindowedModal";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/api";
 
-const GROUP_ORDER = ["Timelapses", "Comments", "Profile", "Insights"];
+const PREFERRED_GROUP_ORDER = ["Timelapses", "Comments", "Profile"];
+
+// derived from the source of truth so a renamed/removed group can't blow up the render
+const GROUP_ORDER = [
+  ...PREFERRED_GROUP_ORDER.filter(name => name in OAUTH_SCOPE_GROUPS),
+  ...Object.keys(OAUTH_SCOPE_GROUPS).filter(name => !PREFERRED_GROUP_ORDER.includes(name))
+];
 
 type ServiceGrant = {
   id: string
@@ -22,7 +28,10 @@ function groupScopes(scopes: string[]) {
   const grouped: Record<string, string[]> = {};
 
   for (const groupName of GROUP_ORDER) {
-    const groupScopes = OAUTH_SCOPE_GROUPS[groupName as keyof typeof OAUTH_SCOPE_GROUPS] as Record<string, string>;
+    const groupScopes = OAUTH_SCOPE_GROUPS[groupName as keyof typeof OAUTH_SCOPE_GROUPS] as Record<string, string> | undefined;
+    if (!groupScopes)
+      continue;
+
     const entries = Object.keys(groupScopes).filter(scope => scopes.includes(scope));
     if (entries.length > 0)
       grouped[groupName] = entries;
@@ -135,9 +144,9 @@ export function OAuthGrantsView({ isOpen, setIsOpen }: {
                         <span className="font-semibold">{group}</span>
                         <ul className="text-muted text-xs mt-1">
                           {scopes.map(scope => {
-                            const groupScopes = OAUTH_SCOPE_GROUPS[group as keyof typeof OAUTH_SCOPE_GROUPS] as Record<string, string>;
+                            const groupScopes = OAUTH_SCOPE_GROUPS[group as keyof typeof OAUTH_SCOPE_GROUPS] as Record<string, string> | undefined;
                             return (
-                              <li key={scope}>• {groupScopes[scope]}</li>
+                              <li key={scope}>• {groupScopes?.[scope] ?? scope}</li>
                             );
                           })}
                         </ul>
