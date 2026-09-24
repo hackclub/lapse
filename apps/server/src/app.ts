@@ -5,9 +5,7 @@ import Fastify from "fastify"
 import fastifyCors from "@fastify/cors"
 import { implement, onError, ORPCError, ValidationError } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
-import { OpenAPIGenerator } from "@orpc/openapi";
 import { RequestHeadersPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins"
-import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import chalk from "chalk";
 import dedent from "dedent";
 import { compositeRouterContract } from "@hackclub/lapse-api";
@@ -19,6 +17,7 @@ import type { Context } from "@/router.js"
 import { database, initDatabase } from "@/db.js";
 import { env } from "@/env.js"
 import { logError } from "@/logging.js";
+import { generateOpenApiSpec } from "@/openapi.js";
 // New recordings go through Lookout, but the tus upload server is still needed so legacy drafts
 // (and unfinished OPFS recordings) can be recovered and published. See `legacyRecovery` on the client.
 import { attachUploadServer } from "@/upload.js";
@@ -71,12 +70,6 @@ const handler = new OpenAPIHandler(
     }
 );
 
-const openApiGenerator = new OpenAPIGenerator({
-    schemaConverters: [
-        new ZodToJsonSchemaConverter()
-    ]
-});
-
 const server = Fastify();
 
 server.register(fastifyCors, {
@@ -126,27 +119,7 @@ server.all("/api/*", async (req, reply) => {
 });
 
 server.all("/openapi.json", async (req, reply) => {
-    const spec = await openApiGenerator.generate(router, {
-        info: {
-            title: "Lapse API",
-            version: "2.0.0"
-        },
-        servers: [
-            { url: process.env["NODE_ENV"] === "production" ? `${env.BASE_URL}/api` : "/api" }
-        ],
-        security: [
-            { bearerAuth: [] }
-        ],
-        components: {
-            securitySchemes: {
-                bearerAuth: {
-                    type: "http",
-                    scheme: "bearer"
-                }
-            }
-        }
-    });
-
+    const spec = await generateOpenApiSpec(router);
     reply.status(200).header("content-type", "application/json").send(JSON.stringify(spec));
 });
 
@@ -181,9 +154,7 @@ server.all("/docs", async (req, reply) => {
                     Scalar.createApiReference("#app", {
                         url: "/openapi.json",
                         authentication: {
-                            securitySchemes: {
-                                bearerAuth: { token: "default-token" }
-                            }
+                            preferredSecurityScheme: "oauth2"
                         }
                     });
                 </script>

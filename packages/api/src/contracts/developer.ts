@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { oc } from "@orpc/contract";
 
 import { apiResult } from "@/common";
 import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 
 /**
  * Represents the trust level of an Lapse OAuth app - `TRUSTED` apps do not show any warnings
@@ -43,7 +45,7 @@ export type OAuthGrant = {
     lastUsedAt: string | null;
 };
 
-export const developerRouterContract = {
+export const developerRouterContract = oc.tag(ROUTER_TAGS.developer).router({
     rotateAppSecret: contract()
         .route({ description: "Rotates the secret for an OAuth app owned by the calling user." })
         .input(z.object({
@@ -164,4 +166,4 @@ export const developerRouterContract = {
                 scopes: z.array(z.string())
             })
         }))
-};
+});

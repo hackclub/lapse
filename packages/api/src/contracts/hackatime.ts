@@ -1,7 +1,9 @@
 import z from "zod";
+import { oc } from "@orpc/contract";
 
 import { apiResult } from "@/common";
 import { contract, NO_INPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 import { OwnedTimelapseSchema, TimelapseSchema } from "@/contracts/timelapse";
 
 /**
@@ -19,7 +21,7 @@ export const HackatimeProjectSchema = z.object({
         `)
 });
 
-export const hackatimeRouterContract = {
+export const hackatimeRouterContract = oc.tag(ROUTER_TAGS.hackatime).router({
     allProjects: contract()
         .route({ description: "Gets all Hackatime projects from the user's Hackatime account." })
         .input(NO_INPUT)
@@ -67,4 +69,4 @@ export const hackatimeRouterContract = {
             timelapses: z.array(TimelapseSchema)
                 .describe("The timelapses made by the user associated with the project key.")
         })),
-};
+});

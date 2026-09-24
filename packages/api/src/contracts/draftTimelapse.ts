@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { oc } from "@orpc/contract";
 
 import { apiResult, LapseDate, LapseId } from "@/common";
 import { MAX_VIDEO_FRAME_COUNT } from "@/constants";
 import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 import { TimelapseDescription, TimelapseName } from "@/contracts/timelapse";
 import { PublicUserSchema } from "@/contracts/user";
 
@@ -98,7 +100,7 @@ export const LegacyUnpublishedTimelapseSchema = z.object({
         .describe("Timestamps taken at regular intervals while the timelapse was recorded. This directly represents the resulting Hackatime heartbeats.")
 });
 
-export const draftTimelapseRouterContract = {
+export const draftTimelapseRouterContract = oc.tag(ROUTER_TAGS.draftTimelapse).router({
     findByUser: contract("GET", "/draftTimelapse/findByUser")
         .route({ description: "Gets all draft timelapses created by the given user." })
         .input(z.object({
@@ -212,4 +214,4 @@ export const draftTimelapseRouterContract = {
                 .describe("The ID of the legacy unpublished timelapse to mark as migrated.")
         }))
         .output(NO_OUTPUT)
-};
+});

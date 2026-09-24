@@ -1,8 +1,10 @@
 import z from "zod";
+import { oc } from "@orpc/contract";
 
 import { apiResult, LapseId } from "@/common";
 import { UserDisplayName, UserHandle } from "@/contracts/user";
 import { contract, NO_INPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 import { TimelapseSchema } from "@/contracts/timelapse";
 
 /**
@@ -18,7 +20,7 @@ export const LeaderboardUserEntrySchema = z.object({
     pfp: z.url()
 });
 
-export const globalRouterContract = {
+export const globalRouterContract = oc.tag(ROUTER_TAGS.global).router({
     weeklyLeaderboard: contract("GET", "/global/weeklyLeaderboard")
         .route({ description: "Returns the users that have the most Lapse time logged in the past 7 days." })
         .input(NO_INPUT)
@@ -39,4 +41,4 @@ export const globalRouterContract = {
         .output(apiResult({
             count: z.number().nonnegative()
         }))
-};
+});

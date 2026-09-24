@@ -1,8 +1,10 @@
 import z from "zod";
+import { oc } from "@orpc/contract";
 
 import { apiResult, LapseDate, LapseId } from "@/common";
 import { PublicUserSchema } from "@/contracts/user";
 import { contract, NO_OUTPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 
 export type Comment = z.infer<typeof CommentSchema>;
 export const CommentSchema = z.object({
@@ -27,7 +29,7 @@ export const CommentSchema = z.object({
     createdAt: LapseDate
 });
 
-export const commentRouterContract = {
+export const commentRouterContract = oc.tag(ROUTER_TAGS.comment).router({
     create: contract("POST", "/comment/create")
         .route({ description: "Creates a new comment for the given timelapse." })
         .input(
@@ -54,4 +56,4 @@ export const commentRouterContract = {
             })
         )
         .output(NO_OUTPUT)
-};
+});

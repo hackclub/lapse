@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { match } from "@hackclub/lapse-shared";
+import { oc } from "@orpc/contract";
 
 import { apiResult, LapseDate, LapseId } from "@/common";
 import { contract, NO_OUTPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 import { PublicUserSchema } from "@/contracts/user";
 import { CommentSchema } from "@/contracts/comment";
 
@@ -134,7 +136,7 @@ export const TimelapseSchema = OwnedTimelapseSchema.partial({ private: true }).e
         .describe("Always `false`. This field is provided for convenience when using strongly-typed clients.")
 });
 
-export const timelapseRouterContract = {
+export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
     query: contract("GET", "/timelapse/query")
         .route({ description: "Finds a timelapse by its ID. This endpoint will return a different view if the user owns the timelapse." })
         .input(
@@ -331,4 +333,4 @@ export const timelapseRouterContract = {
                     .describe("The cursor to use for the next page. `null` if there are no more results."),
             })
         )
-};
+});

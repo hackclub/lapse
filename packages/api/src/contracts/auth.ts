@@ -1,8 +1,10 @@
 import z from "zod";
+import { oc } from "@orpc/contract";
 
 import { apiResult, LapseId } from "@/common";
 import { UserDisplayName, UserHandle } from "@/contracts/user";
 import { contract, NO_INPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 import { TimelapseSchema } from "@/contracts/timelapse";
 
 export type OAuthErrorCode = z.infer<typeof OAuthErrorCodeSchema>;
@@ -30,7 +32,7 @@ export const OAuthErrorCodeSchema = z.enum([
     "upstream_temporarily_unavailable"
 ]);
 
-export const authRouterContract = {
+export const authRouterContract = oc.tag(ROUTER_TAGS.auth).router({
     authorize: contract("GET", "/auth/authorize")
         .route({
             successStatus: 307,
@@ -146,4 +148,4 @@ export const authRouterContract = {
             headers: z.record(z.string(), z.string()).optional(),
             body: z.any().optional()
         }))
-};
+});
