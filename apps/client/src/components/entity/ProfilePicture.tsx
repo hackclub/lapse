@@ -1,3 +1,4 @@
+import { useState } from "react";
 import NextLink from "next/link";
 import clsx from "clsx";
 import { match } from "@hackclub/lapse-shared";
@@ -19,14 +20,21 @@ export function ProfilePicture({ user, size = "md", className = "", isSkeleton =
     "xl": "w-16 h-16 text-lg"
   });
 
+  const cachetUrl = user?.slackId ? `https://cachet.hackclub.com/users/${user.slackId}/r` : null;
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+
   if (isSkeleton || !user)
     return <Skeleton circular className={sizeClass} />;
-  
+
+  // Cachet always redirects to the user's current Slack avatar, whereas the stored URL is only refreshed on login.
+  const src = cachetUrl && failedUrl !== cachetUrl ? cachetUrl : user.profilePictureUrl;
+
   return (
     <NextLink href={user && `/user/@${user.handle}`}>
       <img
         width={32} height={32}
-        src={user.profilePictureUrl}
+        src={src}
+        onError={() => setFailedUrl(src)}
         alt=""
         className={clsx(
           "rounded-full object-cover transition-all max-w-none",
