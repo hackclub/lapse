@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { raise } from "@hackclub/lapse-shared";
+import { oc } from "@orpc/contract";
 
 import { LapseId, LapseDate, apiResult } from "@/common";
 import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 
 /**
  * Represents the permission level of a user.
@@ -150,7 +152,7 @@ export const UserSchema = PublicUserSchema.safeExtend({
     private: PrivateUserDataSchema
 });
 
-export const userRouterContract = {
+export const userRouterContract = oc.tag(ROUTER_TAGS.user).router({
     myself: contract("GET", "/user/myself")
         .route({ description: "Gets the information about the calling user. If the caller is not authenticated, returns `null` as the `user`." })
         .input(NO_INPUT)
@@ -375,4 +377,4 @@ export const userRouterContract = {
                     .describe("The relayed device key, or `null` if no relay is pending.")
             })
         )
-};
+});

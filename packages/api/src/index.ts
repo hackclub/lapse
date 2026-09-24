@@ -3,6 +3,7 @@
 export * from "./common.js";
 export * from "./oauth.js";
 export * from "./constants.js";
+export * from "./tags.js";
 
 export * from "./contracts/user.js";
 export * from "./contracts/timelapse.js";

@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { oc } from "@orpc/contract";
 
 import { apiResult, LapseId, LapseDate, createResultSchema } from "@/common";
 import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
+import { ROUTER_TAGS } from "@/tags";
 import { PermissionLevelSchema } from "@/contracts/user";
 
 export type ProgramKeyMetadata = z.infer<typeof ProgramKeyMetadataSchema>;
@@ -206,7 +208,7 @@ export const AdminSearchOutputSchema = z.object({
     results: z.array(AdminSearchResultSchema)
 });
 
-export const adminRouterContract = {
+export const adminRouterContract = oc.tag(ROUTER_TAGS.admin).router({
     stats: contract("GET", "/admin/stats")
         .route({ description: "Returns aggregate statistics for the admin dashboard. Requires administrator permissions and an `elevated` grant." })
         .input(NO_INPUT)
@@ -362,4 +364,4 @@ export const adminRouterContract = {
                 })
             ),
     }
-};
+});

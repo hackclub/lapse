@@ -1,5 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { ORPCError, os } from "@orpc/server";
+import { oo, type OpenAPI } from "@orpc/openapi";
 import { permissionLevelOrdinal, type LapseOAuthScope, type PermissionLevel } from "@hackclub/lapse-api";
 import type { RequestHeadersPluginContext, ResponseHeadersPluginContext } from "@orpc/server/plugins";
 
@@ -50,6 +51,21 @@ export interface ImplicitUserContext extends ProtectedContext {
 }
 
 /**
+ * The security requirements of an endpoint that can be called by any authenticated actor.
+ */
+const AUTHENTICATED_SECURITY: OpenAPI.SecurityRequirementObject[] = [
+    { oauth2: [] },
+    { programKey: [] }
+];
+
+function appendDescription(operation: OpenAPI.OperationObject, note: string): OpenAPI.OperationObject {
+    return {
+        ...operation,
+        description: operation.description ? `${operation.description}\n\n${note}` : note
+    };
+}
+
+/**
  * Logs each oRPC request.
  */
 export const logMiddleware = os
@@ -71,7 +87,7 @@ export const logMiddleware = os
  * the authenticated user has a certain degree of authority.
  */
 export function requiredAuth(minimumLevel?: PermissionLevel) {
-    return os
+    return oo.spec(os
         .$context<Context>()
         .middleware(async ({ context, next }) => {
             const actor = context.actor;
@@ -90,6 +106,11 @@ export function requiredAuth(minimumLevel?: PermissionLevel) {
             return next<ProtectedContext>({
                 context: { ...context, actor, scopes }
             });
+        }), operation => {
+            const secured = { ...operation, security: AUTHENTICATED_SECURITY };
+            return minimumLevel
+                ? appendDescription(secured, `When called on behalf of a user, that user must have the \`${minimumLevel}\` permission level or higher.`)
+                : secured;
         });
 }
 
@@ -98,7 +119,7 @@ export function requiredAuth(minimumLevel?: PermissionLevel) {
  * it inaccessible to e.g. program keys.
  */
 export function requiredImplicitUser() {
-    return os
+    return oo.spec(os
         .$context<ProtectedContext>()
         .middleware(async ({ context, next }) => {
             if (context.actor.kind != "USER") {
@@ -110,7 +131,13 @@ export function requiredImplicitUser() {
             return next<ImplicitUserContext>({
                 context: { ...context, user: context.actor.user, actor: context.actor }
             });
-        })
+        }), operation => appendDescription(
+            {
+                ...operation,
+                security: operation.security?.filter(requirement => !("programKey" in requirement))
+            },
+            "Can only be called on behalf of a user - program keys are not accepted."
+        ));
 }
 
 /**
@@ -118,7 +145,7 @@ export function requiredImplicitUser() {
  * intended to be used after invoking `requiredAuth`.
  */
 export function requiredScopes(...scopes: LapseOAuthScope[]) {
-    return os
+    return oo.spec(os
         .$context<ProtectedContext>()
         .middleware(async ({ context, next }) => {
             if (!context.scopes.includes("elevated")) {
@@ -133,5 +160,10 @@ export function requiredScopes(...scopes: LapseOAuthScope[]) {
             }
 
             return next({ context });
-        });
+        }), operation => ({
+            ...operation,
+            security: operation.security?.map(requirement => Object.fromEntries(
+                Object.entries(requirement).map(([scheme, granted]) => [scheme, [...granted, ...scopes]])
+            ))
+        }));
 }
