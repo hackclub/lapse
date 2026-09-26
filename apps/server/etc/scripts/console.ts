@@ -45,6 +45,31 @@ const ctx = {
         });
 
         return `(✓) user @${user.handle} (${user.email}) promoted to ROOT`;
+    },
+
+    async startMaintenance(startsAt: string, endsAt: string) {
+        if (!ctx.db)
+            return "(x) connect to a database first!";
+
+        const window = { startsAt: new Date(startsAt), endsAt: new Date(endsAt) };
+        if (isNaN(window.startsAt.getTime()) || isNaN(window.endsAt.getTime()))
+            return "(x) invalid date - use ISO 8601 with an offset, e.g. \"2026-09-27T10:00-04:00\"";
+
+        await ctx.db.maintenance.upsert({
+            where: { id: 1 },
+            create: window,
+            update: window
+        });
+
+        return `(✓) maintenance mode ON (${window.startsAt.toISOString()} - ${window.endsAt.toISOString()}) - only admins can use Lapse`;
+    },
+
+    async endMaintenance() {
+        if (!ctx.db)
+            return "(x) connect to a database first!";
+
+        await ctx.db.maintenance.deleteMany();
+        return "(✓) maintenance mode OFF";
     }
 };
 
@@ -65,6 +90,8 @@ for (let untypedKey in ctx) {
         key == "db" ? `db: PrismaClient, exposes raw access to the database. can only use after calling 'connect'` :
         key == "exit" ? `exit(), exits the REPL` :
         key == "promoteUser" ? `await promoteUser(email: string), grants ROOT permission to the user with the given e-mail` :
+        key == "startMaintenance" ? `await startMaintenance(startsAt: string, endsAt: string), sends every non-admin to the maintenance page. dates are ISO 8601, e.g. "2026-09-27T10:00-04:00"` :
+        key == "endMaintenance" ? `await endMaintenance(), turns maintenance mode off` :
         key
     );
 

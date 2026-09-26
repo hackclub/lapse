@@ -84,3 +84,10 @@ html, body, #__next {
         linear-gradient(to bottom, var(--color-darkless) 1px, transparent 1px) 0 0 / 40px 40px repeat;
 }
 
+.bg-grid-gradient-up {
+    background:
+        linear-gradient(to top, color-mix(in srgb, var(--color-red) 25%, transparent), #00000000),
+        linear-gradient(to right, var(--color-darkless) 1px, transparent 1px) 0 0 / 40px 40px repeat,
+        linear-gradient(to bottom, var(--color-darkless) 1px, transparent 1px) 0 0 / 40px 40px repeat;
+}
+

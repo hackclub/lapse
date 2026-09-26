@@ -1,7 +1,7 @@
 import z from "zod";
 import { oc } from "@orpc/contract";
 
-import { apiResult, LapseId } from "@/common";
+import { apiResult, LapseDate, LapseId } from "@/common";
 import { UserDisplayName, UserHandle } from "@/contracts/user";
 import { contract, NO_INPUT } from "@/internal";
 import { ROUTER_TAGS } from "@/tags";
@@ -18,6 +18,15 @@ export const LeaderboardUserEntrySchema = z.object({
     displayName: UserDisplayName,
     secondsThisWeek: z.number().nonnegative(),
     pfp: z.url()
+});
+
+/**
+ * A scheduled maintenance window. While one is active, Lapse is unavailable to everyone but administrators.
+ */
+export type MaintenanceWindow = z.infer<typeof MaintenanceWindowSchema>;
+export const MaintenanceWindowSchema = z.object({
+    startsAt: LapseDate,
+    endsAt: LapseDate
 });
 
 export const globalRouterContract = oc.tag(ROUTER_TAGS.global).router({
@@ -40,5 +49,12 @@ export const globalRouterContract = oc.tag(ROUTER_TAGS.global).router({
         .input(NO_INPUT)
         .output(apiResult({
             count: z.number().nonnegative()
+        })),
+
+    maintenance: contract("GET", "/global/maintenance")
+        .route({ description: "Returns the active maintenance window, or `null` if Lapse isn't under maintenance." })
+        .input(NO_INPUT)
+        .output(apiResult({
+            maintenance: MaintenanceWindowSchema.nullable()
         }))
 });

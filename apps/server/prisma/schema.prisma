@@ -415,3 +415,11 @@ model ServiceClientReview {
   notes            String        @default("")
   createdAt        DateTime      @default(now())
 }
+
+/// While a row exists, Lapse is in maintenance mode - every non-admin is sent to the maintenance page. There is
+/// only ever one row (with an `id` of 1). Toggled via `startMaintenance`/`endMaintenance` in the server console.
+model Maintenance {
+  id        Int       @id @default(1)
+  startsAt  DateTime
+  endsAt    DateTime
+}

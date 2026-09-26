@@ -105,5 +105,17 @@ export default os.router({
             });
 
             return apiOk({ count: res._count.lastHeartbeat });
+        }),
+
+    maintenance: os.maintenance
+        .handler(async (req) => {
+            const maintenance = await database().maintenance.findFirst();
+
+            return apiOk({
+                maintenance: maintenance && {
+                    startsAt: maintenance.startsAt.getTime(),
+                    endsAt: maintenance.endsAt.getTime()
+                }
+            });
         })
 });

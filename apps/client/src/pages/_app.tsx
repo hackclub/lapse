@@ -5,6 +5,7 @@ import type { AppType } from "next/app";
 import "@/styles/globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { KeyRelayProvider } from "@/context/KeyRelayContext";
+import { MaintenanceProvider } from "@/context/MaintenanceContext";
 import { initLogBucket } from "@/logBucket";
 import { BYPASS_BROWSER_CHECK_KEY } from "@/pages/update-browser";
 import { DeviceStorage } from "@/deviceStorage";
@@ -67,9 +68,11 @@ const App: AppType = ({ Component, pageProps }) => {
 
   return (
     <AuthProvider>
-      <KeyRelayProvider>
-        <Component {...pageProps} />
-      </KeyRelayProvider>
+      <MaintenanceProvider>
+        <KeyRelayProvider>
+          <Component {...pageProps} />
+        </KeyRelayProvider>
+      </MaintenanceProvider>
     </AuthProvider>
   );
 };
