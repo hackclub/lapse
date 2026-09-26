@@ -109,7 +109,7 @@ export default os.router({
             if (req.input.scopes) {
                 const validScopes = new Set<string>(getAllOAuthScopes());
                 const requestedScopes = normalizeScopes(req.input.scopes);
-                const invalidScopes = requestedScopes.filter(scope => !validScopes.has(scope));
+                const invalidScopes = requestedScopes.filter(scope => scope == "elevated" || !validScopes.has(scope));
 
                 if (invalidScopes.length > 0)
                     return apiErr("ERROR", `Unknown scopes: ${invalidScopes.join(", ")}`)

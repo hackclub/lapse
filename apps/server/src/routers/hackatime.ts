@@ -10,6 +10,7 @@ import { logError } from "@/logging.js";
 import { apiErr } from "@/common.js";
 import { HackatimeApiError, HackatimeOAuthApi } from "@/hackatime.js";
 import { maybe } from "@hackclub/lapse-shared";
+import { actorEntitledTo } from "@/ownership.js";
 
 const os = implement(hackatimeRouterContract)
     .$context<Context>()
@@ -130,7 +131,7 @@ export default os.router({
 
             const isPrivilidged = (actor != null) && (
                 (actor.kind == "PROGRAM" && actor.programKey.scopes.includes("timelapse:read")) ||
-                (actor.kind == "USER" && actor.scopes.includes("timelapse:read"))
+                (actor.kind == "USER" && actor.scopes.includes("timelapse:read") && actorEntitledTo({ ownerId: subject.id }, actor))
             );
 
             const timelapses = await database().timelapse.findMany({

@@ -453,6 +453,11 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<Externa
             return null;
         }
 
+        if (token.scp.includes("elevated") && token.cid !== env.CANONICAL_OAUTH_CLIENT_ID) {
+            logWarning(`Access token for client ${token.cid} carries the elevated scope; denying auth!`, { token });
+            return null;
+        }
+
         return { kind: "USER", user, scopes: token.scp as LapseOAuthScope[] };
     }
     catch (error) {

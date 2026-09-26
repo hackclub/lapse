@@ -546,6 +546,7 @@ export default os.router({
 
     getLookoutDrafts: os.getLookoutDrafts
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
         .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
@@ -595,6 +596,7 @@ export default os.router({
 
     pollLookoutStatus: os.pollLookoutStatus
         .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
         .use(requiredImplicitUser())
         .handler(async (req) => {
             const draft = await database().draftLookoutTimelapse.findFirst({

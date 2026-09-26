@@ -180,6 +180,21 @@ export default os.router({
         .use(requiredScopes("elevated"))
         .use(requiredImplicitUser())
         .handler(async (req) => {
+            const client = await database().serviceClient.findFirst({
+                where: { clientId: req.input.clientId, revokedAt: null }
+            });
+
+            if (!client)
+                throw new ORPCError("NOT_FOUND", { message: "That app doesn't exist." });
+
+            const disallowedScopes = req.input.scopes.filter(scope =>
+                !client.scopes.includes(scope) ||
+                (scope === "elevated" && client.clientId !== env.CANONICAL_OAUTH_CLIENT_ID)
+            );
+
+            if (disallowedScopes.length > 0)
+                throw new ORPCError("FORBIDDEN", { message: `This app can't request the scopes ${disallowedScopes.join(", ")}.` });
+
             return {
                 token: createConsentToken({
                     sub: req.context.user.id,

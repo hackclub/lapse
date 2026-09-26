@@ -7,6 +7,7 @@ import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requir
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
+import { actorEntitledTo } from "@/ownership.js";
 
 import * as db from "@/generated/prisma/client.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
@@ -324,9 +325,15 @@ export default os.router({
             if (!req.input.id && !caller)
                 return apiErr("MISSING_PARAMS", "'id' is required when not authenticated.");
             
+            const ownerId = req.input.id ?? caller.id;
+            const isEntitled = actorEntitledTo({ ownerId }, req.context.actor);
+
             const aggregate = await database().timelapse.aggregate({
                 _sum: { duration: true },
-                where: { ownerId: req.input.id ?? caller.id }
+                where: {
+                    ownerId,
+                    visibility: isEntitled ? undefined : "PUBLIC"
+                }
             });
 
             return apiOk({ time: aggregate._sum.duration ?? 0 });
