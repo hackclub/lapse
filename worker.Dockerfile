@@ -4,7 +4,7 @@
 FROM --platform=$TARGETPLATFORM node:26-alpine AS base
 RUN apk update && apk add --no-cache libc6-compat curl bash ffmpeg
 
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@11.18.0
 
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
