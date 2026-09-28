@@ -78,6 +78,8 @@ model User {
   legacyTimelapses      LegacyUnpublishedTimelapse[]
   programKeysCreated    ProgramKey[]                 @relation("programKeysCreated")
   lookoutDrafts         DraftLookoutTimelapse[]
+  lookoutDesktopDevices LookoutDesktopDevice[]
+  lookoutPairingCodes   LookoutPairingCode[]
 }
 
 /// Represents a timelapse created with a legacy version of Lapse. Such a timelapse is encrypted with a 6-digit passkey with a timelapse ID IV.
@@ -183,6 +185,35 @@ model DraftLookoutTimelapse {
 
   ownerId             String
   owner               User     @relation(fields: [ownerId], references: [id])
+}
+
+/// A Lookout desktop install linked to a user. The token itself is never stored;
+/// `tokenHash` is its SHA-256 digest, base64url. It can only start a recording.
+model LookoutDesktopDevice {
+  id        String    @id @default(nanoid(12))
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+  tokenHash String    @unique
+  label     String
+  ownerId   String
+  owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+/// A single-use code the website hands the desktop app after the user consents.
+/// Burned on exchange. Expires after five minutes.
+model LookoutPairingCode {
+  code      String    @id
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  challenge String
+  device    String
+  ownerId   String
+  owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 /// Represents a published timelapse.

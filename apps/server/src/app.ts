@@ -25,6 +25,7 @@ import { ADMIN_ROUTE_PATHS } from "@/adminKey.js";
 import { registerDetectionRoutes } from "@/detections.js";
 import { registerUserSearchRoutes } from "@/userSearch.js";
 import { registerUserTimelapseRoutes } from "@/userTimelapses.js";
+import { registerLookoutDesktopRoutes } from "@/lookoutDesktop.js";
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -79,11 +80,18 @@ server.register(fastifyCors, {
 });
 
 server.addContentTypeParser("*", (request, payload, done) => {
-    if (ADMIN_ROUTE_PATHS.has(request.url)) {
+    const path = request.url.split("?")[0] ?? request.url;
+    // Lookout desktop pairing posts JSON outside /api. An empty body is `{}`
+    // so DELETE-with-a-content-type and POST /lookout/start both parse.
+    if (ADMIN_ROUTE_PATHS.has(request.url) || path.startsWith("/lookout/")) {
         let body = "";
         payload.setEncoding("utf8");
         payload.on("data", chunk => body += chunk);
         payload.on("end", () => {
+            if (!body && path.startsWith("/lookout/")) {
+                done(null, {});
+                return;
+            }
             try {
                 done(null, JSON.parse(body));
             }
@@ -102,6 +110,7 @@ server.addContentTypeParser("*", (request, payload, done) => {
 registerDetectionRoutes(server);
 registerUserSearchRoutes(server);
 registerUserTimelapseRoutes(server);
+registerLookoutDesktopRoutes(server);
 
 server.all("/api/*", async (req, reply) => {
     const actor = await getAuthenticatedUser(req);
