@@ -1104,12 +1104,12 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
   const formattedTime = formatTrackedTime(state.displaySeconds);
 
   return (
-    <RootLayout showHeader={false}>
+    <RootLayout showHeader={false} fitViewport={isCamera}>
       <div
         className={clsx(
           "w-screen bg-dark relative",
           isCamera
-            ? "grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] landscape:grid-cols-[minmax(0,1fr)_auto] landscape:grid-rows-[auto_minmax(0,1fr)]"
+            ? "grid h-full grid-rows-[auto_minmax(0,1fr)_auto] gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] landscape:grid-cols-[minmax(0,1fr)_auto] landscape:grid-rows-[minmax(0,1fr)_auto] landscape:[@container(height>=280px)]:grid-rows-[auto_minmax(0,1fr)]"
             : "flex h-screen p-8"
         )}
       >
@@ -1124,7 +1124,7 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
           className={clsx(
             "z-10 bg-dark border border-black rounded-[48px] shadow-xl flex items-center",
             isCamera
-              ? "row-start-3 justify-self-center gap-6 px-5 py-3 landscape:row-start-2 landscape:col-start-2 landscape:flex-col landscape:gap-2 landscape:px-2 landscape:py-2 landscape:self-center"
+              ? "row-start-3 justify-self-center gap-6 px-5 py-3 landscape:row-start-2 landscape:col-span-2 landscape:[@container(height>=280px)]:col-span-1 landscape:[@container(height>=280px)]:col-start-2 landscape:[@container(height>=280px)]:flex-col landscape:[@container(height>=280px)]:gap-2 landscape:[@container(height>=280px)]:px-2 landscape:[@container(height>=280px)]:py-2 landscape:[@container(height>=280px)]:self-center"
               : "absolute right-12 top-1/2 -translate-y-1/2 px-2.5 py-11 flex-col gap-8"
           )}
         >
@@ -1170,7 +1170,8 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
         <div
           className={clsx(
             "w-full h-full flex justify-center items-center",
-            isCamera && "row-start-2 min-h-0 min-w-0 landscape:row-start-1 landscape:col-start-1 landscape:row-span-2"
+            isCamera &&
+              "row-start-2 min-h-0 min-w-0 landscape:row-start-1 landscape:col-start-1 landscape:[@container(height>=280px)]:row-span-2"
           )}
         >
           {isCamera && state.previewStream ? (
