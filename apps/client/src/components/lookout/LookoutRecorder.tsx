@@ -83,10 +83,16 @@ function RecordingModeOption({ icon, title, description, selected, onClick, reco
 
 const CAPTURE_INTERVAL_S = 60;
 
-function TimePill({ formattedTime, isRecording, displaySeconds }: {
+function TimePill({
+  formattedTime,
+  isRecording,
+  displaySeconds,
+  inline = false
+}: {
   formattedTime: string;
   isRecording: boolean;
   displaySeconds: number;
+  inline?: boolean;
 }) {
   const [pulsing, setPulsing] = useState(false);
   const prevCycle = useRef(Math.floor(displaySeconds / CAPTURE_INTERVAL_S));
@@ -104,22 +110,34 @@ function TimePill({ formattedTime, isRecording, displaySeconds }: {
   return (
     <div
       className={clsx(
-        "z-10 absolute top-12 left-24 rounded-[64px]",
+        "z-10 rounded-[64px]",
+        inline
+          ? "justify-self-start landscape:col-start-2 landscape:row-start-1 landscape:justify-self-center"
+          : "absolute top-12 left-24",
         pulsing && "animate-capture-pulse"
       )}
       onAnimationEnd={() => setPulsing(false)}
     >
-      <div className="relative bg-dark shadow-xl text-xl font-mono font-bold px-8 py-4 flex gap-4 items-center border border-black rounded-[64px] overflow-hidden">
+      <div
+        className={clsx(
+          "relative bg-dark shadow-xl font-mono font-bold flex items-center border border-black rounded-[64px] overflow-hidden",
+          inline ? "text-base px-4 py-2 gap-2" : "text-xl px-8 py-4 gap-4"
+        )}
+      >
         <div
           className={clsx(
-            "rounded-full w-4 h-4 shrink-0",
+            "rounded-full shrink-0",
+            inline ? "w-3 h-3" : "w-4 h-4",
             isRecording ? "bg-red animate-blink" : "bg-secondary"
           )}
         />
         <span>{formattedTime}</span>
         {isRecording && (
           <div
-            className="absolute bottom-1 left-8 right-8 h-1 rounded-full bg-white/10 overflow-hidden"
+            className={clsx(
+              "absolute bottom-1 h-1 rounded-full bg-white/10 overflow-hidden",
+              inline ? "left-4 right-4" : "left-8 right-8"
+            )}
           >
             <div
               className="h-full bg-red rounded-full transition-[width] duration-1000 linear"
@@ -893,7 +911,7 @@ export default function LookoutRecorder() {
   );
 }
 
-function CameraPreviewVideo({ stream }: { stream: MediaStream }) {
+function CameraPreviewVideo({ stream, mirrored }: { stream: MediaStream; mirrored: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -915,8 +933,8 @@ function CameraPreviewVideo({ stream }: { stream: MediaStream }) {
       ref={videoRef}
       playsInline
       muted
-      className="max-h-full rounded-[48px] object-contain"
-      style={{ transform: "scaleX(-1)" }}
+      className="max-w-full max-h-full rounded-[48px] object-contain"
+      style={{ transform: mirrored ? "scaleX(-1)" : "none" }}
     />
   );
 }
@@ -942,6 +960,7 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
   // actually releases them to publish.
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorDone, setEditorDone] = useState(false);
+  const [mirrored, setMirrored] = useState(true);
   const screenStarted = useRef(false);
   const isCamera = state.captureMode === "camera";
 
@@ -1081,58 +1100,81 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
     return <RootLayout showHeader={false}><div /></RootLayout>;
   }
 
-  // Camera preview phase — show preview and "Start Recording" button
-  if (isCamera && state.isPreviewing && !state.isSharing) {
-    const formattedTime = formatTrackedTime(state.displaySeconds);
-    return (
-      <RootLayout showHeader={false}>
-        <div className="flex w-screen h-screen bg-dark p-8 relative">
-          <TimePill formattedTime={formattedTime} isRecording={false} displaySeconds={state.displaySeconds} />
-
-          <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">
-            <PillControlButton onClick={handleStartSharing}>
-              <RecordIcon className="p-3" width={48} height={48} />
-            </PillControlButton>
-
-            <PillControlButton onClick={onShareFailed}>
-              <StopIcon className="p-3" width={48} height={48} />
-            </PillControlButton>
-          </div>
-
-          <div className="w-full h-full flex justify-center items-center">
-            {state.previewStream ? (
-              <CameraPreviewVideo stream={state.previewStream} />
-            ) : (
-              <div className="text-secondary text-lg">Starting camera...</div>
-            )}
-          </div>
-        </div>
-      </RootLayout>
-    );
-  }
-
+  const isCameraPreview = isCamera && state.isPreviewing && !state.isSharing;
   const formattedTime = formatTrackedTime(state.displaySeconds);
 
   return (
     <RootLayout showHeader={false}>
-      <div className="flex w-screen h-screen bg-dark p-8 relative">
-        <TimePill formattedTime={formattedTime} isRecording={state.isRecording} displaySeconds={state.displaySeconds} />
+      <div
+        className={clsx(
+          "w-screen bg-dark relative",
+          isCamera
+            ? "grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto] gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] landscape:grid-cols-[minmax(0,1fr)_auto] landscape:grid-rows-[auto_minmax(0,1fr)]"
+            : "flex h-screen p-8"
+        )}
+      >
+        <TimePill
+          formattedTime={formattedTime}
+          isRecording={state.isRecording}
+          displaySeconds={state.displaySeconds}
+          inline={isCamera}
+        />
 
-        <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">
-          <PillControlButton onClick={togglePause}>
-            {state.status === "paused"
-              ? <RecordIcon className="p-3" width={48} height={48} />
-              : <PauseIcon className="p-3" width={48} height={48} />}
+        <div
+          className={clsx(
+            "z-10 bg-dark border border-black rounded-[48px] shadow-xl flex items-center",
+            isCamera
+              ? "row-start-3 justify-self-center gap-6 px-5 py-3 landscape:row-start-2 landscape:col-start-2 landscape:flex-col landscape:gap-2 landscape:px-2 landscape:py-2 landscape:self-center"
+              : "absolute right-12 top-1/2 -translate-y-1/2 px-2.5 py-11 flex-col gap-8"
+          )}
+        >
+          <PillControlButton
+            onClick={isCameraPreview ? handleStartSharing : togglePause}
+            aria-label={
+              isCameraPreview ? "Start recording" : state.status === "paused" ? "Resume recording" : "Pause recording"
+            }
+          >
+            {isCameraPreview || state.status === "paused" ? (
+              <RecordIcon className="p-3" width={48} height={48} />
+            ) : (
+              <PauseIcon className="p-3" width={48} height={48} />
+            )}
           </PillControlButton>
 
-          <PillControlButton onClick={stopRecording}>
+          {isCamera && (
+            <PillControlButton
+              onClick={() => setMirrored(value => !value)}
+              aria-label="Mirror preview"
+              aria-pressed={mirrored}
+              title="Mirror preview only — recorded video is unchanged"
+              disabled={!state.previewStream}
+            >
+              <span className="flex flex-col items-center gap-1 px-3 py-1">
+                <svg width={24} height={24} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M3 5v14l6-7-6-7Zm18 0v14l-6-7 6-7Z" />
+                  <path d="M12 3v18" stroke="currentColor" strokeWidth={2} strokeDasharray="2 2" />
+                </svg>
+                <span className="text-xs font-bold">Mirror {mirrored ? "on" : "off"}</span>
+              </span>
+            </PillControlButton>
+          )}
+
+          <PillControlButton
+            onClick={isCameraPreview ? onShareFailed : stopRecording}
+            aria-label={isCameraPreview ? "Cancel recording" : "Stop recording"}
+          >
             <StopIcon className="p-3" width={48} height={48} />
           </PillControlButton>
         </div>
 
-        <div className="w-full h-full flex justify-center items-center">
+        <div
+          className={clsx(
+            "w-full h-full flex justify-center items-center",
+            isCamera && "row-start-2 min-h-0 min-w-0 landscape:row-start-1 landscape:col-start-1 landscape:row-span-2"
+          )}
+        >
           {isCamera && state.previewStream ? (
-            <CameraPreviewVideo stream={state.previewStream} />
+            <CameraPreviewVideo stream={state.previewStream} mirrored={mirrored} />
           ) : state.lastScreenshotUrl ? (
             <img
               src={state.lastScreenshotUrl}
@@ -1141,7 +1183,7 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
             />
           ) : (
             <div className="text-secondary text-lg">
-              {state.isSharing ? "Waiting for first screenshot..." : ""}
+              {isCamera ? "Starting camera..." : state.isSharing ? "Waiting for first screenshot..." : ""}
             </div>
           )}
         </div>
@@ -1149,7 +1191,7 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
 
       <ErrorModal
         isOpen={!!error}
-        setIsOpen={(open) => !open && setError(null)}
+        setIsOpen={open => !open && setError(null)}
         message={error || ""}
         onClose={() => router.back()}
       />
