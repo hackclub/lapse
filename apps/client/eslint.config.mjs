@@ -1,21 +1,35 @@
 // @ts-check
 
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTypescript from "eslint-config-next/typescript";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import { FlatCompat } from "@eslint/eslintrc";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const compat = new FlatCompat({
+    baseDirectory: __dirname,
+});
 
 /** @type {import('eslint').Linter.Config[]} */
 const eslintConfig = [
-  ...nextVitals,
-  ...nextTypescript,
-  {
-    rules: {
-      semi: ["error", "always"],
-      "brace-style": ["error", "stroustrup", { allowSingleLine: true }]
-    }
-  },
-  {
-    ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "**/generated/**"]
-  }
+    ...compat.extends("next/core-web-vitals", "next/typescript"),
+    {
+        rules: {
+            "semi": ["error", "always"],
+            "brace-style": ["error", "stroustrup", { "allowSingleLine": true }]
+        },
+    },
+    {
+        ignores: [
+            "node_modules/**",
+            ".next/**",
+            "out/**",
+            "build/**",
+            "next-env.d.ts",
+            "**/generated/**",
+        ],
+    },
 ];
 
 export default eslintConfig;
