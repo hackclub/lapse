@@ -278,6 +278,9 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
    */
   compact?: boolean;
 }) {
+  const router = useRouter();
+  const needsRelink = useHackatimeRelink();
+
   const usesOwnLoader = Boolean(loadProjects);
   const [projects, setProjects] = useState<HackatimeProject[]>(() => usesOwnLoader ? [] : cachedProjects ?? []);
   const [isLoadingProjects, setIsLoadingProjects] = useState(usesOwnLoader || cachedProjects === null);
