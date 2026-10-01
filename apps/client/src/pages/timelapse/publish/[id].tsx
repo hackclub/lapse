@@ -112,6 +112,14 @@ export default function Page() {
       onDesktop = res.data.recordedOnDesktop;
       setRecordedOnDesktop(onDesktop);
 
+      // The user already answered all of this in the desktop app's publish panel, before the video
+      // had finished compiling - so the timelapse published itself and there is nothing to ask.
+      if (res.data.publishedTimelapseId) {
+        removeStoredSession(draftId);
+        location.href = `/timelapse/${res.data.publishedTimelapseId}`;
+        return;
+      }
+
       if (res.data.lookoutStatus === "complete") {
         setCompilationStatus("ready");
         setVideoUrl(res.data.videoUrl);

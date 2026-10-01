@@ -14,6 +14,8 @@ When a user records a video, it first becomes a *draft timelapse* (`DraftTimelap
 
 A user can choose to publish a draft timelapse, creating a `Timelapse` as a result. This involves transcoding and applying edit lists to the video via the `worker`. The contents of a regular, published timelapse are not encrypted and may be viewed by any other user.
 
+Recordings made through the Lookout desktop app can also be started and published from inside the app itself, without a browser round-trip. That inverts one assumption worth knowing about: the publish flow used to require a compiled video, and now the user's answers are stored as a pending intent on the draft and applied once the video lands. See @docs/lookout-desktop.md.
+
 Lapse has the ability to import data to an API-compatible WakaTime fork called Hackatime. When importing, a WakaTime heartbeat will be created for each *snapshot* - a timestamp taken with each recorded frame on the client.
 
 # Code style

@@ -26,6 +26,8 @@ export function DevicesTab({ isVisible }: { isVisible: boolean }) {
 
   const [devices, setDevices] = useState<KnownDevice[]>([]);
   const [localDevices, setLocalDevices] = useState<LocalDevice[]>([]);
+  const [lookoutDevices, setLookoutDevices] = useState<Array<{ id: string; label: string; createdAt: string; lastUsedAt: string | null }>>([]);
+  const [lookoutDevicesLoading, setLookoutDevicesLoading] = useState(true);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -37,8 +39,23 @@ export function DevicesTab({ isVisible }: { isVisible: boolean }) {
       if (res.ok) {
         setDevices(res.data.devices);
       }
+
+      const lookoutRes = await api.timelapse.listDesktopDevices({});
+      if (lookoutRes.ok) {
+        setLookoutDevices(lookoutRes.data.devices);
+      }
+      setLookoutDevicesLoading(false);
     })();
   }, [isVisible]);
+
+  async function revokeLookoutDevice(id: string) {
+    const res = await api.timelapse.revokeDesktopDevice({ id });
+    if (!res.ok) {
+      setError(res.message);
+      return;
+    }
+    setLookoutDevices(prev => prev.filter(d => d.id !== id));
+  }
 
   async function handleRemoveDevice(deviceId: string) {
     if (!auth.currentUser) return;
@@ -111,6 +128,40 @@ export function DevicesTab({ isVisible }: { isVisible: boolean }) {
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-slate bg-darkless px-4 py-3 text-muted">
         With Lookout, device keys are no longer needed. These settings only apply to older timelapses recorded with the legacy encrypted pipeline.
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col">
+          <h3 className="text-lg font-semibold">Linked apps</h3>
+          <p className="text-muted">
+            The Lookout desktop app installs you have approved. Revoke to stop an install from starting timelapses on your account - it will have to be approved again from the app.
+          </p>
+        </div>
+
+        {lookoutDevicesLoading ? (
+          <p className="text-muted text-center">Loading...</p>
+        ) : lookoutDevices.length === 0 ? (
+          <p className="text-muted text-center">No linked apps.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {lookoutDevices.map(device => (
+              <div key={device.id} className="flex items-center justify-between p-3 border-l-8 border-primary rounded-md">
+                <div className="flex flex-col min-w-0">
+                  <span className="font-medium truncate">{device.label}</span>
+                  <span className="text-sm text-muted">
+                    Linked {new Date(device.createdAt).toLocaleDateString()}
+                    {device.lastUsedAt && ` · last used ${new Date(device.lastUsedAt).toLocaleDateString()}`}
+                  </span>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button kind="regular" onClick={() => revokeLookoutDevice(device.id)} className="px-5!" title="Revoke">
+                    <Icon glyph="delete" size={20} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

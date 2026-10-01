@@ -1,5 +1,5 @@
 import { env } from "@/env.js";
-import { logError, logInfo } from "@/logging.js";
+import { logError, logInfo, logWarning } from "@/logging.js";
 
 interface LookoutSessionCreated {
     token: string;
@@ -57,9 +57,62 @@ async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> 
 export async function createSession(
     name?: string,
     metadata?: Record<string, unknown>,
-    options?: { clips?: boolean; redirectUrl?: string }
+    options?: { clips?: boolean; redirectUrl?: string; panelUrl?: string }
 ): Promise<LookoutSessionCreated> {
-    const result = await lookoutFetch<LookoutSessionCreated>("/api/internal/sessions", {
+    const body = {
+        name,
+        metadata,
+        clips: options?.clips,
+        redirectUrl: options?.redirectUrl,
+        panelUrl: options?.panelUrl,
+    };
+
+    const result = await createSessionWithFallback(body);
+
+    logInfo(`Created Lookout session ${result.sessionId}`);
+    return result;
+}
+
+type CreateSessionBody = {
+    name: string | undefined;
+    metadata: Record<string, unknown> | undefined;
+    clips: boolean | undefined;
+    redirectUrl: string | undefined;
+    panelUrl: string | undefined;
+};
+
+/**
+ * Creates the session, dropping `panelUrl` and retrying if Lookout rejects it.
+ *
+ * Not actually needed against Lookout as it stands: its create endpoint declares
+ * `additionalProperties: false`, and Fastify's Ajv defaults to *removing* unknown properties rather
+ * than erroring - so a Lookout that predates panels silently ignores `panelUrl` and creates the
+ * session anyway (verified against a real pre-panel-shaped request, which returns 201). Deploying
+ * this side first is therefore already safe.
+ *
+ * Kept because that graceful behaviour is a default we do not control, one config change away from
+ * becoming a 400 that would take recording down for everyone until the other side deployed. Losing
+ * the in-app panel for that window is a fair price; losing recording is not.
+ */
+async function createSessionWithFallback(body: CreateSessionBody): Promise<LookoutSessionCreated> {
+    try {
+        return await postCreateSession(body);
+    }
+    catch (err) {
+        if (!body.panelUrl || !isBadRequest(err))
+            throw err;
+
+        logWarning("Lookout rejected panelUrl on session creation; retrying without it. The server is probably older than this build.");
+        return await postCreateSession({ ...body, panelUrl: undefined });
+    }
+}
+
+function isBadRequest(err: unknown): boolean {
+    return err instanceof Error && /Lookout API error: 400\b/.test(err.message);
+}
+
+async function postCreateSession(body: CreateSessionBody): Promise<LookoutSessionCreated> {
+    return await lookoutFetch<LookoutSessionCreated>("/api/internal/sessions", {
         method: "POST",
         // `clips` (not `clip`/`clipsEnabled`) is the field that flips `clipsEnabled` on
         // the session, unlocking the cut/edit flow.
@@ -67,11 +120,55 @@ export async function createSession(
         // `redirectUrl` is Lookout's redirect hook: the recording client sends the user there once the
         // timelapse finishes compiling (the desktop app opens it in their default browser). It's immutable
         // after creation, and Lookout only accepts http(s).
-        body: JSON.stringify({ name, metadata, clips: options?.clips, redirectUrl: options?.redirectUrl }),
+        //
+        // `panelUrl` is our publish flow rendered *inside* the desktop app, in place of that redirect.
+        // Also immutable, https only, and it must be unguessable: a third-party iframe receives none of
+        // our cookies, so the URL is the only credential the panel has. Lookout opens it as soon as the
+        // recording is saved, so it loads while the session is still compiling.
+        body: JSON.stringify(body),
     });
+}
 
-    logInfo(`Created Lookout session ${result.sessionId}`);
-    return result;
+/**
+ * Tells Lookout we have what the panel was asking for, so it stops offering it.
+ *
+ * Needed because the user can answer the panel in the desktop app's sheet *or* here on the website,
+ * and Lookout can see inside neither. Without this the desktop app keeps showing a "Lapse needs a few
+ * details" card for a timelapse that is already published. Idempotent on Lookout's side, and a no-op
+ * for sessions with no panel, so it is safe to call unconditionally whenever we publish.
+ */
+export async function markPanelResolved(sessionId: string): Promise<void> {
+    await lookoutFetch<{ panelResolved: boolean }>(`/api/internal/sessions/${sessionId}/panel-resolved`, {
+        method: "POST",
+        // `{}` rather than nothing: `lookoutFetch` always sends a JSON content type, and Fastify
+        // rejects that with an empty body before the route is ever reached. Without this the call
+        // 400s every single time - which is silent here, because a failed resolve is only logged,
+        // and shows up much later as the desktop app still asking for details already given.
+        body: "{}",
+    });
+}
+
+/**
+ * Points the desktop app's "Open in Lapse" action at a published timelapse.
+ *
+ * Mutable on Lookout, unlike the other two URLs, which is the whole point: the page being linked to
+ * does not exist until the user publishes.
+ */
+export async function setViewUrl(sessionId: string, viewUrl: string | null): Promise<void> {
+    await lookoutFetch<{ viewUrl: string | null }>(`/api/internal/sessions/${sessionId}/view-url`, {
+        method: "POST",
+        body: JSON.stringify({ viewUrl }),
+    });
+}
+
+/**
+ * Whether a Lookout session name is just Lookout's placeholder rather than something the user typed.
+ *
+ * Lookout names a session `untitled-YYYY-MM-DD` when nobody supplies one, and we never supply one at
+ * creation - so a name in that shape carries no intent and must not be offered back as a suggestion.
+ */
+export function isPlaceholderSessionName(name: string): boolean {
+    return /^untitled-\d{4}-\d{2}-\d{2}$/.test(name.trim());
 }
 
 export async function getSession(sessionId: string): Promise<LookoutSessionDetails> {
