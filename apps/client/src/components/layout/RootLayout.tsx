@@ -8,10 +8,17 @@ import { HackatimeRelinkModal } from "@/components/layout/HackatimeRelinkModal";
 import { LegacyRecoveryBanner } from "@/components/legacy/LegacyRecoveryBanner";
 import { jetBrainsMono, phantomSans } from "@/fonts";
 
-export default function RootLayout({ children, title = "Lapse", description = "Track time with timelapses", showHeader = false }: PropsWithChildren<{
+export default function RootLayout({
+  children,
+  title = "Lapse",
+  description = "Track time with timelapses",
+  showHeader = false,
+  fitViewport = false
+}: PropsWithChildren<{
   title?: string;
   description?: string;
   showHeader?: boolean;
+  fitViewport?: boolean;
 }>) {
   return (
     <>
@@ -22,21 +29,27 @@ export default function RootLayout({ children, title = "Lapse", description = "T
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className={clsx(
-        "flex flex-col w-full h-full sm:gap-2.5",
-        jetBrainsMono.variable,
-        phantomSans.className
-      )}>
+      <div
+        className={clsx(
+          "flex flex-col w-full sm:gap-2.5",
+          fitViewport ? "h-dvh" : "h-full",
+          jetBrainsMono.variable,
+          phantomSans.className
+        )}
+      >
         <HackatimeRelinkModal />
         <HackatimeRelinkBanner />
         <LegacyRecoveryBanner />
 
-        { showHeader && <Header /> }
-        
-        <main className={clsx(
-          "w-full h-full",
-          showHeader && "pb-24 sm:pb-0"
-        )}>
+        {showHeader && <Header />}
+
+        <main
+          className={clsx(
+            "w-full",
+            fitViewport ? "flex-1 min-h-0 [container-type:size]" : "h-full",
+            showHeader && "pb-24 sm:pb-0"
+          )}
+        >
           {children}
         </main>
       </div>
