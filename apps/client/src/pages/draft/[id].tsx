@@ -5,6 +5,7 @@ import Icon from "@hackclub/icons";
 
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
 import { deviceStorage } from "@/deviceStorage";
 
 import { useDecryptedThumbnail } from "@/components/entity/ThumbnailImage";
@@ -59,6 +60,9 @@ export default function Page() {
   const [visibility, setVisibility] = useState<TimelapseVisibility | null>(null);
 
   const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
+
+  // Hackatime won't take anything from banned users, so there's nothing to sync.
+  const skipHackatime = useHackatimeLinkStatus() === "restricted";
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
 
@@ -99,6 +103,12 @@ export default function Page() {
 
   function handlePublishClick() {
     if (!visibility) return;
+
+    if (skipHackatime) {
+      publish(null);
+      return;
+    }
+
     setHackatimeModalOpen(true);
   }
 

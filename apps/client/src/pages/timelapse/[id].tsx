@@ -8,6 +8,7 @@ import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-ap
 import { api } from "@/api";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 import { useAuth } from "@/hooks/useAuth";
+import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
 import { markdownToJsx } from "@/markdown";
 
 import RootLayout from "@/components/layout/RootLayout";
@@ -56,6 +57,7 @@ export default function Page() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
+  const canSyncHackatime = useHackatimeLinkStatus() !== "restricted";
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
   const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
   const [linkCopied, setLinkCopied] = useState(false);
@@ -341,7 +343,7 @@ export default function Page() {
                       Edit
                     </Button>
 
-                    { timelapse.playbackUrl && !timelapse.private?.hackatimeProject && (
+                    { canSyncHackatime && timelapse.playbackUrl && !timelapse.private?.hackatimeProject && (
                       <Button
                         className="px-6!"
                         icon={<Icon glyph="history" size={24} />}

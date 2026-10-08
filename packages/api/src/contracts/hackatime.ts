@@ -33,7 +33,9 @@ export const hackatimeRouterContract = oc.tag(ROUTER_TAGS.hackatime).router({
         .route({ description: "Reports whether the user's Hackatime authorization has to be renewed. Tokens issued before Lapse requested the `read` scope can still push heartbeats but can no longer list projects." })
         .input(NO_INPUT)
         .output(apiResult({
-            needsRelink: z.boolean()
+            needsRelink: z.boolean(),
+            restricted: z.boolean()
+                .describe("Whether Hackatime has banned the user. Hackatime doesn't share the projects or API key of banned users, so timelapses can't be synced with Hackatime - and signing in again won't help.")
         })),
 
     myTimelapsesForProject: contract("GET", "/hackatime/myTimelapsesForProject")

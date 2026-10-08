@@ -9,7 +9,7 @@ import { lapseId } from "@/common.js";
 import { logInfo, logWarning } from "@/logging.js";
 import * as lookout from "@/lookout.js";
 import { finalizeIfPending, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
-import { hackatimeProjectsForUser } from "@/routers/hackatime.js";
+import { hackatimeProjectsForUser, isHackatimeRestricted } from "@/routers/hackatime.js";
 
 /**
  * The endpoints Lookout's desktop app talks to directly.
@@ -264,11 +264,21 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
             logWarning("Couldn't read the Lookout session name for a panel.", { err, draftId: draft.id });
         }
 
+        let hackatimeRestricted = false;
+
+        try {
+            hackatimeRestricted = await isHackatimeRestricted(draft.owner);
+        }
+        catch (err) {
+            logWarning("Couldn't check whether a panel's owner is banned on Hackatime.", { err, draftId: draft.id });
+        }
+
         return reply.send({
             draftId: draft.id,
             createdAt: draft.createdAt.toISOString(),
             handle: draft.owner.handle,
             hackatimeLinked: Boolean(draft.owner.hackatimeId && draft.owner.hackatimeAccessToken),
+            hackatimeRestricted,
             suggestedName,
             // Non-null when the user has already answered: the panel then has nothing to ask and
             // reports itself done rather than showing the form a second time.

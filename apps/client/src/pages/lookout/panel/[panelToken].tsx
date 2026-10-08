@@ -33,6 +33,7 @@ type PanelContext = {
     createdAt: string;
     handle: string;
     hackatimeLinked: boolean;
+    hackatimeRestricted: boolean;
     suggestedName: string | null;
     submitted: { name: string; description: string; visibility: TimelapseVisibility; hackatimeProject: string | null } | null;
 };
@@ -375,11 +376,13 @@ export default function Page() {
     return (
         <div className={clsx(phantomSans.className, light && "lookout-light", "flex flex-col gap-3 px-4 pt-1 pb-4 text-sm text-text")}>
             {reset}
-            <div className="flex items-center gap-3">
-                <StepMarker index={1} label="Details" state={step === "details" ? "current" : "done"} />
-                <div className="h-px flex-1 bg-border" />
-                <StepMarker index={2} label="Hackatime" state={step === "hackatime" ? "current" : "upcoming"} />
-            </div>
+            {!context.hackatimeRestricted && (
+                <div className="flex items-center gap-3">
+                    <StepMarker index={1} label="Details" state={step === "details" ? "current" : "done"} />
+                    <div className="h-px flex-1 bg-border" />
+                    <StepMarker index={2} label="Hackatime" state={step === "hackatime" ? "current" : "upcoming"} />
+                </div>
+            )}
 
             {/* `relative`, with the inactive step taken out of flow. Both steps used to
                 share a grid cell, which makes the container as tall as the taller of the
@@ -420,13 +423,20 @@ export default function Page() {
                     {/* No "not now" of our own: the sheet's own close control already
                         does that, and closing throws nothing away - the recording keeps
                         compiling and the app offers this again from the session page. */}
+                    {context.hackatimeRestricted && submitError && <p className="text-red">{submitError}</p>}
+
+                    {/* Hackatime won't take anything from banned users, so there's nothing to sync. */}
                     <Button
-                        onClick={() => setStep("hackatime")}
+                        onClick={() => context.hackatimeRestricted ? publish() : setStep("hackatime")}
                         disabled={!visibility || isPublishing}
                         kind="primary"
                         className="w-full !h-10"
                     >
-                        Continue
+                        {
+                            !context.hackatimeRestricted ? "Continue" :
+                            isPublishing ? "Publishing..." :
+                            "Publish"
+                        }
                     </Button>
                 </div>
 

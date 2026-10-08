@@ -182,6 +182,12 @@ export interface CreatedWakaTimeHeartbeat {
 
 export type WakaTimeResponse<T> = { data: T }
 
+/**
+ * A Hackatime user's trust level. `red` users are banned: Hackatime still accepts their heartbeats, but refuses every
+ * OAuth API call made on their behalf other than `/me`.
+ */
+export type HackatimeTrustLevel = "blue" | "red" | "green" | "yellow";
+
 export class HackatimeApiError extends Error {
     readonly status: number;
 
@@ -336,7 +342,11 @@ export class HackatimeOAuthApi extends HackatimeBase {
             id: number,
             emails: string[],
             slack_id?: string,
-            github_username?: string
+            github_username?: string,
+            trust_factor?: {
+                trust_level: HackatimeTrustLevel,
+                trust_value: number
+            }
         }>(
             "GET", "v1/authenticated/me"
         );
