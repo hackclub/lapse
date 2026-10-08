@@ -18,6 +18,7 @@ import { ErrorModal } from "@/components/layout/ErrorModal";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 import { NOT_FOUND_STATUS, PageStatus, StatusPage, statusForApiError } from "@/components/layout/StatusPage";
 import { HackatimeProjectPicker, prefetchHackatimeProjects } from "@/components/entity/HackatimeProjectPicker";
+import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
 
 type CompilationStatus = "waiting" | "ready" | "failed";
 
@@ -84,6 +85,9 @@ export default function Page() {
   }, [draftId]);
   const [hackatimeProject, setHackatimeProject] = useState<string | null>(null);
   const [isLoadingHackatime, setIsLoadingHackatime] = useState(false);
+
+  // Hackatime won't take anything from banned users, so there's nothing to sync.
+  const skipHackatime = useHackatimeLinkStatus() === "restricted";
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +166,12 @@ export default function Page() {
 
   function handleVisibilitySelect() {
     if (!visibility) return;
+
+    if (skipHackatime) {
+      publish(null);
+      return;
+    }
+
     setStep("hackatime");
   }
 
@@ -268,11 +278,13 @@ export default function Page() {
               )}
 
               <div className="flex flex-col gap-6 flex-1 min-w-0">
-                <div className="flex items-center gap-3">
-                  <StepMarker index={1} label="Details" state={step === "details" ? "current" : "done"} />
-                  <div className="flex-1 h-px bg-slate" />
-                  <StepMarker index={2} label="Hackatime" state={step === "hackatime" ? "current" : "upcoming"} />
-                </div>
+                {!skipHackatime && (
+                  <div className="flex items-center gap-3">
+                    <StepMarker index={1} label="Details" state={step === "details" ? "current" : "done"} />
+                    <div className="flex-1 h-px bg-slate" />
+                    <StepMarker index={2} label="Hackatime" state={step === "hackatime" ? "current" : "upcoming"} />
+                  </div>
+                )}
 
                 {/*
                   Both steps live in the same grid cell - the column is then as tall as the tallest of the two, and
@@ -316,7 +328,11 @@ export default function Page() {
                         kind="primary"
                         className="w-full"
                       >
-                        Continue
+                        {
+                          !skipHackatime ? "Continue" :
+                          isPublishing ? "Publishing..." :
+                          "Publish"
+                        }
                       </Button>
 
                       <Button

@@ -4,30 +4,38 @@ import { useRouter } from "next/router";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 
-export const RELINK_SESSION_KEY = "lapse:hackatimeNeedsRelink";
+export const LINK_STATUS_SESSION_KEY = "lapse:hackatimeLinkStatus";
 
 /**
- * Whether the signed-in user has to authorize Lapse with Hackatime again. A "no" is cached for the browser
+ * - `linked`: everything works.
+ * - `needsRelink`: the user has to authorize Lapse with Hackatime again.
+ * - `restricted`: the user is banned on Hackatime, which won't let us sync anything for them. Signing in again won't help.
+ */
+export type HackatimeLinkStatus = "linked" | "needsRelink" | "restricted";
+
+/**
+ * The state of the signed-in user's Hackatime authorization. Anything but `needsRelink` is cached for the browser
  * session, since checking costs a request to Hackatime and almost nobody needs to be asked twice.
  */
-export function useHackatimeRelink(): boolean {
+export function useHackatimeLinkStatus(): HackatimeLinkStatus {
   const router = useRouter();
   const auth = useAuth(false);
-  const [needsRelink, setNeedsRelink] = useState(false);
+  const [status, setStatus] = useState<HackatimeLinkStatus>("linked");
 
   // Nothing renders this on /auth anyway, and checking there would ask about the token being replaced.
   const isReauthenticating = router.pathname === "/auth";
 
   useEffect(() => {
     if (!auth.currentUser || isReauthenticating) {
-      setNeedsRelink(false);
+      setStatus("linked");
       return;
     }
 
-    // Only "no" is worth remembering. Someone told to reconnect is expected to go and do it, so a cached "yes"
-    // would outlive the fix and keep nagging them - which is exactly what it did.
-    if (sessionStorage.getItem(RELINK_SESSION_KEY) === "false") {
-      setNeedsRelink(false);
+    // Someone told to reconnect is expected to go and do it, so a cached `needsRelink` would outlive the fix and
+    // keep nagging them - which is exactly what it did.
+    const cached = sessionStorage.getItem(LINK_STATUS_SESSION_KEY);
+    if (cached === "linked" || cached === "restricted") {
+      setStatus(cached);
       return;
     }
 
@@ -37,16 +45,26 @@ export function useHackatimeRelink(): boolean {
       if (cancelled || !res.ok)
         return;
 
-      if (res.data.needsRelink)
-        sessionStorage.removeItem(RELINK_SESSION_KEY);
-      else
-        sessionStorage.setItem(RELINK_SESSION_KEY, "false");
+      const next: HackatimeLinkStatus =
+        res.data.restricted ? "restricted" :
+        res.data.needsRelink ? "needsRelink" :
+        "linked";
 
-      setNeedsRelink(res.data.needsRelink);
+      if (next === "needsRelink")
+        sessionStorage.removeItem(LINK_STATUS_SESSION_KEY);
+      else
+        sessionStorage.setItem(LINK_STATUS_SESSION_KEY, next);
+
+      setStatus(next);
     })();
 
     return () => { cancelled = true; };
   }, [auth.currentUser, isReauthenticating]);
 
-  return needsRelink;
+  return status;
+}
+
+/** Whether the signed-in user has to authorize Lapse with Hackatime again. */
+export function useHackatimeRelink(): boolean {
+  return useHackatimeLinkStatus() === "needsRelink";
 }

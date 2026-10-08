@@ -41,6 +41,18 @@ export async function hackatimeProjectsForUser(user: db.User): Promise<Hackatime
         }));
 }
 
+/**
+ * Whether Hackatime has banned the user (marked them as `red`). Banned users can still sign in, but Hackatime refuses
+ * to give us their projects or their API key - so there is nothing to sync with, and signing in again won't change that.
+ */
+export async function isHackatimeRestricted(user: db.User): Promise<boolean> {
+    if (!user.hackatimeId || !user.hackatimeAccessToken)
+        return false;
+
+    const me = await new HackatimeOAuthApi(user.hackatimeAccessToken).me();
+    return me.trust_factor?.trust_level === "red";
+}
+
 const os = implement(hackatimeRouterContract)
     .$context<Context>()
     .use(logMiddleware);
@@ -84,13 +96,13 @@ export default os.router({
             });
 
             if (!dbUser?.hackatimeId || !dbUser.hackatimeAccessToken)
-                return apiOk({ needsRelink: false });
+                return apiOk({ needsRelink: false, restricted: false });
 
             const oauthApi = new HackatimeOAuthApi(dbUser.hackatimeAccessToken);
 
             try {
                 await oauthApi.getProjects();
-                return apiOk({ needsRelink: false });
+                return apiOk({ needsRelink: false, restricted: false });
             }
             catch (error) {
                 // 403 is Hackatime refusing a token minted before we asked for `read`; 401 is one that has stopped
@@ -101,7 +113,26 @@ export default os.router({
                 if (status !== 401 && status !== 403)
                     logError("Couldn't check the Hackatime link status", { error, userId: caller.id });
 
-                return apiOk({ needsRelink: status === 401 || status === 403 });
+                if (status === 403)
+                    return apiOk({ needsRelink: true, restricted: false });
+
+                if (status !== 401)
+                    return apiOk({ needsRelink: false, restricted: false });
+
+                // Hackatime also answers 401 for banned users. Their token still works for `/me` - so if it does, the
+                // token is fine, and signing in again wouldn't change a thing.
+                try {
+                    await oauthApi.me();
+                    return apiOk({ needsRelink: false, restricted: true });
+                }
+                catch (meError) {
+                    const meStatus = meError instanceof HackatimeApiError ? meError.status : null;
+
+                    if (meStatus !== 401)
+                        logError("Couldn't check whether the user is banned on Hackatime", { error: meError, userId: caller.id });
+
+                    return apiOk({ needsRelink: meStatus === 401, restricted: false });
+                }
             }
         }),
 
