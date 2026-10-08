@@ -104,7 +104,8 @@ export function Header() {
           {
             auth.currentUser ? (
               <button
-                className="flex flex-col items-center gap-2 transition-transform active:scale-90"
+                className="flex flex-col items-center gap-2 cursor-pointer transition-transform active:scale-90"
+                onClick={() => setAreSettingsOpen(true)}
               >
                 <ProfilePicture user={auth.currentUser} size="lg" />
                 <span className="text-lg">You</span>
