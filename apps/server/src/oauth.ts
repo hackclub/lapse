@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import OAuth2Server from "@node-oauth/oauth2-server";
 import { assert } from "@hackclub/lapse-shared";
 import z from "zod";
@@ -119,6 +119,36 @@ function decodeAccessToken(accessToken: string): AccessTokenJwt | Error {
         logWarning("Access token is either expired, forged, or has an incorrect schema.", { err });
         return err as Error;
     }
+}
+
+/**
+ * Access tokens are stateless JWTs, so revoking one means remembering it until it would have expired on its own.
+ * We key the denylist by a hash rather than the token itself - a Redis dump shouldn't hand out live credentials.
+ */
+function revokedAccessTokenKey(accessToken: string) {
+    return `lapse:auth:revoked:${createHash("sha256").update(accessToken).digest("hex")}`;
+}
+
+/**
+ * Revokes a single access token, making every subsequent request authenticated with it fail. Tokens that are
+ * already invalid (expired, forged, or not JWTs at all) are ignored, as there is nothing left to revoke.
+ * @returns `true` if the token was valid and has now been revoked.
+ */
+export async function revokeAccessToken(accessToken: string): Promise<boolean> {
+    const token = decodeAccessToken(accessToken);
+    if (token instanceof Error)
+        return false;
+
+    const ttlSeconds = token.exp - Math.floor(Date.now() / 1000);
+    if (ttlSeconds <= 0)
+        return false;
+
+    await redis().set(revokedAccessTokenKey(accessToken), token.sub, "EX", ttlSeconds);
+    return true;
+}
+
+async function isAccessTokenRevoked(accessToken: string) {
+    return (await redis().exists(revokedAccessTokenKey(accessToken))) === 1;
 }
 
 /**
@@ -397,6 +427,9 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
             return null;
         }
 
+        if (await isAccessTokenRevoked(accessToken))
+            return null;
+
         const client = await this.clientById(token.cid);
         if (!client) {
             logWarning(`The client ${token.cid} that issued access token for user ${token.sub} either doesn't exist or has been revoked.`, { token });
@@ -439,6 +472,9 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<Externa
         logWarning("Could not decode access token!", { error: token });
         return null;
     }
+
+    if (await isAccessTokenRevoked(bearerToken))
+        return null;
 
     try {
         const user = await database().user.findFirst({

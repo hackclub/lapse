@@ -8,6 +8,7 @@ import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
 import { actorEntitledTo } from "@/ownership.js";
+import { revokeAccessToken } from "@/oauth.js";
 
 import * as db from "@/generated/prisma/client.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
@@ -265,6 +266,17 @@ export default os.router({
 
     signOut: os.signOut
         .handler(async (req) => {
+            const authorization = req.context.req.headers.authorization;
+            if (authorization?.startsWith("Bearer ")) {
+                try {
+                    await revokeAccessToken(authorization.substring("Bearer ".length));
+                }
+                catch (error) {
+                    logError("Could not revoke the caller's access token!", { error });
+                    return apiErr("ERROR", "We couldn't sign you out right now. Please try again in a moment.");
+                }
+            }
+
             if (req.context.resHeaders) {
                 deleteCookie(req.context.resHeaders, "lapse-auth", {
                     httpOnly: true,

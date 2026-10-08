@@ -1,25 +1,53 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { useRouter } from "next/router";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { User } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
+import { SESSIONS_KEY } from "@/components/lookout/sessions";
 import { useOnce } from "@/hooks/useOnce";
 import { useCache } from "@/hooks/useCache";
 
 interface AuthContextValue {
   currentUser: User | null;
   isLoading: boolean;
-  signOut: () => Promise<void>;
+  signOut: (options?: SignOutOptions) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
+export interface SignOutOptions {
+  /**
+   * When `true`, the session is forgotten locally even if the server couldn't revoke its token. Used as an escape
+   * hatch for when the API is unreachable - the token then stays valid until it expires on its own.
+   */
+  skipRevocation?: boolean;
+}
+
+const TOKEN_KEY = "lapse:token";
+
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * Removes everything this browser remembers about the signed-in account. Device-level state is deliberately kept:
+ * the OPFS store holds legacy encryption keys and unrecovered recordings, and wiping it could destroy data that
+ * exists nowhere else.
+ */
+function forgetLocalSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(SESSIONS_KEY);
+
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith("lapse:cache."))
+      localStorage.removeItem(key);
+  }
+
+  for (const key of Object.keys(sessionStorage)) {
+    if (key.startsWith("lapse:"))
+      sessionStorage.removeItem(key);
+  }
+}
 
 export function AuthProvider({ children }: {
   children: ReactNode;
 }) {
-  const router = useRouter();
-
   const [userCache, setUserCache] = useCache<User>("user");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,15 +90,34 @@ export function AuthProvider({ children }: {
     await loadUser();
   }, [loadUser]);
 
-  const signOut = useCallback(async () => {
+  // Throws if the token couldn't be revoked, leaving the session intact - signing out locally while the token stays
+  // valid would give the user a false sense of security, so that's only done when explicitly asked for.
+  const signOut = useCallback(async (options?: SignOutOptions) => {
     console.log("(AuthContext.tsx) signing out...");
 
-    await api.user.signOut({});
-    setUserCache(null);
-    setCurrentUser(null);
-    router.push("/");
-    router.reload();
-  }, [router, setUserCache]);
+    if (!options?.skipRevocation) {
+      const res = await api.user.signOut({});
+      if (!res.ok)
+        throw new Error(res.message);
+    }
+
+    forgetLocalSession();
+
+    // A full navigation (rather than a router push) guarantees no in-memory state from the old session survives.
+    window.location.replace("/");
+  }, []);
+
+  // Signing out in one tab should sign out every other tab too, instead of leaving them showing an account that's
+  // no longer there. Tabs never receive their own `storage` events, so this only reacts to other tabs.
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === TOKEN_KEY && e.oldValue !== null && e.newValue === null)
+        window.location.replace("/");
+    }
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const effectiveUser = isLoading ? userCache : currentUser;
 

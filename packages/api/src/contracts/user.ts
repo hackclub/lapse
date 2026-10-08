@@ -254,7 +254,7 @@ export const userRouterContract = oc.tag(ROUTER_TAGS.user).router({
         .output(NO_OUTPUT),
 
     signOut: contract("POST", "/user/signOut")
-        .route({ description: "Signs out the current user by clearing the authentication cookie." })
+        .route({ description: "Signs out the current session by revoking the access token used to authenticate the request. Other sessions, as well as tokens issued to third-party apps, are left untouched." })
         .input(NO_INPUT)
         .output(NO_OUTPUT),
 
