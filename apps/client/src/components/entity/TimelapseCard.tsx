@@ -8,12 +8,13 @@ import clsx from "clsx";
 import { deviceStorage } from "@/deviceStorage";
 import { mediaFetch } from "@/safety";
 import { useAdminView } from "@/hooks/useAdminView";
+import { navigateTo } from "@/navigation";
 
 import { ProfilePicture } from "@/components/entity/ProfilePicture"
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { Duration } from "@/components/Duration";
-import { AdminBadge, AdminOnly, hiddenTimelapseReason } from "@/components/ui/AdminOnly";
+import { AdminOnly, StatusBadge, timelapseStatus } from "@/components/ui/AdminOnly";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -76,10 +77,12 @@ export function TimelapseCard({ timelapse }: {
   }, [timelapse]);
 
   const isAdminOnly = !timelapse.isDraft && adminView.isAdminOnly(timelapse);
+  const href = `/${timelapse.isDraft ? "draft" : "timelapse"}/${timelapse.id}`;
 
   const card = (
     <article
-      onClick={() => router.push(`/${timelapse.isDraft ? "draft" : "timelapse"}/${timelapse.id}`)}
+      onClick={e => navigateTo(router, href, e)}
+      onAuxClick={e => e.button === 1 && navigateTo(router, href, e)}
       role="button"
       className={clsx(
         "flex flex-col cursor-pointer sm:max-w-80",
@@ -98,10 +101,11 @@ export function TimelapseCard({ timelapse }: {
             : <img src={thumb} alt="" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
         }
 
-        {!timelapse.isDraft && isAdminOnly && (
-          <AdminBadge className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-black/80!">
-            {hiddenTimelapseReason(timelapse)}
-          </AdminBadge>
+        {!timelapse.isDraft && adminView.enabled && (
+          <StatusBadge
+            status={timelapseStatus(timelapse)}
+            className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-black/80!"
+          />
         )}
 
         {!timelapse.isDraft && timelapse.duration > 0 && (

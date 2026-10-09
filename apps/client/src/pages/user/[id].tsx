@@ -10,6 +10,7 @@ import { markdownToJsx } from "@/markdown";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
+import { useAdminView } from "@/hooks/useAdminView";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { ProfilePicture } from "@/components/entity/ProfilePicture";
@@ -26,6 +27,7 @@ import { TextareaInput } from "@/components/ui/TextareaInput";
 export default function Page() {
   const router = useRouter();
   const { currentUser } = useAuth(false);
+  const adminView = useAdminView();
 
   const [user, setUser] = useState<User | PublicUser | null>(null);
   const [drafts, setDrafts] = useState<DraftTimelapse[] | null>(null);
@@ -227,6 +229,14 @@ export default function Page() {
           </div>
 
           <div className="flex flex-col min-[950px]:flex-row gap-2 md:gap-4 w-full md:w-auto">
+            { user && adminView.isAdmin && (
+              
+              <Button icon="admin" href={`/admin/user/${user.id}`}>
+                Admin profile
+              </Button>
+
+            ) }
+
             { user && user.slackId && (
               <Button icon="slack-fill" onClick={() => window.open(`https://hackclub.slack.com/team/${user.slackId}`, "_blank")}>
                 Open in Slack

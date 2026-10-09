@@ -25,7 +25,7 @@ import { TextareaInput } from "@/components/ui/TextareaInput";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
-import { AdminBadge, hiddenTimelapseReason } from "@/components/ui/AdminOnly";
+import { HackatimeProjectLink, StatusBadge, timelapseStatus } from "@/components/ui/AdminOnly";
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { CommentSection } from "@/components/entity/CommentSection";
@@ -287,8 +287,8 @@ export default function Page() {
               { timelapse?.name || <Skeleton className="w-64" /> }
             </h1>
 
-            { timelapse && adminView.isAdminOnly(timelapse) ? (
-              <AdminBadge>{hiddenTimelapseReason(timelapse)}</AdminBadge>
+            { timelapse && adminView.enabled ? (
+              <StatusBadge status={timelapseStatus(timelapse)} />
             ) : timelapse?.visibility === "UNLISTED" && (
               <Badge variant="default">UNLISTED</Badge>
             ) }
@@ -341,9 +341,17 @@ export default function Page() {
 
                       <span className="flex items-center gap-1.5 min-w-0">
                         on Hackatime as
-                        <code className="font-mono text-smoke truncate">
-                          {timelapse.private.hackatimeProject}
-                        </code>
+                        { adminView.isAdmin && timelapse.owner.hackatimeId ? (
+                          <HackatimeProjectLink
+                            hackatimeId={timelapse.owner.hackatimeId}
+                            project={timelapse.private.hackatimeProject}
+                            className="truncate"
+                          />
+                        ) : (
+                          <code className="font-mono text-smoke truncate">
+                            {timelapse.private.hackatimeProject}
+                          </code>
+                        ) }
                       </span>
                     </>
                   ) }
