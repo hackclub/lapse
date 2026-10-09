@@ -259,7 +259,7 @@ model Timelapse {
   /// Specifies whether the timelapse can only be accessed via its URL.
   visibility            TimelapseVisibility     @default(UNLISTED)
 
-  /// When set, the video is withheld from everyone (including the owner) and this text is shown in its place.
+  /// When set, this text is shown in place of the video, with an option to view it anyway.
   /// There's deliberately no API for this - set it via the console (`etc/scripts/console.ts`).
   blocker               String?
 

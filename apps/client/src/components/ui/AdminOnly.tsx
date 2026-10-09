@@ -9,7 +9,7 @@ export function hiddenTimelapseReason(timelapse: Timelapse) {
   if (timelapse.visibility === "FAILED_PROCESSING")
     return "Failed";
 
-  if (timelapse.playbackUrl === null && timelapse.blocker === null)
+  if (timelapse.playbackUrl === null)
     return "Processing";
 
   return "Unlisted";

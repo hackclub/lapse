@@ -48,6 +48,7 @@ export default function Page() {
   const adminView = useAdminView();
 
   const [timelapse, setTimelapse] = useState<Timelapse | null>(null);
+  const [viewBlocked, setViewBlocked] = useState(false);
 
   // A timelapse we can't load leaves nothing to show, so it takes over the page. Everything past that point is
   // recoverable, and stays a modal over the timelapse the user is already looking at.
@@ -107,7 +108,7 @@ export default function Page() {
         console.log("([id].tsx) timelapse fetched!", timelapse);
         setTimelapse(timelapse);
 
-        if (timelapse.playbackUrl || timelapse.blocker) {
+        if (timelapse.playbackUrl) {
           break;
         }
 
@@ -224,7 +225,7 @@ export default function Page() {
     return <StatusPage {...loadStatus} />;
   }
 
-  const isProcessing = timelapse != null && !timelapse.playbackUrl && !timelapse.blocker && timelapse.visibility !== "FAILED_PROCESSING";
+  const isProcessing = timelapse != null && !timelapse.playbackUrl && timelapse.visibility !== "FAILED_PROCESSING";
   const hasFailed = timelapse?.visibility === "FAILED_PROCESSING";
 
   return (
@@ -237,10 +238,19 @@ export default function Page() {
         */}
         { !timelapse ? (
           <div className={clsx(THEATRE_BAND, "bg-darker animate-pulse")} />
-        ) : timelapse.blocker ? (
+        ) : timelapse.blocker && !viewBlocked ? (
           <div className={clsx(THEATRE_BAND, "bg-[#000] flex flex-col items-center justify-center gap-5 px-6 text-center")}>
             <Icon glyph="forbidden" size={48} className="text-muted" />
             <p className="text-secondary text-lg sm:text-xl max-w-2xl whitespace-pre-wrap wrap-break-word">{timelapse.blocker}</p>
+
+            { timelapse.playbackUrl && (
+              <button
+                onClick={() => setViewBlocked(true)}
+                className="text-muted underline decoration-dashed underline-offset-4 cursor-pointer hover:text-secondary transition-colors"
+              >
+                View it anyway
+              </button>
+            ) }
           </div>
         ) : !timelapse.playbackUrl ? (
           <div className={clsx(THEATRE_BAND, "bg-[#000] flex flex-col items-center justify-center gap-5 px-6 text-center")}>

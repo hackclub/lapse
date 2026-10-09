@@ -98,10 +98,10 @@ export const OwnedTimelapseSchema = TimelapsePayloadSchema.extend({
         .describe("All comments for this timelapse."),
 
     playbackUrl: z.url().nullable()
-        .describe("The public URL that can be used to stream video data. If `null`, the timelapse is still being processed, or has been blocked (see `blocker`)."),
+        .describe("The public URL that can be used to stream video data. If `null`, the timelapse is still being processed."),
 
     blocker: z.string().nullable()
-        .describe("If not `null`, the video has been withheld by Lapse staff, and this text explains why. `playbackUrl` is always `null` in this case."),
+        .describe("If not `null`, the video has been withheld by Lapse staff, and this text should be shown in place of it. Clients may still let the user view the video anyway."),
 
     thumbnailUrl: z.url().nullable()
         .describe("The URL of the thumbnail image for this timelapse. If `null`, the timelapse is still being processed. It's recommended to derive the processing status of the timelapse from `playbackUrl`."),
