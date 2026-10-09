@@ -7,14 +7,17 @@ import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { ConnectedServicesTab } from "@/components/layout/settings/ConnectedServicesTab";
 import { DeveloperAppsTab } from "@/components/layout/settings/DeveloperAppsTab";
 import { DevicesTab } from "@/components/layout/settings/DevicesTab";
+import { AdminTab } from "@/components/layout/settings/AdminTab";
 import { SignOutModal } from "@/components/layout/SignOutModal";
+import { useAdminView } from "@/hooks/useAdminView";
 
-type SettingsTab = "services" | "apps" | "devices";
+type SettingsTab = "services" | "apps" | "devices" | "admin";
 
 const tabs: { id: SettingsTab; label: string; icon: IconGlyph }[] = [
   { id: "services", label: "Connected Services", icon: "web" },
   { id: "apps", label: "Developer Apps", icon: "code" },
   { id: "devices", label: "Devices", icon: "laptop" },
+  { id: "admin", label: "Admin", icon: "admin-badge" },
 ];
 
 export function SettingsView({ isOpen, setIsOpen }: {
@@ -23,6 +26,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("services");
   const [isSignOutOpen, setIsSignOutOpen] = useState(false);
+  const { isAdmin } = useAdminView();
 
   return (
     <>
@@ -37,7 +41,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
         <div className="flex flex-1 overflow-hidden">
           <nav className="flex flex-col gap-1 p-3 border-r border-black min-w-48 shrink-0">
-            {tabs.map(tab => (
+            {tabs.filter(tab => tab.id !== "admin" || isAdmin).map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -66,6 +70,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
             {activeTab === "services" && <ConnectedServicesTab isVisible={isOpen} />}
             {activeTab === "apps" && <DeveloperAppsTab isVisible={isOpen} />}
             {activeTab === "devices" && <DevicesTab isVisible={isOpen} />}
+            {activeTab === "admin" && isAdmin && <AdminTab />}
           </ModalContent>
         </div>
       </Modal>

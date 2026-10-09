@@ -8,6 +8,7 @@ import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-ap
 import { api } from "@/api";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminView } from "@/hooks/useAdminView";
 import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
 import { markdownToJsx } from "@/markdown";
 
@@ -24,7 +25,7 @@ import { TextareaInput } from "@/components/ui/TextareaInput";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
-import { AdminBadge, hiddenTimelapseReason, isAdminOnlyTimelapse } from "@/components/ui/AdminOnly";
+import { AdminBadge, hiddenTimelapseReason } from "@/components/ui/AdminOnly";
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { CommentSection } from "@/components/entity/CommentSection";
@@ -44,6 +45,7 @@ const THEATRE_BAND = `w-full aspect-video ${THEATRE_MAX_HEIGHT}`;
 export default function Page() {
   const router = useRouter();
   const { currentUser } = useAuth(false);
+  const adminView = useAdminView();
 
   const [timelapse, setTimelapse] = useState<Timelapse | null>(null);
 
@@ -270,8 +272,8 @@ export default function Page() {
               { timelapse?.name || <Skeleton className="w-64" /> }
             </h1>
 
-            { timelapse && isAdminOnlyTimelapse(timelapse, currentUser) ? (
-              <AdminBadge>{hiddenTimelapseReason(timelapse)} - visible to you as an admin</AdminBadge>
+            { timelapse && adminView.isAdminOnly(timelapse) ? (
+              <AdminBadge>{hiddenTimelapseReason(timelapse)}</AdminBadge>
             ) : timelapse?.visibility === "UNLISTED" && (
               <Badge variant="default">UNLISTED</Badge>
             ) }

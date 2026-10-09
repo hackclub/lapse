@@ -1,22 +1,6 @@
 import clsx from "clsx";
 import { PropsWithChildren } from "react";
-import type { Timelapse, User } from "@hackclub/lapse-api";
-
-export function isAdmin(user: User | null) {
-  return user !== null && user.private.permissionLevel !== "USER";
-}
-
-/**
- * Returns `true` if `viewer` can only see `timelapse` because they're an admin - i.e. it isn't theirs, and other users
- * wouldn't be able to discover it.
- */
-export function isAdminOnlyTimelapse(timelapse: Timelapse, viewer: User | null) {
-  return (
-    isAdmin(viewer) &&
-    viewer?.id !== timelapse.owner.id &&
-    (timelapse.visibility !== "PUBLIC" || timelapse.playbackUrl === null)
-  );
-}
+import type { Timelapse } from "@hackclub/lapse-api";
 
 /**
  * Describes why an admin-only timelapse is hidden from everyone else.
