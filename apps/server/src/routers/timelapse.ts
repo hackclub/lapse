@@ -10,7 +10,8 @@ import { dtoPublicUser } from "@/routers/user.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
 import { apiOk, apiErr, type Result, Err, lapseId } from "@/common.js";
-import { actorEntitledTo, actorHasAdminView, type Actor } from "@/ownership.js";
+import { actorEntitledTo, actorHasAdminView, stringifyActor, type Actor } from "@/ownership.js";
+import { isLegacyRecording } from "@/routers/draftTimelapse.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/hackatime.js";
 import { dtoComment, type DbComment } from "@/routers/comment.js";
@@ -276,6 +277,11 @@ export default os.router({
 
             if (!draft)
                 return apiErr("NOT_FOUND", `The draft timelapse ${req.input.id} couldn't be found.`);
+
+            if (!isLegacyRecording(draft.snapshots)) {
+                logWarning(`Refused to publish draft ${draft.id} for ${stringifyActor(req.context.actor)}.`);
+                return apiErr("ERROR", "A session of the given draft timelapse hasn't been uploaded or otherwise cannot be accessed.");
+            }
 
             // There _is_ a scenario where the caller just ignores our S3 upload URLs and never uploads the sessions they promised to upload.
             let allUploaded = true;

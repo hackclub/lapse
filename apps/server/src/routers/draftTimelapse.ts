@@ -49,6 +49,19 @@ async function objectExists(key: string): Promise<boolean> {
 }
 
 /**
+ * The in-browser recorder was replaced by Lookout in #236. Anything recorded with it has to predate this (with a few
+ * days of slack for stale tabs), so drafts are only accepted when they're recovering such a recording.
+ */
+const LEGACY_RECORDER_CUTOFF = new Date("2026-06-27T00:00:00Z");
+
+/**
+ * Returns `true` if `snapshots` could have been captured by the legacy in-browser recorder.
+ */
+export function isLegacyRecording(snapshots: Date[]) {
+    return snapshots.length > 0 && snapshots.every(x => x < LEGACY_RECORDER_CUTOFF);
+}
+
+/**
  * Filters out "orphaned" drafts - rows that `draftTimelapse.create` persisted up-front (it writes the row and hands
  * back tus upload tokens) but whose session bytes were never actually uploaded (e.g. the tab was closed mid-upload).
  * These leave a permanent DB row with no backing S3 objects, which can't be played or published and would only surface
@@ -216,6 +229,20 @@ export default os.router({
             if (!device)
                 return apiErr("DEVICE_NOT_FOUND", `The specified known device ${req.input.deviceId} could not be found.`);
 
+            // A device only ever holds a single unfinished legacy recording, so it only ever needs one draft to recover it.
+            const snapshots = req.input.snapshots.map(x => new Date(x));
+            const recentDrafts = await database().draftTimelapse.count({
+                where: {
+                    deviceId: device.id,
+                    createdAt: { gte: LEGACY_RECORDER_CUTOFF }
+                }
+            });
+
+            if (!isLegacyRecording(snapshots) || recentDrafts > 0) {
+                logWarning(`Refused draft creation for ${stringifyActor(req.context.actor)} on device ${device.id}.`, { recentDrafts });
+                return apiErr("ERROR", "This recording couldn't be uploaded.");
+            }
+
             const thumbnailKey = `timelapses/${caller.id}/${id}-thumbnail.webp`;
             const thumbnailUploadToken = issueUploadToken(thumbnailKey, MAX_THUMBNAIL_UPLOAD_SIZE);
 
@@ -231,7 +258,7 @@ export default os.router({
                     editList: [],
                     sessions: sessionKeys,
                     thumbnailKey,
-                    snapshots: req.input.snapshots.map(x => new Date(x)),
+                    snapshots,
                     deviceId: req.input.deviceId,
                     ownerId: caller.id,
                     iv: toHex(iv)
