@@ -12,7 +12,6 @@ export type TimelapseFilterState = {
   from: string;
   to: string;
   projects: string[];
-
 };
 
 export const EMPTY_TIMELAPSE_FILTERS: TimelapseFilterState = { from: "", to: "", projects: [] };

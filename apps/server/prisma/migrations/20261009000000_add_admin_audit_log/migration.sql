@@ -11,7 +11,7 @@ CREATE TABLE "AdminAuditLog" (
     CONSTRAINT "AdminAuditLog_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndexs
+-- CreateIndex
 CREATE INDEX "AdminAuditLog_entity_entityId_idx" ON "AdminAuditLog"("entity", "entityId");
 
 CREATE INDEX "AdminAuditLog_createdAt_idx" ON "AdminAuditLog"("createdAt");

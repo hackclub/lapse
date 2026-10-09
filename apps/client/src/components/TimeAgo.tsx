@@ -1,7 +1,4 @@
 import { useSyncExternalStore } from "react";
-import clsx from "clsx";
-
-import { useAdminView } from "@/hooks/useAdminView";
 
 function extractDateComponents(seconds: number) {
   seconds = Math.floor(seconds);
@@ -57,15 +54,6 @@ function formatTimeElapsed(date: Date, now: number) {
 function formatExactDate(date: Date) {
   return date.toLocaleDateString("en-us", {
     day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "numeric"
-  });
-}
-
-/**
- * base date/time will be in EST
- */
-function formatEasternDate(date: Date) {
-  return date.toLocaleString("en-us", {
-    timeZone: "America/New_York", dateStyle: "long", timeStyle: "long"
   });
 }
 
@@ -134,14 +122,13 @@ export function TimeAgo({ date, className }: {
     first render, and so never flash an absolute date at anyone.
   */
   const now = useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot);
-  const { isAdmin } = useAdminView();
 
   return (
     <time
       // Always UTC, and so identical on both sides of the wire.
       dateTime={exact.toISOString()}
-      title={now === null ? undefined : isAdmin ? formatEasternDate(exact) : formatExactDate(exact)}
-      className={clsx("hover:underline underline-offset-2", className)}
+      title={now === null ? undefined : formatExactDate(exact)}
+      className={className}
       suppressHydrationWarning
     >
       {now === null ? formatExactDate(exact) : formatTimeElapsed(exact, now)}

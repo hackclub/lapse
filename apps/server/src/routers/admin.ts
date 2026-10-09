@@ -10,7 +10,7 @@ import { logError, logInfo } from "@/logging.js";
 import { HackatimeApiError } from "@/hackatime.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
 import { durationBySnapshots, hackatimeApiKeyFor, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
-import { diffAuditedFields, findAuditedEntity, recordAdminChange } from "@/adminAudit.js";
+import { diffAuditedFields, findAuditedEntity, recordAdminChange, type AuditClient } from "@/adminAudit.js";
 
 import * as db from "@/generated/prisma/client.js";
 
@@ -201,7 +201,7 @@ function dtoAdminLegacyTimelapse(entity: db.LegacyUnpublishedTimelapse & { owner
 interface EntityConfig {
     list: (where: Record<string, unknown>, sort: AdminSort | undefined, orderBy: Record<string, unknown> | undefined, skip: number, take: number) => Promise<Record<string, unknown>[]>;
     count: (where: Record<string, unknown>) => Promise<number>;
-    update: (id: string, changes: Record<string, unknown>, caller: db.User) => Promise<Record<string, unknown> | null>;
+    update: (tx: AuditClient, id: string, changes: Record<string, unknown>, caller: db.User) => Promise<Record<string, unknown> | null>;
 }
 
 const EDITABLE_USER_FIELDS = new Set(["email", "handle", "displayName", "bio", "hackatimeId", "slackId", "permissionLevel"]);
@@ -235,12 +235,12 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
             return rows.map(dtoAdminUser);
         },
         count: (where) => database().user.count({ where }),
-        update: async (id, changes) => {
+        update: async (tx, id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_USER_FIELDS);
             if (Object.keys(safe).length === 0)
                 return null;
 
-            const updated = await database().user.update({
+            const updated = await tx.user.update({
                 where: { id },
                 data: safe
             });
@@ -258,12 +258,12 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
             return rows.map(dtoAdminTimelapse);
         },
         count: (where) => database().timelapse.count({ where }),
-        update: async (id, changes) => {
+        update: async (tx, id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_TIMELAPSE_FIELDS);
             if (Object.keys(safe).length === 0)
                 return null;
 
-            const updated = await database().timelapse.update({
+            const updated = await tx.timelapse.update({
                 where: { id },
                 data: safe,
                 include: { owner: true }
@@ -282,12 +282,12 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
             return rows.map(dtoAdminComment);
         },
         count: (where) => database().comment.count({ where }),
-        update: async (id, changes) => {
+        update: async (tx, id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_COMMENT_FIELDS);
             if (Object.keys(safe).length === 0)
                 return null;
 
-            const updated = await database().comment.update({
+            const updated = await tx.comment.update({
                 where: { id },
                 data: safe,
                 include: { author: true }
@@ -315,12 +315,12 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
             return rows.map(dtoAdminDraftTimelapse);
         },
         count: (where) => database().draftTimelapse.count({ where }),
-        update: async (id, changes) => {
+        update: async (tx, id, changes) => {
             const safe = sanitizeChanges(changes, EDITABLE_DRAFT_FIELDS);
             if (Object.keys(safe).length === 0)
                 return null;
 
-            const updated = await database().draftTimelapse.update({
+            const updated = await tx.draftTimelapse.update({
                 where: { id },
                 data: safe,
                 include: { owner: true }
@@ -432,10 +432,10 @@ export default os.router({
         .handler(async (req) => {
             const { entity, entityId, permissionChangesOnly, page, pageSize } = req.input;
 
-            const where = {
+            const where: db.Prisma.AdminAuditLogWhereInput = {
                 ...(entity && { entity }),
                 ...(entityId && { entityId }),
-                ...(permissionChangesOnly && { entity: "user", fields: { has: "permissionLevel" } })
+                ...(permissionChangesOnly && { fields: { has: "permissionLevel" } })
             };
 
             const [rows, total] = await Promise.all([
@@ -536,22 +536,27 @@ export default os.router({
             }
 
             const config = entityConfigs[entity];
-            const before = await findAuditedEntity(entity, id);
-            const row = await config.update(id, changes as Record<string, unknown>, caller);
+
+            // The snapshots and the write share one transaction so that concurrent edits can't be misattributed, and
+            // so that no change can land without its audit entry.
+            const row = await database().$transaction(async tx => {
+                const before = await findAuditedEntity(tx, entity, id);
+                const updated = await config.update(tx, id, changes as Record<string, unknown>, caller);
+
+                if (!updated)
+                    return null;
+
+                const after = await findAuditedEntity(tx, entity, id);
+                if (before && after) {
+                    const fields = Object.keys(changes).filter(x => EDITABLE_FIELDS[entity].has(x));
+                    await recordAdminChange(tx, caller.id, entity, id, diffAuditedFields(before, after, fields));
+                }
+
+                return updated;
+            });
 
             if (!row)
                 return apiErr("ERROR", "No valid changes provided.");
-
-            const after = await findAuditedEntity(entity, id);
-            if (before && after) {
-                try {
-                    const fields = Object.keys(changes).filter(x => EDITABLE_FIELDS[entity].has(x));
-                    await recordAdminChange(caller.id, entity, id, diffAuditedFields(before, after, fields));
-                }
-                catch (err) {
-                    logError(`Could not record admin audit log entry for ${entity} ${id}!`, { err });
-                }
-            }
 
             logInfo(`Admin update: ${entity} ${id}`, {
                 actor: caller.id,

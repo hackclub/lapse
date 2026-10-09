@@ -10,6 +10,7 @@ import { getTimelapseById } from "@/routers/timelapse.js";
 import { apiErr, apiOk, Err } from "@/common.js";
 import { database } from "@/db.js";
 import { actorEntitledTo } from "@/ownership.js";
+import { adminOverrideActorId, recordAdminDeletion } from "@/adminAudit.js";
 
 const os = implement(commentRouterContract)
     .$context<Context>()
@@ -73,6 +74,11 @@ export default os.router({
             await database().comment.delete({
                 where: { id: req.input.commentId }
             });
+
+            const adminId = adminOverrideActorId(req.context.actor, comment.authorId);
+            if (adminId !== null) {
+                await recordAdminDeletion(adminId, "comment", comment.id);
+            }
 
             return apiOk({});
         })

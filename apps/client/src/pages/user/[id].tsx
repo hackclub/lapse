@@ -230,11 +230,9 @@ export default function Page() {
 
           <div className="flex flex-col min-[950px]:flex-row gap-2 md:gap-4 w-full md:w-auto">
             { user && adminView.isAdmin && (
-              
               <Button icon="admin" href={`/admin/user/${user.id}`}>
                 Admin profile
               </Button>
-
             ) }
 
             { user && user.slackId && (
