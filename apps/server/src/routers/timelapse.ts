@@ -10,7 +10,7 @@ import { dtoPublicUser } from "@/routers/user.js";
 import { env } from "@/env.js";
 import { database } from "@/db.js";
 import { apiOk, apiErr, type Result, Err, lapseId } from "@/common.js";
-import { actorEntitledTo, type Actor } from "@/ownership.js";
+import { actorEntitledTo, actorHasAdminView, type Actor } from "@/ownership.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/hackatime.js";
 import { dtoComment, type DbComment } from "@/routers/comment.js";
@@ -416,7 +416,7 @@ export default os.router({
 
             const isEntitled = (
                 (caller && caller.id === req.input.user) || // viewing self
-                (caller && (caller.permissionLevel in oneOf("ADMIN", "ROOT"))) || // caller is admin
+                actorHasAdminView(actor) || // caller is an admin on the canonical client
                 actor?.kind === "PROGRAM" // program keys can always view
             );
 

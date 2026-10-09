@@ -38,7 +38,7 @@ export const globalRouterContract = oc.tag(ROUTER_TAGS.global).router({
         })),
 
     recentTimelapses: contract("GET", "/global/recentTimelapses")
-        .route({ description: "Returns the most recent public timelapses at the time of the API call." })
+        .route({ description: "Returns the most recent public timelapses at the time of the API call. Administrators calling through the canonical client also receive unlisted, failed, and still-processing timelapses." })
         .input(NO_INPUT)
         .output(apiResult({
             timelapses: z.array(TimelapseSchema)

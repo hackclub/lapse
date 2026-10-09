@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
 import RootLayout from "@/components/layout/RootLayout";
+import { isAdmin } from "@/components/ui/AdminOnly";
 
 export default function Home() {
   const router = useRouter();
@@ -231,7 +232,10 @@ export default function Home() {
               description="See what other Hack Clubbers are up to"
             />
 
-            <TimelapseGrid timelapses={reqRecent?.timelapses ?? []} />
+            {/* The cached feed may outlive an admin session, so never show its hidden entries to anyone else. */}
+            <TimelapseGrid
+              timelapses={(reqRecent?.timelapses ?? []).filter(x => isAdmin(auth.currentUser) || x.visibility === "PUBLIC")}
+            />
           </section>
         ) }
 

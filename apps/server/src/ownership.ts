@@ -84,6 +84,19 @@ export function actorEntitledTo(entity: OwnedObject, actor: Actor | null): boole
 }
 
 /**
+ * Returns `true` if the actor may discover every timelapse, regardless of its visibility. This requires an ADMIN/ROOT
+ * user acting through the canonical client (i.e. holding the `elevated` scope), so that a third-party app an admin
+ * has authorized can't use their grant to enumerate unlisted or unfinished timelapses.
+ */
+export function actorHasAdminView(actor: Actor | null): boolean {
+    return (
+        actor?.kind === "USER" &&
+        actor.scopes.includes("elevated") &&
+        actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
+    );
+}
+
+/**
  * Converts the `actor` into a human-readable string.
  */
 export function stringifyActor(actor: Actor | null): string {

@@ -6,12 +6,14 @@ import { decryptData, fromHex } from "@hackclub/lapse-shared";
 import clsx from "clsx";
 
 import { deviceStorage } from "@/deviceStorage";
+import { useAuthContext } from "@/context/AuthContext";
 import { mediaFetch } from "@/safety";
 
 import { ProfilePicture } from "@/components/entity/ProfilePicture"
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { Duration } from "@/components/Duration";
+import { AdminBadge, AdminOnly, hiddenTimelapseReason, isAdminOnlyTimelapse } from "@/components/ui/AdminOnly";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -19,6 +21,7 @@ export function TimelapseCard({ timelapse }: {
   timelapse: DraftTimelapse | Timelapse
 }) {
   const router = useRouter();
+  const { currentUser } = useAuthContext();
   const [thumb, setThumb] = useState<string | null>(null);
   const [missingKey, setMissingKey] = useState(false);
 
@@ -72,7 +75,7 @@ export function TimelapseCard({ timelapse }: {
     setThumb(timelapse.thumbnailUrl);
   }, [timelapse]);
 
-  return (
+  const card = (
     <article
       onClick={() => router.push(`/${timelapse.isDraft ? "draft" : "timelapse"}/${timelapse.id}`)}
       role="button"
@@ -92,6 +95,12 @@ export function TimelapseCard({ timelapse }: {
             )
             : <img src={thumb} alt="" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
         }
+
+        {!timelapse.isDraft && isAdminOnlyTimelapse(timelapse, currentUser) && (
+          <AdminBadge className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-black/80!">
+            {hiddenTimelapseReason(timelapse)}
+          </AdminBadge>
+        )}
 
         {!timelapse.isDraft && timelapse.duration > 0 && (
           <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 bg-black/80 text-white text-xs sm:text-sm px-1 sm:px-1.5 py-0.5 rounded font-medium">
@@ -128,4 +137,9 @@ export function TimelapseCard({ timelapse }: {
       </div>
     </article>
   );
+
+  if (!timelapse.isDraft && isAdminOnlyTimelapse(timelapse, currentUser))
+    return <AdminOnly className="p-2 sm:max-w-84">{card}</AdminOnly>;
+
+  return card;
 }

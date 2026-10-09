@@ -8,6 +8,7 @@ import { dtoPublicTimelapse } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
+import { actorHasAdminView } from "@/ownership.js";
 
 const os = implement(globalRouterContract)
     .$context<Context>()
@@ -80,8 +81,11 @@ export default os.router({
 
     recentTimelapses: os.recentTimelapses
         .handler(async (req) => {
+            // Admins see every timelapse, including unlisted, failed, and still-processing ones, so they can moderate.
+            const isAdminView = actorHasAdminView(req.context.actor);
+
             const timelapses = await database().timelapse.findMany({
-                where: { visibility: "PUBLIC" },
+                where: isAdminView ? {} : { visibility: "PUBLIC", associatedJobId: null },
                 orderBy: { createdAt: "desc" },
                 include: {
                     owner: true,

@@ -24,6 +24,7 @@ import { TextareaInput } from "@/components/ui/TextareaInput";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
+import { AdminBadge, hiddenTimelapseReason, isAdminOnlyTimelapse } from "@/components/ui/AdminOnly";
 import { Bullet } from "@/components/ui/Bullet";
 import { TimeAgo } from "@/components/TimeAgo";
 import { CommentSection } from "@/components/entity/CommentSection";
@@ -269,7 +270,9 @@ export default function Page() {
               { timelapse?.name || <Skeleton className="w-64" /> }
             </h1>
 
-            { timelapse?.visibility === "UNLISTED" && (
+            { timelapse && isAdminOnlyTimelapse(timelapse, currentUser) ? (
+              <AdminBadge>{hiddenTimelapseReason(timelapse)} - visible to you as an admin</AdminBadge>
+            ) : timelapse?.visibility === "UNLISTED" && (
               <Badge variant="default">UNLISTED</Badge>
             ) }
           </div>
