@@ -110,7 +110,7 @@ export const AdminLegacyTimelapseRowSchema = z.object({
 
 export const ADMIN_ENTITY_FIELDS = {
     user: {
-        id: { label: "ID", kind: "string" as const, sortable: true },
+        id: { label: "Lapse ID", kind: "string" as const, sortable: true },
         email: { label: "Email", kind: "string" as const, sortable: true, editable: true },
         handle: { label: "Handle", kind: "string" as const, sortable: true, editable: true },
         displayName: { label: "Display Name", kind: "string" as const, sortable: true, editable: true },
@@ -120,7 +120,7 @@ export const ADMIN_ENTITY_FIELDS = {
         hackatimeId: { label: "Hackatime ID", kind: "string" as const, sortable: true },
         slackId: { label: "Slack ID", kind: "string" as const, sortable: true },
         createdAt: { label: "Created At", kind: "date" as const, sortable: true },
-        lastHeartbeat: { label: "Last Heartbeat", kind: "date" as const, sortable: true }
+        lastHeartbeat: { label: "Last Recording", kind: "date" as const, sortable: true }
     },
     timelapse: {
         id: { label: "ID", kind: "string" as const, sortable: true },
@@ -208,7 +208,55 @@ export const AdminSearchOutputSchema = z.object({
     results: z.array(AdminSearchResultSchema)
 });
 
+export type AdminAuditValue = z.infer<typeof AdminAuditValueSchema>;
+export const AdminAuditValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+export type AdminAuditChanges = z.infer<typeof AdminAuditChangesSchema>;
+export const AdminAuditChangesSchema = z.record(z.string(), z.object({
+    from: AdminAuditValueSchema,
+    to: AdminAuditValueSchema
+}));
+
+export type AdminAuditLogEntry = z.infer<typeof AdminAuditLogEntrySchema>;
+export const AdminAuditLogEntrySchema = z.object({
+    id: z.string(),
+    actor: z.object({
+        id: LapseId,
+        handle: z.string(),
+        displayName: z.string()
+    }).nullable()
+        .describe("The administrator that made the change. `null` for changes made from the server console, or by a since-deleted user."),
+    entity: AdminEntitySchema,
+    entityId: z.string(),
+    changes: AdminAuditChangesSchema
+        .describe("Every changed field, mapped to its previous and new value."),
+    createdAt: LapseDate
+});
+
+export const AdminAuditLogInputSchema = z.object({
+    entity: AdminEntitySchema.optional()
+        .describe("Only returns changes made to this kind of entity."),
+    entityId: z.string().optional()
+        .describe("Only returns changes made to the entity with this ID."),
+    permissionChangesOnly: z.boolean().default(false)
+        .describe("Only returns changes to user permission levels."),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(25)
+});
+
+export const AdminAuditLogResultSchema = z.object({
+    entries: z.array(AdminAuditLogEntrySchema),
+    total: z.number().int().nonnegative(),
+    page: z.number().int().min(1),
+    pageSize: z.number().int().min(1)
+});
+
 export const adminRouterContract = oc.tag(ROUTER_TAGS.admin).router({
+    auditLog: contract("POST", "/admin/auditLog")
+        .route({ description: "Lists changes made by administrators, newest first. Requires administrator permissions and an `elevated` grant." })
+        .input(AdminAuditLogInputSchema)
+        .output(createResultSchema(AdminAuditLogResultSchema)),
+
     stats: contract("GET", "/admin/stats")
         .route({ description: "Returns aggregate statistics for the admin dashboard. Requires administrator permissions and an `elevated` grant." })
         .input(NO_INPUT)

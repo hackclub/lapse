@@ -44,6 +44,18 @@ const ctx = {
             data: { permissionLevel: "ROOT" }
         });
 
+        if (user.permissionLevel !== "ROOT") {
+            await ctx.db.adminAuditLog.create({
+                data: {
+                    actorId: null,
+                    entity: "user",
+                    entityId: user.id,
+                    fields: ["permissionLevel"],
+                    changes: { permissionLevel: { from: user.permissionLevel, to: "ROOT" } }
+                }
+            });
+        }
+
         return `(✓) user @${user.handle} (${user.email}) promoted to ROOT`;
     },
 

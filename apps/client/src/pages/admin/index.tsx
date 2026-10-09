@@ -11,6 +11,8 @@ import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextInput } from "@/components/ui/TextInput";
+import { ExternalIdLink, StatusBadge, statusFromVisibility } from "@/components/ui/AdminOnly";
+import { AuditLog } from "@/components/admin/AuditLog";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/api";
 import type { IconGlyph } from "@/common";
@@ -59,7 +61,7 @@ type AdminFieldDef = {
 
 type AdminRecord = Record<string, unknown>;
 
-const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse", "app", "programKey"] as const;
+const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse", "app", "programKey", "auditLog"] as const;
 
 type AdminPanelEntity = typeof ENTITIES[number];
 
@@ -70,7 +72,8 @@ const ENTITY_LABELS: Record<AdminPanelEntity, string> = {
   draftTimelapse: "Draft Timelapses",
   legacyTimelapse: "Legacy Timelapses",
   app: "Apps",
-  programKey: "Program Keys"
+  programKey: "Program Keys",
+  auditLog: "Audit Log"
 };
 
 const ENTITY_ICONS: Record<AdminPanelEntity, IconGlyph> = {
@@ -80,7 +83,8 @@ const ENTITY_ICONS: Record<AdminPanelEntity, IconGlyph> = {
   draftTimelapse: "docs",
   legacyTimelapse: "profile-fill",
   app: "code",
-  programKey: "private-outline"
+  programKey: "private-outline",
+  auditLog: "event-check"
 };
 
 const ADMIN_FIELD_OPERATORS: Record<AdminFieldKind, Array<{ value: AdminFilter["operator"]; label: string }>> = {
@@ -1668,7 +1672,51 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
                   if (key === "__profilePicture") {
                     return (
                       <td key={key} className="w-20 px-3 py-2 align-top">
-                        <PreviewImage src={row["profilePictureUrl"]} alt="Profile" className="w-12 h-12 rounded-full object-cover" />
+                        <Link
+                          href={`/admin/user/${String(row["id"])}`}
+                          onClick={e => e.stopPropagation()}
+                          title="Open admin user page"
+                          className="block w-12 h-12 rounded-full transition-opacity hover:opacity-70"
+                        >
+                          <PreviewImage src={row["profilePictureUrl"]} alt="Profile" className="w-12 h-12 rounded-full object-cover" />
+                        </Link>
+                      </td>
+                    );
+                  }
+
+                  const cellValue = row[key];
+                  if (entity === "user" && (key === "hackatimeId" || key === "slackId") && typeof cellValue === "string") {
+                    return (
+                      <td key={key} className="max-w-0 px-3 py-2 align-top">
+                        <ExternalIdLink
+                          kind={key === "hackatimeId" ? "hackatime" : "slack"}
+                          id={cellValue}
+                          className="block truncate"
+                        />
+                      </td>
+                    );
+                  }
+
+                  if (entity === "comment" && key === "timelapseId" && typeof cellValue === "string") {
+                    return (
+                      <td key={key} className="max-w-0 px-3 py-2 align-top">
+                        <Link
+                          href={`/timelapse/${cellValue}`}
+                          onClick={e => e.stopPropagation()}
+                          title="Open timelapse"
+                          className="flex items-center gap-1 text-cyan hover:underline"
+                        >
+                          <span className="truncate font-mono">{cellValue}</span>
+                          <Icon glyph="external" size={16} className="shrink-0" />
+                        </Link>
+                      </td>
+                    );
+                  }
+
+                  if (entity === "timelapse" && key === "visibility") {
+                    return (
+                      <td key={key} className="max-w-0 px-3 py-2 align-top">
+                        <StatusBadge status={statusFromVisibility(String(row[key]), row["associatedJobId"] != null)} />
                       </td>
                     );
                   }
@@ -1978,6 +2026,8 @@ export default function AdminDashboard() {
             ? <AdminAppsTable />
             : activeEntity === "programKey"
             ? <AdminProgramKeysTable />
+            : activeEntity === "auditLog"
+            ? <AuditLog />
             : (
                 <AdminEntityTable
                   entity={activeEntity}

@@ -1,8 +1,9 @@
 import clsx from "clsx";
-import { JSX, PropsWithChildren } from "react";
+import { JSX, PropsWithChildren, type MouseEvent } from "react";
 import Icon from "@hackclub/icons";
 
 import type { IconGlyph } from "@/common";
+import { navigateTo } from "@/navigation";
 import { useRouter } from "next/router";
 
 export type ButtonKind =
@@ -29,13 +30,28 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
 
   kind ??= "regular";
 
-  if (href) {
-    onClick = () => router.push(href);
+  function handleClick(e: MouseEvent) {
+    if (disabled)
+      return;
+
+    if (href) {
+      navigateTo(router, href, e);
+      return;
+    }
+
+    onClick?.();
+  }
+
+  function handleAuxClick(e: MouseEvent) {
+    if (!disabled && href && e.button === 1) {
+      navigateTo(router, href, e);
+    }
   }
 
   return (
     <button
-      onClick={disabled ? undefined : onClick}
+      onClick={handleClick}
+      onAuxClick={handleAuxClick}
       title={title}
       aria-label={!children ? title : undefined}
       className={clsx(

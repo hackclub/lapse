@@ -80,6 +80,26 @@ model User {
   lookoutDrafts         DraftLookoutTimelapse[]
   lookoutDevices        LookoutDevice[]
   lookoutPairingCodes   LookoutPairingCode[]
+  adminAuditLogs        AdminAuditLog[]
+}
+
+model AdminAuditLog {
+  id          String    @id @default(uuid())
+
+  actorId     String?
+  actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  entity      String
+  entityId    String
+  
+  fields      String[]
+
+  changes     Json
+
+  createdAt   DateTime  @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
 }
 
 /// Represents a timelapse created with a legacy version of Lapse. Such a timelapse is encrypted with a 6-digit passkey with a timelapse ID IV.

@@ -16,6 +16,7 @@ import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/hackatime.js";
 import { dtoComment, type DbComment } from "@/routers/comment.js";
 import { enqueueRealizeJob } from "@/job.js";
+import { adminOverrideActorId, diffAuditedFields, recordAdminChange, recordAdminDeletion } from "@/adminAudit.js";
 import * as lookout from "@/lookout.js";
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
@@ -180,6 +181,11 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor | null):
     await database().timelapse.delete({
         where: { id: timelapse.id }
     });
+
+    const adminId = adminOverrideActorId(actor, timelapse.ownerId);
+    if (adminId !== null) {
+        await recordAdminDeletion(adminId, "timelapse", timelapse.id);
+    }
 
     logInfo(`Timelapse ${timelapseId} (${timelapse.name}) deleted.`, { timelapse });
 }
@@ -396,10 +402,21 @@ export default os.router({
                 updateData.visibility = req.input.changes.visibility;
             }
 
-            const updatedTimelapse = await database().timelapse.update({
-                where: { id: req.input.id },
-                data: updateData,
-                include: TIMELAPSE_INCLUDES
+            const adminId = adminOverrideActorId(actor, timelapse.ownerId);
+
+            const updatedTimelapse = await database().$transaction(async tx => {
+                const updated = await tx.timelapse.update({
+                    where: { id: req.input.id },
+                    data: updateData,
+                    include: TIMELAPSE_INCLUDES
+                });
+
+                if (adminId !== null) {
+                    const changes = diffAuditedFields(timelapse, updated, Object.keys(updateData));
+                    await recordAdminChange(tx, adminId, "timelapse", timelapse.id, changes);
+                }
+
+                return updated;
             });
 
             return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
