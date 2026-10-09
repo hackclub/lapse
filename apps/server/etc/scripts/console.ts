@@ -70,6 +70,24 @@ const ctx = {
 
         await ctx.db.maintenance.deleteMany();
         return "(✓) maintenance mode OFF";
+    },
+
+    async setBlocker(timelapseId: string, text: string | null) {
+        if (!ctx.db)
+            return "(x) connect to a database first!";
+
+        const timelapse = await ctx.db.timelapse.findFirst({ where: { id: timelapseId } });
+        if (!timelapse)
+            return "(x) no timelapse found";
+
+        await ctx.db.timelapse.update({
+            where: { id: timelapse.id },
+            data: { blocker: text?.trim() || null }
+        });
+
+        return text?.trim()
+            ? `(✓) "${timelapse.name}" (${timelapse.id}) is now blocked with: ${text.trim()}`
+            : `(✓) "${timelapse.name}" (${timelapse.id}) is no longer blocked`;
     }
 };
 
@@ -92,6 +110,7 @@ for (let untypedKey in ctx) {
         key == "promoteUser" ? `await promoteUser(email: string), grants ROOT permission to the user with the given e-mail` :
         key == "startMaintenance" ? `await startMaintenance(startsAt: string, endsAt: string), sends every non-admin to the maintenance page. dates are ISO 8601, e.g. "2026-09-27T10:00-04:00"` :
         key == "endMaintenance" ? `await endMaintenance(), turns maintenance mode off` :
+        key == "setBlocker" ? `await setBlocker(timelapseId: string, text: string | null), withholds a timelapse's video and shows 'text' instead. pass null to unblock` :
         key
     );
 

@@ -259,6 +259,10 @@ model Timelapse {
   /// Specifies whether the timelapse can only be accessed via its URL.
   visibility            TimelapseVisibility     @default(UNLISTED)
 
+  /// When set, the video is withheld from everyone (including the owner) and this text is shown in its place.
+  /// There's deliberately no API for this - set it via the console (`etc/scripts/console.ts`).
+  blocker               String?
+
   /// The amount of seconds that this timelapse lasts for. This is inferred from the snapshots.
   duration              Float
 

@@ -61,8 +61,10 @@ export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
         description: entity.description.slice(0, MAX_TIMELAPSE_DESCRIPTION_LENGTH),
         comments: entity.comments.map(dtoComment),
         visibility: entity.visibility,
-        playbackUrl: entity.lookoutVideoUrl
-            ?? (entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`),
+        blocker: entity.blocker,
+        playbackUrl: entity.blocker != null
+            ? null
+            : entity.lookoutVideoUrl ?? (entity.s3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.s3Key}`),
         thumbnailUrl: entity.lookoutThumbnailUrl
             ?? (entity.thumbnailS3Key == null ? null : `${env.S3_PUBLIC_URL_PUBLIC}/${entity.thumbnailS3Key}`),
         duration: entity.duration,

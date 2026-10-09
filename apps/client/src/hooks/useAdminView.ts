@@ -50,7 +50,7 @@ export function useAdminView() {
   function isHiddenFromOthers(timelapse: Timelapse) {
     return (
       currentUser?.id !== timelapse.owner.id &&
-      (timelapse.visibility !== "PUBLIC" || timelapse.playbackUrl === null)
+      (timelapse.visibility !== "PUBLIC" || (timelapse.playbackUrl === null && timelapse.blocker === null))
     );
   }
 
