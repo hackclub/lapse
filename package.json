@@ -1,9 +1,11 @@
 {
 	"packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c",
 	"devDependencies": {
+		"oxfmt": "^0.72.0",
+		"oxlint": "^1.87.0",
 		"tsup": "^8.5.1",
-		"typescript": "^6.0.3",
-		"vitest": "^4.1.10"
+		"typescript": "^7.0.2",
+		"vitest": "^5.0.3"
 	},
 	"scripts": {
 		"build": "pnpm --filter @lookout/shared run build && pnpm -r run build",
@@ -13,6 +15,9 @@
 		"dev:start-env": "pnpm run --filter @hackclub/lapse-devscripts dev:start-env",
 		"dev:stop-env": "pnpm run --filter @hackclub/lapse-devscripts dev:stop-env",
 		"dev:remove-env": "pnpm run --filter @hackclub/lapse-devscripts dev:remove-env",
-		"console": "pnpm tsx ./apps/server/etc/scripts/console.ts"
+		"console": "pnpm tsx ./apps/server/etc/scripts/console.ts",
+		"lint": "oxlint",
+		"format": "oxfmt",
+		"format:check": "oxfmt --check"
 	}
 }
