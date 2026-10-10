@@ -33,6 +33,24 @@ export interface LookoutTimings {
     timestamps: string[];
 }
 
+/**
+ * A non-2xx answer from Lookout. Carries the status so callers can tell "that session doesn't exist" apart from
+ * "Lookout is having a bad moment" - the two warrant very different reactions.
+ */
+export class LookoutApiError extends Error {
+    constructor(readonly status: number, message: string) {
+        super(message);
+        this.name = "LookoutApiError";
+    }
+}
+
+/**
+ * Whether an error is Lookout definitively saying the session is gone, as opposed to a timeout, outage, or bug.
+ */
+export function isSessionGone(err: unknown): boolean {
+    return err instanceof LookoutApiError && err.status === 404;
+}
+
 async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const url = `${env.LOOKOUT_API_BASE_URL}${path}`;
     const res = await fetch(url, {
@@ -48,7 +66,7 @@ async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> 
         const body = await res.text().catch(() => "(no body)");
         const msg = `Lookout API error: ${res.status} ${res.statusText} on ${path} — ${body}`;
         logError(msg);
-        throw new Error(msg);
+        throw new LookoutApiError(res.status, msg);
     }
 
     return res.json() as Promise<T>;

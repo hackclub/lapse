@@ -657,7 +657,17 @@ export default os.router({
                         videoUrl: session.session.videoUrl as string | null,
                         thumbnailUrl: session.session.thumbnailUrl as string | null,
                     };
-                } catch {
+                }
+                catch (err) {
+                    // Only a definitive "no such session" from Lookout means the draft is dead. Anything else -
+                    // a timeout, an outage, a deploy - is Lookout's problem for the moment, not the user's, and the
+                    // draft is the only link Lapse has to their recording. Drop it from this listing and move on.
+                    if (!lookout.isSessionGone(err)) {
+                        logWarning(`Couldn't check Lookout session for draft ${draft.id}; leaving it alone.`, { err, draftId: draft.id });
+                        return null;
+                    }
+
+                    logInfo(`Deleting draft ${draft.id}: Lookout session ${draft.lookoutSessionId} no longer exists (listing for ${caller.id}).`);
                     await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
                     return null;
                 }
@@ -676,9 +686,16 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            await database().draftLookoutTimelapse.deleteMany({
+            const draft = await database().draftLookoutTimelapse.findFirst({
                 where: { id: req.input.id, ownerId: caller.id }
             });
+
+            if (!draft)
+                return apiOk({});
+
+            logInfo(`Discarding draft ${draft.id} (Lookout session ${draft.lookoutSessionId}) at the request of ${stringifyActor(req.context.actor)}.`);
+
+            await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
 
             return apiOk({});
         }),

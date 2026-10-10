@@ -335,6 +335,11 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
   }
 
   async function handleDiscard(draftId: string) {
+    // The cards don't say much about what's in a session, so an unguarded click here can throw away hours
+    // of recording that merely looked like an empty one.
+    if (!window.confirm("Discard this recording? This cannot be undone."))
+      return;
+
     setBusy(draftId);
     await api.timelapse.discardLookoutDraft({ id: draftId });
     removeStoredSession(draftId);
