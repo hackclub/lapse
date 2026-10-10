@@ -181,9 +181,7 @@ server.listen({ port: parseInt(env.PORT), host: env.HOST })
     .then(async (address) => {
         if (env.SENTRY_DSN) {
             Sentry.init({
-                dsn: env.SENTRY_DSN,
-                enableLogs: true,
-                sendDefaultPii: true
+                dsn: env.SENTRY_DSN
             });
         }
 

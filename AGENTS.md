@@ -48,5 +48,5 @@ else {
 
 - Avoid using the `any` type.
 - All code should be strongly typed.
-- Do not run linters. You may verify the code style with ESLint, but do not run code formatters.
+- Do not run linters. You may verify the code style with oxlint (`pnpm lint`), but do not run code formatters (oxfmt).
 - Do not attempt to preview the site or run the server by yourself.
