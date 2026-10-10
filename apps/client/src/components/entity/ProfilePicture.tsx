@@ -6,6 +6,8 @@ import { type PublicUser } from "@hackclub/lapse-api";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 
+const failedUrls = new Set<string>();
+
 export function ProfilePicture({ user, size = "md", className = "", isSkeleton = false }: {
   user: PublicUser | null,
   size?: "xs" | "sm" | "md" | "lg" | "xl";
@@ -21,30 +23,55 @@ export function ProfilePicture({ user, size = "md", className = "", isSkeleton =
   });
 
   const cachetUrl = user?.slackId ? `https://cachet.hackclub.com/users/${user.slackId}/r` : null;
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const [, setFailureCount] = useState(0);
 
   if (isSkeleton || !user)
     return <Skeleton circular className={sizeClass} />;
 
   // Cachet always redirects to the user's current Slack avatar, whereas the stored URL is only refreshed on login.
-  const src = cachetUrl && failedUrl !== cachetUrl ? cachetUrl : user.profilePictureUrl;
+  // Each candidate is tried once; when all of them fail (e.g. a network that blocks Slack's CDN), we show the
+  // user's initial instead of retrying.
+  const src = [cachetUrl, user.profilePictureUrl].find(url => url && !failedUrls.has(url));
+
+  const interactiveClass = "cursor-pointer hover:opacity-80 transition-opacity";
 
   return (
-    <NextLink href={user && `/user/@${user.handle}`}>
-      <img
-        width={32} height={32}
-        src={src}
-        onError={() => setFailedUrl(src)}
-        alt=""
-        className={clsx(
-          "rounded-full object-cover transition-all max-w-none",
-          sizeClass,
-          user && "cursor-pointer hover:opacity-80 transition-opacity",
-          className
-        )}
-        role={user ? "button" : undefined}
-        tabIndex={user ? 0 : undefined}
-      />
+    <NextLink href={`/user/@${user.handle}`}>
+      {
+        src
+          ? (
+            <img
+              width={32} height={32}
+              src={src}
+              onError={() => {
+                failedUrls.add(src);
+                setFailureCount(x => x + 1);
+              }}
+              alt=""
+              className={clsx(
+                "rounded-full object-cover transition-all max-w-none",
+                sizeClass,
+                interactiveClass,
+                className
+              )}
+              role="button"
+              tabIndex={0}
+            />
+          )
+          : (
+            <span
+              aria-hidden
+              className={clsx(
+                "rounded-full bg-slate text-white font-bold flex items-center justify-center select-none",
+                sizeClass,
+                interactiveClass,
+                className
+              )}
+            >
+              {user.displayName.charAt(0).toUpperCase()}
+            </span>
+          )
+      }
     </NextLink>
   );
 }
