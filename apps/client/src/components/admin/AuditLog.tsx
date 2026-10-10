@@ -11,6 +11,7 @@ const ENTITY_NAMES: Record<AdminEntity, string> = {
   timelapse: "Timelapse",
   comment: "Comment",
   draftTimelapse: "Draft",
+  lookoutDraft: "Lookout draft",
   legacyTimelapse: "Legacy timelapse"
 };
 

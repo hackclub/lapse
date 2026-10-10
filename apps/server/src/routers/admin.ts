@@ -1,5 +1,5 @@
 import { implement } from "@orpc/server";
-import { adminRouterContract, AdminAuditChangesSchema, AdminEntitySchema, ADMIN_ENTITY_FIELDS, getAllOAuthScopes, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLegacyTimelapseRow, type ProgramKeyMetadata } from "@hackclub/lapse-api";
+import { adminRouterContract, AdminAuditChangesSchema, AdminEntitySchema, ADMIN_ENTITY_FIELDS, getAllOAuthScopes, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLookoutDraftRow, type AdminLegacyTimelapseRow, type ProgramKeyMetadata } from "@hackclub/lapse-api";
 import { match } from "@hackclub/lapse-shared";
 
 import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
@@ -8,6 +8,7 @@ import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { logError, logInfo } from "@/logging.js";
 import { HackatimeApiError } from "@/hackatime.js";
+import * as lookout from "@/lookout.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
 import { durationBySnapshots, hackatimeApiKeyFor, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 import { diffAuditedFields, findAuditedEntity, recordAdminChange, type AuditClient } from "@/adminAudit.js";
@@ -185,6 +186,39 @@ function dtoAdminDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }):
     };
 }
 
+/**
+ * Lookout draft rows carry the session's live state, since the draft itself is only a pointer and "does this
+ * recording still exist, and is it compiled?" is the question an admin opening this table is asking.
+ */
+async function dtoAdminLookoutDraft(entity: db.DraftLookoutTimelapse & { owner: db.User }): Promise<AdminLookoutDraftRow> {
+    let lookoutStatus: string | null = null;
+    let trackedSeconds: number | null = null;
+    let hasVideo = false;
+
+    try {
+        const session = await lookout.getSession(entity.lookoutSessionId);
+        lookoutStatus = session.session.status;
+        trackedSeconds = session.trackedSeconds;
+        hasVideo = session.session.videoUrl !== null;
+    }
+    catch (err) {
+        logError("Couldn't read a Lookout session for the admin panel.", { err, draftId: entity.id });
+    }
+
+    return {
+        id: entity.id,
+        ownerId: entity.ownerId,
+        ownerHandle: entity.owner.handle,
+        createdAt: entity.createdAt.getTime(),
+        lookoutSessionId: entity.lookoutSessionId,
+        lookoutStatus,
+        trackedSeconds,
+        hasVideo,
+        pendingName: entity.pendingName,
+        pendingAt: entity.pendingAt?.getTime() ?? null
+    };
+}
+
 function dtoAdminLegacyTimelapse(entity: db.LegacyUnpublishedTimelapse & { owner: db.User }): AdminLegacyTimelapseRow {
     return {
         id: entity.id,
@@ -214,6 +248,7 @@ const EDITABLE_FIELDS: Record<AdminEntity, Set<string>> = {
     timelapse: EDITABLE_TIMELAPSE_FIELDS,
     comment: EDITABLE_COMMENT_FIELDS,
     draftTimelapse: EDITABLE_DRAFT_FIELDS,
+    lookoutDraft: new Set(),
     legacyTimelapse: new Set()
 };
 
@@ -328,6 +363,18 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
 
             return dtoAdminDraftTimelapse(updated);
         }
+    },
+    lookoutDraft: {
+        list: async (where, _sort, orderBy, skip, take) => {
+            const rows = await database().draftLookoutTimelapse.findMany({
+                where, orderBy, skip, take,
+                include: { owner: true }
+            });
+
+            return Promise.all(rows.map(dtoAdminLookoutDraft));
+        },
+        count: (where) => database().draftLookoutTimelapse.count({ where }),
+        update: async () => null
     },
     legacyTimelapse: {
         list: async (where, _sort, orderBy, skip, take) => {
@@ -582,6 +629,7 @@ export default os.router({
                 : entity === "timelapse" ? database().timelapse.findUnique({ where: { id } })
                 : entity === "comment" ? database().comment.findUnique({ where: { id } })
                 : entity === "draftTimelapse" ? database().draftTimelapse.findUnique({ where: { id } })
+                : entity === "lookoutDraft" ? database().draftLookoutTimelapse.findUnique({ where: { id }, omit: { lookoutToken: true, panelToken: true } })
                 : database().legacyUnpublishedTimelapse.findUnique({ where: { id } })
             );
 
@@ -896,7 +944,7 @@ export default os.router({
 
             const results: SearchResultRow[] = [];
 
-            const [users, timelapses, comments, drafts, legacyTimelapses] = await Promise.all([
+            const [users, timelapses, comments, drafts, lookoutDrafts, legacyTimelapses] = await Promise.all([
                 database().user.findMany({
                     select: { id: true, handle: true, displayName: true, slackId: true }
                 }),
@@ -911,6 +959,10 @@ export default os.router({
                 
                 database().draftTimelapse.findMany({
                     select: { id: true, name: true, owner: { select: { handle: true } } }
+                }),
+
+                database().draftLookoutTimelapse.findMany({
+                    select: { id: true, lookoutSessionId: true, pendingName: true, owner: { select: { handle: true } } }
                 }),
 
                 database().legacyUnpublishedTimelapse.findMany({
@@ -969,6 +1021,20 @@ export default os.router({
                         id: draft.id,
                         displayText: `${displayName} by @${draft.owner.handle}`,
                         fuzzyValues: [displayName, draft.owner.handle]
+                    }
+                );
+            }
+
+            for (const draft of lookoutDrafts) {
+                const displayName = draft.pendingName || "(Unpublished recording)";
+                pushSearchDescriptor(
+                    results,
+                    query,
+                    {
+                        entity: "lookoutDraft" as const,
+                        id: draft.id,
+                        displayText: `${displayName} by @${draft.owner.handle} (Lookout draft)`,
+                        fuzzyValues: [draft.pendingName ?? "", draft.owner.handle, draft.lookoutSessionId]
                     }
                 );
             }

@@ -36,6 +36,8 @@ export async function findAuditedEntity(tx: AuditClient, entity: AdminEntity, id
             return await tx.comment.findUnique({ where: { id } });
         case "draftTimelapse":
             return await tx.draftTimelapse.findUnique({ where: { id } });
+        case "lookoutDraft":
+            return await tx.draftLookoutTimelapse.findUnique({ where: { id }, omit: { lookoutToken: true, panelToken: true } });
         case "legacyTimelapse":
             return await tx.legacyUnpublishedTimelapse.findUnique({ where: { id } });
     }

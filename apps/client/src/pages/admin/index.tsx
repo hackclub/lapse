@@ -61,7 +61,7 @@ type AdminFieldDef = {
 
 type AdminRecord = Record<string, unknown>;
 
-const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse", "app", "programKey", "auditLog"] as const;
+const ENTITIES = ["user", "timelapse", "comment", "draftTimelapse", "lookoutDraft", "legacyTimelapse", "app", "programKey", "auditLog"] as const;
 
 type AdminPanelEntity = typeof ENTITIES[number];
 
@@ -70,6 +70,7 @@ const ENTITY_LABELS: Record<AdminPanelEntity, string> = {
   timelapse: "Timelapses",
   comment: "Comments",
   draftTimelapse: "Draft Timelapses",
+  lookoutDraft: "Lookout Drafts",
   legacyTimelapse: "Legacy Timelapses",
   app: "Apps",
   programKey: "Program Keys",
@@ -81,6 +82,7 @@ const ENTITY_ICONS: Record<AdminPanelEntity, IconGlyph> = {
   timelapse: "controls",
   comment: "message",
   draftTimelapse: "docs",
+  lookoutDraft: "clock-fill",
   legacyTimelapse: "profile-fill",
   app: "code",
   programKey: "private-outline",
@@ -323,7 +325,7 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
 
   const fieldEntries = Object.entries(fields);
   const recordName = record["name"] ?? record["displayName"] ?? record["id"];
-  const entityName = entity === "user" ? "User" : entity === "timelapse" ? "Timelapse" : entity === "draftTimelapse" ? "Draft Timelapse" : entity === "legacyTimelapse" ? "Legacy Timelapse" : "Comment";
+  const entityName = entity === "user" ? "User" : entity === "timelapse" ? "Timelapse" : entity === "draftTimelapse" ? "Draft Timelapse" : entity === "lookoutDraft" ? "Lookout Draft" : entity === "legacyTimelapse" ? "Legacy Timelapse" : "Comment";
 
   function setChange(key: string, value: unknown) {
     setChanges(prev => ({ ...prev, [key]: value }));
@@ -372,6 +374,7 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
           user: "profile-fill",
           comment: "message",
           draftTimelapse: "docs",
+          lookoutDraft: "clock-fill",
           timelapse: "controls",
           legacyTimelapse: "profile-fill",
         })}
@@ -1880,6 +1883,7 @@ export default function AdminDashboard() {
     timelapse: defaultQuery(),
     comment: defaultQuery(),
     draftTimelapse: defaultQuery(),
+    lookoutDraft: defaultQuery(),
     legacyTimelapse: defaultQuery()
   });
 

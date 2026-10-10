@@ -24,7 +24,7 @@ export const ProgramKeyMetadataSchema = z.object({
 });
 
 export type AdminEntity = z.infer<typeof AdminEntitySchema>;
-export const AdminEntitySchema = z.enum(["user", "timelapse", "comment", "draftTimelapse", "legacyTimelapse"]);
+export const AdminEntitySchema = z.enum(["user", "timelapse", "comment", "draftTimelapse", "lookoutDraft", "legacyTimelapse"]);
 
 export type AdminFilterOperator = z.infer<typeof AdminFilterOperatorSchema>;
 export const AdminFilterOperatorSchema = z.enum(["eq", "neq", "contains", "gt", "lt", "gte", "lte"]);
@@ -96,6 +96,21 @@ export const AdminDraftTimelapseRowSchema = z.object({
     snapshotsCount: z.number().int()
 });
 
+export type AdminLookoutDraftRow = z.infer<typeof AdminLookoutDraftRowSchema>;
+export const AdminLookoutDraftRowSchema = z.object({
+    id: LapseId,
+    ownerId: LapseId,
+    ownerHandle: z.string(),
+    createdAt: LapseDate,
+    lookoutSessionId: z.string(),
+    /** Lookout's own status for the session, or `null` if Lookout couldn't be reached. */
+    lookoutStatus: z.string().nullable(),
+    trackedSeconds: z.number().int().nullable(),
+    hasVideo: z.boolean(),
+    pendingName: z.string().nullable(),
+    pendingAt: LapseDate.nullable()
+});
+
 export type AdminLegacyTimelapseRow = z.infer<typeof AdminLegacyTimelapseRowSchema>;
 export const AdminLegacyTimelapseRowSchema = z.object({
     id: LapseId,
@@ -153,6 +168,18 @@ export const ADMIN_ENTITY_FIELDS = {
         createdAt: { label: "Created At", kind: "date" as const, sortable: true },
         sessionsCount: { label: "Sessions Count", kind: "number" as const, sortable: true },
         snapshotsCount: { label: "Snapshots Count", kind: "number" as const, sortable: true }
+    },
+    lookoutDraft: {
+        id: { label: "ID", kind: "string" as const, sortable: true },
+        ownerId: { label: "Owner ID", kind: "string" as const, sortable: true },
+        ownerHandle: { label: "Owner Handle", kind: "string" as const, sortable: true },
+        createdAt: { label: "Created At", kind: "date" as const, sortable: true },
+        lookoutSessionId: { label: "Lookout Session ID", kind: "string" as const, sortable: true },
+        lookoutStatus: { label: "Lookout Status", kind: "string" as const },
+        trackedSeconds: { label: "Tracked Seconds", kind: "number" as const },
+        hasVideo: { label: "Has Video", kind: "boolean" as const },
+        pendingName: { label: "Pending Name", kind: "string" as const, sortable: true },
+        pendingAt: { label: "Pending Since", kind: "date" as const, sortable: true }
     },
     legacyTimelapse: {
         id: { label: "ID", kind: "string" as const, sortable: true },
