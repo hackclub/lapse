@@ -4,7 +4,9 @@ import type { FastifyInstance } from "fastify";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import type * as db from "@/generated/prisma/client.js";
+import { cancelRealizeJob } from "@/job.js";
 import { logError, logInfo } from "@/logging.js";
+import * as lookout from "@/lookout.js";
 import { firstUseOf, PrivacyTokenError, verifyPrivacyToken, type PrivacyAction, type PrivacySubject } from "@/privacyToken.js";
 
 const PRIVACY_ROUTES: Record<PrivacyAction, string> = {
@@ -23,6 +25,9 @@ export type ErasureResult = {
 type PrivacyReply = { statusCode: number; body: Record<string, unknown> };
 
 type Bucket = "encrypted" | "public";
+
+// The hub gives up after 15 seconds, so per-timelapse and per-session calls run side by side rather than one by one.
+const EXTERNAL_CONCURRENCY = 16;
 
 const s3 = new S3Client({
     region: "auto",
@@ -112,15 +117,26 @@ export async function eraseSubject(subject: PrivacySubject, dryRun: boolean): Pr
 
     const owned = await ownedRecords(userIds);
     const objects = await storedObjects(owned);
+    const lookoutSessions = lookoutSessionIds(owned);
     const retained = await retainedRecords(userIds, owned);
 
-    if (!dryRun)
+    if (!dryRun) {
         await deleteObjects(objects);
+        await deleteLookoutSessions(lookoutSessions);
+
+        for (const timelapse of owned.timelapses) {
+            if (timelapse.associatedJobId)
+                await cancelRealizeJob(timelapse.associatedJobId);
+        }
+    }
 
     const deleted = await deleteRows(userIds, owned, dryRun);
     const objectCount = objects.encrypted.length + objects.public.length;
     if (objectCount > 0)
         deleted["S3 objects"] = objectCount;
+
+    if (lookoutSessions.length > 0)
+        deleted["Lookout sessions"] = lookoutSessions.length;
 
     return { found: true, deleted, retained };
 }
@@ -143,7 +159,7 @@ async function ownedRecords(userIds: string[]) {
     const [timelapses, drafts, legacyTimelapses, lookoutDrafts] = await Promise.all([
         database().timelapse.findMany({
             where: { ownerId: { in: userIds } },
-            select: { id: true, s3Key: true, thumbnailS3Key: true, lookoutSessionId: true, hackatimeProject: true }
+            select: { id: true, s3Key: true, thumbnailS3Key: true, lookoutSessionId: true, hackatimeProject: true, associatedJobId: true }
         }),
         database().draftTimelapse.findMany({
             where: { ownerId: { in: userIds } },
@@ -155,7 +171,7 @@ async function ownedRecords(userIds: string[]) {
         }),
         database().draftLookoutTimelapse.findMany({
             where: { ownerId: { in: userIds } },
-            select: { id: true }
+            select: { id: true, lookoutSessionId: true }
         })
     ]);
 
@@ -184,10 +200,10 @@ async function storedObjects(owned: OwnedRecords): Promise<Record<Bucket, string
             encrypted.add(key);
     }
 
-    for (const timelapse of owned.timelapses) {
+    await forEachConcurrently(owned.timelapses, async timelapse => {
         for (const key of await listObjects("public", `timelapses/${timelapse.id}/`))
             published.add(key);
-    }
+    });
 
     return { encrypted: [...encrypted].filter(Boolean), public: [...published].filter(Boolean) };
 }
@@ -198,9 +214,6 @@ async function retainedRecords(userIds: string[], owned: OwnedRecords): Promise<
         database().serviceClient.count({ where: { createdByUserId: { in: userIds } } }),
         database().adminAuditLog.count({ where: { OR: [...audited, { actorId: { in: userIds } }] } })
     ]);
-
-    const lookoutRecordings = owned.lookoutDrafts.length
-        + owned.timelapses.filter(timelapse => timelapse.lookoutSessionId !== null).length;
 
     const hackatimeImports = owned.timelapses.filter(timelapse => timelapse.hackatimeProject !== null).length;
 
@@ -216,11 +229,6 @@ async function retainedRecords(userIds: string[], owned: OwnedRecords): Promise<
             reason: "kept as the record of admin actions; the account and any recorded values are removed"
         },
         {
-            type: "Lookout recordings",
-            count: lookoutRecordings,
-            reason: "stored by Lookout, which has no delete API yet; Lapse's references to them are deleted"
-        },
-        {
             type: "Hackatime heartbeats",
             count: hackatimeImports,
             reason: "imported into the person's Hackatime account; the Hackatime target deletes them"
@@ -228,6 +236,51 @@ async function retainedRecords(userIds: string[], owned: OwnedRecords): Promise<
     ];
 
     return retained.filter(item => item.count > 0);
+}
+
+/**
+ * Lookout has no accounts, so the sessions behind a user's Lookout drafts and timelapses can only be found through us.
+ */
+function lookoutSessionIds(owned: OwnedRecords): string[] {
+    return [...new Set([
+        ...owned.lookoutDrafts.map(draft => draft.lookoutSessionId),
+        ...owned.timelapses.map(timelapse => timelapse.lookoutSessionId).filter(id => id !== null)
+    ])];
+}
+
+/**
+ * Has Lookout delete each session. Lookout hides them at once and destroys them an hour later, which leaves staff a
+ * window to restore them from Lookout's side if this erasure turns out to be a mistake.
+ */
+async function deleteLookoutSessions(sessionIds: string[]) {
+    await forEachConcurrently(sessionIds, async sessionId => {
+        try {
+            await lookout.deleteSession(sessionId);
+        }
+        catch (error) {
+            if (!lookout.isSessionGone(error))
+                throw new PrivacyError(503, "lookout_unavailable");
+
+            // A 404 is either a session that is already gone, or one our key isn't allowed to delete - such as one
+            // created before Lapse had its own program key, or a Lookout that predates deletion. Only the first is safe
+            // to count as done.
+            if (!await lookoutSessionGone(sessionId))
+                throw new PrivacyError(409, "manual_review_required");
+        }
+    });
+}
+
+async function lookoutSessionGone(sessionId: string): Promise<boolean> {
+    try {
+        await lookout.getSession(sessionId);
+        return false;
+    }
+    catch (error) {
+        if (lookout.isSessionGone(error))
+            return true;
+
+        throw new PrivacyError(503, "lookout_unavailable");
+    }
 }
 
 function auditedEntities(owned: OwnedRecords): db.Prisma.AdminAuditLogWhereInput[] {
@@ -328,6 +381,16 @@ async function s3Call<T>(call: () => Promise<T>): Promise<T> {
     catch {
         throw new PrivacyError(503, "storage_unavailable");
     }
+}
+
+async function forEachConcurrently<T>(items: T[], action: (item: T) => Promise<void>) {
+    const queue = [...items];
+    const workers = Array.from({ length: Math.min(EXTERNAL_CONCURRENCY, queue.length) }, async () => {
+        for (let item = queue.shift(); item !== undefined; item = queue.shift())
+            await action(item);
+    });
+
+    await Promise.all(workers);
 }
 
 function bucketName(bucket: Bucket) {

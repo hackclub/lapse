@@ -1,9 +1,11 @@
 import { Queue, QueueEvents } from "bullmq";
+import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { EditListEntry } from "@hackclub/lapse-api";
 import { REALIZE_JOB_QUEUE_NAME, RealizeJobOutputsSchema, type RealizeJobInputs, type RealizeJobOutputs } from "@hackclub/lapse-jobs";
 
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { database, redis } from "@/db.js";
+import { env } from "@/env.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
 import { syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
@@ -13,6 +15,15 @@ import { syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
 const realizeQueue = new Queue<RealizeJobInputs, RealizeJobOutputs>(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
 const realizeEvents = new QueueEvents(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
+
+const s3 = new S3Client({
+    region: "auto",
+    endpoint: env.S3_ENDPOINT,
+    credentials: {
+        accessKeyId: env.S3_ACCESS_KEY_ID,
+        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+    },
+});
 
 /**
  * Enqueues a job in the worker to realize the video for a timelapse from encrypted sessions belonging to a (potentially removed) draft timelapse.
@@ -35,6 +46,19 @@ export async function enqueueRealizeJob(timelapseId: string, sessionUrls: string
     });
 }
 
+/**
+ * Removes a realize job that hasn't started yet, along with the passkey it carries. A job that is already running
+ * can't be removed; if its timelapse is gone by the time it finishes, the completion handler deletes what it uploaded.
+ */
+export async function cancelRealizeJob(jobId: string) {
+    try {
+        await realizeQueue.remove(jobId);
+    }
+    catch (err) {
+        logWarning(`Could not remove realize job ${jobId}; it is probably running.`, { err });
+    }
+}
+
 realizeEvents.waitUntilReady()
     .then(() => {
         realizeEvents.on("completed", async ({ jobId, returnvalue }) => {
@@ -42,6 +66,17 @@ realizeEvents.waitUntilReady()
             const { videoKey, thumbnailKey, timelapseId, realTimeDuration } = result;
 
             logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey, realTimeDuration });
+
+            // The timelapse was deleted while it was encoding (by its owner, or a privacy erasure), so nothing will
+            // ever point at what the worker just uploaded.
+            if (!await database().timelapse.findFirst({ where: { id: timelapseId }, select: { id: true } })) {
+                for (const key of [videoKey, thumbnailKey]) {
+                    await s3.send(new DeleteObjectCommand({ Bucket: env.S3_PUBLIC_BUCKET_NAME, Key: key }));
+                }
+
+                logInfo(`Timelapse ${timelapseId} was deleted while processing; removed its realized files.`);
+                return;
+            }
 
             const draft = await database().draftTimelapse.findFirst({
                 where: {
@@ -115,9 +150,10 @@ realizeEvents.waitUntilReady()
                 return;
 
             // We keep the draft timelapse, mark the associated timelapse as failed processing, and unlink the two so that
-            // the publishing of the draft can be retried by the user at a later time.
+            // the publishing of the draft can be retried by the user at a later time. Either may already be gone if the
+            // timelapse was deleted while it was processing.
             await database().$transaction([
-                database().draftTimelapse.update({
+                database().draftTimelapse.updateMany({
                     where: {
                         associatedTimelapseId: job.data.timelapseId
                     },
@@ -126,7 +162,7 @@ realizeEvents.waitUntilReady()
                     }
                 }),
 
-                database().timelapse.update({
+                database().timelapse.updateMany({
                     where: {
                         id: job.data.timelapseId
                     },
