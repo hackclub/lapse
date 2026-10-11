@@ -189,6 +189,18 @@ export function isPlaceholderSessionName(name: string): boolean {
     return /^untitled-\d{4}-\d{2}-\d{2}$/.test(name.trim());
 }
 
+/**
+ * Asks Lookout to delete a session. Lookout hides it immediately and destroys its captures and video an hour later;
+ * until then it can be restored with `POST /api/internal/sessions/:id/restore`. Idempotent, and repeating it does not
+ * push the deadline out.
+ */
+export async function deleteSession(sessionId: string): Promise<void> {
+    await lookoutFetch<{ sessionId: string; deleteAfter: string }>(`/api/internal/sessions/${sessionId}`, {
+        method: "DELETE",
+        body: "{}",
+    });
+}
+
 export async function getSession(sessionId: string): Promise<LookoutSessionDetails> {
     return lookoutFetch<LookoutSessionDetails>(`/api/internal/sessions/${sessionId}`);
 }

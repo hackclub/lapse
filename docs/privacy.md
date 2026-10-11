@@ -26,8 +26,8 @@ Responses:
 
 - `200 {request_id, found, dry_run, deleted: {model: rows}, retained: [{type, count, reason}]}`. Once someone is deleted, later calls answer `found: false`.
 - `401 {error}` for a bad token, `400 action_mismatch`, `409 replayed`
-- `409 manual_review_required` when the account created program keys or reviewed OAuth apps. Those belong to staff and back integrations other people rely on, so a human decides what happens to them first.
-- `503` when the hub's JWKS or S3 can't be reached. The hub retries these.
+- `409 manual_review_required` when the account created program keys or reviewed OAuth apps. Those belong to staff and back integrations other people rely on, so a human decides what happens to them first. Also when Lookout still has one of their sessions but refuses to delete it for our key (a session created before Lapse had its own program key, or a Lookout that predates deletion).
+- `503` when the hub's JWKS, S3, or Lookout can't be reached. The hub retries these.
 
 ## Who is matched
 
@@ -45,8 +45,10 @@ Users whose `email` matches one of the subject's emails (case-insensitively) or 
   - draft sessions and thumbnails, plus anything else under `timelapses/<userId>/` in the encrypted bucket (uploads that never became a draft, upload metadata)
   - legacy session and thumbnail keys
   - everything under `timelapses/<timelapseId>/` in the public bucket
+- **Lookout sessions** behind their Lookout drafts and Lookout-recorded timelapses, also before the transaction. Lookout has no accounts, so these can only be found through us. `DELETE /api/internal/sessions/:id` hides each session immediately and Lookout destroys its captures and video an hour later. During that hour a Lookout admin can undo it with `POST /api/internal/sessions/:id/restore` if an erasure was a mistake. Repeating the call (on a retry) doesn't extend the hour.
+- **Queued encodes**: realize jobs for their timelapses that haven't started are removed from Redis, along with the draft passkey they carry. A job that is already running finishes, and the completion handler deletes its output when it finds the timelapse gone.
 
-A dry run performs the same deletion inside a transaction and rolls it back, so the counts the reviewer approves are the counts that get executed. S3 objects are listed but not touched.
+A dry run performs the same deletion inside a transaction and rolls it back, so the counts the reviewer approves are the counts that get executed. S3 objects are listed and Lookout sessions counted, but neither is touched.
 
 ## What is kept
 
@@ -54,11 +56,9 @@ A dry run performs the same deletion inside a transaction and rolls it back, so 
 | --- | --- |
 | OAuth apps they registered | Other people sign in with them. The creator is removed (`createdByUserId` becomes null) |
 | Admin audit entries | The record of admin actions. Entries about their records have `changes` cleared, and entries they made lose the actor |
-| Lookout recordings | Stored by Lookout, which has no delete API yet. Lapse's references are deleted |
 | Hackatime heartbeats | Imported into their Hackatime account. The hub's Hackatime target deletes them |
 
 ## Not covered
 
 - Sentry and console logs from before the deletion, which can include profile data.
-- Completed `lapse-realize` jobs kept in Redis, whose data includes session URLs.
-- A video that is mid-encode when the deletion runs: the worker's upload lands after the timelapse is gone and is left in the public bucket.
+- Completed and failed `lapse-realize` jobs kept in Redis, whose data includes session URLs and the draft's passkey. The sessions themselves are deleted, so the passkey has nothing left to decrypt. Only jobs we can still find through `Timelapse.associatedJobId`, which means unfinished ones, are removed.
