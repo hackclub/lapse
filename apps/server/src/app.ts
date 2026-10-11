@@ -25,6 +25,7 @@ import { ADMIN_ROUTE_PATHS } from "@/adminKey.js";
 import { registerDetectionRoutes } from "@/detections.js";
 import { registerUserSearchRoutes } from "@/userSearch.js";
 import { registerUserTimelapseRoutes } from "@/userTimelapses.js";
+import { registerPrivacyRoutes } from "@/privacy.js";
 import { registerLookoutDesktopRoutes } from "@/lookoutDesktop.js";
 import { startLookoutPublishSweeper } from "@/lookoutPublish.js";
 
@@ -104,6 +105,9 @@ server.addContentTypeParser("*", (request, payload, done) => {
 registerDetectionRoutes(server);
 registerUserSearchRoutes(server);
 registerUserTimelapseRoutes(server);
+
+// GDPR deletion and export requests from the Hack Club privacy hub. See `docs/privacy.md`.
+registerPrivacyRoutes(server);
 
 // Lookout's desktop app talks to these directly - device pairing, starting a recording without a
 // browser, and the publish panel it renders in-app. See `lookoutDesktop.ts`.

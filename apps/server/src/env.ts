@@ -99,6 +99,12 @@ export const env = {
     get LAPSE_ADMIN_API_KEY() { return optional("LAPSE_ADMIN_API_KEY") },
 
     /**
+     * Overrides the Hack Club privacy hub's JWKS URL, which defaults to "https://yeet.hackclub.com/.well-known/jwks.json".
+     * Only needed to test against a hub running locally.
+     */
+    get PRIVACY_JWKS_URL() { return optional("PRIVACY_JWKS_URL") },
+
+    /**
      * Passed to `Sentry.init`.
      */
     get SENTRY_DSN() { return optional("SENTRY_DSN") },

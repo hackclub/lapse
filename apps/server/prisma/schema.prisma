@@ -494,3 +494,11 @@ model Maintenance {
   startsAt  DateTime
   endsAt    DateTime
 }
+
+/// A privacy hub token that has been accepted. Each token may only be used once.
+model PrivacyTokenUse {
+  jti       String   @id
+  usedAt    DateTime @default(now())
+
+  @@index([usedAt])
+}
