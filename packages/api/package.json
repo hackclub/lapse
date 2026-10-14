@@ -32,6 +32,6 @@
   "dependencies": {
     "@hackclub/lapse-shared": "workspace:*",
     "@orpc/contract": "^1.15.5",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   }
 }
