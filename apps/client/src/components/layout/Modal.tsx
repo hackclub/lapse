@@ -16,7 +16,7 @@ export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
 
   const modal = (
     <div role="dialog" className={clsx(
-      "flex fixed w-screen h-screen p-4 sm:p-8 top-0 left-0 text-text bg-[#00000088] duration-500 transition-colors justify-center items-center shadow z-20 overflow-y-auto",
+      "flex fixed w-screen h-dvh p-4 sm:p-8 top-0 left-0 text-text bg-[#00000088] duration-500 transition-colors justify-center items-center shadow z-20 overflow-y-auto",
       !isOpen && "hidden",
       className
     )}>
