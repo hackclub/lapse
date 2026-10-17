@@ -32,7 +32,7 @@
     "bullmq": "^6.3.12",
     "dotenv": "^18.0.7",
     "ioredis": "^6.0.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.5",
