@@ -20,6 +20,7 @@ const os = implement(authRouterContract)
     .use(logMiddleware);
 
 const OAUTH_COOKIE_NAME = "lapse_oauthdata";
+const THIRD_PARTY_OAUTH_COOKIE_NAME = "lapse_oauthdata_3p";
 const HKT_REDIRECT_URI = `${env.BASE_URL}/api/auth/hackatimeCallback`; // should point to an actual endpoint we have defined below!
 
 type OAuthCookie = z.infer<typeof OAuthCookieSchema>;
@@ -96,15 +97,19 @@ function createConsentToken(data: ConsentJwt) {
     return jwt.sign(data, env.JWT_CONSENT_TOKENS, { expiresIn: "60s" });
 }
 
-function readOAuthCookie(reqHeaders?: Headers) {
-    const cookie = getCookie(reqHeaders, OAUTH_COOKIE_NAME);
-    if (!cookie) {
-        // Hm. No cookie means we don't know where this request came from.
-        logWarning(`Couldn't find the ${OAUTH_COOKIE_NAME} cookie when handling the Hackatime callback.`);
-        throw new ORPCError("BAD_REQUEST", {
-            message: `Cannot find OAuth2 cookie ${OAUTH_COOKIE_NAME} - make sure you have cookies enabled and try again.`
-        });
-    }
+/**
+ * Third-party flows keep their own cookie, as the consent screen may need to sign the user into the canonical client
+ * first. That nested canonical flow would otherwise overwrite the third-party app's data, leaving `/auth/continue`
+ * unable to redirect back to it.
+ */
+function oauthCookieName(clientId: string) {
+    return clientId === env.CANONICAL_OAUTH_CLIENT_ID ? OAUTH_COOKIE_NAME : THIRD_PARTY_OAUTH_COOKIE_NAME;
+}
+
+function parseOAuthCookie(reqHeaders: Headers | undefined, name: string): OAuthCookie | null {
+    const cookie = getCookie(reqHeaders, name);
+    if (!cookie)
+        return null;
 
     try {
         const result = OAuthCookieSchema.safeParse(
@@ -121,11 +126,46 @@ function readOAuthCookie(reqHeaders?: Headers) {
         return result.data;
     }
     catch (error) {
+        if (error instanceof ORPCError)
+            throw error;
+
         logError("Couldn't parse OAuth cookie!", { error });
         throw new ORPCError("BAD_REQUEST", {
             message: `Cannot parse OAuth2 cookie - please try clearing cookies and authenticating again.`
         });
     }
+}
+
+function missingOAuthCookie(name: string) {
+    // Hm. No cookie means we don't know where this request came from.
+    logWarning(`Couldn't find the ${name} cookie when handling an OAuth2 request.`);
+    return new ORPCError("BAD_REQUEST", {
+        message: `Cannot find OAuth2 cookie ${name} - make sure you have cookies enabled and try again.`
+    });
+}
+
+function readOAuthCookie(reqHeaders: Headers | undefined, name: string) {
+    const data = parseOAuthCookie(reqHeaders, name);
+    if (!data)
+        throw missingOAuthCookie(name);
+
+    return data;
+}
+
+/**
+ * Finds the cookie of the flow Hackatime is calling back for. Both a third-party and a canonical flow may be in
+ * progress at once, so we match on the Hackatime state.
+ */
+function readHackatimeCallbackCookie(reqHeaders: Headers | undefined, state: string | undefined) {
+    const candidates = [OAUTH_COOKIE_NAME, THIRD_PARTY_OAUTH_COOKIE_NAME]
+        .map(name => ({ name, data: parseOAuthCookie(reqHeaders, name) }))
+        .filter((x): x is { name: string; data: OAuthCookie } => x.data !== null);
+
+    const match = candidates.find(x => x.data.hst === state) ?? candidates[0];
+    if (!match)
+        throw missingOAuthCookie(OAUTH_COOKIE_NAME);
+
+    return match;
 }
 
 export default os.router({
@@ -140,7 +180,7 @@ export default os.router({
 
             setCookie(
                 req.context.resHeaders,
-                OAUTH_COOKIE_NAME,
+                oauthCookieName(req.input.query.client_id),
                 Buffer.from(
                     JSON.stringify({
                         hst: state,
@@ -207,10 +247,10 @@ export default os.router({
     // The routes below are not defined in the contracts, as we don't want the client to be calling them directly! We only want to access them through redirects.
     hackatimeCallback: os.hackatimeCallback
         .handler(async (req) => {
-            const oauthData = readOAuthCookie(req.context.reqHeaders);
+            const { name: cookieName, data: oauthData } = readHackatimeCallbackCookie(req.context.reqHeaders, req.input.query.state);
 
             function errorRedirect(error: OAuthErrorCode): { status: 307; headers: Record<string, string> } {
-                deleteCookie(req.context.resHeaders, OAUTH_COOKIE_NAME);
+                deleteCookie(req.context.resHeaders, cookieName);
 
                 const url = new URL(oauthData.uri);
                 url.searchParams.set("error", error);
@@ -428,7 +468,8 @@ export default os.router({
                });
            }
 
-           const oauthData = readOAuthCookie(req.context.reqHeaders);
+           const cookieName = oauthCookieName(consent.cid);
+           const oauthData = readOAuthCookie(req.context.reqHeaders, cookieName);
            
            if (
                consent.cid !== oauthData.cid ||
@@ -462,6 +503,8 @@ export default os.router({
                    },
                }
            );
+
+           deleteCookie(req.context.resHeaders, cookieName);
 
            return {
                status: 307 as const,
