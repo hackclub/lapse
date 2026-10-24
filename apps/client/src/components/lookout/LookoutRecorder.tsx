@@ -8,6 +8,7 @@ import type { CaptureMode } from "@lookout/react";
 import type { IconGlyph } from "@/common";
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
 import { useInterval } from "@/hooks/useInterval";
 import {
   type StoredLookoutSession,
@@ -513,7 +514,9 @@ export default function LookoutRecorder() {
   const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
   // Reviewers can't make sense of a timelapse of an editor, so we say so before every recording.
+  // Banned users are the exception - we ask them to record their code with Lapse.
   const [showCodeNotice, setShowCodeNotice] = useState(() => !isCodeNoticeDismissed());
+  const hackatimeStatus = useHackatimeLinkStatus();
   // Set when a previous Browser (screen) capture failed. Drives the warning blurb,
   // the dimmed Browser option, and the "are you sure?" confirmation on the selector.
   const [browserError, setBrowserError] = useState<string | null>(null);
@@ -671,7 +674,15 @@ export default function LookoutRecorder() {
     }
   }
 
-  if (showCodeNotice) {
+  if (showCodeNotice && hackatimeStatus === null) {
+    return (
+      <RootLayout showHeader={false}>
+        <div className="flex items-center justify-center h-screen text-muted">Checking for sessions...</div>
+      </RootLayout>
+    );
+  }
+
+  if (showCodeNotice && hackatimeStatus !== "restricted") {
     return (
       <RootLayout showHeader={false}>
         <CodeNoticeModal

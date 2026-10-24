@@ -14,20 +14,26 @@ export const LINK_STATUS_SESSION_KEY = "lapse:hackatimeLinkStatus";
 export type HackatimeLinkStatus = "linked" | "needsRelink" | "restricted";
 
 /**
- * The state of the signed-in user's Hackatime authorization. Anything but `needsRelink` is cached for the browser
- * session, since checking costs a request to Hackatime and almost nobody needs to be asked twice.
+ * The state of the signed-in user's Hackatime authorization, or `null` while it's not known yet. Anything but
+ * `needsRelink` is cached for the browser session, since checking costs a request to Hackatime and almost nobody
+ * needs to be asked twice.
  */
-export function useHackatimeLinkStatus(): HackatimeLinkStatus {
+export function useHackatimeLinkStatus(): HackatimeLinkStatus | null {
   const router = useRouter();
   const auth = useAuth(false);
-  const [status, setStatus] = useState<HackatimeLinkStatus>("linked");
+  const [status, setStatus] = useState<HackatimeLinkStatus | null>(null);
 
   // Nothing renders this on /auth anyway, and checking there would ask about the token being replaced.
   const isReauthenticating = router.pathname === "/auth";
 
   useEffect(() => {
-    if (!auth.currentUser || isReauthenticating) {
+    if (isReauthenticating) {
       setStatus("linked");
+      return;
+    }
+
+    if (!auth.currentUser) {
+      setStatus(null);
       return;
     }
 
@@ -42,8 +48,13 @@ export function useHackatimeLinkStatus(): HackatimeLinkStatus {
     let cancelled = false;
     (async () => {
       const res = await api.hackatime.linkStatus({});
-      if (cancelled || !res.ok)
+      if (cancelled)
         return;
+
+      if (!res.ok) {
+        setStatus("linked");
+        return;
+      }
 
       const next: HackatimeLinkStatus =
         res.data.restricted ? "restricted" :
