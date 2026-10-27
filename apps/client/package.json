@@ -37,7 +37,7 @@
     "webpack": "^5.111.1"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.7",
+    "@babel/core": "^8.0.9",
     "@babel/preset-env": "^8.0.7",
     "@inquirer/prompts": "^8.7.3",
     "@svgr/webpack": "^8.1.0",
