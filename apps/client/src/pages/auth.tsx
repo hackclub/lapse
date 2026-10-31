@@ -26,6 +26,22 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
     .replace(/=+$/, "");
 }
 
+function getSafeRedirect(value: unknown): string | null {
+  if (typeof value !== "string" || !value.startsWith("/"))
+    return null;
+
+  try {
+    const resolved = new URL(value, window.location.origin);
+    if (resolved.origin !== window.location.origin)
+      return null;
+
+    return resolved.pathname + resolved.search + resolved.hash;
+  }
+  catch {
+    return null;
+  }
+}
+
 export default function Auth() {
   const router = useRouter();
   const { currentUser, isLoading, refreshUser } = useAuthContext();
@@ -44,8 +60,7 @@ export default function Auth() {
       return;
 
     if (currentUser && !currentUser.private.needsReauth && router.query.force !== "1") {
-      const redirect = typeof router.query.redirect === "string" ? router.query.redirect : "/";
-      router.push(redirect);
+      router.push(getSafeRedirect(router.query.redirect) ?? "/");
       return;
     }
 
@@ -80,7 +95,7 @@ export default function Auth() {
     sessionStorage.setItem("lapse:oauth_state", state);
     sessionStorage.setItem("lapse:oauth_code_verifier", codeVerifier);
 
-    const redirectParam = typeof router.query.redirect === "string" ? router.query.redirect : null;
+    const redirectParam = getSafeRedirect(router.query.redirect);
     if (redirectParam)
       sessionStorage.setItem("lapse:oauth_redirect", redirectParam);
 
@@ -139,7 +154,7 @@ export default function Auth() {
       sessionStorage.removeItem(LINK_STATUS_SESSION_KEY);
       await refreshUser();
 
-      const redirect = sessionStorage.getItem("lapse:oauth_redirect");
+      const redirect = getSafeRedirect(sessionStorage.getItem("lapse:oauth_redirect"));
       sessionStorage.removeItem("lapse:oauth_redirect");
       router.push(redirect ?? "/");
     }
