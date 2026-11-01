@@ -732,7 +732,7 @@ export default function LookoutRecorder() {
             <div className="flex flex-col gap-2">
               <h1 className="text-2xl font-bold">Opening Lookout</h1>
               <p className="text-muted">
-                The Lookout desktop app should open automatically — if it has&apos;t yet, you made need to install it. We&apos;ll bring you back here to publish your timelapse once you&apos;ve finished recording.
+                The Lookout desktop app should open automatically — if it has&apos;t yet, you may need to install it. We&apos;ll bring you back here to publish your timelapse once you&apos;ve finished recording.
               </p>
             </div>
             <div className="flex flex-col gap-3 w-full">
