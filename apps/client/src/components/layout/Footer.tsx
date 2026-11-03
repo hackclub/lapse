@@ -48,6 +48,7 @@ export function Footer() {
           </>
         ) : null}
         {" "}Report issues at <Link newTab href="https://github.com/hackclub/lapse" />.
+        {" "}See how Lapse is doing on the <Link href="/stats" content="stats page" newTab={false} />.
       </p>
       {contributors.length > 0 ? (
         <p>
