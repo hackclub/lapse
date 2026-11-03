@@ -29,6 +29,49 @@ export const MaintenanceWindowSchema = z.object({
     endsAt: LapseDate
 });
 
+/**
+ * The amount of time recorded and timelapses published within a single week.
+ */
+export type GlobalStatsWeek = z.infer<typeof GlobalStatsWeekSchema>;
+export const GlobalStatsWeekSchema = z.object({
+    weekStart: LapseDate,
+    seconds: z.number().nonnegative(),
+    timelapses: z.number().nonnegative()
+});
+
+/**
+ * Aggregate, anonymous statistics about Lapse as a whole.
+ */
+export type GlobalStats = z.infer<typeof GlobalStatsSchema>;
+export const GlobalStatsSchema = z.object({
+    generatedAt: LapseDate,
+    users: z.object({
+        total: z.number().nonnegative(),
+        creators: z.number().nonnegative(),
+        newThisWeek: z.number().nonnegative()
+    }),
+    time: z.object({
+        totalSeconds: z.number().nonnegative(),
+        thisWeekSeconds: z.number().nonnegative(),
+        averageTimelapseSeconds: z.number().nonnegative(),
+        longestTimelapseSeconds: z.number().nonnegative()
+    }),
+    timelapses: z.object({
+        published: z.number().nonnegative(),
+        public: z.number().nonnegative(),
+        unlisted: z.number().nonnegative(),
+        lookout: z.number().nonnegative(),
+        browser: z.number().nonnegative(),
+        hackatimeSynced: z.number().nonnegative()
+    }),
+    recordings: z.object({
+        started: z.number().nonnegative(),
+        drafts: z.number().nonnegative()
+    }),
+    comments: z.number().nonnegative(),
+    weekly: z.array(GlobalStatsWeekSchema)
+});
+
 export const globalRouterContract = oc.tag(ROUTER_TAGS.global).router({
     weeklyLeaderboard: contract("GET", "/global/weeklyLeaderboard")
         .route({ description: "Returns the users that have the most Lapse time logged in the past 7 days." })
@@ -49,6 +92,13 @@ export const globalRouterContract = oc.tag(ROUTER_TAGS.global).router({
         .input(NO_INPUT)
         .output(apiResult({
             count: z.number().nonnegative()
+        })),
+
+    stats: contract("GET", "/global/stats")
+        .route({ description: "Returns aggregate, anonymous statistics about Lapse. The result may be cached for a few minutes." })
+        .input(NO_INPUT)
+        .output(apiResult({
+            stats: GlobalStatsSchema
         })),
 
     maintenance: contract("GET", "/global/maintenance")
