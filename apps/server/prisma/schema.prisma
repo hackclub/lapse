@@ -59,6 +59,8 @@ model User {
   displayName               String
   profilePictureUrl         String
   bio                       String            @default("")
+  /// The Slack title last copied into `bio`. While `bio` still reads exactly this, it follows Slack on each login.
+  slackTitle                String?
   urls                      String[]          @default([])
   hackatimeId               String?
   hackatimeAccessToken      String?

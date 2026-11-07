@@ -14,6 +14,7 @@ import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi } from "@/hackatime.js";
 import { slackQueryProfile } from "@/slack.js";
 import { oauthSrv } from "@/oauth.js";
+import type * as db from "@/generated/prisma/client.js";
 
 const os = implement(authRouterContract)
     .$context<Context>()
@@ -92,6 +93,21 @@ const HackatimeTokenResponseSchema = z.object({
     expires_in: z.number(),
     refresh_token: z.string().optional(),
 });
+
+/**
+ * The bio starts out as the user's Slack title, and keeps following it for as long as it still reads exactly what
+ * we last copied (`slackTitle`). Writing their own bio in Lapse breaks the match, and from then on it's theirs.
+ *
+ * Accounts from before we tracked this have no `slackTitle`, so a bio copied from Slack and one written by hand
+ * look the same. Those are left alone - unless the bio is empty, which has nothing to lose, or already matches the
+ * Slack title, which is as good as having copied it.
+ */
+function bioFromSlack(user: db.User, title: string): Pick<db.User, "bio" | "slackTitle"> | null {
+    if (user.slackTitle === null ? (user.bio === "" || user.bio === title) : user.bio === user.slackTitle)
+        return { bio: title, slackTitle: title };
+
+    return null;
+}
 
 function createConsentToken(data: ConsentJwt) {
     return jwt.sign(data, env.JWT_CONSENT_TOKENS, { expiresIn: "60s" });
@@ -346,6 +362,8 @@ export default os.router({
             }
 
             // We update the user's profile picture on each login, not just when they register.
+            const slackTitle = (slack?.profile.title ?? "").slice(0, MAX_BIO_LENGTH);
+
             const pfp = slack?.profile.image_512 ??
                 slack?.profile.image_192 ??
                 slack?.profile.image_original ??
@@ -396,7 +414,8 @@ export default os.router({
                         handle: handle,
                         displayName: ((slack?.profile.display_name || slack?.profile.real_name) || baseHandle).slice(0, 24) || "User",
                         profilePictureUrl: pfp,
-                        bio: (slack?.profile.title ?? "").slice(0, MAX_BIO_LENGTH),
+                        bio: slackTitle,
+                        slackTitle: slack ? slackTitle : null,
                         urls: [],
                         permissionLevel: "USER"
                     },
@@ -413,7 +432,9 @@ export default os.router({
                         hackatimeAccessToken: tokenData.access_token,
                         hackatimeRefreshToken: tokenData.refresh_token,
                         slackId: hktUser.slack_id || undefined,
-                        profilePictureUrl: pfp != env.DEFAULT_PFP_URL ? pfp : undefined
+                        profilePictureUrl: pfp != env.DEFAULT_PFP_URL ? pfp : undefined,
+                        // Only with a Slack profile in hand - a failed lookup isn't an empty title.
+                        ...(slack ? bioFromSlack(dbUser, slackTitle) : null)
                     }
                 });
             }
