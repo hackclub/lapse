@@ -38,9 +38,6 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     pnpm --filter @hackclub/lapse-jobs run build && \
     pnpm --filter @hackclub/lapse-server run build
 
-# Apply database migrations
-RUN cd apps/server && npx prisma migrate deploy
-
 ############################  runner  ############################
 FROM base AS runner
 WORKDIR /app
@@ -78,4 +75,5 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
 EXPOSE 8080
 
-CMD ["node", "apps/server/dist/app.js"]
+# Migrations run at start, not build: the build has no database to reach.
+CMD ["sh", "-c", "cd apps/server && ./node_modules/.bin/prisma migrate deploy && cd /app && exec node apps/server/dist/app.js"]
