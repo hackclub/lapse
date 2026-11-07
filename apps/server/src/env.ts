@@ -122,6 +122,23 @@ export const env = {
     get HACKATIME_RATE_LIMIT_BYPASS() { return optional("HACKATIME_RATE_LIMIT_BYPASS") },
 
     /**
+     * An Airtable personal access token for the daily Loops user sync (`airtableSync.ts`). Needs the
+     * `data.records:read` and `data.records:write` scopes on the sync base. The sync is off unless this,
+     * `AIRTABLE_SYNC_BASE_ID` and `AIRTABLE_SYNC_TABLE_ID` are all set.
+     */
+    get AIRTABLE_SYNC_TOKEN() { return optional("AIRTABLE_SYNC_TOKEN") },
+
+    /**
+     * The Airtable base ID (e.g. "appUimr7Lxb0Y3AoW") the user sync writes to.
+     */
+    get AIRTABLE_SYNC_BASE_ID() { return optional("AIRTABLE_SYNC_BASE_ID") },
+
+    /**
+     * The Airtable table ID (e.g. "tblNaGgcF3sf9Qiz9") the user sync writes to.
+     */
+    get AIRTABLE_SYNC_TABLE_ID() { return optional("AIRTABLE_SYNC_TABLE_ID") },
+
+    /**
      * The Slack bot token used to fetch user profile information.
      */
     get SLACK_BOT_TOKEN() { return required("SLACK_BOT_TOKEN") },

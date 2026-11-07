@@ -27,7 +27,7 @@ Responses:
 - `200 {request_id, found, dry_run, deleted: {model: rows}, retained: [{type, count, reason}]}`. Once someone is deleted, later calls answer `found: false`.
 - `401 {error}` for a bad token, `400 action_mismatch`, `409 replayed`
 - `409 manual_review_required` when the account created program keys or reviewed OAuth apps. Those belong to staff and back integrations other people rely on, so a human decides what happens to them first. Also when Lookout still has one of their sessions but refuses to delete it for our key (a session created before Lapse had its own program key, or a Lookout that predates deletion).
-- `503` when the hub's JWKS, S3, or Lookout can't be reached. The hub retries these.
+- `503` when the hub's JWKS, Airtable, S3, or Lookout can't be reached. The hub retries these.
 
 ## Who is matched
 
@@ -46,6 +46,7 @@ Users whose `email` matches one of the subject's emails (case-insensitively) or 
   - legacy session and thumbnail keys
   - everything under `timelapses/<timelapseId>/` in the public bucket
 - **Lookout sessions** behind their Lookout drafts and Lookout-recorded timelapses, also before the transaction. Lookout has no accounts, so these can only be found through us. `DELETE /api/internal/sessions/:id` hides each session immediately and Lookout destroys its captures and video an hour later. During that hour a Lookout admin can undo it with `POST /api/internal/sessions/:id/restore` if an erasure was a mistake. Repeating the call (on a retry) doesn't extend the hour.
+- **Airtable rows** in the Loops user table (`apps/server/src/airtableSync.ts`) for the subject's emails and the matched users' emails. These go before anything else, so if Airtable can't be reached the call fails with `503 airtable_unavailable` and nothing has changed. The daily sync also deletes any row whose email no longer belongs to an account, which catches a sync that was mid-flight during the erasure.
 - **Queued encodes**: realize jobs for their timelapses that haven't started are removed from Redis, along with the draft passkey they carry. A job that is already running finishes, and the completion handler deletes its output when it finds the timelapse gone.
 
 A dry run performs the same deletion inside a transaction and rolls it back, so the counts the reviewer approves are the counts that get executed. S3 objects are listed and Lookout sessions counted, but neither is touched.

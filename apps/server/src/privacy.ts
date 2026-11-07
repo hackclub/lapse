@@ -1,6 +1,7 @@
 import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import type { FastifyInstance } from "fastify";
 
+import { deleteAirtableRowsForEmails } from "@/airtableSync.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import type * as db from "@/generated/prisma/client.js";
@@ -120,6 +121,17 @@ export async function eraseSubject(subject: PrivacySubject, dryRun: boolean): Pr
     const lookoutSessions = lookoutSessionIds(owned);
     const retained = await retainedRecords(userIds, owned);
 
+    // Before anything irreversible, so an Airtable outage leaves everything untouched for the retry. If a later step
+    // fails instead, the account survives and the next daily sync simply puts its row back.
+    const emails = [...subject.emails, ...users.map(user => user.email)];
+    let airtableRows: number;
+    try {
+        airtableRows = await deleteAirtableRowsForEmails(emails, dryRun);
+    }
+    catch {
+        throw new PrivacyError(503, "airtable_unavailable");
+    }
+
     if (!dryRun) {
         await deleteObjects(objects);
         await deleteLookoutSessions(lookoutSessions);
@@ -138,10 +150,13 @@ export async function eraseSubject(subject: PrivacySubject, dryRun: boolean): Pr
     if (lookoutSessions.length > 0)
         deleted["Lookout sessions"] = lookoutSessions.length;
 
+    if (airtableRows > 0)
+        deleted["Airtable rows"] = airtableRows;
+
     return { found: true, deleted, retained };
 }
 
-async function matchingUsers(subject: PrivacySubject): Promise<{ id: string }[]> {
+async function matchingUsers(subject: PrivacySubject): Promise<{ id: string; email: string }[]> {
     const conditions: db.Prisma.UserWhereInput[] = subject.emails.map(email => ({ email: { equals: email, mode: "insensitive" } }));
     if (subject.slackId)
         conditions.push({ slackId: subject.slackId });
@@ -150,7 +165,7 @@ async function matchingUsers(subject: PrivacySubject): Promise<{ id: string }[]>
     if (conditions.length === 0)
         return [];
 
-    return await database().user.findMany({ where: { OR: conditions }, select: { id: true } });
+    return await database().user.findMany({ where: { OR: conditions }, select: { id: true, email: true } });
 }
 
 type OwnedRecords = Awaited<ReturnType<typeof ownedRecords>>;
