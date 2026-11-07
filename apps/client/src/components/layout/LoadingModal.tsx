@@ -1,6 +1,7 @@
 import Icon from "@hackclub/icons";
 
 import { Modal, ModalHeader } from "@/components/layout/Modal";
+import { Morph } from "@/components/ui/Morph";
 
 export function LoadingModal({ isOpen, title = "Processing...", message, progress, className }: {
   isOpen: boolean;
@@ -14,7 +15,7 @@ export function LoadingModal({ isOpen, title = "Processing...", message, progres
       <ModalHeader icon="clock-fill" title={title}>
         <div className="flex flex-col gap-4 w-full">
           { message && (
-            <p className="text-sm text-muted">{message}</p>
+            <p className="text-sm text-muted"><Morph>{message}</Morph></p>
           ) }
 
           <div className="flex items-center gap-2 mb-4 w-full">

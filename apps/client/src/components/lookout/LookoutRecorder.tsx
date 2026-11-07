@@ -43,6 +43,7 @@ function formatTrackedTime(totalSeconds: number): string {
 import RecordIcon from "@/assets/icons/record.svg";
 import PauseIcon from "@/assets/icons/pause.svg";
 import StopIcon from "@/assets/icons/stop.svg";
+import { Morph } from "@/components/ui/Morph";
 
 interface LookoutSessionConfig {
   draftId: string;
@@ -120,7 +121,7 @@ function TimePill({ formattedTime, isRecording, displaySeconds }: {
             isRecording ? "bg-red animate-blink" : "bg-secondary"
           )}
         />
-        <span>{formattedTime}</span>
+        <Morph>{formattedTime}</Morph>
         {isRecording && (
           <div
             className="absolute bottom-1 left-8 right-8 h-1 rounded-full bg-white/10 overflow-hidden"

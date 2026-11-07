@@ -435,6 +435,7 @@ export default function Page() {
                         onClick={() => context.hackatimeRestricted ? publish() : setStep("hackatime")}
                         disabled={!visibility || isPublishing}
                         kind="primary"
+                        morph={false}
                         className="w-full !h-10"
                     >
                         {
@@ -486,6 +487,7 @@ export default function Page() {
                             onClick={publish}
                             disabled={isLoadingHackatime || isPublishing}
                             kind="primary"
+                            morph={false}
                             className="w-full !h-10"
                         >
                             {

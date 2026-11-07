@@ -326,6 +326,7 @@ export default function Page() {
                         onClick={handleVisibilitySelect}
                         disabled={!visibility || isPublishing || isDiscarding}
                         kind="primary"
+                        morph={false}
                         className="w-full"
                       >
                         {
@@ -373,6 +374,7 @@ export default function Page() {
                         onClick={() => publish(hackatimeProject)}
                         disabled={isLoadingHackatime || isPublishing}
                         kind="primary"
+                        morph={false}
                         className="w-full"
                       >
                         {

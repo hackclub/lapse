@@ -4,6 +4,7 @@ import Icon from "@hackclub/icons";
 
 import type { IconGlyph } from "@/common";
 import { navigateTo } from "@/navigation";
+import { Morph } from "@/components/ui/Morph";
 import { useRouter } from "next/router";
 
 export type ButtonKind =
@@ -12,7 +13,7 @@ export type ButtonKind =
   "destructive" |
   "error";
 
-export function Button({ children, kind, disabled, onClick, href, className, icon, title }: PropsWithChildren<
+export function Button({ children, kind, disabled, onClick, href, className, icon, title, morph = true }: PropsWithChildren<
   {
     kind?: ButtonKind,
     disabled?: boolean,
@@ -20,7 +21,10 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
     icon?: IconGlyph | JSX.Element,
 
     /** A tooltip for the button. Doubles as the accessible name for buttons that are nothing but an icon. */
-    title?: string
+    title?: string,
+
+    /** Whether a plain-text label animates when it changes. On by default. */
+    morph?: boolean
   } & (
     { href?: undefined, onClick: () => void } |
     { href: string, onClick?: undefined }
@@ -75,7 +79,7 @@ export function Button({ children, kind, disabled, onClick, href, className, ico
             : icon
         )
       }
-      {children}
+      {morph && typeof children === "string" ? <Morph>{children}</Morph> : children}
     </button>
   );
 }
