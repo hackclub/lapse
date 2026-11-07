@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import NextImage from "next/image";
 import { useState } from "react";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 import { type Timelapse, type User, type PublicUser, DraftTimelapse } from "@hackclub/lapse-api";
 import { assert, validateUrl, matchOrDefault, descending } from "@hackclub/lapse-shared";
 
@@ -16,13 +17,13 @@ import RootLayout from "@/components/layout/RootLayout";
 import { ProfilePicture } from "@/components/entity/ProfilePicture";
 
 import { Button } from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { TextInput } from "@/components/ui/TextInput";
 import { ErrorModal } from "@/components/layout/ErrorModal";
 import { NOT_FOUND_STATUS, PageStatus, SERVER_ERROR_STATUS, StatusPage, statusForApiError } from "@/components/layout/StatusPage";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 import { WindowedModal } from "@/components/layout/WindowedModal";
 import { TextareaInput } from "@/components/ui/TextareaInput";
+import { SAMPLE_TIMELAPSES, SAMPLE_USER } from "@/samples";
 
 export default function Page() {
   const router = useRouter();
@@ -167,87 +168,91 @@ export default function Page() {
   return (
     <RootLayout showHeader={true} title={user ? `${user.displayName} (@${user.handle}) - Lapse` : "Lapse"}>
       <div className="px-8 py-8 md:py-0 sm:px-16">
-        <div className="flex flex-col gap-6 md:gap-0 md:flex-row justify-between items-center md:px-16">
-          <div className="flex flex-col md:flex-row gap-4 md:gap-8 w-full md:w-auto">
-            <ProfilePicture
-              user={user}
-              size="lg"
-              className="w-24 h-24 text-2xl"
-            />
+        <Skeleton data={user} sample={SAMPLE_USER} label="Loading profile">
+          {u => (
+            <div className="flex flex-col gap-6 md:gap-0 md:flex-row justify-between items-center md:px-16">
+              <div className="flex flex-col md:flex-row gap-4 md:gap-8 w-full md:w-auto">
+                <ProfilePicture
+                  user={u}
+                  size="lg"
+                  className="w-24 h-24 text-2xl"
+                />
 
-            <div className="flex flex-col">
-              <h1 className="text-4xl font-bold wrap-break-word">{ user ? user.displayName : <Skeleton className="w-48" /> }</h1>
-              <p className="text-secondary text-lg m-0">{ user ? `@${user.handle}` : <Skeleton className="w-32 h-3!" /> }</p>
+                <div className="flex flex-col">
+                  <h1 className="text-4xl font-bold wrap-break-word">{u.displayName}</h1>
+                  <p className="text-secondary text-lg m-0">@{u.handle}</p>
 
-              { user?.bio && user.bio.trim().length > 0 && (
-                <p className="text-smoke text-lg leading-relaxed mb-4 max-w-2xl mt-2">
-                  { markdownToJsx(user.bio) }
-                </p>
-              ) }
+                  { u.bio.trim().length > 0 && (
+                    <p className="text-smoke text-lg leading-relaxed mb-4 max-w-2xl mt-2">
+                      { markdownToJsx(u.bio) }
+                    </p>
+                  ) }
 
-              <div className="flex flex-col text-muted">
-                <div className="flex items-center gap-2">
-                  <Icon glyph="clock" size={16} />
-                  <span>{ user ? `Joined ${formatJoinDate(user.createdAt)}` : <Skeleton className="w-64 h-3!" /> }</span>
-                </div>
+                  <div className="flex flex-col text-muted">
+                    <div className="flex items-center gap-2">
+                      <Icon glyph="clock" size={16} />
+                      <span>Joined {formatJoinDate(u.createdAt)}</span>
+                    </div>
 
-                { (user?.urls ?? []).length > 0 && (
-                  user!.urls.map(url => (
-                    <div key={url} className="flex items-center gap-2">
-                      <Icon
-                         size={16}
-                         glyph={
-                           matchOrDefault(new URL(url).hostname, {
-                             "x.com": "twitter", // seriously?
-                             "twitter.com": "twitter",
-                             "twitch.tv": "twitch",
-                             "github.com": "github",
-                             "messenger.com": "messenger-fill",
-                             "instagram.com": "instagram",
-                             "hackclub.slack.com": "slack-fill",
-                             "medium.com": "medium-fill",
-                             "facebook.com": "facebook",
-                             "youtube.com": "youtube",
-                             "youtu.be": "youtube"
-                           }) ?? "link"
-                         }
-                       />
+                    { u.urls.length > 0 && (
+                      u.urls.map(url => (
+                        <div key={url} className="flex items-center gap-2">
+                          <Icon
+                             size={16}
+                             glyph={
+                               matchOrDefault(new URL(url).hostname, {
+                                 "x.com": "twitter", // seriously?
+                                 "twitter.com": "twitter",
+                                 "twitch.tv": "twitch",
+                                 "github.com": "github",
+                                 "messenger.com": "messenger-fill",
+                                 "instagram.com": "instagram",
+                                 "hackclub.slack.com": "slack-fill",
+                                 "medium.com": "medium-fill",
+                                 "facebook.com": "facebook",
+                                 "youtube.com": "youtube",
+                                 "youtu.be": "youtube"
+                               }) ?? "link"
+                             }
+                           />
 
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-cyan hover:underline"
-                      >
-                        {new URL(url).hostname}{new URL(url).pathname}
-                      </a>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan hover:underline"
+                          >
+                            {new URL(url).hostname}{new URL(url).pathname}
+                          </a>
+                      </div>
+                      ))
+                    )}
                   </div>
-                  ))
-                )}
+                </div>
+              </div>
+
+              <div className="flex flex-col min-[950px]:flex-row gap-2 md:gap-4 w-full md:w-auto">
+                { adminView.isAdmin && (
+                  <Button icon="admin" href={`/admin/user/${u.id}`}>
+                    Admin profile
+                  </Button>
+                ) }
+
+                { u.slackId && (
+                  <Button icon="slack-fill" onClick={() => window.open(`https://hackclub.slack.com/team/${u.slackId}`, "_blank")}>
+                    Open in Slack
+                  </Button>
+                ) }
+
+                { isMyself && (
+                  <Button icon="edit" onClick={handleEditProfile}>
+                    Edit Profile
+                  </Button>
+                ) }
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-col min-[950px]:flex-row gap-2 md:gap-4 w-full md:w-auto">
-            { user && adminView.isAdmin && (
-              <Button icon="admin" href={`/admin/user/${user.id}`}>
-                Admin profile
-              </Button>
-            ) }
-
-            { user && user.slackId && (
-              <Button icon="slack-fill" onClick={() => window.open(`https://hackclub.slack.com/team/${user.slackId}`, "_blank")}>
-                Open in Slack
-              </Button>
-            ) }
-
-            { isMyself && (
-              <Button icon="edit" onClick={handleEditProfile}>
-                Edit Profile
-              </Button>
-            ) }
-          </div>
-        </div>
+          )}
+        </Skeleton>
 
         {
           (drafts && drafts.length > 0) && (
@@ -272,9 +277,8 @@ export default function Page() {
           )
         }
 
-        {
-          // `timelapses` is null until the request lands, so an empty profile doesn't flash this while loading.
-          (timelapses && timelapses.length === 0) ? (
+        <Skeleton data={timelapses} sample={SAMPLE_TIMELAPSES} label="Loading timelapses">
+          {list => list.length === 0 ? (
             // Sized to what's left of the viewport under the profile header, so the notice sits in the middle of
             // the empty space rather than right below the bio.
             <div className="flex flex-col items-center justify-center gap-4 py-16 px-0 sm:px-16 min-h-[50vh] sm:min-h-[calc(100vh-24rem)]">
@@ -302,9 +306,9 @@ export default function Page() {
               )}
             </div>
           ) : (
-            <TimelapseGrid timelapses={timelapses ?? []} className="gap-y-16 py-16 px-0 sm:px-16" />
-          )
-        }
+            <TimelapseGrid timelapses={list} className="gap-y-16 py-16 px-0 sm:px-16" />
+          )}
+        </Skeleton>
       </div>
 
       <WindowedModal

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { User } from "@hackclub/lapse-api";
+import { forgetShapes } from "skullet";
 
 import { api } from "@/api";
 import { SESSIONS_KEY } from "@/components/lookout/sessions";
@@ -43,6 +44,10 @@ function forgetLocalSession() {
     if (key.startsWith("lapse:"))
       sessionStorage.removeItem(key);
   }
+
+  // Skeleton shapes outlive the session in localStorage, and would show the next person on this device the outline
+  // of the last one's pages.
+  forgetShapes();
 }
 
 export function AuthProvider({ children }: {

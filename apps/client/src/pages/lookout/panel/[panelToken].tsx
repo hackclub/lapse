@@ -294,6 +294,11 @@ export default function Page() {
                 --placeholder: #8492a6;
                 --secondary: #5f6f83;
 
+                /* The provider pins Skullet to dark, so the Hackatime picker's
+                   skeleton needs light colours spelled out here, too. */
+                --skullet-base: rgb(0 0 0 / 0.07);
+                --skullet-highlight: rgb(255 255 255 / 0.6);
+
                 /* Spelled out rather than left to the --color-x: var(--x)
                    aliases in the theme. A var() in a custom property is
                    substituted where it is DECLARED, so those aliases resolved

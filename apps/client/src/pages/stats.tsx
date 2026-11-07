@@ -1,16 +1,17 @@
 import NextImage from "next/image";
 import clsx from "clsx";
 import type { ReactNode } from "react";
+import { Skeleton } from "skullet/react";
 import type { GlobalStats } from "@hackclub/lapse-api";
 import { formatDuration } from "@hackclub/lapse-shared";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Footer } from "@/components/layout/Footer";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { TimeAgo } from "@/components/TimeAgo";
 
 import { api } from "@/api";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
+import { SAMPLE_STATS } from "@/samples";
 
 const numberFormat = new Intl.NumberFormat("en-US");
 const hoursFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
@@ -86,7 +87,7 @@ function WeeklyChart({ weeks }: { weeks: GlobalStats["weekly"] }) {
         <span className="text-muted">Published timelapses over the last {weeks.length} weeks</span>
       </div>
 
-      <div className="flex items-end gap-1 sm:gap-2 h-56">
+      <div skullet-block="" className="flex items-end gap-1 sm:gap-2 h-56">
         {
           weeks.map(x => (
             <div
@@ -139,104 +140,93 @@ export default function Stats() {
 
         <div className="flex flex-col gap-2">
           <h1 className="text-4xl font-bold tracking-tight">Lapse in numbers</h1>
-          <p className="text-xl text-pretty">
-            {
-              stats
-                ? <>Hack Clubbers have recorded <b>{hours(stats.time.totalSeconds)} hours</b> of work with Lapse so far.</>
-                : <>Counting up every timelapse recorded with Lapse...</>
-            }
-          </p>
+          <Skeleton id="stats-summary" data={stats} sample={SAMPLE_STATS} label="Counting up every timelapse recorded with Lapse">
+            {x => (
+              <p className="text-xl text-pretty">
+                Hack Clubbers have recorded <b>{hours(x.time.totalSeconds)} hours</b> of work with Lapse so far.
+              </p>
+            )}
+          </Skeleton>
         </div>
       </section>
 
       <div className="flex flex-col gap-6 px-12 sm:px-16 md:px-24 lg:px-32 py-8">
-        {
-          stats ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                <StatCard
-                  label="Hours logged"
-                  value={hours(stats.time.totalSeconds)}
-                  detail={`${hours(stats.time.thisWeekSeconds)} in the past 7 days`}
-                />
+        <Skeleton id="stats" data={stats} sample={SAMPLE_STATS} label="Loading stats">
+          {x => (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                    <StatCard
+                      label="Hours logged"
+                      value={hours(x.time.totalSeconds)}
+                      detail={`${hours(x.time.thisWeekSeconds)} in the past 7 days`}
+                    />
 
-                <StatCard
-                  label="Recordings started"
-                  value={numberFormat.format(stats.recordings.started)}
-                  detail={`${numberFormat.format(stats.recordings.drafts)} still being worked on`}
-                />
+                    <StatCard
+                      label="Recordings started"
+                      value={numberFormat.format(x.recordings.started)}
+                      detail={`${numberFormat.format(x.recordings.drafts)} still being worked on`}
+                    />
 
-                <StatCard
-                  label="Timelapses published"
-                  value={numberFormat.format(stats.timelapses.published)}
-                  detail={`${numberFormat.format(stats.timelapses.hackatimeSynced)} synced to Hackatime`}
-                />
+                    <StatCard
+                      label="Timelapses published"
+                      value={numberFormat.format(x.timelapses.published)}
+                      detail={`${numberFormat.format(x.timelapses.hackatimeSynced)} synced to Hackatime`}
+                    />
 
-                <StatCard
-                  label="Hack Clubbers"
-                  value={numberFormat.format(stats.users.total)}
-                  detail={`${numberFormat.format(stats.users.creators)} have published · ${numberFormat.format(stats.users.newThisWeek)} joined this week`}
-                />
+                    <StatCard
+                      label="Hack Clubbers"
+                      value={numberFormat.format(x.users.total)}
+                      detail={`${numberFormat.format(x.users.creators)} have published · ${numberFormat.format(x.users.newThisWeek)} joined this week`}
+                    />
 
-                <StatCard
-                  label="Average timelapse"
-                  value={formatDuration(Math.round(stats.time.averageTimelapseSeconds / 60) * 60)}
-                />
+                    <StatCard
+                      label="Average timelapse"
+                      value={formatDuration(Math.round(x.time.averageTimelapseSeconds / 60) * 60)}
+                    />
 
-                <StatCard
-                  label="Longest timelapse"
-                  value={formatDuration(Math.round(stats.time.longestTimelapseSeconds / 60) * 60)}
-                />
+                    <StatCard
+                      label="Longest timelapse"
+                      value={formatDuration(Math.round(x.time.longestTimelapseSeconds / 60) * 60)}
+                    />
 
-                <StatCard
-                  label="Comments"
-                  value={numberFormat.format(stats.comments)}
-                />
+                    <StatCard
+                      label="Comments"
+                      value={numberFormat.format(x.comments)}
+                    />
 
-                <StatCard
-                  label="Hours per Hack Clubber"
-                  value={hours(stats.users.creators == 0 ? 0 : stats.time.totalSeconds / stats.users.creators)}
-                  detail="Among those who have published"
-                />
-              </div>
-
-              <WeeklyChart weeks={stats.weekly} />
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <SplitBar
-                  title="Public vs. unlisted"
-                  segments={[
-                    { label: "Public", value: stats.timelapses.public, className: "bg-green" },
-                    { label: "Unlisted", value: stats.timelapses.unlisted, className: "bg-muted" }
-                  ]}
-                />
-
-                <SplitBar
-                  title="Where timelapses are recorded"
-                  segments={[
-                    { label: "Browser", value: stats.timelapses.browser, className: "bg-blue" },
-                    { label: "Desktop app", value: stats.timelapses.lookout, className: "bg-orange" }
-                  ]}
-                />
-              </div>
-
-              <p className="text-muted text-center">
-                Updated <TimeAgo date={stats.generatedAt} />.
-              </p>
-            </>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-              {
-                Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="rounded-2xl border border-slate bg-dark px-6 py-5 flex flex-col gap-3">
-                    <Skeleton className="w-1/2" />
-                    <Skeleton className="w-3/4 h-8!" />
+                    <StatCard
+                      label="Hours per Hack Clubber"
+                      value={hours(x.users.creators == 0 ? 0 : x.time.totalSeconds / x.users.creators)}
+                      detail="Among those who have published"
+                    />
                   </div>
-                ))
-              }
-            </div>
-          )
-        }
+
+                  <WeeklyChart weeks={x.weekly} />
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <SplitBar
+                      title="Public vs. unlisted"
+                      segments={[
+                        { label: "Public", value: x.timelapses.public, className: "bg-green" },
+                        { label: "Unlisted", value: x.timelapses.unlisted, className: "bg-muted" }
+                      ]}
+                    />
+
+                    <SplitBar
+                      title="Where timelapses are recorded"
+                      segments={[
+                        { label: "Browser", value: x.timelapses.browser, className: "bg-blue" },
+                        { label: "Desktop app", value: x.timelapses.lookout, className: "bg-orange" }
+                      ]}
+                    />
+                  </div>
+
+                  <p className="text-muted text-center">
+                    Updated <TimeAgo date={x.generatedAt} />.
+                  </p>
+                </>
+          )}
+        </Skeleton>
 
         <Footer />
       </div>

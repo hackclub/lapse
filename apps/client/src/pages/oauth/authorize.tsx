@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
+import { Skeleton } from "skullet/react";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +19,14 @@ type AppInfo = {
   iconUrl: string;
   trustLevel: "TRUSTED" | "UNTRUSTED";
   scopes: string[];
+};
+
+const SAMPLE_APP_INFO: AppInfo = {
+  name: "Example App",
+  description: "",
+  iconUrl: "",
+  trustLevel: "TRUSTED",
+  scopes: []
 };
 
 const SILLY_SCOPES = [
@@ -107,6 +116,7 @@ export default function OAuthAuthorize() {
   }, [requestedScopes, sillyScope]);
 
   const hasWriteScopes = requestedScopes.some(x => x.endsWith(":write"));
+  const info = appInfo ?? SAMPLE_APP_INFO;
 
   async function respond(consent: boolean) {
     if (!appInfo || !clientId)
@@ -146,88 +156,84 @@ export default function OAuthAuthorize() {
     <RootLayout showHeader={false} title={`Authorize ${appInfo?.name ?? "Service"} - Lapse`}>
       <div className="h-full w-full flex justify-center items-center p-8 sm:p-12">
         <div className="w-full max-w-2xl rounded-3xl border border-black shadow-lg p-8 sm:p-10 flex flex-col gap-6">
-          {isLoading && (
-            <div className="text-center text-muted">
-              Preparing authorization...
-            </div>
-          )}
-
-          {!isLoading && error && (
-            <div className="text-center text-red-400">{error}</div>
-          )}
-
-          {!isLoading && !error && appInfo && (
-            <>
-              <div className="flex flex-col text-center">
-                <h1 className="text-3xl font-bold">{appInfo.name}</h1>
-                <p className="text-lg text-muted">
-                  wants access to your Lapse account
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate bg-dark p-6 flex flex-col gap-4">
-                {Object.keys(groupedScopes).length === 0 && (
-                  <p className="text-sm text-muted">
-                    no scopes were requested. nothing to see here!
-                  </p>
-                )}
-
-                {Object.entries(groupedScopes).map(([group, items]) => (
-                  <div key={group} className="flex flex-col gap-1">
-                    <h2 className="text-lg font-semibold">{group}</h2>
-                    <ul className="flex flex-col gap-1">
-                      {items.map((item) => (
-                        <li key={item.scope} className="text-sm text-muted flex gap-2">
-                          <span>&bull;</span> <span>{item.description}</span>
-                        </li>
-                      ))}
-                    </ul>
+          <Skeleton loading={isLoading} label="Preparing authorization">
+            {
+              error ? (
+                <div className="text-center text-red-400">{error}</div>
+              ) : (appInfo || isLoading) && (
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col text-center">
+                    <h1 className="text-3xl font-bold">{info.name}</h1>
+                    <p className="text-lg text-muted">
+                      wants access to your Lapse account
+                    </p>
                   </div>
-                ))}
-              </div>
 
-              {appInfo.trustLevel === "UNTRUSTED" && (
-                <Alert icon="important-fill" variant="warning">
-                  <p className="font-semibold text-lg">Community app</p>
-                  <p>
-                    Granting access lets this app act as you. Only proceed if
-                    you trust the developer.
-                  </p>
+                  <div className="rounded-2xl border border-slate bg-dark p-6 flex flex-col gap-4">
+                    {Object.keys(groupedScopes).length === 0 && (
+                      <p className="text-sm text-muted">
+                        no scopes were requested. nothing to see here!
+                      </p>
+                    )}
 
-                  { hasWriteScopes && <p>This app requests <b>write access</b> to your data.</p> }
-                </Alert>
-              )}
+                    {Object.entries(groupedScopes).map(([group, items]) => (
+                      <div key={group} className="flex flex-col gap-1">
+                        <h2 className="text-lg font-semibold">{group}</h2>
+                        <ul className="flex flex-col gap-1">
+                          {items.map((item) => (
+                            <li key={item.scope} className="text-sm text-muted flex gap-2">
+                              <span>&bull;</span> <span>{item.description}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
 
-              {appInfo.trustLevel === "UNTRUSTED" && (
-                <div className="flex flex-col gap-2">
-                  <label className="text-muted">Type <b>{appInfo.name}</b> to confirm.</label>
-                  <TextInput type="text" value={typedName} onChange={setTypedName} />
+                  {info.trustLevel === "UNTRUSTED" && (
+                    <Alert icon="important-fill" variant="warning">
+                      <p className="font-semibold text-lg">Community app</p>
+                      <p>
+                        Granting access lets this app act as you. Only proceed if
+                        you trust the developer.
+                      </p>
+
+                      { hasWriteScopes && <p>This app requests <b>write access</b> to your data.</p> }
+                    </Alert>
+                  )}
+
+                  {info.trustLevel === "UNTRUSTED" && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-muted">Type <b>{info.name}</b> to confirm.</label>
+                      <TextInput type="text" value={typedName} onChange={setTypedName} />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      kind="regular"
+                      onClick={() => respond(false)}
+                      className="flex-1"
+                    >
+                      Deny
+                    </Button>
+
+                    <Button
+                      kind="primary"
+                      onClick={() => respond(true)}
+                      className="flex-1"
+                      disabled={
+                        info.trustLevel === "UNTRUSTED" &&
+                        typedName.trim() !== info.name
+                      }
+                    >
+                      Allow
+                    </Button>
+                  </div>
                 </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button
-                  kind="regular"
-                  onClick={() => respond(false)}
-                  className="flex-1"
-                >
-                  Deny
-                </Button>
-
-                <Button
-                  kind="primary"
-                  onClick={() => respond(true)}
-                  className="flex-1"
-                  disabled={
-                    appInfo.trustLevel === "UNTRUSTED" &&
-                    typedName.trim() !== appInfo.name
-                  }
-                >
-                  Allow
-                </Button>
-              </div>
-            </>
-          )}
+              )
+            }
+          </Skeleton>
         </div>
       </div>
     </RootLayout>

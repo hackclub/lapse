@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import type { AppType } from "next/app";
+import { SkulletProvider } from "skullet/react";
+import type { SkulletTheme } from "skullet";
 
 import "@/styles/globals.css";
 import { AuthProvider } from "@/context/AuthContext";
@@ -12,6 +14,16 @@ import { DeviceStorage } from "@/deviceStorage";
 import { api } from "@/api";
 
 initLogBucket();
+
+// Lapse only has a dark theme, so only dark colours are given. Skullet's default highlight sits barely above its
+// base, which on `--color-dark` reads as a static grey block - this one is bright enough for the sweep to be seen.
+const SKELETON_THEME: SkulletTheme = {
+  dark: { base: "rgb(255 255 255 / 0.07)", highlight: "rgb(255 255 255 / 0.22)" },
+  animation: "shimmer",
+  speed: "fast",
+  radius: "6px",
+  text: { top: "ascender", bottom: "descender" }
+};
 
 const App: AppType = ({ Component, pageProps }) => {
   const router = useRouter();
@@ -78,13 +90,15 @@ const App: AppType = ({ Component, pageProps }) => {
   }, [router]);
 
   return (
-    <AuthProvider>
-      <MaintenanceProvider>
-        <KeyRelayProvider>
-          <Component {...pageProps} />
-        </KeyRelayProvider>
-      </MaintenanceProvider>
-    </AuthProvider>
+    <SkulletProvider mode="dark" theme={SKELETON_THEME} reveal="sweep">
+      <AuthProvider>
+        <MaintenanceProvider>
+          <KeyRelayProvider>
+            <Component {...pageProps} />
+          </KeyRelayProvider>
+        </MaintenanceProvider>
+      </AuthProvider>
+    </SkulletProvider>
   );
 };
 

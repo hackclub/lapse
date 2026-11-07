@@ -3,6 +3,7 @@ import NextImage from "next/image";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
+import { Skeleton } from "skullet/react";
 import { descending, formatDuration } from "@hackclub/lapse-shared";
 
 import { Footer } from "@/components/layout/Footer";
@@ -15,6 +16,33 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
 import RootLayout from "@/components/layout/RootLayout";
+import { SAMPLE_LEADERBOARD, SAMPLE_RECENT } from "@/samples";
+
+// The real list shows up to five projects, so the first skeleton does too.
+const SAMPLE_TOP_PROJECTS = [
+  { name: "lapse", time: "40h 12m", percentage: 1 },
+  { name: "my-cool-website", time: "12h 5m", percentage: 0.3 },
+  { name: "macropad", time: "6h 40m", percentage: 0.16 },
+  { name: "dotfiles", time: "2h 10m", percentage: 0.05 },
+  { name: "weekend-hackathon", time: "1h 2m", percentage: 0.03 }
+];
+
+function ShelfHeader({ title, description, icon }: {
+  title: string,
+  description: string,
+  icon: string
+}) {
+  return (
+    <div className="flex items-center gap-4 w-full h-min">
+      <img src={icon} alt="" className="block w-14 h-14" />
+
+      <div className="flex flex-col">
+        <h1 className="font-bold text-3xl">{title}</h1>
+        <p className="text-lg sm:text-xl">{description}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
@@ -29,7 +57,9 @@ export default function Home() {
     name: string,
     time: string,
     percentage: number // [0.0, 1.0], relative to top project. topUserProjects[0].percentage is always 1.0
-  }[]>([]);
+  }[] | null>(null);
+
+  const isAuthUnknown = auth.isLoading && !auth.currentUser;
 
   // Legacy recordings (unfinished OPFS captures or unpublished drafts) can no longer be recorded, only recovered.
   // The site-wide banner (see RootLayout) nudges the user to `/timelapse/recover` whenever they have any.
@@ -39,9 +69,20 @@ export default function Home() {
       if (!auth.currentUser)
         return;
 
-      const res = await api.user.hackatimeProjects({});
+      // Anything short of a list leaves the bars' skeleton up for good, so a failure has to settle on an empty one.
+      let res: Awaited<ReturnType<typeof api.user.hackatimeProjects>>;
+      try {
+        res = await api.user.hackatimeProjects({});
+      }
+      catch (err) {
+        console.error("(index.tsx) Could not fetch the user's Hackatime projects!", err);
+        setTopUserProjects([]);
+        return;
+      }
+
       if (!res.ok) {
         console.error("(index.tsx) Could not fetch the user's Hackatime projects!", res);
+        setTopUserProjects([]);
         return;
       }
 
@@ -84,23 +125,6 @@ export default function Home() {
     }
   }, [router.query, router]);
 
-  function ShelfHeader({ title, description, icon }: {
-    title: string,
-    description: string,
-    icon: string
-  }) {
-    return (
-      <div className="flex items-center gap-4 w-full h-min">
-        <img src={icon} alt="" className="block w-14 h-14" />
-        
-        <div className="flex flex-col">
-          <h1 className="font-bold text-3xl">{title}</h1>
-          <p className="text-lg sm:text-xl">{description}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <RootLayout showHeader={true}>
       <section className={clsx(
@@ -120,123 +144,134 @@ export default function Home() {
             className="w-40 h-40"
           />
 
-          {
-            auth.currentUser ? (
-              <h1 className="text-3xl tracking-tight text-pretty">
-                Hi, <b className="sm:text-nowrap">@{auth.currentUser.displayName}</b>! <br />
-                { 
-                  (totalTime || totalTimeCache)
-                    ? (
-                      <>
-                        You've recorded a total of <br />
-                        <b className="sm:text-nowrap">{totalTime || totalTimeCache}</b> of timelapses so far.
-                      </>
-                    )
-                    : (
-                      <>
-                        You haven't recorded any timelapses so far! <br />
-                        Go change that!
-                      </>
-                    )
-                }
-              </h1>
-            ) : (
-              <h1 className="text-3xl tracking-tight">
-                Welcome to <b>Lapse</b>, Hack Club's timelapse time tracking tool!
-              </h1>
-            )
-          }
+          <Skeleton id="home-greeting" loading={isAuthUnknown}>
+            {
+              auth.currentUser ? (
+                <h1 className="text-3xl tracking-tight text-pretty">
+                  Hi, <b className="sm:text-nowrap">@{auth.currentUser.displayName}</b>! <br />
+                  { 
+                    (totalTime || totalTimeCache)
+                      ? (
+                        <>
+                          You've recorded a total of <br />
+                          <b className="sm:text-nowrap">{totalTime || totalTimeCache}</b> of timelapses so far.
+                        </>
+                      )
+                      : (
+                        <>
+                          You haven't recorded any timelapses so far! <br />
+                          Go change that!
+                        </>
+                      )
+                  }
+                </h1>
+              ) : (
+                <h1 className="text-3xl tracking-tight">
+                  Welcome to <b>Lapse</b>, Hack Club's timelapse time tracking tool!
+                </h1>
+              )
+            }
+          </Skeleton>
         </div>
 
-        <div className={clsx(
-          "w-full", // mobile
-          "md:w-1/3", // desktop
-          "flex flex-col gap-4 content-around justify-end text-right" // all
-        )}>
-          {
-            auth.currentUser ? (
-              topUserProjects.map(x => (
-                <div key={x.name} className="flex gap-2.5">
-                  <span className="tracking-tight text-nowrap">{x.name}</span>
-                  <div className="w-full bg-darkless relative rounded-2xl overflow-hidden">
-                    <div
-                      style={{ width: `${x.percentage * 100}%` }}
-                      className="bg-red text-dark absolute text-right px-4"
-                    >
-                      {x.time}
+        <Skeleton
+          id="home-projects"
+          loading={isAuthUnknown || (auth.currentUser !== null && topUserProjects === null)}
+          className={clsx(
+            "w-full", // mobile
+            "md:w-1/3" // desktop
+          )}
+        >
+          <div className="flex flex-col gap-4 content-around justify-end text-right">
+            {
+              auth.currentUser ? (
+                (topUserProjects ?? SAMPLE_TOP_PROJECTS).map(x => (
+                  <div key={x.name} className="flex gap-2.5">
+                    <span className="tracking-tight text-nowrap">{x.name}</span>
+                    <div className="w-full bg-darkless relative rounded-2xl overflow-hidden">
+                      <div
+                        style={{ width: `${x.percentage * 100}%` }}
+                        className="bg-red text-dark absolute text-right px-4"
+                      >
+                        {x.time}
+                      </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="w-full h-full flex justify-end-safe items-center">
+                  <Button href="/auth" className="px-16" kind="primary" icon="welcome">Sign in</Button>
                 </div>
-              ))
-            ) : (
-              <div className="w-full h-full flex justify-end-safe items-center">
-                <Button href="/auth" className="px-16" kind="primary" icon="welcome">Sign in</Button>
-              </div>
-            )
-          }
-        </div>
+              )
+            }
+          </div>
+        </Skeleton>
       </section>
 
       <div className="flex flex-col px-12 sm:px-16 md:px-24 lg:px-32 py-8">
-        { reqLeaderboard && reqLeaderboard.leaderboard.length != 0 && (
-          <section className="flex flex-col w-full">
-            <ShelfHeader
-              icon="/images/orpheus-cool.png"
-              title="Leaderboard"
-              description="These Hack Clubbers spent the most time documenting their work!"
-            />
+        <Skeleton id="home-leaderboard" data={reqLeaderboard} sample={SAMPLE_LEADERBOARD}>
+          {lb => lb.leaderboard.length != 0 && (
+            <section className="flex flex-col w-full">
+              <ShelfHeader
+                icon="/images/orpheus-cool.png"
+                title="Leaderboard"
+                description="These Hack Clubbers spent the most time documenting their work!"
+              />
 
-            <div className={clsx(
-              "flex-wrap py-12", // mobile
-              "sm:flex-nowrap md:py-20", // desktop
-              "flex w-full gap-y-12", // all
-              reqLeaderboard.leaderboard.length <= 2 ? "gap-32" : "justify-between"
-            )}>
-              {
-                reqLeaderboard.leaderboard.slice(0, 6).map((x, i) => (
-                  <div
-                    key={x.id}
-                    className={clsx(
-                      "flex flex-col sm:gap-1 justify-center items-center",
-                      i === 3 && "min-[583px]:max-[1000px]:hidden",
-                      i === 4 && "min-[583px]:max-[1400px]:hidden",
-                      i === 5 && "max-[1500px]:hidden",
-                    )}
-                  >
-                    <NextLink href={`/user/@${x.handle}`}>
-                      <NextImage
-                        src={x.pfp}
-                        alt=""
-                        width={120} height={120}
-                        unoptimized={!isOptimizableImage(x.pfp)}
-                        className={clsx(
-                          "w-16 h-16", // mobile
-                          "sm:w-30 sm:h-30", // desktop
-                          "block rounded-full mb-2 shadow transition-all hover:brightness-75" // all
-                        )}
-                      />
-                    </NextLink>
+              <div className={clsx(
+                "flex-wrap py-12", // mobile
+                "sm:flex-nowrap md:py-20", // desktop
+                "flex w-full gap-y-12", // all
+                lb.leaderboard.length <= 2 ? "gap-32" : "justify-between"
+              )}>
+                {
+                  lb.leaderboard.slice(0, 6).map((x, i) => (
+                    <div
+                      key={x.id}
+                      className={clsx(
+                        "flex flex-col sm:gap-1 justify-center items-center",
+                        i === 3 && "min-[583px]:max-[1000px]:hidden",
+                        i === 4 && "min-[583px]:max-[1400px]:hidden",
+                        i === 5 && "max-[1500px]:hidden",
+                      )}
+                    >
+                      <NextLink href={`/user/@${x.handle}`}>
+                        <NextImage
+                          src={x.pfp}
+                          alt=""
+                          width={120} height={120}
+                          unoptimized={!isOptimizableImage(x.pfp)}
+                          className={clsx(
+                            "w-16 h-16", // mobile
+                            "sm:w-30 sm:h-30", // desktop
+                            "block rounded-full mb-2 shadow transition-all hover:brightness-75" // all
+                          )}
+                        />
+                      </NextLink>
 
-                    <div className="text-2xl sm:text-3xl font-bold">{x.displayName}</div>
-                    <div className="text-lg sm:text-xl text-center leading-6">{`${formatDuration(x.secondsThisWeek)} recorded`}<br/>this week</div>
-                  </div>
-                ))
-              }
-            </div>
-          </section>
-        ) }
+                      <div className="text-2xl sm:text-3xl font-bold">{x.displayName}</div>
+                      <div className="text-lg sm:text-xl text-center leading-6">{`${formatDuration(x.secondsThisWeek)} recorded`}<br/>this week</div>
+                    </div>
+                  ))
+                }
+              </div>
+            </section>
+          )}
+        </Skeleton>
 
-        { reqRecent && reqRecent.timelapses.length != 0 && (
-          <section className="flex flex-col w-full gap-12">
-            <ShelfHeader
-              icon="/images/orpheus-woah.png"
-              title="Timelapses Being Created Now"
-              description="See what other Hack Clubbers are up to"
-            />
+        <Skeleton id="home-recent" data={reqRecent} sample={SAMPLE_RECENT}>
+          {recent => recent.timelapses.length != 0 && (
+            <section className="flex flex-col w-full gap-12">
+              <ShelfHeader
+                icon="/images/orpheus-woah.png"
+                title="Timelapses Being Created Now"
+                description="See what other Hack Clubbers are up to"
+              />
 
-            <TimelapseGrid timelapses={reqRecent?.timelapses ?? []} />
-          </section>
-        ) }
+              <TimelapseGrid timelapses={recent.timelapses} />
+            </section>
+          )}
+        </Skeleton>
 
         <Footer />
       </div>

@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
+import { Skeleton, SkeletonBox } from "skullet/react";
 import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
@@ -23,7 +24,6 @@ import { HackatimeSelectModal } from "@/components/layout/HackatimeSelectModal";
 import { TextInput } from "@/components/ui/TextInput";
 import { TextareaInput } from "@/components/ui/TextareaInput";
 import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { Badge } from "@/components/ui/Badge";
 import { HackatimeProjectLink, StatusBadge, timelapseStatus } from "@/components/ui/AdminOnly";
 import { Bullet } from "@/components/ui/Bullet";
@@ -32,6 +32,7 @@ import { CommentSection } from "@/components/entity/CommentSection";
 import { TimelapsePlayer } from "@/components/entity/TimelapsePlayer";
 import { Duration } from "@/components/Duration";
 import { sleep } from "@hackclub/lapse-shared";
+import { SAMPLE_TIMELAPSE } from "@/samples";
 
 /*
   The video runs the full width of the window, and its height is capped so that the title and author underneath it
@@ -63,14 +64,12 @@ export default function Page() {
   const [hackatimeModalOpen, setHackatimeModalOpen] = useState(false);
   const canSyncHackatime = useHackatimeLinkStatus() !== "restricted";
   const [localComments, setLocalComments] = useState<Comment[]>(timelapse?.comments ?? []);
-  const [formattedDescription, setFormattedDescription] = useState<React.ReactNode>("");
   const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!timelapse)
       return;
 
-    setFormattedDescription(markdownToJsx(timelapse.description));
     setLocalComments(timelapse.comments);
   }, [timelapse]);
 
@@ -237,7 +236,8 @@ export default function Page() {
           took.
         */}
         { !timelapse ? (
-          <div className={clsx(THEATRE_BAND, "bg-darker animate-pulse")} />
+          // The band is sized by its classes, so the box's own default width and height are cleared to let them through.
+          <SkeletonBox radius={0} className={clsx(THEATRE_BAND, "block")} style={{ width: undefined, height: undefined }} />
         ) : timelapse.blocker && !viewBlocked ? (
           <div className={clsx(THEATRE_BAND, "bg-[#000] flex flex-col items-center justify-center gap-5 px-6 text-center")}>
             <Icon glyph="forbidden" size={48} className="text-muted" />
@@ -277,135 +277,129 @@ export default function Page() {
         ) }
 
         <div className="w-full max-w-[80rem] mx-auto flex flex-col gap-3 px-4 sm:px-12 pt-5 sm:pt-6">
-          {/*
-            The title gets a line of its own, the way it does on YouTube. Sharing one with the buttons left it pinned
-            to the top of a row as tall as they are, and the empty half of that row underneath read as a paragraph
-            break between the title and the person who made it.
-          */}
-          <div className="flex items-center gap-3 flex-wrap min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-smoke leading-tight wrap-break-word min-w-0">
-              { timelapse?.name || <Skeleton className="w-64" /> }
-            </h1>
-
-            { timelapse && adminView.enabled ? (
-              <StatusBadge status={timelapseStatus(timelapse)} />
-            ) : timelapse?.visibility === "UNLISTED" && (
-              <Badge variant="default">UNLISTED</Badge>
-            ) }
-          </div>
-
-          {/* Who made it and what it cost them on the left; everything you can do about it on the right. */}
-          <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <ProfilePicture
-                isSkeleton={timelapse == null}
-                user={timelapse?.owner ?? null}
-                size="md"
-              />
-
-              <div className="flex flex-col min-w-0 leading-tight gap-1">
-                { timelapse ? (
-                  <NextLink
-                    href={`/user/@${timelapse.owner.handle}`}
-                    className="font-bold text-white truncate hover:underline"
-                  >
-                    @{timelapse.owner.displayName}
-                  </NextLink>
-                ) : (
-                  <Skeleton className="w-32" />
-                ) }
-
+          <Skeleton data={timelapse} sample={SAMPLE_TIMELAPSE} label="Loading timelapse">
+            {t => (
+              <div className="flex flex-col gap-3">
                 {/*
-                  One line of facts about the recording, set at the size facts deserve. The tracked time is the only
-                  one of them anybody came here for, so it's the only one carrying any weight - and it's spelled out
-                  ("2h 34m") rather than clocked, because it isn't a position in the video.
+                  The title gets a line of its own, the way it does on YouTube. Sharing one with the buttons left it pinned
+                  to the top of a row as tall as they are, and the empty half of that row underneath read as a paragraph
+                  break between the title and the person who made it.
                 */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-secondary min-w-0">
-                  { timelapse ? <TimeAgo date={timelapse.createdAt} /> : <Skeleton className="w-20" /> }
+                <div className="flex items-center gap-3 flex-wrap min-w-0">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-smoke leading-tight wrap-break-word min-w-0">
+                    {t.name}
+                  </h1>
 
-                  <Bullet />
-
-                  <span className="flex items-center gap-1.5">
-                    <Icon glyph="stopwatch" size={16} className="shrink-0" />
-
-                    <b className="text-white">
-                      { timelapse ? <Duration seconds={timelapse.duration} format="long" /> : <Skeleton className="w-8" /> }
-                    </b>
-
-                    tracked
-                  </span>
-
-                  { timelapse?.private?.hackatimeProject && (
-                    <>
-                      <Bullet />
-
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        on Hackatime as
-                        { adminView.isAdmin && timelapse.owner.hackatimeId ? (
-                          <HackatimeProjectLink
-                            hackatimeId={timelapse.owner.hackatimeId}
-                            project={timelapse.private.hackatimeProject}
-                            className="truncate"
-                          />
-                        ) : (
-                          <code className="font-mono text-smoke truncate">
-                            {timelapse.private.hackatimeProject}
-                          </code>
-                        ) }
-                      </span>
-                    </>
+                  { adminView.enabled ? (
+                    <StatusBadge status={timelapseStatus(t)} />
+                  ) : t.visibility === "UNLISTED" && (
+                    <Badge variant="default">UNLISTED</Badge>
                   ) }
                 </div>
-              </div>
-            </div>
 
-            { timelapse && (
-              <div className="flex items-center gap-2 shrink-0">
-                { isOwned ? (
-                  <>
-                    <Button
-                      className="px-6!"
-                      icon={<Icon glyph="edit" size={24} />}
-                      onClick={handleEdit}
-                    >
-                      Edit
-                    </Button>
+                {/* Who made it and what it cost them on the left; everything you can do about it on the right. */}
+                <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ProfilePicture user={t.owner} size="md" />
 
-                    { canSyncHackatime && timelapse.playbackUrl && !timelapse.private?.hackatimeProject && (
-                      <Button
-                        className="px-6!"
-                        icon={<Icon glyph="history" size={24} />}
-                        onClick={() => setHackatimeModalOpen(true)}
+                    <div className="flex flex-col min-w-0 leading-tight gap-1">
+                      <NextLink
+                        href={`/user/@${t.owner.handle}`}
+                        className="font-bold text-white truncate hover:underline"
                       >
-                        <span className="hidden sm:inline">Sync with </span>Hackatime
-                      </Button>
+                        @{t.owner.displayName}
+                      </NextLink>
+
+                      {/*
+                        One line of facts about the recording, set at the size facts deserve. The tracked time is the only
+                        one of them anybody came here for, so it's the only one carrying any weight - and it's spelled out
+                        ("2h 34m") rather than clocked, because it isn't a position in the video.
+                      */}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-secondary min-w-0">
+                        <TimeAgo date={t.createdAt} />
+
+                        <Bullet />
+
+                        <span className="flex items-center gap-1.5">
+                          <Icon glyph="stopwatch" size={16} className="shrink-0" />
+
+                          <b className="text-white">
+                            <Duration seconds={t.duration} format="long" />
+                          </b>
+
+                          tracked
+                        </span>
+
+                        { t.private?.hackatimeProject && (
+                          <>
+                            <Bullet />
+
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              on Hackatime as
+                              { adminView.isAdmin && t.owner.hackatimeId ? (
+                                <HackatimeProjectLink
+                                  hackatimeId={t.owner.hackatimeId}
+                                  project={t.private.hackatimeProject}
+                                  className="truncate"
+                                />
+                              ) : (
+                                <code className="font-mono text-smoke truncate">
+                                  {t.private.hackatimeProject}
+                                </code>
+                              ) }
+                            </span>
+                          </>
+                        ) }
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    { isOwned ? (
+                      <>
+                        <Button
+                          className="px-6!"
+                          icon={<Icon glyph="edit" size={24} />}
+                          onClick={handleEdit}
+                        >
+                          Edit
+                        </Button>
+
+                        { canSyncHackatime && t.playbackUrl && !t.private?.hackatimeProject && (
+                          <Button
+                            className="px-6!"
+                            icon={<Icon glyph="history" size={24} />}
+                            onClick={() => setHackatimeModalOpen(true)}
+                          >
+                            <span className="hidden sm:inline">Sync with </span>Hackatime
+                          </Button>
+                        ) }
+                      </>
+                    ) : (
+                      <Button
+                        title="Report this timelapse"
+                        icon={<Icon glyph="flag-fill" size={24} />}
+                        onClick={() => alert("Sorry, not implemented yet!")}
+                      />
                     ) }
-                  </>
-                ) : (
-                  <Button
-                    title="Report this timelapse"
-                    icon={<Icon glyph="flag-fill" size={24} />}
-                    onClick={() => alert("Sorry, not implemented yet!")}
-                  />
+
+                    <Button
+                      className={clsx(linkCopied && "text-green!")}
+                      title={linkCopied ? "Link copied!" : "Copy a link to this timelapse"}
+                      icon={<Icon glyph={linkCopied ? "checkmark" : "link"} size={24} />}
+                      onClick={handleCopyLink}
+                    />
+                  </div>
+                </div>
+
+                { t.description.trim().length > 0 && (
+                  <p className="text-smoke leading-relaxed wrap-break-word">
+                    {markdownToJsx(t.description)}
+                  </p>
                 ) }
-
-                <Button
-                  className={clsx(linkCopied && "text-green!")}
-                  title={linkCopied ? "Link copied!" : "Copy a link to this timelapse"}
-                  icon={<Icon glyph={linkCopied ? "checkmark" : "link"} size={24} />}
-                  onClick={handleCopyLink}
-                />
               </div>
-            ) }
-          </div>
-
-          { !timelapse ? (
-            <Skeleton lines={2} />
-          ) : timelapse.description.trim().length > 0 && (
-            <p className="text-smoke leading-relaxed wrap-break-word">
-              {formattedDescription}
-            </p>
-          ) }
+            )}
+          </Skeleton>
 
           { timelapse?.visibility === "UNLISTED" && isOwned && (
             <Alert variant="warning" icon="private-fill">

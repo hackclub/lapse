@@ -18,6 +18,8 @@ Recordings made through the Lookout desktop app can also be started and publishe
 
 Lapse has the ability to import data to an API-compatible WakaTime fork called Hackatime. When importing, a WakaTime heartbeat will be created for each *snapshot* - a timestamp taken with each recorded frame on the client.
 
+Loading states in the client use Skullet (https://skullet.lochie.me/docs). Wrap the real component in `<Skeleton data={x} sample={SAMPLE_X}>` from `skullet/react` rather than drawing grey boxes by hand - Skullet renders the sample unseen and traces it into the skeleton. Samples live in @apps/client/src/samples.ts. Use `loading` with plain children when there is no data object (e.g. the signed-in state), an `id` where the shape should be remembered across visits, and `<SkeletonBox>` only for things that don't measure (the video band, an avatar with no user). Theme and reveal are set once by `SkulletProvider` in `_app.tsx`, and `forgetShapes()` runs on sign-out.
+
 # Code style
 
 - Avoid braces for if/else blocks that return or throw.

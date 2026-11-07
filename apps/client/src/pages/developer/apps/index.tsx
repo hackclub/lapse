@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 import { OAuthApp, OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
@@ -304,14 +305,10 @@ export default function DeveloperApps() {
           </div>
         )}
 
-        <div className="flex flex-col gap-4">
-          {isLoading && <p className="text-muted">Loading apps...</p>}
-
-          {!isLoading && apps.length === 0 && (
+        <Skeleton id="developer-apps-page" loading={isLoading} label="Loading apps">
+          {apps.length === 0 ? (
             <p className="text-muted">No apps yet.</p>
-          )}
-
-          {!isLoading && apps.length > 0 && (
+          ) : (
             <div className="flex flex-col gap-4">
               {apps.map((app) => (
                 <div
@@ -365,7 +362,7 @@ export default function DeveloperApps() {
               ))}
             </div>
           )}
-        </div>
+        </Skeleton>
 
         <WindowedModal
           icon="plus"

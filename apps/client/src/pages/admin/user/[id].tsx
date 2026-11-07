@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 import { assert } from "@hackclub/lapse-shared";
 import { AdminUserRowSchema, type AdminEntity, type AdminUserRow, type Timelapse } from "@hackclub/lapse-api";
 
@@ -11,13 +12,13 @@ import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { TimeAgo } from "@/components/TimeAgo";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 import { Duration } from "@/components/Duration";
 import { AuditLog } from "@/components/admin/AuditLog";
 import { TimelapseFilters, EMPTY_TIMELAPSE_FILTERS, applyTimelapseFilters, type TimelapseFilterState } from "@/components/admin/TimelapseFilters";
 import { ExternalIdLink, HackatimeProjectLink, StatusBadge, timelapseStatus, type TimelapseStatus } from "@/components/ui/AdminOnly";
+import { SAMPLE_ADMIN_USER, SAMPLE_TIMELAPSES } from "@/samples";
 
 const STATUSES: TimelapseStatus[] = ["PUBLIC", "UNLISTED", "PROCESSING", "FAILED"];
 
@@ -71,9 +72,17 @@ function HackatimeSection({ hackatimeId, timelapses }: {
   hackatimeId: string | null;
   timelapses: Timelapse[] | null;
 }) {
-  if (timelapses === null)
-    return <Skeleton className="w-full h-32" />;
+  return (
+    <Skeleton data={timelapses} sample={SAMPLE_TIMELAPSES} label="Loading Hackatime projects">
+      {x => <HackatimeTable hackatimeId={hackatimeId} timelapses={x} />}
+    </Skeleton>
+  );
+}
 
+function HackatimeTable({ hackatimeId, timelapses }: {
+  hackatimeId: string | null;
+  timelapses: Timelapse[];
+}) {
   const groups = groupByHackatimeProject(timelapses);
 
   if (groups.length === 0)
@@ -126,7 +135,9 @@ function CountCard({ label, value }: { label: ReactNode; value: number | null })
   return (
     <div className="flex flex-col items-start gap-2 rounded-xl border border-slate bg-darkless p-4">
       {label}
-      <span className="text-2xl font-bold">{value === null ? <Skeleton className="w-10" /> : value.toLocaleString()}</span>
+      <Skeleton data={value} sample={123}>
+        {x => <span className="text-2xl font-bold">{x.toLocaleString()}</span>}
+      </Skeleton>
     </div>
   );
 }
@@ -229,44 +240,46 @@ export default function AdminUserPage() {
           <div className="rounded-lg border border-red bg-red/10 px-4 py-3 text-red">{error}</div>
         )}
 
-        <div className="flex flex-col sm:flex-row gap-6 justify-between">
-          <div className="flex items-center gap-6 min-w-0">
-            {user
-              ? <img src={user.profilePictureUrl} alt="" className="w-24 h-24 rounded-full object-cover shrink-0" />
-              : <div className="w-24 h-24 rounded-full bg-slate shrink-0" />}
+        <Skeleton data={user} sample={SAMPLE_ADMIN_USER} label="Loading user">
+          {u => (
+            <div className="flex flex-col gap-8">
+              <div className="flex flex-col sm:flex-row gap-6 justify-between">
+                <div className="flex items-center gap-6 min-w-0">
+                  <img src={u.profilePictureUrl} alt="" className="w-24 h-24 rounded-full object-cover shrink-0" />
 
-            <div className="flex flex-col min-w-0">
-              <h1 className="text-3xl font-bold truncate">{user ? user.displayName : <Skeleton className="w-48" />}</h1>
-              <p className="text-secondary text-lg">{user ? `@${user.handle}` : <Skeleton className="w-32" />}</p>
-            </div>
-          </div>
+                  <div className="flex flex-col min-w-0">
+                    <h1 className="text-3xl font-bold truncate">{u.displayName}</h1>
+                    <p className="text-secondary text-lg">@{u.handle}</p>
+                  </div>
+                </div>
 
-          {user && (
-            <div className="flex flex-wrap gap-2 items-start">
-              <Button icon="person" href={`/user/@${user.handle}`}>Public profile</Button>
+                <div className="flex flex-wrap gap-2 items-start">
+                  <Button icon="person" href={`/user/@${u.handle}`}>Public profile</Button>
 
-              {user.slackId && (
-                <Button icon="slack-fill" onClick={() => window.open(`https://hackclub.slack.com/team/${user.slackId}`, "_blank")}>
-                  Open in Slack
-                </Button>
-              )}
+                  {u.slackId && (
+                    <Button icon="slack-fill" onClick={() => window.open(`https://hackclub.slack.com/team/${u.slackId}`, "_blank")}>
+                      Open in Slack
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 rounded-xl border border-slate p-6">
+                <InfoRow label="Lapse ID">{u.id}</InfoRow>
+                <InfoRow label="Email">{u.email}</InfoRow>
+                <InfoRow label="Permission level">{u.permissionLevel}</InfoRow>
+                <InfoRow label="Hackatime ID">
+                  {u.hackatimeId && <ExternalIdLink kind="hackatime" id={u.hackatimeId} />}
+                </InfoRow>
+                <InfoRow label="Slack ID">
+                  {u.slackId && <ExternalIdLink kind="slack" id={u.slackId} />}
+                </InfoRow>
+                <InfoRow label="Joined"><TimeAgo date={u.createdAt} /></InfoRow>
+                <InfoRow label="Last recording"><TimeAgo date={u.lastHeartbeat} /></InfoRow>
+              </div>
             </div>
           )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 rounded-xl border border-slate p-6">
-          <InfoRow label="Lapse ID">{user?.id}</InfoRow>
-          <InfoRow label="Email">{user?.email}</InfoRow>
-          <InfoRow label="Permission level">{user?.permissionLevel}</InfoRow>
-          <InfoRow label="Hackatime ID">
-            {user?.hackatimeId && <ExternalIdLink kind="hackatime" id={user.hackatimeId} />}
-          </InfoRow>
-          <InfoRow label="Slack ID">
-            {user?.slackId && <ExternalIdLink kind="slack" id={user.slackId} />}
-          </InfoRow>
-          <InfoRow label="Joined">{user && <TimeAgo date={user.createdAt} />}</InfoRow>
-          <InfoRow label="Last recording">{user && <TimeAgo date={user.lastHeartbeat} />}</InfoRow>
-        </div>
+        </Skeleton>
 
         {timelapses !== null && timelapses.length > 0 && (
           <TimelapseFilters timelapses={timelapses} value={filters} onChange={setFilters} />
@@ -295,11 +308,11 @@ export default function AdminUserPage() {
         <section className="flex flex-col gap-4">
           <h2 className="text-2xl font-bold">Timelapses</h2>
 
-          {filtered === null
-            ? <Skeleton className="w-full h-48" />
-            : filtered.length === 0
+          <Skeleton data={filtered} sample={SAMPLE_TIMELAPSES} label="Loading timelapses">
+            {x => x.length === 0
               ? <p className="text-muted">{timelapses?.length ? "No timelapses match these filters." : "This user has no timelapses."}</p>
-              : <TimelapseGrid timelapses={filtered} />}
+              : <TimelapseGrid timelapses={x} />}
+          </Skeleton>
         </section>
       </div>
     </RootLayout>

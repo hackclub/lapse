@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
 import { useCallback, useState } from "react";
 import clsx from "clsx";
+import { Skeleton } from "skullet/react";
 
 import { Button } from "@/components/ui/Button";
 import { ProfilePicture } from "@/components/entity/ProfilePicture";
@@ -17,6 +18,10 @@ import LapseLogo from "@/assets/icon.svg";
 export function Header() {
   const auth = useAuth(false);
   const router = useRouter();
+
+  // Until the session is known, the account area is drawn from the shape it had last visit - signed in or not -
+  // rather than guessing one and flashing the other.
+  const isAuthUnknown = auth.isLoading && !auth.currentUser;
 
   const [areSettingsOpen, setAreSettingsOpen] = useState(false);
   const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
@@ -55,10 +60,10 @@ export function Header() {
             </div>
           </div>
 
-          <div className="flex gap-6 items-center">
+          <Skeleton id="header-account" loading={isAuthUnknown} label="Loading your account">
             {
-              (auth.isLoading || auth.currentUser) ? (
-                <>
+              auth.currentUser ? (
+                <div className="flex gap-6 items-center">
                   <Button href="/timelapse/create" kind="primary" icon="plus-fill">Create</Button>
 
                   <Icon
@@ -69,14 +74,12 @@ export function Header() {
                   />
 
                   <ProfilePicture user={auth.currentUser} size="md" />
-                </>
+                </div>
               ) : (
-                <>
-                  <Button href="/auth" kind="primary" icon="welcome">Sign in</Button>
-                </>
+                <Button href="/auth" kind="primary" icon="welcome">Sign in</Button>
               )
             }
-          </div>
+          </Skeleton>
         </div>
 
         {/* mobile */}
@@ -101,25 +104,27 @@ export function Header() {
             <Icon glyph="plus-fill" width={36} height={36} />
           </button>
 
-          {
-            auth.currentUser ? (
-              <button
-                className="flex flex-col items-center gap-2 cursor-pointer transition-transform active:scale-90"
-                onClick={() => setAreSettingsOpen(true)}
-              >
-                <ProfilePicture user={auth.currentUser} size="lg" />
-                <span className="text-lg">You</span>
-              </button>
-            ) : (
-              <button
-                className="flex flex-col items-center gap-2 cursor-pointer transition-transform active:scale-90"
-                onClick={() => router.push("/auth")}
-              >
-                <Icon glyph="welcome" width={32} height={32} />
-                <span className="text-lg">Sign up</span>
-              </button>
-            )
-          }
+          <Skeleton id="header-account-mobile" loading={isAuthUnknown} label="Loading your account">
+            {
+              auth.currentUser ? (
+                <button
+                  className="flex flex-col items-center gap-2 cursor-pointer transition-transform active:scale-90"
+                  onClick={() => setAreSettingsOpen(true)}
+                >
+                  <ProfilePicture user={auth.currentUser} size="lg" />
+                  <span className="text-lg">You</span>
+                </button>
+              ) : (
+                <button
+                  className="flex flex-col items-center gap-2 cursor-pointer transition-transform active:scale-90"
+                  onClick={() => router.push("/auth")}
+                >
+                  <Icon glyph="welcome" width={32} height={32} />
+                  <span className="text-lg">Sign up</span>
+                </button>
+              )
+            }
+          </Skeleton>
         </div>
       </header>
 

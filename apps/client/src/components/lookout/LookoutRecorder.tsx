@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
 
@@ -306,6 +307,17 @@ type ServerDraft = {
   thumbnailUrl: string | null;
 };
 
+// Two drafts, for Skullet to measure the list from until the real ones arrive.
+const SAMPLE_SERVER_DRAFTS: ServerDraft[] = [0, 1].map(i => ({
+  id: `sampledraft${i}`,
+  createdAt: Date.UTC(2026, 0, 1),
+  lookoutSessionId: "",
+  lookoutToken: "",
+  lookoutStatus: i === 0 ? "complete" : "recording",
+  videoUrl: null,
+  thumbnailUrl: null
+}));
+
 function SessionSelector({ onSelectSession, onNewSession, onClose }: {
   onSelectSession: (session: StoredLookoutSession) => void;
   onNewSession: () => void;
@@ -365,11 +377,9 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
         shortDescription="Select a session"
       />
       <ModalContent>
-        {loading ? (
-          <p className="text-muted text-center">Loading drafts...</p>
-        ) : (
+        <Skeleton id="lookout-resume" loading={loading} label="Loading drafts">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {drafts.map(draft => (
+            {(loading ? SAMPLE_SERVER_DRAFTS : drafts).map(draft => (
               <div
                 key={draft.id}
                 className={clsx(
@@ -445,7 +455,7 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
               <span className="font-bold">New session</span>
             </div>
           </div>
-        )}
+        </Skeleton>
       </ModalContent>
     </Modal>
   );

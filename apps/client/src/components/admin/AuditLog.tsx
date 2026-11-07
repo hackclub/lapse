@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Skeleton } from "skullet/react";
 import type { AdminAuditLogEntry, AdminAuditValue, AdminEntity } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
 import { Button } from "@/components/ui/Button";
 import { TimeAgo } from "@/components/TimeAgo";
+import { SAMPLE_AUDIT_LOG } from "@/samples";
 
 const ENTITY_NAMES: Record<AdminEntity, string> = {
   user: "User",
@@ -127,14 +129,15 @@ export function AuditLog({ entity, entityId, pageSize = 25 }: {
       )}
 
       <div className="rounded-xl border border-slate">
-        {entries === null && !error && <p className="px-4 py-3 text-muted">Loading...</p>}
-        {entries?.length === 0 && <p className="px-4 py-3 text-muted">No changes recorded yet.</p>}
-
-        {entries && entries.length > 0 && (
-          <ul>
-            {entries.map(x => <AuditLogRow key={x.id} entry={x} showTarget={entityId === undefined} />)}
-          </ul>
-        )}
+        <Skeleton data={error ? [] : entries} sample={SAMPLE_AUDIT_LOG} label="Loading admin history">
+          {list => list.length === 0
+            ? (!error && <p className="px-4 py-3 text-muted">No changes recorded yet.</p>)
+            : (
+              <ul>
+                {list.map(x => <AuditLogRow key={x.id} entry={x} showTarget={entityId === undefined} />)}
+              </ul>
+            )}
+        </Skeleton>
       </div>
 
       {totalPages > 1 && (
