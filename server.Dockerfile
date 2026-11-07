@@ -38,9 +38,6 @@ RUN --mount=type=cache,id=pnpm-cache,target=/root/.local/share/pnpm \
     pnpm --filter @hackclub/lapse-jobs run build && \
     pnpm --filter @hackclub/lapse-server run build
 
-# Apply database migrations
-RUN cd apps/server && npx prisma migrate deploy
-
 ############################  runner  ############################
 FROM base AS runner
 WORKDIR /app
@@ -69,6 +66,11 @@ COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 # Copy the generated Prisma client
 COPY --from=builder /app/apps/server/src/generated ./apps/server/src/generated
 
+# Deps are installed with --ignore-scripts, so Prisma's schema engine (needed
+# by `migrate deploy` in CMD) was never downloaded. Fetch it as root here;
+# the lapse user can't write to node_modules at runtime.
+RUN node /app/node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines/scripts/postinstall.js
+
 USER lapse
 
 ENV NODE_ENV=production
@@ -78,4 +80,5 @@ ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
 EXPOSE 8080
 
-CMD ["node", "apps/server/dist/app.js"]
+# Migrations run at start, not build: the build has no database to reach.
+CMD ["sh", "-c", "cd apps/server && ./node_modules/.bin/prisma migrate deploy && cd /app && exec node apps/server/dist/app.js"]

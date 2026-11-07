@@ -34,6 +34,15 @@ WORKDIR /app
 ARG SOURCE_COMMIT
 ENV SOURCE_COMMIT=${SOURCE_COMMIT}
 
+# NEXT_PUBLIC_* values are inlined into the bundle at build time, so they must
+# exist here, not just at runtime. Without NEXT_PUBLIC_OAUTH_CLIENT_ID the
+# client authorizes as client "undefined", the API treats it as a third-party
+# app and bounces it through the consent page, and sign-in loops forever.
+ARG NEXT_PUBLIC_OAUTH_CLIENT_ID=svc_canonical
+ARG NEXT_PUBLIC_API_URL=https://api.lapse.hackclub.com
+ENV NEXT_PUBLIC_OAUTH_CLIENT_ID=${NEXT_PUBLIC_OAUTH_CLIENT_ID}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 COPY packages/shared/ ./packages/shared/
 COPY packages/api/ ./packages/api/
 COPY apps/client/ ./apps/client/
