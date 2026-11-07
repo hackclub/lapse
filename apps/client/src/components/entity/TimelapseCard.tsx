@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import NextImage from "next/image";
 import Icon from "@hackclub/icons";
 import type { DraftTimelapse, Timelapse } from "@hackclub/lapse-api"
 import { decryptData, fromHex } from "@hackclub/lapse-shared";
@@ -9,6 +10,7 @@ import { deviceStorage } from "@/deviceStorage";
 import { mediaFetch } from "@/safety";
 import { useAdminView } from "@/hooks/useAdminView";
 import { navigateTo } from "@/navigation";
+import { isOptimizableImage } from "@/remoteImages";
 
 import { ProfilePicture } from "@/components/entity/ProfilePicture"
 import { Bullet } from "@/components/ui/Bullet";
@@ -98,7 +100,16 @@ export function TimelapseCard({ timelapse }: {
                 {missingKey && <Icon glyph="private" size={32} className="text-muted" />}
               </div>
             )
-            : <img src={thumb} alt="" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
+            : (
+              <NextImage
+                src={thumb}
+                alt=""
+                fill
+                sizes="(min-width: 640px) 320px, 50vw"
+                unoptimized={!isOptimizableImage(thumb)}
+                className="block w-full h-full transition-all hover:brightness-75 object-cover"
+              />
+            )
         }
 
         {!timelapse.isDraft && adminView.enabled && (
