@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useRouter } from "next/router";
 import type { MaintenanceWindow } from "@hackclub/lapse-api";
 
-import { api } from "@/api";
+import { cachedApi } from "@/api";
 import { useAuthContext } from "@/context/AuthContext";
 import { useInterval } from "@/hooks/useInterval";
 
@@ -30,7 +30,7 @@ export function MaintenanceProvider({ children }: {
 
   useInterval(async () => {
     try {
-      const res = await api.global.maintenance({});
+      const res = await cachedApi.global.maintenance({});
       if (res.ok)
         setMaintenance(res.data.maintenance);
     }

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 
 import { api } from "@/api";
+import { isOptimizableImage } from "@/remoteImages";
 import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
@@ -203,9 +204,11 @@ export default function Home() {
                     )}
                   >
                     <NextLink href={`/user/@${x.handle}`}>
-                      <img
+                      <NextImage
                         src={x.pfp}
                         alt=""
+                        width={120} height={120}
+                        unoptimized={!isOptimizableImage(x.pfp)}
                         className={clsx(
                           "w-16 h-16", // mobile
                           "sm:w-30 sm:h-30", // desktop

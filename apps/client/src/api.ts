@@ -2,7 +2,7 @@ import type { JsonifiedClient } from "@orpc/openapi-client";
 import type { ContractRouterClient } from "@orpc/contract";
 import { createORPCClient, onError } from "@orpc/client";
 import { OpenAPILink } from "@orpc/openapi-client/fetch";
-import { compositeRouterContract } from "@hackclub/lapse-api";
+import { compositeRouterContract, globalRouterContract } from "@hackclub/lapse-api";
 import * as tus from "tus-js-client";
 import { sfetch } from "@/safety";
 
@@ -56,6 +56,29 @@ const link = new OpenAPILink(compositeRouterContract, {
  * The main API client.
  */
 export const api: JsonifiedClient<ContractRouterClient<typeof compositeRouterContract>> = createORPCClient(link);
+
+const cachedRouterContract = {
+  global: {
+    activeUsers: globalRouterContract.activeUsers,
+    maintenance: globalRouterContract.maintenance,
+  },
+};
+
+const cachedLink = new OpenAPILink(cachedRouterContract, {
+  url: () => `${window.location.origin}/api/cached`,
+  fetch: (request, init) => {
+    return sfetch(request, {
+      ...init,
+      credentials: "omit"
+    });
+  },
+});
+
+/**
+ * A client for the polled, user-agnostic procedures that we proxy through our own origin (see `pages/api/cached`),
+ * so that a CDN can cache them. It never sends credentials, as the responses are shared between all users.
+ */
+export const cachedApi: JsonifiedClient<ContractRouterClient<typeof cachedRouterContract>> = createORPCClient(cachedLink);
 
 /**
  * Uploads `data` to the server via `tus`, authorized by an upload `token` issued by an endpoint such as

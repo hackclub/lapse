@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
 import TerserPlugin from "terser-webpack-plugin";
 
+import { OPTIMIZED_IMAGE_HOSTS } from "./src/remoteImages";
+
 const root = path.resolve(__dirname, "..", "..");
 
 function resolveSquircle(): Record<string, string> {
@@ -37,6 +39,19 @@ const config: NextConfig = {
   transpilePackages: ["@lookout/react", "@squircle-js/react"],
   productionBrowserSourceMaps: true,
   poweredByHeader: false,
+
+  // Remote images (timelapse thumbnails, avatars) are only optimized on Vercel, where the optimizer doesn't run in our
+  // process. On the standalone Node server, resizing them with `sharp` could exceed the pod's memory limit, so there
+  // we neither request optimization for them (see `isOptimizableImage`) nor allow any remote hosts, which keeps
+  // `/_next/image` limited to our own static images, exactly as before.
+  env: {
+    LAPSE_OPTIMIZE_REMOTE_IMAGES: process.env.VERCEL ? "true" : "false",
+  },
+  images: {
+    remotePatterns: process.env.VERCEL
+      ? OPTIMIZED_IMAGE_HOSTS.map(hostname => ({ protocol: "https" as const, hostname, pathname: "/**" }))
+      : [],
+  },
 
   webpack: (config: Configuration, { isServer, dev }) => {
     if (!dev) {

@@ -10,7 +10,7 @@ import { SettingsView } from "@/components/layout/SettingsView";
 import { useCachedState } from "@/hooks/useCachedState";
 import { useInterval } from "@/hooks/useInterval";
 import { useAuth } from "@/hooks/useAuth";
-import { api } from "@/api";
+import { cachedApi } from "@/api";
 
 import LapseLogo from "@/assets/icon.svg";
 
@@ -22,7 +22,7 @@ export function Header() {
   const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
 
   const fetchActiveUsers = useCallback(async () => {
-    const res = await api.global.activeUsers({});
+    const res = await cachedApi.global.activeUsers({});
     if (!res.ok) {
       console.error("(Header.tsx) could not query active users!", res);
       return;
