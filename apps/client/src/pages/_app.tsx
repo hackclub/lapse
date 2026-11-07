@@ -11,7 +11,7 @@ import { MaintenanceProvider } from "@/context/MaintenanceContext";
 import { initLogBucket } from "@/logBucket";
 import { BYPASS_BROWSER_CHECK_KEY } from "@/pages/update-browser";
 import { DeviceStorage } from "@/deviceStorage";
-import { api } from "@/api";
+import { api, sessionToken } from "@/api";
 
 initLogBucket();
 
@@ -69,7 +69,7 @@ const App: AppType = ({ Component, pageProps }) => {
     if (router.pathname === "/auth" || router.pathname.startsWith("/oauth/"))
       return;
 
-    if (!localStorage.getItem("lapse:token"))
+    if (!sessionToken())
       return;
 
     (async () => {

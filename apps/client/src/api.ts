@@ -11,11 +11,42 @@ import { sfetch } from "@/safety";
  */
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com";
 
+const TOKEN_KEY = "lapse:token";
+
+function tokenExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1].replaceAll("-", "+").replaceAll("_", "/");
+    const { exp } = JSON.parse(atob(payload)) as { exp?: unknown };
+    return typeof exp === "number" ? exp * 1000 : null;
+  }
+  catch {
+    return null;
+  }
+}
+
+/**
+ * The stored access token, or `null` if there is none or it has expired. An expired token is forgotten on the spot:
+ * the server would only treat it as anonymous anyway, and every request carrying it costs a warning in its logs.
+ */
+export function sessionToken(): string | null {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token)
+    return null;
+
+  const expiry = tokenExpiry(token);
+  if (expiry !== null && expiry <= Date.now()) {
+    localStorage.removeItem(TOKEN_KEY);
+    return null;
+  }
+
+  return token;
+}
+
 const link = new OpenAPILink(compositeRouterContract, {
   url: `${API_URL}/api`,
   headers: () => {
-    const token = localStorage.getItem("lapse:token");
-    
+    const token = sessionToken();
+
     return {
       "Authorization": token ? `Bearer ${token}` : undefined,
     };

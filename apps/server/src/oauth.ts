@@ -116,7 +116,10 @@ function decodeAccessToken(accessToken: string): AccessTokenJwt | Error {
         );
     }
     catch (err) {
-        logWarning("Access token is either expired, forged, or has an incorrect schema.", { err });
+        // Browsers hold on to tokens long after they lapse, so expiry is routine rather than worth a warning.
+        if (!(err instanceof jwt.TokenExpiredError))
+            logWarning(`Access token is forged or has an incorrect schema: ${err instanceof Error ? err.message : String(err)}`);
+
         return err as Error;
     }
 }
@@ -423,7 +426,9 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
             );
         }
         catch (err) {
-            logWarning("Access token is either expired, forged, or has an incorrect schema.", { err });
+            if (!(err instanceof jwt.TokenExpiredError))
+                logWarning(`Access token is forged or has an incorrect schema: ${err instanceof Error ? err.message : String(err)}`);
+
             return null;
         }
 
@@ -468,10 +473,8 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<Externa
     }
 
     const token = decodeAccessToken(bearerToken);
-    if (token instanceof Error) {
-        logWarning("Could not decode access token!", { error: token });
+    if (token instanceof Error)
         return null;
-    }
 
     if (await isAccessTokenRevoked(bearerToken))
         return null;
