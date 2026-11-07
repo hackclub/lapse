@@ -520,6 +520,9 @@ export default function LookoutRecorder() {
   const [selectedMode, setSelectedMode] = useState<RecordingMode>("desktop");
   const [captureMode, setCaptureMode] = useState<CaptureMode | null>(null);
   const [cameraDeviceId, setCameraDeviceId] = useState<string | null>(null);
+  // The engine's live preview frames are only 854x480, which looks soft blown up to fill the
+  // screen. Every upload tick also hands us the full-resolution frame, so that's what we show.
+  const [fullCaptureUrl, setFullCaptureUrl] = useState<string | null>(null);
   const [pickingCamera, setPickingCamera] = useState(false);
   const [desktopLaunched, setDesktopLaunched] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -563,6 +566,14 @@ export default function LookoutRecorder() {
       setPhase("ready");
     }
   }, []);
+
+  // Each new capture replaces the last, so free the old frame's memory as soon as it's off screen.
+  useEffect(() => {
+    if (!fullCaptureUrl)
+      return;
+
+    return () => URL.revokeObjectURL(fullCaptureUrl);
+  }, [fullCaptureUrl]);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -822,6 +833,7 @@ export default function LookoutRecorder() {
         token={config.lookoutToken}
         apiBaseUrl={config.lookoutApiBaseUrl}
         appName="Lapse"
+        callbacks={{ onCapture: (capture) => setFullCaptureUrl(URL.createObjectURL(capture.blob)) }}
         capture={captureMode === "camera"
           ? { mode: "camera", camera: cameraDeviceId ? { deviceId: cameraDeviceId } : undefined }
           : undefined
@@ -831,7 +843,8 @@ export default function LookoutRecorder() {
           draftId={config.draftId}
           lookoutToken={config.lookoutToken}
           apiBaseUrl={config.lookoutApiBaseUrl}
-          onShareFailed={() => { releasePendingStream(); setCaptureMode(null); setCameraDeviceId(null); }}
+          fullCaptureUrl={fullCaptureUrl}
+          onShareFailed={() => { releasePendingStream(); setCaptureMode(null); setCameraDeviceId(null); setFullCaptureUrl(null); }}
           onBrowserError={(message) => {
             // Browser capture failed — return to the selector (the "picker") and remember why,
             // so we can warn the user and steer them toward Desktop. Pre-select Desktop so the
@@ -839,6 +852,7 @@ export default function LookoutRecorder() {
             releasePendingStream();
             setCaptureMode(null);
             setCameraDeviceId(null);
+            setFullCaptureUrl(null);
             setBrowserError(message);
             setSelectedMode("desktop");
           }}
@@ -978,15 +992,42 @@ function CameraPreviewVideo({ stream }: { stream: MediaStream }) {
   );
 }
 
+/**
+ * The latest screen capture, scaled to fill the space between the controls without cropping.
+ * Sized from the image's own aspect ratio rather than `object-contain`, so the rounded corners
+ * sit on the picture and not on an invisible letterbox around it.
+ */
+function CapturePreviewImage({ src }: { src: string }) {
+  const [aspect, setAspect] = useState<number | null>(null);
+
+  return (
+    <div className="w-full h-full px-32 flex justify-center items-center">
+      <div className="w-full h-full flex justify-center items-center" style={{ containerType: "size" }}>
+        <img
+          src={src}
+          alt="Latest capture"
+          className="rounded-[48px]"
+          onLoad={(e) => setAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
+          style={aspect
+            ? { width: `min(100cqw, 100cqh * ${aspect})` }
+            : { maxWidth: "100%", maxHeight: "100%" }
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
 // The browser screen picker reports a deliberate user cancellation with this exact
 // message (from getDisplayMedia's AbortError, mapped in the Lookout SDK). We treat
 // it as "go back to mode selection" rather than a scary error — see the error effect.
 const SCREEN_CANCELLED_MESSAGE = "Screen sharing was cancelled.";
 
-function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBrowserError }: {
+function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, fullCaptureUrl, onShareFailed, onBrowserError }: {
   draftId: string;
   lookoutToken: string;
   apiBaseUrl: string;
+  fullCaptureUrl: string | null;
   onShareFailed: () => void;
   onBrowserError: (message: string) => void;
 }) {
@@ -1217,6 +1258,7 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
   }
 
   const formattedTime = formatTrackedTime(state.displaySeconds);
+  const captureUrl = fullCaptureUrl ?? state.lastScreenshotUrl;
 
   return (
     <RootLayout showHeader={false}>
@@ -1238,12 +1280,8 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
         <div className="w-full h-full flex justify-center items-center">
           {isCamera && state.previewStream ? (
             <CameraPreviewVideo stream={state.previewStream} />
-          ) : state.lastScreenshotUrl ? (
-            <img
-              src={state.lastScreenshotUrl}
-              alt="Latest capture"
-              className="max-h-full rounded-[48px] object-contain"
-            />
+          ) : captureUrl ? (
+            <CapturePreviewImage src={captureUrl} />
           ) : (
             <div className="text-secondary text-lg">
               {state.isSharing ? "Waiting for first screenshot..." : ""}
