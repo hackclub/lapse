@@ -24,7 +24,8 @@ export function Header() {
   const isAuthUnknown = auth.isLoading && !auth.currentUser;
 
   const [areSettingsOpen, setAreSettingsOpen] = useState(false);
-  const [usersActive, setUsersActive] = useCachedState("usersActive", 0);
+  // `null` until it's known - a placeholder `0` read as "nobody is recording" for as long as the request took.
+  const [usersActive, setUsersActive] = useCachedState<number | null>("usersActive", null);
 
   const fetchActiveUsers = useCallback(async () => {
     const res = await cachedApi.global.activeUsers({});
@@ -54,9 +55,9 @@ export function Header() {
 
             <div className="flex gap-1.5 px-6 py-2 h-min justify-center items-center rounded-2xl bg-dark border border-black shadow text-nowrap">
               <div aria-hidden className="w-2 h-2 rounded-full bg-green" />
-              <div>
-                {usersActive === 1 ? "1 person" : `${usersActive} people`} recording right now
-              </div>
+              <Skeleton id="header-users-active" data={usersActive} sample={12} label="Loading who's recording">
+                {count => <div>{count === 1 ? "1 person" : `${count} people`} recording right now</div>}
+              </Skeleton>
             </div>
           </div>
 
