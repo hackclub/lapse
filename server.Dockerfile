@@ -66,6 +66,11 @@ COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 # Copy the generated Prisma client
 COPY --from=builder /app/apps/server/src/generated ./apps/server/src/generated
 
+# Deps are installed with --ignore-scripts, so Prisma's schema engine (needed
+# by `migrate deploy` in CMD) was never downloaded. Fetch it as root here;
+# the lapse user can't write to node_modules at runtime.
+RUN node /app/node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines/scripts/postinstall.js
+
 USER lapse
 
 ENV NODE_ENV=production
