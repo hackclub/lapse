@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "cd ../.. && rm -rf vendor/lookout && git clone --depth 1 --branch v0.3.7 https://github.com/hackclub/lookout.git vendor/lookout && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && SOURCE_COMMIT=$VERCEL_GIT_COMMIT_SHA pnpm run build:client",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages ../../package.json ../../pnpm-lock.yaml ../../pnpm-workspace.yaml"
+}

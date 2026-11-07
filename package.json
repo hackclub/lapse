@@ -9,6 +9,7 @@
 	},
 	"scripts": {
 		"build": "pnpm --filter @lookout/shared run build && pnpm -r run build",
+		"build:client": "pnpm --filter @lookout/shared run build && pnpm --filter @lookout/react run build && pnpm --filter @hackclub/lapse-shared run build && pnpm --filter @hackclub/lapse-api run build && pnpm --filter @lapse/lapse-client run build",
 		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
 		"dev:watch-all": "pnpm --parallel run watch",
 		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env",
