@@ -1,6 +1,7 @@
 {
 	"packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c",
 	"devDependencies": {
+		"@types/node": "^26.6.5",
 		"oxfmt": "^0.72.0",
 		"oxlint": "^1.87.0",
 		"tsup": "^8.5.1",
@@ -8,9 +9,9 @@
 		"vitest": "^5.0.3"
 	},
 	"scripts": {
-		"build": "pnpm --filter @lookout/shared run build && pnpm -r run build",
-		"build:client": "pnpm --filter @lookout/shared run build && pnpm --filter @lookout/react run build && pnpm --filter @hackclub/lapse-shared run build && pnpm --filter @hackclub/lapse-api run build && pnpm --filter @lapse/lapse-client run build",
-		"dev": "pnpm --filter './packages/*' --parallel run build && pnpm --parallel run dev",
+		"build": "bash etc/build-lookout-wasm.sh && pnpm --filter @lookout/shared run build && pnpm -r --filter '!@lookout/wasm' run build",
+		"build:client": "bash etc/build-lookout-wasm.sh && pnpm --filter @lookout/shared run build && pnpm --filter @lookout/react run build && pnpm --filter @hackclub/lapse-shared run build && pnpm --filter @hackclub/lapse-api run build && pnpm --filter @lapse/lapse-client run build",
+		"dev": "bash etc/build-lookout-wasm.sh && pnpm --filter './packages/*' --parallel run build && pnpm --parallel --filter '!@lookout/wasm' run dev",
 		"dev:watch-all": "pnpm --parallel run watch",
 		"dev:setup-env": "pnpm run --filter @hackclub/lapse-devscripts dev:setup-env",
 		"dev:start-env": "pnpm run --filter @hackclub/lapse-devscripts dev:start-env",

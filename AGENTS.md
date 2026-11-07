@@ -5,6 +5,7 @@ This project features the following packages:
 - `apps/server`: the main Fastify/oRPC backend for Lapse.
 - `packages/api`: contracts shared between `client` and `server`. This package also allows for third-party clients to be developed for Lapse.
 - `apps/worker`: a BullMQ worker responsible for tasks like encoding. Interfaces with `server`.
+- `vendor/lookout`: a git submodule of Lookout, a separate Hack Club project. Its `packages/shared`, `packages/wasm` (`@lookout/wasm`, the Rust recorder engine compiled to WebAssembly - build it with `etc/build-lookout-wasm.sh`) and `clients/react` (`@lookout/react`) are part of this workspace. `client.Dockerfile` and `etc/fetch-lookout.sh` (used by Vercel) pin the same Lookout commit as the submodule - keep all three in step.
 
 Database models are defined in @apps/server/prisma/schema.prisma.
 API contracts are defined in @packages/api/src/contracts.

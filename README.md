@@ -18,6 +18,13 @@ That way, we can synchronize your progress with our servers, while still making 
 
 In order to get started with developing Lapse, run these commands:
 ```bash
+# Fetch Lookout, which Lapse records through
+git submodule update --init
+
+# Lookout's browser recorder is Rust compiled to WebAssembly, so you'll also need Rust (https://rustup.rs).
+# `pnpm build` and `pnpm dev` build it via `etc/build-lookout-wasm.sh`, which adds the wasm32 target
+# and wasm-bindgen for you.
+
 # Install all packages
 pnpm install
 
