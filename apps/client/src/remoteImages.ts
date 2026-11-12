@@ -4,7 +4,7 @@
  */
 export const OPTIMIZED_IMAGE_HOSTS = [
   // The public R2 bucket (`S3_PUBLIC_URL_PUBLIC`), which holds full-size thumbnails of browser-recorded timelapses.
-  "public.lapse-hackclub.link",
+  "lapse-legacy.hackclub-assets.com",
 
   // Profile pictures, which are stored as 512px images.
   "avatars.slack-edge.com",
