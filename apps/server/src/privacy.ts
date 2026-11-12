@@ -1,14 +1,14 @@
-import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import type { FastifyInstance } from "fastify";
 
 import { deleteAirtableRowsForEmails } from "@/airtableSync.js";
 import { database } from "@/db.js";
-import { env } from "@/env.js";
 import type * as db from "@/generated/prisma/client.js";
 import { cancelRealizeJob } from "@/job.js";
 import { logError, logInfo } from "@/logging.js";
 import * as lookout from "@/lookout.js";
 import { firstUseOf, PrivacyTokenError, verifyPrivacyToken, type PrivacyAction, type PrivacySubject } from "@/privacyToken.js";
+import { bucketName, s3For, type Bucket } from "@/storage.js";
 
 const PRIVACY_ROUTES: Record<PrivacyAction, string> = {
     delete: "/api/privacy/delete",
@@ -25,19 +25,8 @@ export type ErasureResult = {
 
 type PrivacyReply = { statusCode: number; body: Record<string, unknown> };
 
-type Bucket = "encrypted" | "public";
-
 // The hub gives up after 15 seconds, so per-timelapse and per-session calls run side by side rather than one by one.
 const EXTERNAL_CONCURRENCY = 16;
-
-const s3 = new S3Client({
-    region: "auto",
-    endpoint: env.S3_ENDPOINT,
-    credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID,
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-    },
-});
 
 /**
  * Errors that end a privacy call with a specific status. `code` is short snake_case and is safe to return and log.
@@ -356,7 +345,7 @@ async function listObjects(bucket: Bucket, prefix: string): Promise<string[]> {
     let continuationToken: string | undefined;
 
     do {
-        const page = await s3Call(() => s3.send(new ListObjectsV2Command({
+        const page = await s3Call(() => s3For(bucket).send(new ListObjectsV2Command({
             Bucket: bucketName(bucket),
             Prefix: prefix,
             ContinuationToken: continuationToken
@@ -378,7 +367,7 @@ async function deleteObjects(objects: Record<Bucket, string[]>) {
         const keys = objects[bucket];
         for (let start = 0; start < keys.length; start += 1000) {
             const batch = keys.slice(start, start + 1000);
-            const response = await s3Call(() => s3.send(new DeleteObjectsCommand({
+            const response = await s3Call(() => s3For(bucket).send(new DeleteObjectsCommand({
                 Bucket: bucketName(bucket),
                 Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true }
             })));
@@ -406,8 +395,4 @@ async function forEachConcurrently<T>(items: T[], action: (item: T) => Promise<v
     });
 
     await Promise.all(workers);
-}
-
-function bucketName(bucket: Bucket) {
-    return bucket === "encrypted" ? env.S3_ENCRYPTED_BUCKET_NAME : env.S3_PUBLIC_BUCKET_NAME;
 }

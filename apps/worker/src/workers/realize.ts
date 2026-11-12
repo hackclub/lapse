@@ -1,5 +1,4 @@
 import { Worker } from "bullmq";
-import { S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { THUMBNAIL_SIZE, TIMELAPSE_FACTOR, TIMELAPSE_FPS, type EditListEntry } from "@hackclub/lapse-api";
 import { REALIZE_JOB_QUEUE_NAME, RealizeJobInputsSchema, type RealizeJobInputs, type RealizeJobOutputs } from "@hackclub/lapse-jobs";
@@ -14,16 +13,8 @@ import { execFile } from "node:child_process";
 import { redis } from "@/redis.js";
 import { measureVideoDuration, probeVideo, selectDominantResolution } from "@/video.js";
 import { env } from "@/env.js";
+import { publicS3 } from "@/storage.js";
 import { JobLogger } from "@/log.js";
-
-const s3 = new S3Client({
-    region: "auto",
-    endpoint: env.S3_ENDPOINT,
-    credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID,
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-    },
-});
 
 /**
  * Flags that should be included at the beginning of each `ffmpeg` invocation.
@@ -310,7 +301,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
 
             try {
                 await new Upload({
-                    client: s3,
+                    client: publicS3,
                     params: {
                         Bucket: env.S3_PUBLIC_BUCKET_NAME,
                         Key: videoKey,
@@ -327,7 +318,7 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
 
             try {
                 await new Upload({
-                    client: s3,
+                    client: publicS3,
                     params: {
                         Bucket: env.S3_PUBLIC_BUCKET_NAME,
                         Key: thumbnailKey,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { HeadObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { HeadObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { oneOf } from "@hackclub/lapse-shared";
 import { EditListEntrySchema, timelapseRouterContract, type OwnedTimelapse, type Timelapse, MIN_TIMELAPSE_NAME_LENGTH, MAX_TIMELAPSE_NAME_LENGTH, MAX_TIMELAPSE_DESCRIPTION_LENGTH } from "@hackclub/lapse-api";
 
@@ -8,6 +8,7 @@ import * as db from "@/generated/prisma/client.js";
 import { logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes, type Context } from "@/router.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { env } from "@/env.js";
+import { encryptedS3, publicS3 } from "@/storage.js";
 import { database } from "@/db.js";
 import { apiOk, apiErr, type Result, Err, lapseId } from "@/common.js";
 import { actorEntitledTo, actorHasAdminView, stringifyActor, type Actor } from "@/ownership.js";
@@ -20,15 +21,6 @@ import { adminOverrideActorId, diffAuditedFields, recordAdminChange, recordAdmin
 import * as lookout from "@/lookout.js";
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
-
-const s3 = new S3Client({
-    region: "auto",
-    endpoint: env.S3_ENDPOINT,
-    credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID,
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-    },
-});
 
 export type DbTimelapse = db.Timelapse & { owner: db.User, comments: DbComment[] };
 export type DbOwnedTimelapse = DbTimelapse & { owner: db.User };
@@ -165,14 +157,14 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor | null):
 
     // Scary stuff ahead! If we mess this up, we permanently lose data. We don't want that!
     if (timelapse.s3Key) {
-        await s3.send(new DeleteObjectCommand({
+        await publicS3.send(new DeleteObjectCommand({
             Bucket: env.S3_PUBLIC_BUCKET_NAME,
             Key: timelapse.s3Key
         }));
     }
 
     if (timelapse.thumbnailS3Key) {
-        await s3.send(new DeleteObjectCommand({
+        await publicS3.send(new DeleteObjectCommand({
             Bucket: env.S3_PUBLIC_BUCKET_NAME,
             Key: timelapse.thumbnailS3Key
         }));
@@ -295,7 +287,7 @@ export default os.router({
 
             for (const session of draft.sessions) {
                 try {
-                    await s3.send(
+                    await encryptedS3.send(
                         new HeadObjectCommand({
                             Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
                             Key: session
