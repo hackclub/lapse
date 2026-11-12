@@ -1,11 +1,12 @@
 import { Queue, QueueEvents } from "bullmq";
-import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import type { EditListEntry } from "@hackclub/lapse-api";
 import { REALIZE_JOB_QUEUE_NAME, RealizeJobOutputsSchema, type RealizeJobInputs, type RealizeJobOutputs } from "@hackclub/lapse-jobs";
 
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
+import { publicS3 } from "@/storage.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
 import { syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
@@ -15,15 +16,6 @@ import { syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
 const realizeQueue = new Queue<RealizeJobInputs, RealizeJobOutputs>(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
 const realizeEvents = new QueueEvents(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
-
-const s3 = new S3Client({
-    region: "auto",
-    endpoint: env.S3_ENDPOINT,
-    credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID,
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-    },
-});
 
 /**
  * Enqueues a job in the worker to realize the video for a timelapse from encrypted sessions belonging to a (potentially removed) draft timelapse.
@@ -71,7 +63,7 @@ realizeEvents.waitUntilReady()
             // ever point at what the worker just uploaded.
             if (!await database().timelapse.findFirst({ where: { id: timelapseId }, select: { id: true } })) {
                 for (const key of [videoKey, thumbnailKey]) {
-                    await s3.send(new DeleteObjectCommand({ Bucket: env.S3_PUBLIC_BUCKET_NAME, Key: key }));
+                    await publicS3.send(new DeleteObjectCommand({ Bucket: env.S3_PUBLIC_BUCKET_NAME, Key: key }));
                 }
 
                 logInfo(`Timelapse ${timelapseId} was deleted while processing; removed its realized files.`);

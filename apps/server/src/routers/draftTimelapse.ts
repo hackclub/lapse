@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { DeleteObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { oneOf, range, toHex } from "@hackclub/lapse-shared";
 
@@ -8,6 +8,7 @@ import * as db from "@/generated/prisma/client.js";
 import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse, type LegacyUnpublishedTimelapse } from "@hackclub/lapse-api";
 import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
 import { env } from "@/env.js";
+import { encryptedS3 } from "@/storage.js";
 import { database } from "@/db.js";
 
 import { apiOk, apiErr, lapseId, Err } from "@/common.js";
@@ -17,15 +18,6 @@ import { actorEntitledTo, stringifyActor, type Actor } from "@/ownership.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { issueUploadToken } from "@/upload.js";
 
-const s3 = new S3Client({
-    region: "auto",
-    endpoint: env.S3_ENDPOINT,
-    credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID,
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-    },
-});
-
 /**
  * Whether `key` exists in the encrypted bucket.
  *
@@ -34,7 +26,7 @@ const s3 = new S3Client({
  */
 async function objectExists(key: string): Promise<boolean> {
     try {
-        await s3.send(new HeadObjectCommand({ Bucket: env.S3_ENCRYPTED_BUCKET_NAME, Key: key }));
+        await encryptedS3.send(new HeadObjectCommand({ Bucket: env.S3_ENCRYPTED_BUCKET_NAME, Key: key }));
         return true;
     }
     catch (error) {
@@ -146,7 +138,7 @@ export async function deleteDraftTimelapse(id: string, actor: Actor | null): Pro
     for (const session of draft.sessions) {
         logInfo(`Deleting session ${session} from S3.`);
 
-        await s3.send(new DeleteObjectCommand({
+        await encryptedS3.send(new DeleteObjectCommand({
             Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
             Key: session
         }));
@@ -154,7 +146,7 @@ export async function deleteDraftTimelapse(id: string, actor: Actor | null): Pro
 
     logInfo(`Deleting thumbnail ${draft.thumbnailKey} from S3.`);
 
-    await s3.send(new DeleteObjectCommand({
+    await encryptedS3.send(new DeleteObjectCommand({
         Bucket: env.S3_ENCRYPTED_BUCKET_NAME,
         Key: draft.thumbnailKey
     }));
