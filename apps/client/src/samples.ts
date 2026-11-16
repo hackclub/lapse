@@ -115,3 +115,25 @@ export const SAMPLE_AUDIT_LOG: AdminAuditLogEntry[] = ([
   changes,
   createdAt: SAMPLE_DATE
 }));
+
+export type ArchivedLookoutDraft = {
+  id: string;
+  createdAt: number;
+  archivedAt: number;
+  archivedReason: "discarded" | "session-gone";
+  lookoutSessionId: string;
+  lookoutStatus: string | null;
+  thumbnailUrl: string | null;
+  trackedSeconds: number | null;
+};
+
+export const SAMPLE_ARCHIVED_DRAFTS: ArchivedLookoutDraft[] = [0, 1].map(i => ({
+  id: `samplearch0${i}`,
+  createdAt: SAMPLE_DATE,
+  archivedAt: SAMPLE_DATE,
+  archivedReason: "discarded",
+  lookoutSessionId: "",
+  lookoutStatus: "complete",
+  thumbnailUrl: null,
+  trackedSeconds: 78 * 60
+}));

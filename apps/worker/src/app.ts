@@ -7,12 +7,24 @@ import { env } from "@/env.js";
 if (env.SENTRY_DSN) {
     Sentry.init({
         dsn: env.SENTRY_DSN,
+        environment: process.env["NODE_ENV"] ?? "development",
+        release: env.SOURCE_COMMIT,
         tracesSampleRate: 0,
         integrations: [
             Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] })
         ]
     });
 }
+
+// Job data carries the legacy device key, so only identifiers go along with the error - never the job itself.
+realizeJobWorker.on("failed", (job, err) => {
+    Sentry.withScope(scope => {
+        scope.setTag("lapse_jobName", job?.name ?? "unknown");
+        scope.setTag("lapse_jobId", job?.id ?? "unknown");
+        scope.setTag("lapse_timelapseId", job?.data.timelapseId ?? "unknown");
+        Sentry.captureException(err);
+    });
+});
 
 async function main() {
     console.log("⧗  Lapse (Background Worker) v2.0.0");

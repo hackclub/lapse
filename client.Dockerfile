@@ -13,7 +13,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 # Keep in step with the vendor/lookout submodule. A commit rather than a tag: the shared WebAssembly
 # recorder engine isn't in a tagged release yet.
 FROM base AS lookout
-ARG LOOKOUT_REF=385480c3b8d91579191385488c1aecaaa73aace8
+ARG LOOKOUT_REF=858931cc4da22b7467b67b589c23736dbad4893a
 RUN git init -q /lookout && cd /lookout && \
     git remote add origin https://github.com/hackclub/lookout.git && \
     git fetch -q --depth 1 origin "$LOOKOUT_REF" && \

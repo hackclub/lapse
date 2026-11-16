@@ -25,7 +25,8 @@ export function TimelapseCard({ timelapse }: {
 }) {
   const router = useRouter();
   const adminView = useAdminView();
-  const [thumb, setThumb] = useState<string | null>(null);
+  // A published thumbnail isn't encrypted, so it can go straight into a pre-rendered page.
+  const [thumb, setThumb] = useState<string | null>(timelapse.isDraft ? null : timelapse.thumbnailUrl);
   const [missingKey, setMissingKey] = useState(false);
 
   useEffect(() => {

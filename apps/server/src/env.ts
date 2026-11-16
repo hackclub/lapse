@@ -126,6 +126,11 @@ export const env = {
     get SENTRY_DSN() { return optional("SENTRY_DSN") },
 
     /**
+     * The commit being run, reported to Sentry as the release. Set by the deployment platform.
+     */
+    get SOURCE_COMMIT() { return optional("SOURCE_COMMIT") },
+
+    /**
      * A fallback Hackatime API key used in development when OAuth is unavailable.
      * Only considered when `NODE_ENV` is not `"production"`.
      */

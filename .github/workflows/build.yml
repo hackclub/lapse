@@ -28,6 +28,12 @@ jobs:
           node-version: 26
           cache: pnpm
 
+      # @lookout/react records through Lookout's Rust engine, compiled to WebAssembly (@lookout/wasm).
+      - name: Setup Rust for WebAssembly
+        run: |
+          rustup target add wasm32-unknown-unknown
+          bash vendor/lookout/packages/wasm/install-bindgen.sh
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

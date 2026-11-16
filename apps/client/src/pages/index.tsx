@@ -1,10 +1,12 @@
 import NextLink from "next/link";
 import NextImage from "next/image";
+import type { GetStaticProps } from "next";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { Skeleton } from "skullet/react";
 import { descending, formatDuration } from "@hackclub/lapse-shared";
+import type { LeaderboardUserEntry, Timelapse } from "@hackclub/lapse-api";
 
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +14,7 @@ import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 
 import { api } from "@/api";
 import { isOptimizableImage } from "@/remoteImages";
+import { serverApi, prefetch } from "@/serverApi";
 import { useAuth } from "@/hooks/useAuth";
 import { useCache } from "@/hooks/useCache";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
@@ -44,12 +47,31 @@ function ShelfHeader({ title, description, icon }: {
   );
 }
 
-export default function Home() {
+type Props = {
+  initialLeaderboard: { leaderboard: LeaderboardUserEntry[] } | null;
+  initialRecent: { timelapses: Timelapse[] } | null;
+};
+
+// The shelves are the same for every signed-out visitor, so the CDN can serve them already filled in. Admins see more
+// in "recent", which they still get from the client-side refetch.
+export const getStaticProps: GetStaticProps<Props> = async () => {
+  const [initialLeaderboard, initialRecent] = await Promise.all([
+    prefetch(() => serverApi.global.weeklyLeaderboard({})),
+    prefetch(() => serverApi.global.recentTimelapses({}))
+  ]);
+
+  return {
+    props: { initialLeaderboard, initialRecent },
+    revalidate: initialLeaderboard && initialRecent ? 60 : 10
+  };
+};
+
+export default function Home({ initialLeaderboard, initialRecent }: Props) {
   const router = useRouter();
   const auth = useAuth(false);
 
-  const reqLeaderboard = useCachedApiCall(() => api.global.weeklyLeaderboard({}), "leaderboard");
-  const reqRecent = useCachedApiCall(() => api.global.recentTimelapses({}), "recent");
+  const reqLeaderboard = useCachedApiCall(() => api.global.weeklyLeaderboard({}), "leaderboard", initialLeaderboard);
+  const reqRecent = useCachedApiCall(() => api.global.recentTimelapses({}), "recent", initialRecent);
 
   const [totalTimeCache, setTotalTimeCache] = useCache<string>("currentUserTotalTime");
   const [totalTime, setTotalTime] = useState<string | null>(null);

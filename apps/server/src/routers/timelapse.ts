@@ -19,6 +19,7 @@ import { dtoComment, type DbComment } from "@/routers/comment.js";
 import { enqueueRealizeJob } from "@/job.js";
 import { adminOverrideActorId, diffAuditedFields, recordAdminChange, recordAdminDeletion } from "@/adminAudit.js";
 import * as lookout from "@/lookout.js";
+import { archiveLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
 
@@ -619,7 +620,7 @@ export default os.router({
             const mayPublish = req.context.scopes.includes("timelapse:write") || req.context.scopes.includes("elevated");
 
             const drafts = await database().draftLookoutTimelapse.findMany({
-                where: { ownerId: caller.id },
+                where: { ownerId: caller.id, archivedAt: null },
                 orderBy: { createdAt: "desc" },
             });
 
@@ -659,8 +660,15 @@ export default os.router({
                         return null;
                     }
 
-                    logInfo(`Deleting draft ${draft.id}: Lookout session ${draft.lookoutSessionId} no longer exists (listing for ${caller.id}).`);
-                    await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
+                    // Archived rather than deleted: a 404 from a proxy in front of Lookout looks just like Lookout's
+                    // own, and losing the draft over one would cut the user off from a recording that still exists.
+                    await archiveLookoutDraft(draft, "session-gone", {
+                        actor: stringifyActor(req.context.actor),
+                        detail: err instanceof lookout.LookoutApiError
+                            ? { status: err.status, body: err.body.slice(0, 2000) }
+                            : { error: String(err) },
+                    });
+
                     return null;
                 }
             }));
@@ -685,11 +693,78 @@ export default os.router({
             if (!draft)
                 return apiOk({});
 
-            logInfo(`Discarding draft ${draft.id} (Lookout session ${draft.lookoutSessionId}) at the request of ${stringifyActor(req.context.actor)}.`);
-
-            await database().draftLookoutTimelapse.delete({ where: { id: draft.id } });
+            await archiveLookoutDraft(draft, "discarded", { actor: stringifyActor(req.context.actor) });
 
             return apiOk({});
+        }),
+
+    getArchivedLookoutDrafts: os.getArchivedLookoutDrafts
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const drafts = await database().draftLookoutTimelapse.findMany({
+                where: { ownerId: req.context.user.id, archivedAt: { not: null } },
+                orderBy: { archivedAt: "desc" },
+            });
+
+            const results = await Promise.all(drafts.map(async (draft) => {
+                // Lookout is asked only for decoration. The archive is where people come looking for a recording
+                // they've lost, so it has to list everything even when Lookout can't be reached.
+                let session: Awaited<ReturnType<typeof lookout.getSession>> | null = null;
+
+                try {
+                    session = await lookout.getSession(draft.lookoutSessionId);
+                }
+                catch (err) {
+                    logWarning(`Couldn't check Lookout session for archived draft ${draft.id}.`, { err, draftId: draft.id });
+                }
+
+                return {
+                    id: draft.id,
+                    createdAt: draft.createdAt.getTime(),
+                    archivedAt: (draft.archivedAt ?? draft.createdAt).getTime(),
+                    archivedReason: draft.archivedReason === "session-gone" ? "session-gone" as const : "discarded" as const,
+                    lookoutSessionId: draft.lookoutSessionId,
+                    lookoutStatus: session ? session.session.status : null,
+                    thumbnailUrl: session ? session.session.thumbnailUrl : null,
+                    trackedSeconds: session ? session.trackedSeconds : null,
+                };
+            }));
+
+            return apiOk({ drafts: results });
+        }),
+
+    restoreLookoutDraft: os.restoreLookoutDraft
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            const draft = await database().draftLookoutTimelapse.findFirst({
+                where: { id: req.input.id, ownerId: req.context.user.id, archivedAt: { not: null } }
+            });
+
+            if (!draft)
+                return apiErr("NOT_FOUND", "Couldn't find that archived recording!");
+
+            // Checked first so a recording Lookout really has lost isn't restored only to be archived again by the
+            // next draft listing.
+            let status: string;
+
+            try {
+                status = (await lookout.getSession(draft.lookoutSessionId)).session.status;
+            }
+            catch (err) {
+                if (lookout.isSessionGone(err))
+                    return apiErr("NOT_FOUND", "Lookout no longer has this recording, so it can't be restored.");
+
+                logWarning(`Couldn't check Lookout session while restoring draft ${draft.id}.`, { err, draftId: draft.id });
+                return apiErr("ERROR", "Couldn't reach Lookout to check this recording. Please try again in a bit.");
+            }
+
+            await restoreLookoutDraft(draft, { actor: stringifyActor(req.context.actor) });
+
+            return apiOk({ draftId: draft.id, lookoutStatus: status });
         }),
 
     pollLookoutStatus: os.pollLookoutStatus
@@ -771,6 +846,9 @@ export default os.router({
 
             if (outcome.kind === "failed")
                 return apiErr("ERROR", "Lookout couldn't compile this recording.");
+
+            if (outcome.kind === "rejected")
+                return apiErr("ERROR", outcome.message);
 
             if (outcome.kind === "waiting")
                 return apiErr("ERROR", `Lookout session is not ready yet (status: ${outcome.status}). Your details are saved and it will publish itself once the video is ready.`);

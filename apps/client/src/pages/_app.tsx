@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/router";
 import type { AppType } from "next/app";
 import { SkulletProvider } from "skullet/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { SkulletTheme } from "skullet";
 
 import "@/styles/globals.css";
@@ -24,6 +25,9 @@ const SKELETON_THEME: SkulletTheme = {
   radius: "6px",
   text: { top: "ascender", bottom: "descender" }
 };
+
+// Speed Insights reports to an endpoint only Vercel serves. Self-hosted builds (`client.Dockerfile`) would just 404 it.
+const IS_VERCEL = Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV);
 
 const App: AppType = ({ Component, pageProps }) => {
   const router = useRouter();
@@ -95,6 +99,7 @@ const App: AppType = ({ Component, pageProps }) => {
         <MaintenanceProvider>
           <KeyRelayProvider>
             <Component {...pageProps} />
+            { IS_VERCEL && <SpeedInsights /> }
           </KeyRelayProvider>
         </MaintenanceProvider>
       </AuthProvider>

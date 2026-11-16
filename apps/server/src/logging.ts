@@ -133,6 +133,26 @@ export function logError(message: string, data: Record<string, unknown> = {}) {
     const scope = getScope();
     console.error(getPlain("error", scope, message, data));
     Sentry.logger.error(`(${scope}) ${message}`, remapData(data));
+    captureIssue(scope, message, data);
+}
+
+/**
+ * Turns an error log into a Sentry issue, so it gets grouped and alerted on rather than sitting in the log stream.
+ * The first `Error` in `data` supplies the stack trace; without one, the message itself becomes the issue.
+ */
+function captureIssue(scope: string, message: string, data: Record<string, unknown>) {
+    const error = Object.values(data).find(x => x instanceof Error);
+    const extra = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== error));
+
+    Sentry.withScope(sentryScope => {
+        sentryScope.setTag("lapse_scope", scope);
+        sentryScope.setContext("lapse", { message, ...extra });
+
+        if (error)
+            Sentry.captureException(error);
+        else
+            Sentry.captureMessage(`(${scope}) ${message}`, "error");
+    });
 }
 
 export function logRequest(endpoint: string, input: unknown, actor: ExternalActor | null) {
