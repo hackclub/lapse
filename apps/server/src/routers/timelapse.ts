@@ -43,7 +43,7 @@ function clampTimelapseName(name: string): string {
 /**
  * Converts a database representation of a timelapse to a runtime (API) one. This excludes private fields.
  */
-export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
+export function dtoPublicTimelapse(entity: Omit<DbTimelapse, "snapshots">): Timelapse {
     // This lacks `isPublished` so that we have to mark it explicitly when creating a DTO
     // that might hold private data (e.g. device names).
     return {
