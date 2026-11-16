@@ -28,6 +28,10 @@ export function MaintenanceProvider({ children }: {
   const { currentUser, isLoading } = useAuthContext();
   const [maintenance, setMaintenance] = useState<MaintenanceWindow | null | undefined>(undefined);
 
+  // The Lookout desktop app keeps its panel loaded out of sight, where it never looks hidden to the page and would
+  // otherwise poll for as long as the app runs. Checking once when the panel opens is enough there.
+  const isPanel = router.pathname.startsWith("/lookout/panel/");
+
   useInterval(async () => {
     try {
       const res = await cachedApi.global.maintenance({});
@@ -37,7 +41,7 @@ export function MaintenanceProvider({ children }: {
     catch (err) {
       console.error("(MaintenanceContext.tsx) failed to fetch maintenance status", err);
     }
-  }, POLL_INTERVAL_MS);
+  }, isPanel ? null : POLL_INTERVAL_MS, { pauseWhenHidden: true });
 
   const isAdmin = currentUser !== null && currentUser.private.permissionLevel !== "USER";
 

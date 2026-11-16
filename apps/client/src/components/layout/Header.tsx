@@ -37,7 +37,7 @@ export function Header() {
     setUsersActive(res.data.count);
   }, []);
 
-  useInterval(fetchActiveUsers, 30 * 1000);
+  useInterval(fetchActiveUsers, 30 * 1000, { pauseWhenHidden: true });
 
   return (
     <>
