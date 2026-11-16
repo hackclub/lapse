@@ -47,6 +47,8 @@ model KnownDevice {
 
   /// Legacy unpublished timelapses that were created on this device. Only this device can decrypt and migrate such a timelapse.
   legacyTimelapses    LegacyUnpublishedTimelapse[]
+
+  @@index([ownerId])
 }
 
 /// Represents a single user of Lapse.
@@ -83,6 +85,9 @@ model User {
   lookoutDevices        LookoutDevice[]
   lookoutPairingCodes   LookoutPairingCode[]
   adminAuditLogs        AdminAuditLog[]
+
+  @@index([hackatimeId])
+  @@index([slackId])
 }
 
 model AdminAuditLog {
@@ -194,6 +199,9 @@ model DraftTimelapse {
 
   ownerId               String
   owner                 User               @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([deviceId])
 }
 
 /// A draft timelapse recorded via Lookout that has not yet been published.
@@ -221,6 +229,9 @@ model DraftLookoutTimelapse {
 
   ownerId             String
   owner               User     @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([pendingAt])
 }
 
 /// A Lookout desktop install paired to a user, letting it start recordings without sending
@@ -316,6 +327,9 @@ model Timelapse {
 
   comments              Comment[]
   associatedDraft       DraftTimelapse?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
 }
 
 /// Represents a comment that belongs to a timelapse.
@@ -335,6 +349,8 @@ model Comment {
 
   /// The date when the comment was created.
   createdAt   DateTime                @default(now())
+
+  @@index([timelapseId])
 }
 
 /// Represents an OAuth2 service client (app).
