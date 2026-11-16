@@ -1,4 +1,5 @@
 import NextImage from "next/image";
+import type { GetStaticProps } from "next";
 import clsx from "clsx";
 import type { ReactNode } from "react";
 import { Skeleton } from "skullet/react";
@@ -10,6 +11,7 @@ import { Footer } from "@/components/layout/Footer";
 import { TimeAgo } from "@/components/TimeAgo";
 
 import { api } from "@/api";
+import { serverApi, prefetch } from "@/serverApi";
 import { useCachedApiCall } from "@/hooks/useCachedApiCall";
 import { SAMPLE_STATS } from "@/samples";
 
@@ -121,8 +123,26 @@ function WeeklyChart({ weeks }: { weeks: GlobalStats["weekly"] }) {
   );
 }
 
-export default function Stats() {
-  const stats = useCachedApiCall(() => api.global.stats({}), "globalStats")?.stats;
+type Props = {
+  initialStats: GlobalStats | null;
+};
+
+// The server caches these numbers too, so there's nothing to gain from asking more often than this.
+export const getStaticProps: GetStaticProps<Props> = async () => {
+  const res = await prefetch(() => serverApi.global.stats({}));
+
+  return {
+    props: { initialStats: res?.stats ?? null },
+    revalidate: res ? 300 : 30
+  };
+};
+
+export default function Stats({ initialStats }: Props) {
+  const stats = useCachedApiCall(
+    () => api.global.stats({}),
+    "globalStats",
+    initialStats ? { stats: initialStats } : null
+  )?.stats;
 
   return (
     <RootLayout showHeader={true} title="Lapse Stats" description="How much Hack Clubbers have been recording with Lapse">

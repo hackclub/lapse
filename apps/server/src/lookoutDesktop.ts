@@ -235,7 +235,7 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
         const { panelToken } = req.params as { panelToken: string };
 
         const draft = await database().draftLookoutTimelapse.findFirst({
-            where: { panelToken },
+            where: { panelToken, archivedAt: null },
             include: { owner: true },
         });
 
@@ -296,7 +296,7 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
         const { panelToken } = req.params as { panelToken: string };
         const body = (req.body ?? {}) as Record<string, unknown>;
 
-        const draft = await database().draftLookoutTimelapse.findFirst({ where: { panelToken } });
+        const draft = await database().draftLookoutTimelapse.findFirst({ where: { panelToken, archivedAt: null } });
         if (!draft)
             return reply.code(404).send({ error: "no draft for that panel" });
 
@@ -330,6 +330,9 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
 
         const outcome = await finalizeIfPending(stored);
 
+        if (outcome?.kind === "rejected")
+            return reply.code(403).send({ error: outcome.message });
+
         if (outcome?.kind === "published") {
             return reply.send({
                 published: true,
@@ -348,7 +351,7 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
         const { panelToken } = req.params as { panelToken: string };
 
         const draft = await database().draftLookoutTimelapse.findFirst({
-            where: { panelToken },
+            where: { panelToken, archivedAt: null },
             include: { owner: true },
         });
 

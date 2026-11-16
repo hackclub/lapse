@@ -1,4 +1,5 @@
 import { useRouter } from "next/router";
+import type { GetStaticPaths, GetStaticProps } from "next";
 import NextImage from "next/image";
 import { useState } from "react";
 import Icon from "@hackclub/icons";
@@ -7,6 +8,7 @@ import { type Timelapse, type User, type PublicUser, DraftTimelapse } from "@hac
 import { assert, validateUrl, matchOrDefault, descending } from "@hackclub/lapse-shared";
 
 import { api } from "@/api";
+import { serverApi, prefetch } from "@/serverApi";
 import { markdownToJsx } from "@/markdown";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -25,14 +27,43 @@ import { WindowedModal } from "@/components/layout/WindowedModal";
 import { TextareaInput } from "@/components/ui/TextareaInput";
 import { SAMPLE_TIMELAPSES, SAMPLE_USER } from "@/samples";
 
-export default function Page() {
+type Props = {
+  initialUser: User | PublicUser | null;
+  initialTimelapses: Timelapse[] | null;
+};
+
+// Profiles are rendered on their first visit and then served from the CDN. What's baked in is the public view - the
+// owner's own unlisted timelapses and drafts arrive with the client-side refetch.
+export const getStaticPaths: GetStaticPaths = async () => ({ paths: [], fallback: "blocking" });
+
+export const getStaticProps: GetStaticProps<Props, { id: string }> = async ({ params }) => {
+  const id = params?.id;
+  const userRes = id
+    ? await prefetch(() => serverApi.user.query(id.startsWith("@") ? { handle: id.substring(1).trim() } : { id }))
+    : null;
+
+  const initialUser = userRes?.user ?? null;
+  const timelapsesRes = initialUser
+    ? await prefetch(() => serverApi.timelapse.findByUser({ user: initialUser.id }))
+    : null;
+
+  return {
+    props: {
+      initialUser,
+      initialTimelapses: timelapsesRes?.timelapses ?? null
+    },
+    revalidate: 60
+  };
+};
+
+export default function Page({ initialUser, initialTimelapses }: Props) {
   const router = useRouter();
   const { currentUser } = useAuth(false);
   const adminView = useAdminView();
 
-  const [user, setUser] = useState<User | PublicUser | null>(null);
+  const [user, setUser] = useState<User | PublicUser | null>(initialUser);
   const [drafts, setDrafts] = useState<DraftTimelapse[] | null>(null);
-  const [timelapses, setTimelapses] = useState<Timelapse[] | null>(null);
+  const [timelapses, setTimelapses] = useState<Timelapse[] | null>(initialTimelapses);
 
   // A profile that won't load is a dead end, and gets a page of its own - anything that goes wrong afterwards is
   // something the user can retry from where they are, and stays a modal.
@@ -155,9 +186,11 @@ export default function Page() {
   };
 
   function formatJoinDate(timestamp: number) {
+    // Pinned to UTC so the server's render and the browser's hydration agree on the month.
     return new Date(timestamp).toLocaleDateString("en-US", {
       year: "numeric",
-      month: "long"
+      month: "long",
+      timeZone: "UTC"
     });
   };
 
@@ -166,7 +199,12 @@ export default function Page() {
   }
 
   return (
-    <RootLayout showHeader={true} title={user ? `${user.displayName} (@${user.handle}) - Lapse` : "Lapse"}>
+    <RootLayout
+      showHeader={true}
+      title={user ? `${user.displayName} (@${user.handle}) - Lapse` : "Lapse"}
+      description={user ? (user.bio.trim() || `${user.displayName}'s timelapses on Lapse.`).slice(0, 200) : undefined}
+      image={user?.profilePictureUrl}
+    >
       <div className="px-8 py-8 md:py-0 sm:px-16">
         <Skeleton data={user} sample={SAMPLE_USER} label="Loading profile">
           {u => (

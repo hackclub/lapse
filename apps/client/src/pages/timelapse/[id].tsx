@@ -1,4 +1,5 @@
 import NextLink from "next/link";
+import type { GetStaticPaths, GetStaticProps } from "next";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
@@ -7,6 +8,7 @@ import { Skeleton, SkeletonBox } from "skullet/react";
 import type { Timelapse, TimelapseVisibility, Comment } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
+import { serverApi, prefetch } from "@/serverApi";
 import { useAsyncEffect } from "@/hooks/useAsyncEffect";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminView } from "@/hooks/useAdminView";
@@ -31,7 +33,7 @@ import { TimeAgo } from "@/components/TimeAgo";
 import { CommentSection } from "@/components/entity/CommentSection";
 import { TimelapsePlayer } from "@/components/entity/TimelapsePlayer";
 import { Duration } from "@/components/Duration";
-import { sleep } from "@hackclub/lapse-shared";
+import { formatDuration, sleep } from "@hackclub/lapse-shared";
 import { SAMPLE_TIMELAPSE } from "@/samples";
 
 /*
@@ -43,12 +45,42 @@ import { SAMPLE_TIMELAPSE } from "@/samples";
 const THEATRE_MAX_HEIGHT = "max-h-[calc(100dvh_-_20rem)]";
 const THEATRE_BAND = `w-full aspect-video ${THEATRE_MAX_HEIGHT}`;
 
-export default function Page() {
+type Props = {
+  initialTimelapse: Timelapse | null;
+};
+
+// Nothing is built ahead of time - each timelapse is rendered on its first visit and then served from the CDN.
+export const getStaticPaths: GetStaticPaths = async () => ({ paths: [], fallback: "blocking" });
+
+// This is only ever what an anonymous visitor would see. A timelapse that isn't visible to them (one still
+// processing, say) comes back as `null` rather than a 404, as its owner can still see it once the client asks.
+export const getStaticProps: GetStaticProps<Props, { id: string }> = async ({ params }) => {
+  const res = params ? await prefetch(() => serverApi.timelapse.query({ id: params.id })) : null;
+
+  return {
+    props: { initialTimelapse: res?.timelapse ?? null },
+    revalidate: 60
+  };
+};
+
+function previewDescription(timelapse: Timelapse) {
+  const text = timelapse.description
+    .replace(/[*_`#>~[\]()!]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (text.length == 0)
+    return `A ${formatDuration(timelapse.duration)} timelapse by ${timelapse.owner.displayName} on Lapse.`;
+
+  return text.length > 200 ? `${text.slice(0, 197)}...` : text;
+}
+
+export default function Page({ initialTimelapse }: Props) {
   const router = useRouter();
   const { currentUser } = useAuth(false);
   const adminView = useAdminView();
 
-  const [timelapse, setTimelapse] = useState<Timelapse | null>(null);
+  const [timelapse, setTimelapse] = useState<Timelapse | null>(initialTimelapse);
   const [viewBlocked, setViewBlocked] = useState(false);
 
   // A timelapse we can't load leaves nothing to show, so it takes over the page. Everything past that point is
@@ -228,7 +260,13 @@ export default function Page() {
   const hasFailed = timelapse?.visibility === "FAILED_PROCESSING";
 
   return (
-    <RootLayout showHeader={true} title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}>
+    <RootLayout
+      showHeader={true}
+      title={timelapse ? `${timelapse.name} - Lapse` : "Lapse"}
+      description={timelapse ? previewDescription(timelapse) : undefined}
+      image={timelapse && !timelapse.blocker ? timelapse.thumbnailUrl : null}
+      video={timelapse && !timelapse.blocker ? timelapse.playbackUrl : null}
+    >
       <div className="w-full flex flex-col pb-16">
         {/*
           The video is the page, and it gets the whole width of the window to be it in. Everything else is arranged

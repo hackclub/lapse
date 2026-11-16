@@ -21,8 +21,10 @@
     "@orpc/openapi": "^1.15.5",
     "@orpc/openapi-client": "^1.15.5",
     "@scure/bip39": "^2.4.0",
+    "@sentry/nextjs": "^11.11.0",
     "@squircle-js/react": "^1.3.0",
     "@types/platform": "^1.3.6",
+    "@vercel/speed-insights": "2.0.0",
     "@videojs/react": "^10.0.1",
     "clsx": "^2.1.1",
     "fetch-retry": "^6.0.0",
@@ -49,7 +51,6 @@
     "@types/react-dom": "^19.3.0",
     "babel-loader": "^10.1.1",
     "tailwindcss": "^4.3.3",
-    "terser-webpack-plugin": "^5.6.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
