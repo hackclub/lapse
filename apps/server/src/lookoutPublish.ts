@@ -7,6 +7,8 @@ import { env } from "@/env.js";
 import { lapseId } from "@/common.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import * as lookout from "@/lookout.js";
+import { rejectLookoutPublish, removePublishedLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
+import { isHackatimeRestricted } from "@/routers/hackatime.js";
 import { durationBySnapshots, syncTimelapseWithHackatime, TIMELAPSE_INCLUDES, type DbOwnedTimelapse } from "@/routers/timelapse.js";
 
 /**
@@ -37,7 +39,26 @@ export type FinalizeOutcome =
     /** Lookout is still working; try again later. */
     | { kind: "waiting"; status: string }
     /** Lookout gave up on the recording, so there will never be a video. */
-    | { kind: "failed"; status: string };
+    | { kind: "failed"; status: string }
+    /** The recording may not be published at all. The pending intent has been dropped. */
+    | { kind: "rejected"; message: string };
+
+export const BROWSER_RECORDING_RESTRICTED_MESSAGE = "Your account type does not allow you to publish timelapses recorded in the browser. Please record with the Lookout desktop app instead.";
+
+/**
+ * Users banned on Hackatime may only publish recordings made with the Lookout desktop app. `clientInfo` is `null`
+ * until the first upload, so a session that hasn't recorded anything yet can't be judged.
+ */
+async function isRestrictedBrowserRecording(ownerId: string, clientInfo: string | null): Promise<boolean> {
+    if (clientInfo === null || lookout.isDesktopClient(clientInfo))
+        return false;
+
+    const owner = await database().user.findFirst({ where: { id: ownerId } });
+    if (!owner)
+        return false;
+
+    return await isHackatimeRestricted(owner);
+}
 
 export function intentOf(draft: db.DraftLookoutTimelapse): PublishIntent | null {
     if (!draft.pendingAt || !draft.pendingName || !draft.pendingVisibility)
@@ -63,15 +84,21 @@ export function timelapseUrl(timelapseId: string): string {
  * a card nagging them for details they already gave would be a lie.
  */
 export async function storePublishIntent(draft: db.DraftLookoutTimelapse, intent: PublishIntent): Promise<db.DraftLookoutTimelapse> {
-    const updated = await database().draftLookoutTimelapse.update({
-        where: { id: draft.id },
-        data: {
-            pendingName: intent.name,
-            pendingDescription: intent.description,
-            pendingVisibility: intent.visibility,
-            pendingHackatimeProject: intent.hackatimeProject,
-            pendingAt: new Date(),
-        },
+    // Answering for an archived draft brings it back: filling in its details is as clear a sign as any that the
+    // user wants it after all - and the desktop panel can still be open on a draft discarded from the website.
+    const updated = await database().$transaction(async tx => {
+        await restoreLookoutDraft(draft, { tx, actor: "publish intent" });
+
+        return await tx.draftLookoutTimelapse.update({
+            where: { id: draft.id },
+            data: {
+                pendingName: intent.name,
+                pendingDescription: intent.description,
+                pendingVisibility: intent.visibility,
+                pendingHackatimeProject: intent.hackatimeProject,
+                pendingAt: new Date(),
+            },
+        });
     });
 
     try {
@@ -103,7 +130,7 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
     });
 
     if (existing) {
-        await database().draftLookoutTimelapse.deleteMany({ where: { id: draft.id } });
+        await removePublishedLookoutDraft(draft, existing.id);
         return { kind: "published", timelapse: existing };
     }
 
@@ -112,6 +139,11 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
 
     if (status === "failed")
         return { kind: "failed", status };
+
+    if (await isRestrictedBrowserRecording(draft.ownerId, session.clientInfo)) {
+        await rejectLookoutPublish(draft, "browser-recording-restricted", { detail: { clientInfo: session.clientInfo } });
+        return { kind: "rejected", message: BROWSER_RECORDING_RESTRICTED_MESSAGE };
+    }
 
     if (status !== "complete")
         return { kind: "waiting", status };
@@ -138,7 +170,7 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
         include: TIMELAPSE_INCLUDES,
     });
 
-    await database().draftLookoutTimelapse.deleteMany({ where: { id: draft.id } });
+    await removePublishedLookoutDraft(draft, timelapse.id);
 
     // Now that the timelapse has a page, point the desktop app's "Open in Lapse" action at it.
     try {
@@ -206,7 +238,7 @@ export async function sweepPendingLookoutPublishes(): Promise<void> {
 
     try {
         const pending = await database().draftLookoutTimelapse.findMany({
-            where: { pendingAt: { not: null } },
+            where: { pendingAt: { not: null }, archivedAt: null },
             orderBy: { pendingAt: "asc" },
             take: 100,
         });

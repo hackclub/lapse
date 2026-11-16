@@ -38,7 +38,7 @@ export interface LookoutTimings {
  * "Lookout is having a bad moment" - the two warrant very different reactions.
  */
 export class LookoutApiError extends Error {
-    constructor(readonly status: number, message: string) {
+    constructor(readonly status: number, message: string, readonly body: string) {
         super(message);
         this.name = "LookoutApiError";
     }
@@ -66,7 +66,7 @@ async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> 
         const body = await res.text().catch(() => "(no body)");
         const msg = `Lookout API error: ${res.status} ${res.statusText} on ${path} — ${body}`;
         logError(msg);
-        throw new LookoutApiError(res.status, msg);
+        throw new LookoutApiError(res.status, msg, body);
     }
 
     return res.json() as Promise<T>;
@@ -197,6 +197,17 @@ export function isPlaceholderSessionName(name: string): boolean {
 export async function deleteSession(sessionId: string): Promise<void> {
     await lookoutFetch<{ sessionId: string; deleteAfter: string }>(`/api/internal/sessions/${sessionId}`, {
         method: "DELETE",
+        body: "{}",
+    });
+}
+
+/**
+ * Cancels a deletion requested with `deleteSession`. Only possible within the grace period - past it, Lookout answers
+ * with a 410.
+ */
+export async function restoreSession(sessionId: string): Promise<void> {
+    await lookoutFetch<{ restored: boolean }>(`/api/internal/sessions/${sessionId}/restore`, {
+        method: "POST",
         body: "{}",
     });
 }

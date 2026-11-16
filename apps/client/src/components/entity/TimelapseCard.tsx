@@ -23,7 +23,8 @@ export function TimelapseCard({ timelapse }: {
 }) {
   const router = useRouter();
   const adminView = useAdminView();
-  const [thumb, setThumb] = useState<string | null>(null);
+  // A published thumbnail isn't encrypted, so it can go straight into a pre-rendered page.
+  const [thumb, setThumb] = useState<string | null>(timelapse.isDraft ? null : timelapse.thumbnailUrl);
   const [missingKey, setMissingKey] = useState(false);
 
   useEffect(() => {
@@ -98,7 +99,7 @@ export function TimelapseCard({ timelapse }: {
                 {missingKey && <Icon glyph="private" size={32} className="text-muted" />}
               </div>
             )
-            : <img src={thumb} alt="" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
+            : <img src={thumb} alt="" loading="lazy" decoding="async" className="block w-full h-full transition-all hover:brightness-75 object-cover" />
         }
 
         {!timelapse.isDraft && adminView.enabled && (

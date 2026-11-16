@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
-import { globalRouterContract, type GlobalStats, type GlobalStatsWeek, type LeaderboardUserEntry, MAX_DISPLAY_NAME_LENGTH } from "@hackclub/lapse-api";
+import { globalRouterContract, type GlobalStats, type Timelapse, type GlobalStatsWeek, type LeaderboardUserEntry, MAX_DISPLAY_NAME_LENGTH } from "@hackclub/lapse-api";
 import { daysAgo, descending } from "@hackclub/lapse-shared";
 
 import { logMiddleware, type Context } from "@/router.js";
 import { dtoPublicTimelapse } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
-import { logError } from "@/logging.js";
+import { logError, logWarning } from "@/logging.js";
 import { actorHasAdminView } from "@/ownership.js";
 
 const os = implement(globalRouterContract)
@@ -18,6 +18,19 @@ let leaderboardCacheUpdatedOn: Date | null = null;
 let leaderboardCache: LeaderboardUserEntry[] = [];
 
 const ACTIVE_USERS_EXPIRY_MS = 60 * 1000;
+/**
+ * Every open page polls this, and the answer is the same for everyone. `lastHeartbeat` is deliberately left
+ * unindexed - it is rewritten on every heartbeat - so the count is a full scan of `User` that we share instead.
+ */
+const ACTIVE_USERS_CACHE_TTL_MS = 5 * 1000;
+
+let activeUsersCache: { expiresAt: number, count: Promise<number> } | null = null;
+
+async function countActiveUsers(): Promise<number> {
+    return await database().user.count({
+        where: { lastHeartbeat: { gt: new Date(Date.now() - ACTIVE_USERS_EXPIRY_MS) } }
+    });
+}
 
 const STATS_CACHE_TTL_MS = 10 * 60 * 1000;
 const STATS_WEEKS = 12;
@@ -30,6 +43,59 @@ function startOfUtcWeek(date: Date) {
     const daysSinceMonday = (start.getUTCDay() + 6) % 7;
     start.setUTCDate(start.getUTCDate() - daysSinceMonday);
     return start;
+}
+
+/** How long a cached list of recent public timelapses is served before a refresh is started in the background. */
+const RECENT_FRESH_MS = 5 * 1000;
+/** Past this, the cache is too old to serve while refreshing, and the request waits for the database instead. */
+const RECENT_MAX_STALE_MS = 5 * 60 * 1000;
+
+let recentCache: { fetchedAt: number, timelapses: Timelapse[] } | null = null;
+let recentRefresh: Promise<Timelapse[]> | null = null;
+
+async function queryRecentTimelapses(isAdminView: boolean): Promise<Timelapse[]> {
+    const timelapses = await database().timelapse.findMany({
+        where: isAdminView ? {} : { visibility: "PUBLIC", associatedJobId: null },
+        orderBy: { createdAt: "desc" },
+        omit: { snapshots: true },
+        include: {
+            owner: true,
+            comments: { include: { author: true } }
+        },
+        take: 50
+    });
+
+    return timelapses.map(dtoPublicTimelapse);
+}
+
+function refreshRecentTimelapses(): Promise<Timelapse[]> {
+    // Concurrent misses share one query rather than each hitting the database.
+    recentRefresh ??= queryRecentTimelapses(false)
+        .then(timelapses => {
+            recentCache = { fetchedAt: Date.now(), timelapses };
+            return timelapses;
+        })
+        .finally(() => { recentRefresh = null; });
+
+    return recentRefresh;
+}
+
+/**
+ * The home page's feed is the same for every non-admin caller, so it is served from memory and refreshed
+ * behind the scenes (stale-while-revalidate): once warm, no request ever waits on the database.
+ */
+async function cachedPublicRecentTimelapses(): Promise<Timelapse[]> {
+    const age = recentCache ? Date.now() - recentCache.fetchedAt : Infinity;
+
+    if (recentCache && age < RECENT_FRESH_MS)
+        return recentCache.timelapses;
+
+    if (recentCache && age < RECENT_MAX_STALE_MS) {
+        refreshRecentTimelapses().catch(err => logWarning("Couldn't refresh the recent timelapses cache.", { err }));
+        return recentCache.timelapses;
+    }
+
+    return await refreshRecentTimelapses();
 }
 
 async function computeStats(): Promise<GlobalStats> {
@@ -193,33 +259,21 @@ export default os.router({
     recentTimelapses: os.recentTimelapses
         .handler(async (req) => {
             // Admins see every timelapse, including unlisted, failed, and still-processing ones, so they can moderate.
-            const isAdminView = actorHasAdminView(req.context.actor);
+            if (actorHasAdminView(req.context.actor))
+                return apiOk({ timelapses: await queryRecentTimelapses(true) });
 
-            const timelapses = await database().timelapse.findMany({
-                where: isAdminView ? {} : { visibility: "PUBLIC", associatedJobId: null },
-                orderBy: { createdAt: "desc" },
-                include: {
-                    owner: true,
-                    comments: { include: { author: true } }
-                },
-                take: 50
-            });
-
-            return apiOk({
-                timelapses: timelapses.map(dtoPublicTimelapse)
-            });
+            return apiOk({ timelapses: await cachedPublicRecentTimelapses() });
         }),
 
     activeUsers: os.activeUsers
-        .handler(async (req) => {
-            const res = await database().user.aggregate({
-                _count: { lastHeartbeat: true },
-                where: {
-                    lastHeartbeat: { gt: new Date(new Date().getTime() - ACTIVE_USERS_EXPIRY_MS) }
-                }
-            });
+        .handler(async () => {
+            if (activeUsersCache == null || activeUsersCache.expiresAt <= Date.now()) {
+                const count = countActiveUsers();
+                activeUsersCache = { expiresAt: Date.now() + ACTIVE_USERS_CACHE_TTL_MS, count };
+                count.catch(() => { activeUsersCache = null; });
+            }
 
-            return apiOk({ count: res._count.lastHeartbeat });
+            return apiOk({ count: await activeUsersCache.count });
         }),
 
     stats: os.stats

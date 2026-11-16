@@ -30,7 +30,12 @@ export const env = {
     /**
      * Passed to `Sentry.init`.
      */
-    get SENTRY_DSN() { return optional("SENTRY_DSN") }
+    get SENTRY_DSN() { return optional("SENTRY_DSN") },
+
+    /**
+     * The commit being run, reported to Sentry as the release. Set by the deployment platform.
+     */
+    get SOURCE_COMMIT() { return optional("SOURCE_COMMIT") }
 };
 
 function optional(name: string) {

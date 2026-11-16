@@ -3,30 +3,34 @@ import NextLink from "next/link";
 import clsx from "clsx";
 import { match } from "@hackclub/lapse-shared";
 import { type PublicUser } from "@hackclub/lapse-api";
-
-import { Skeleton } from "@/components/ui/Skeleton";
+import { SkeletonBox } from "skullet/react";
 
 const failedUrls = new Set<string>();
 
-export function ProfilePicture({ user, size = "md", className = "", isSkeleton = false }: {
-  user: PublicUser | null,
-  size?: "xs" | "sm" | "md" | "lg" | "xl";
-  className?: string;
-  isSkeleton?: boolean;
-}) {
-  const sizeClass = match(size, {
+type ProfilePictureSize = "xs" | "sm" | "md" | "lg" | "xl";
+
+function sizeClassOf(size: ProfilePictureSize) {
+  return match(size, {
     "xs": "w-6 h-6 text-xs",
     "sm": "w-8 h-8 text-xs",
     "md": "w-10 h-10 text-sm",
     "lg": "w-12 h-12 text-base",
     "xl": "w-16 h-16 text-lg"
   });
+}
+
+export function ProfilePicture({ user, size = "md", className = "" }: {
+  user: PublicUser | null,
+  size?: ProfilePictureSize;
+  className?: string;
+}) {
+  const sizeClass = sizeClassOf(size);
 
   const cachetUrl = user?.slackId ? `https://cachet.hackclub.com/users/${user.slackId}/r` : null;
   const [, setFailureCount] = useState(0);
 
-  if (isSkeleton || !user)
-    return <Skeleton circular className={sizeClass} />;
+  if (!user)
+    return <ProfilePicture.Skeleton size={size} className={className} />;
 
   // Cachet always redirects to the user's current Slack avatar, whereas the stored URL is only refreshed on login.
   // Each candidate is tried once; when all of them fail (e.g. a network that blocks Slack's CDN), we show the
@@ -75,3 +79,17 @@ export function ProfilePicture({ user, size = "md", className = "", isSkeleton =
     </NextLink>
   );
 }
+
+// The avatar is sized by its classes, so the box's own default width and height are cleared to let them through.
+ProfilePicture.Skeleton = function ProfilePictureSkeleton({ size = "md", className = "" }: {
+  size?: ProfilePictureSize;
+  className?: string;
+}) {
+  return (
+    <SkeletonBox
+      radius="50%"
+      className={clsx("block shrink-0", sizeClassOf(size), className)}
+      style={{ width: undefined, height: undefined }}
+    />
+  );
+};

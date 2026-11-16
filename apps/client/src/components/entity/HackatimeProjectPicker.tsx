@@ -5,13 +5,14 @@ import { formatDuration } from "@hackclub/lapse-shared";
 import type { HackatimeProject } from "@hackclub/lapse-api";
 
 import { useRouter } from "next/router";
+import { Skeleton } from "skullet/react";
 
 import { api } from "@/api";
 import type { IconGlyph } from "@/common";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { useHackatimeRelink } from "@/hooks/useHackatimeRelink";
+import { SAMPLE_HACKATIME_PROJECTS } from "@/samples";
 
 /** The maximum length of a Hackatime project name, as enforced by the API contract. */
 const MAX_PROJECT_NAME_LENGTH = 128;
@@ -243,6 +244,23 @@ function ProjectRow({ project, selected, compact, onClick }: {
   );
 }
 
+/** What the project list looks like with a few projects in it, for Skullet to measure while the real ones load. */
+function SampleProjectList({ compact }: { compact?: boolean }) {
+  return (
+    <div className="flex flex-col border border-slate rounded-xl overflow-hidden">
+      {SAMPLE_HACKATIME_PROJECTS.map(project => (
+        <ProjectRow key={project.name} project={project} selected={false} compact={compact} onClick={() => {}} />
+      ))}
+
+      <div className="border-t border-slate">
+        <PickerRow icon="plus" selected={false} compact={compact} onClick={() => {}} className={compact ? "py-2!" : "py-3!"}>
+          <span className="flex-1 font-bold">I want to make a new project</span>
+        </PickerRow>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Lets the user pick one of their Hackatime projects, or name a new one. The picker owns the choice and reports it
  * back via `onChange` - `null` meaning "nothing picked yet".
@@ -471,18 +489,7 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
   // still visible and still reversible.
   const listCollapsed = compact && effectiveMode === "new";
 
-  if (isLoadingProjects) {
-    return (
-      <div className="flex flex-col gap-3">
-        <span className="font-bold">Loading your Hackatime projects...</span>
-        <Skeleton className="w-full h-9" />
-        <Skeleton className="w-full h-9" />
-        <Skeleton className="w-full h-9" />
-      </div>
-    );
-  }
-
-  return (
+  const picker = (
     <div className="flex flex-col">
       <div className="flex flex-col gap-3">
         {hasProjects ? (
@@ -634,5 +641,17 @@ export function HackatimeProjectPicker({ isActive, initialProject, onChange, onL
         </div>
       </div>
     </div>
+  );
+
+  // Stays mounted across the load, so the list comes in over its skeleton rather than replacing it. Until then it
+  // shows a sample list - or, from the second time on, the shape of the user's real one.
+  return (
+    <Skeleton
+      id={compact ? "hackatime-projects-compact" : "hackatime-projects"}
+      loading={isLoadingProjects}
+      label="Loading your Hackatime projects"
+    >
+      {isLoadingProjects ? <SampleProjectList compact={compact} /> : picker}
+    </Skeleton>
   );
 }

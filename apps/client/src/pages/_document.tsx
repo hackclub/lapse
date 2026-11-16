@@ -1,5 +1,7 @@
 import { Html, Head, Main, NextScript } from "next/document";
 
+const API_ORIGIN = new URL(process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com").origin;
+
 export default function Document() {
   return (
     <Html lang="en">
@@ -13,6 +15,11 @@ export default function Document() {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="mobile-web-app-capable" content="yes" />
+
+        {/* Every page talks to the API, and most show Lookout's videos and thumbnails - open those connections early. */}
+        <link rel="preconnect" href={API_ORIGIN} crossOrigin="use-credentials" />
+        <link rel="preconnect" href="https://lookout.hackclub.com" />
+        <link rel="preconnect" href="https://lookout.hackclub-assets.com" />
       </Head>
       <body className="antialiased">
         <Main />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
 
@@ -10,6 +11,8 @@ import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
 import { useInterval } from "@/hooks/useInterval";
+import { useRecordingKeepAwake } from "@/hooks/useRecordingKeepAwake";
+import { checkBrowserRecorderSupport } from "@/components/lookout/engineSupport";
 import {
   type StoredLookoutSession,
   storeSession,
@@ -50,7 +53,7 @@ interface LookoutSessionConfig {
 
 type RecordingMode = "desktop" | "screen" | "camera";
 
-function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed }: {
+function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed, unavailable }: {
   icon: IconGlyph;
   title: string;
   description: string;
@@ -58,14 +61,19 @@ function RecordingModeOption({ icon, title, description, selected, onClick, reco
   onClick: () => void;
   recommended?: boolean;
   dimmed?: boolean;
+  /** Greyed out for good. Still clickable, so the click can explain why. */
+  unavailable?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
+      aria-disabled={unavailable || undefined}
       className={clsx(
-        "relative flex flex-col items-center gap-3 p-6 w-full cursor-pointer transition-colors rounded-lg border",
-        selected ? "bg-red text-white border-red" : "border-slate hover:bg-darkless",
-        dimmed && !selected && "opacity-40"
+        "relative flex flex-col items-center gap-3 p-6 w-full transition-colors rounded-lg border",
+        unavailable ? "border-slate opacity-40 grayscale cursor-not-allowed"
+          : selected ? "bg-red text-white border-red cursor-pointer"
+          : "border-slate hover:bg-darkless cursor-pointer",
+        dimmed && !selected && !unavailable && "opacity-40"
       )}
     >
       {recommended && (
@@ -306,6 +314,17 @@ type ServerDraft = {
   thumbnailUrl: string | null;
 };
 
+// Two drafts, for Skullet to measure the list from until the real ones arrive.
+const SAMPLE_SERVER_DRAFTS: ServerDraft[] = [0, 1].map(i => ({
+  id: `sampledraft${i}`,
+  createdAt: Date.UTC(2026, 0, 1),
+  lookoutSessionId: "",
+  lookoutToken: "",
+  lookoutStatus: i === 0 ? "complete" : "recording",
+  videoUrl: null,
+  thumbnailUrl: null
+}));
+
 function SessionSelector({ onSelectSession, onNewSession, onClose }: {
   onSelectSession: (session: StoredLookoutSession) => void;
   onNewSession: () => void;
@@ -336,9 +355,9 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
   }
 
   async function handleDiscard(draftId: string) {
-    // The cards don't say much about what's in a session, so an unguarded click here can throw away hours
-    // of recording that merely looked like an empty one.
-    if (!window.confirm("Discard this recording? This cannot be undone."))
+    // The cards don't say much about what's in a session, so a click here can throw away hours of recording that
+    // merely looked like an empty one. Discarding only archives it, but the user should still know where it went.
+    if (!window.confirm("Discard this recording? You can get it back from Archived recordings."))
       return;
 
     setBusy(draftId);
@@ -365,11 +384,9 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
         shortDescription="Select a session"
       />
       <ModalContent>
-        {loading ? (
-          <p className="text-muted text-center">Loading drafts...</p>
-        ) : (
+        <Skeleton id="lookout-resume" loading={loading} label="Loading drafts">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {drafts.map(draft => (
+            {(loading ? SAMPLE_SERVER_DRAFTS : drafts).map(draft => (
               <div
                 key={draft.id}
                 className={clsx(
@@ -445,7 +462,11 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
               <span className="font-bold">New session</span>
             </div>
           </div>
-        )}
+        </Skeleton>
+
+        <a href="/timelapse/archive" className="block mt-4 text-center text-sm text-muted hover:underline">
+          Looking for a recording you discarded? See archived recordings
+        </a>
       </ModalContent>
     </Modal>
   );
@@ -521,6 +542,12 @@ export default function LookoutRecorder() {
   // the dimmed Browser option, and the "are you sure?" confirmation on the selector.
   const [browserError, setBrowserError] = useState<string | null>(null);
   const [confirmingBrowser, setConfirmingBrowser] = useState(false);
+  // Set when this browser can't load Lookout's WebAssembly recorder, which both Browser and Camera
+  // modes run on. Checked up front so nobody finds out after they've already shared their screen.
+  const [engineError, setEngineError] = useState<string | null>(null);
+  // Users banned on Hackatime have to record with the desktop app.
+  const screenModeBlocked = hackatimeStatus === "restricted";
+  const [showScreenBlockedNotice, setShowScreenBlockedNotice] = useState(false);
   const initialized = useRef(false);
   // Cleanup for an in-gesture screen-share primed by primeScreenShare(): stops
   // the stream and restores getDisplayMedia if the SDK never consumed it.
@@ -565,6 +592,14 @@ export default function LookoutRecorder() {
     // `/timelapse/recover` page, surfaced by the site-wide banner - not from the create flow.
     checkLookoutDrafts();
   }, [router.isReady, desktopOnly, auth.isLoading, auth.currentUser, checkLookoutDrafts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    checkBrowserRecorderSupport().then((reason) => {
+      if (!cancelled) setEngineError(reason);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   async function createSessionAndStart(onReady: (cfg: LookoutSessionConfig) => void) {
     setIsCreating(true);
@@ -618,9 +653,22 @@ export default function LookoutRecorder() {
     setPhase("ready");
   }
 
+  useEffect(() => {
+    if (screenModeBlocked && selectedMode === "screen")
+      setSelectedMode("desktop");
+  }, [screenModeBlocked, selectedMode]);
+
   function handleStart() {
-    // If Browser failed last time, make the user actively confirm before retrying it.
-    if (selectedMode === "screen" && browserError && !confirmingBrowser) {
+    if (selectedMode === "screen" && screenModeBlocked) {
+      setShowScreenBlockedNotice(true);
+      return;
+    }
+
+    // If Browser failed last time (or the in-browser recorder couldn't load), make the user actively
+    // confirm before trying it anyway.
+    const browserRecordingDoubtful = (selectedMode === "screen" && !!browserError)
+      || (selectedMode !== "desktop" && !!engineError);
+    if (browserRecordingDoubtful && !confirmingBrowser) {
       setConfirmingBrowser(true);
       return;
     }
@@ -834,6 +882,18 @@ export default function LookoutRecorder() {
         />
         <ModalContent>
           <div className="flex flex-col gap-6">
+            {engineError && !browserError && (
+              <div className="flex items-start gap-3 text-sm bg-red/10 border border-red/30 text-red rounded-lg p-3">
+                <Icon glyph="important" size={20} className="shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-1 leading-relaxed">
+                  <span>
+                    Hey! Your browser can&apos;t run Lookout&apos;s in-browser recorder, so Browser and Camera recording probably won&apos;t work here. We recommend using Desktop instead.
+                  </span>
+                  <span className="text-red/70 text-xs">Reason: {engineError}</span>
+                </div>
+              </div>
+            )}
+
             {browserError && (
               <div className="flex items-start gap-3 text-sm bg-red/10 border border-red/30 text-red rounded-lg p-3">
                 <Icon glyph="important" size={20} className="shrink-0 mt-0.5" />
@@ -852,7 +912,7 @@ export default function LookoutRecorder() {
                 title="Desktop"
                 description="Open in Lookout app"
                 selected={selectedMode === "desktop"}
-                onClick={() => { setSelectedMode("desktop"); setConfirmingBrowser(false); }}
+                onClick={() => { setSelectedMode("desktop"); setConfirmingBrowser(false); setShowScreenBlockedNotice(false); }}
                 recommended
               />
               <RecordingModeOption
@@ -860,22 +920,42 @@ export default function LookoutRecorder() {
                 title="Browser"
                 description="Share your screen"
                 selected={selectedMode === "screen"}
-                dimmed={!!browserError}
-                onClick={() => { setSelectedMode("screen"); setConfirmingBrowser(false); }}
+                dimmed={!!browserError || !!engineError}
+                unavailable={screenModeBlocked}
+                onClick={() => {
+                  if (screenModeBlocked) {
+                    setShowScreenBlockedNotice(true);
+                    return;
+                  }
+                  setSelectedMode("screen");
+                  setConfirmingBrowser(false);
+                }}
               />
               <RecordingModeOption
                 icon="camera"
                 title="Camera"
                 description="Use your webcam"
                 selected={selectedMode === "camera"}
-                onClick={() => { setSelectedMode("camera"); setConfirmingBrowser(false); }}
+                dimmed={!!engineError}
+                onClick={() => { setSelectedMode("camera"); setConfirmingBrowser(false); setShowScreenBlockedNotice(false); }}
               />
             </div>
+
+            {showScreenBlockedNotice && (
+              <div role="alert" className="flex items-start gap-3 text-sm bg-red/10 border border-red/30 text-red rounded-lg p-3">
+                <Icon glyph="private" size={20} className="shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
+                  Your account type does not allow you to use this recording mode.
+                </span>
+              </div>
+            )}
 
             {confirmingBrowser ? (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-center text-muted">
-                  Are you sure? This didn&apos;t work last time!
+                  {selectedMode === "screen" && browserError
+                    ? "Are you sure? This didn't work last time!"
+                    : "Are you sure? Your browser couldn't load the recorder."}
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -889,7 +969,7 @@ export default function LookoutRecorder() {
                     disabled={isCreating}
                     className="flex-1 border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isCreating ? "Setting up..." : "Try Browser anyway"}
+                    {isCreating ? "Setting up..." : selectedMode === "camera" ? "Try Camera anyway" : "Try Browser anyway"}
                   </button>
                 </div>
               </div>
@@ -942,6 +1022,26 @@ function CameraPreviewVideo({ stream }: { stream: MediaStream }) {
 // it as "go back to mode selection" rather than a scary error — see the error effect.
 const SCREEN_CANCELLED_MESSAGE = "Screen sharing was cancelled.";
 
+// Browsers' own getUserMedia/play() messages are written for developers ("The fetching process for
+// the media resource was aborted by the user agent..."), so map the names we can act on.
+function describeCameraError(err: unknown): string {
+  const name = err instanceof DOMException ? err.name : null;
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Lapse doesn't have permission to use your camera. Allow camera access in your browser's site settings, then try again.";
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "We couldn't find a camera. Make sure one is connected, then try again.";
+    case "NotReadableError":
+      return "Your camera is being used by another app or tab. Close it there, then try again.";
+    case "AbortError":
+      return "Your browser interrupted the camera before it started. Try again - if it keeps happening, reload the page.";
+    default:
+      return `${err instanceof Error ? err.message : "Something went wrong."} Check your browser's camera permissions and try again.`;
+  }
+}
+
 function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBrowserError }: {
   draftId: string;
   lookoutToken: string;
@@ -959,15 +1059,30 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorDone, setEditorDone] = useState(false);
   const screenStarted = useRef(false);
+  // Whether a screen share has ever been live in this recorder. Tells "the picker is still open"
+  // apart from "the share ended mid-recording", which look identical in `state.isSharing`.
+  const [hasShared, setHasShared] = useState(false);
   const isCamera = state.captureMode === "camera";
 
-  // Camera: auto-start preview (mirrors Fallout's BrowserRecorderUI)
+  useRecordingKeepAwake(state.isRecording);
+
+  if (state.isSharing && !hasShared) setHasShared(true);
+
+  // Camera: auto-start preview (mirrors Fallout's BrowserRecorderUI).
+  //
+  // `isPreviewing` only flips once the stream is playing, which can be seconds after the call while
+  // the permission prompt is up. Without the in-flight guard, a `status` change in that window
+  // starts a second preview, which stops the first stream's tracks under its pending `play()` -
+  // Firefox rejects that with an AbortError the user sees as "couldn't start your camera".
+  const previewStarting = useRef(false);
   useEffect(() => {
-    if (isCamera && !state.isPreviewing && !state.isSharing) {
-      actions.startPreview().catch((err) =>
-        setCaptureError(err instanceof Error ? err.message : "Could not start your camera.")
-      );
-    }
+    if (!isCamera || state.isPreviewing || state.isSharing || previewStarting.current)
+      return;
+
+    previewStarting.current = true;
+    actions.startPreview()
+      .catch((err: unknown) => setCaptureError(describeCameraError(err)))
+      .finally(() => { previewStarting.current = false; });
   }, [isCamera, state.status, state.isPreviewing, state.isSharing]);
 
   // Screen: auto-start sharing on mount. The screen stream was already
@@ -1082,12 +1197,53 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, onShareFailed, onBro
           isOpen
           setIsOpen={() => {}}
           title="Couldn't start your camera"
-          message={`${captureError} Please check your browser's camera permissions and try again.`}
+          message={captureError}
           onClose={onShareFailed}
           buttons={[
             { label: "Try again", onClick: onShareFailed, kind: "primary" },
           ]}
         />
+      </RootLayout>
+    );
+  }
+
+  // The share ended mid-recording - the browser's "Stop sharing" bar, or the OS dropping the capture
+  // when the screen locked or the machine slept. The SDK has already paused the session (flushing the
+  // partial minute), so nothing is lost; sharing again from this click resumes it.
+  const recordingEnded = state.status === "stopped" || state.status === "compiling" || state.status === "complete";
+  if (!isCamera && !state.isSharing && !state.error && hasShared && !recordingEnded) {
+    return (
+      <RootLayout showHeader={false}>
+        <Modal isOpen>
+          <ModalHeader
+            icon="web"
+            showCloseButton={false}
+            title="Screen sharing stopped"
+            description="Your recording is paused, and everything so far is saved."
+            shortDescription="Recording paused"
+          />
+          <ModalContent>
+            <div className="flex flex-col gap-6">
+              <p className="text-sm text-muted leading-relaxed">
+                This can happen when your computer goes to sleep, the screen locks, or sharing is stopped from the browser. Share your screen again to pick up where you left off.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={stopRecording}
+                  className="flex-1 border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
+                >
+                  Stop recording
+                </button>
+                <button
+                  onClick={handleStartSharing}
+                  className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
+                >
+                  Share screen &amp; resume
+                </button>
+              </div>
+            </div>
+          </ModalContent>
+        </Modal>
       </RootLayout>
     );
   }

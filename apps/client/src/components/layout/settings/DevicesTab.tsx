@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 import type { DraftTimelapse, KnownDevice } from "@hackclub/lapse-api";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
@@ -138,30 +139,30 @@ export function DevicesTab({ isVisible }: { isVisible: boolean }) {
           </p>
         </div>
 
-        {lookoutDevicesLoading ? (
-          <p className="text-muted text-center">Loading...</p>
-        ) : lookoutDevices.length === 0 ? (
-          <p className="text-muted text-center">No linked apps.</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {lookoutDevices.map(device => (
-              <div key={device.id} className="flex items-center justify-between p-3 border-l-8 border-primary rounded-md">
-                <div className="flex flex-col min-w-0">
-                  <span className="font-medium truncate">{device.label}</span>
-                  <span className="text-sm text-muted">
-                    Linked {new Date(device.createdAt).toLocaleDateString()}
-                    {device.lastUsedAt && ` · last used ${new Date(device.lastUsedAt).toLocaleDateString()}`}
-                  </span>
+        <Skeleton id="lookout-devices" loading={lookoutDevicesLoading} label="Loading linked apps">
+          {lookoutDevices.length === 0 ? (
+            <p className="text-muted text-center">No linked apps.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {lookoutDevices.map(device => (
+                <div key={device.id} className="flex items-center justify-between p-3 border-l-8 border-primary rounded-md">
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-medium truncate">{device.label}</span>
+                    <span className="text-sm text-muted">
+                      Linked {new Date(device.createdAt).toLocaleDateString()}
+                      {device.lastUsedAt && ` · last used ${new Date(device.lastUsedAt).toLocaleDateString()}`}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button kind="regular" onClick={() => revokeLookoutDevice(device.id)} className="px-5!" title="Revoke">
+                      <Icon glyph="delete" size={20} />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button kind="regular" onClick={() => revokeLookoutDevice(device.id)} className="px-5!" title="Revoke">
-                    <Icon glyph="delete" size={20} />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </Skeleton>
       </div>
 
       <div className="flex flex-col gap-2">

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 import { OAuthApp, OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
@@ -361,25 +362,23 @@ export function DeveloperAppsTab({ isVisible }: { isVisible: boolean }) {
         </div>
       )}
 
-      {isLoading && <p className="text-muted">Loading apps...</p>}
-
-      {!isLoading && apps.length === 0 && (
-        <p className="text-muted text-center">No apps yet.</p>
-      )}
-
-      {!isLoading && apps.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {apps.map((app) => (
-            <AppCard
-              key={app.id}
-              app={app}
-              onEdit={() => beginEdit(app)}
-              onRotate={() => setRotateSecretId(app.id)}
-              onDelete={() => setDeleteConfirmId(app.id)}
-            />
-          ))}
-        </div>
-      )}
+      <Skeleton id="developer-apps" loading={isLoading} label="Loading apps">
+        {apps.length === 0 ? (
+          <p className="text-muted text-center">No apps yet.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {apps.map((app) => (
+              <AppCard
+                key={app.id}
+                app={app}
+                onEdit={() => beginEdit(app)}
+                onRotate={() => setRotateSecretId(app.id)}
+                onDelete={() => setDeleteConfirmId(app.id)}
+              />
+            ))}
+          </div>
+        )}
+      </Skeleton>
 
       <WindowedModal
         icon={appModalMode === "create" ? "plus" : "edit"}

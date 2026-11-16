@@ -27,7 +27,7 @@ Responses:
 - `200 {request_id, found, dry_run, deleted: {model: rows}, retained: [{type, count, reason}]}`. Once someone is deleted, later calls answer `found: false`.
 - `401 {error}` for a bad token, `400 action_mismatch`, `409 replayed`
 - `409 manual_review_required` when the account created program keys or reviewed OAuth apps. Those belong to staff and back integrations other people rely on, so a human decides what happens to them first. Also when Lookout still has one of their sessions but refuses to delete it for our key (a session created before Lapse had its own program key, or a Lookout that predates deletion).
-- `503` when the hub's JWKS, S3, or Lookout can't be reached. The hub retries these.
+- `503` when the hub's JWKS, Airtable, S3, or Lookout can't be reached. The hub retries these.
 
 ## Who is matched
 
@@ -38,14 +38,15 @@ Users whose `email` matches one of the subject's emails (case-insensitively) or 
 - **Database**, in one transaction, in the order the RESTRICT foreign keys need:
   - comments they wrote, and other people's comments on their timelapses
   - draft timelapses, legacy unpublished timelapses, and timelapses
-  - known devices, Lookout drafts, Lookout devices, and pairing codes
+  - known devices, Lookout drafts (archived ones included) and their `LookoutDraftEvent` history, Lookout devices, and pairing codes
   - OAuth grants and token audits
   - the user row
 - **S3**, before the transaction, so a storage failure leaves the database untouched for the retry:
   - draft sessions and thumbnails, plus anything else under `timelapses/<userId>/` in the encrypted bucket (uploads that never became a draft, upload metadata)
   - legacy session and thumbnail keys
   - everything under `timelapses/<timelapseId>/` in the public bucket
-- **Lookout sessions** behind their Lookout drafts and Lookout-recorded timelapses, also before the transaction. Lookout has no accounts, so these can only be found through us. `DELETE /api/internal/sessions/:id` hides each session immediately and Lookout destroys its captures and video an hour later. During that hour a Lookout admin can undo it with `POST /api/internal/sessions/:id/restore` if an erasure was a mistake. Repeating the call (on a retry) doesn't extend the hour.
+- **Lookout sessions** behind their Lookout drafts and Lookout-recorded timelapses, before S3 and the transaction. Lookout has no accounts, so these can only be found through us. `DELETE /api/internal/sessions/:id` hides each session immediately and Lookout destroys its captures and video an hour later. During that hour a Lookout admin can undo it with `POST /api/internal/sessions/:id/restore` if an erasure was a mistake. Repeating the call (on a retry) doesn't extend the hour. These go first, before S3, because they're the only deletions that can be undone: if any session can't be deleted, or anything after them fails, Lapse restores every session it scheduled before returning the error. Otherwise a failed erasure would leave the account and its timelapses in place with their videos gone, and a session that needs manual review fails every retry the same way.
+- **Airtable rows** in the Loops user table (`apps/server/src/airtableSync.ts`) for the subject's emails and the matched users' emails. These go before anything else, so if Airtable can't be reached the call fails with `503 airtable_unavailable` and nothing has changed. The daily sync also deletes any row whose email no longer belongs to an account, which catches a sync that was mid-flight during the erasure.
 - **Queued encodes**: realize jobs for their timelapses that haven't started are removed from Redis, along with the draft passkey they carry. A job that is already running finishes, and the completion handler deletes its output when it finds the timelapse gone.
 
 A dry run performs the same deletion inside a transaction and rolls it back, so the counts the reviewer approves are the counts that get executed. S3 objects are listed and Lookout sessions counted, but neither is touched.

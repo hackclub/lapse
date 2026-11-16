@@ -303,13 +303,47 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
         ),
 
     discardLookoutDraft: contract("DELETE", "/timelapse/discardLookoutDraft")
-        .route({ description: "Deletes a Lookout draft timelapse." })
+        .route({ description: "Archives a Lookout draft timelapse. It no longer shows up as a draft, but can be brought back with `restoreLookoutDraft`." })
         .input(
             z.object({
                 id: LapseId,
             })
         )
         .output(NO_OUTPUT),
+
+    getArchivedLookoutDrafts: contract("GET", "/timelapse/getArchivedLookoutDrafts")
+        .route({ description: "Lists the authenticated user's archived Lookout drafts - discarded ones, and ones whose Lookout session couldn't be found - newest archive first." })
+        .input(z.object({}))
+        .output(
+            apiResult({
+                drafts: z.array(z.object({
+                    id: LapseId,
+                    createdAt: LapseDate,
+                    archivedAt: LapseDate,
+                    archivedReason: z.enum(["discarded", "session-gone"])
+                        .describe("`discarded` if the user threw it away, `session-gone` if Lapse couldn't find its Lookout session."),
+                    lookoutSessionId: z.string(),
+                    lookoutStatus: z.string().nullable()
+                        .describe("The Lookout session's status, or `null` if Lookout couldn't be reached or no longer has it."),
+                    thumbnailUrl: z.string().nullable(),
+                    trackedSeconds: z.number().nullable(),
+                })),
+            })
+        ),
+
+    restoreLookoutDraft: contract("POST", "/timelapse/restoreLookoutDraft")
+        .route({ description: "Brings an archived Lookout draft back, so it can be continued or published again." })
+        .input(
+            z.object({
+                id: LapseId,
+            })
+        )
+        .output(
+            apiResult({
+                draftId: LapseId,
+                lookoutStatus: z.string(),
+            })
+        ),
 
     publishFromLookout: contract("POST", "/timelapse/publishFromLookout")
         .route({ description: "Publishes a Lookout-backed timelapse from a draft. The Lookout session must have status 'complete'. Creates the timelapse record and deletes the draft." })

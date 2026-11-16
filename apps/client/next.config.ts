@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { NextConfig } from "next";
 import type { Configuration } from "webpack";
-import TerserPlugin from "terser-webpack-plugin";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const root = path.resolve(__dirname, "..", "..");
 
@@ -38,19 +38,7 @@ const config: NextConfig = {
   productionBrowserSourceMaps: true,
   poweredByHeader: false,
 
-  webpack: (config: Configuration, { isServer, dev }) => {
-    if (!dev) {
-      config.optimization = {
-        ...config.optimization,
-        minimizer: [
-          new TerserPlugin({
-            terserOptions: {
-              mangle: false,
-            },
-          }),
-        ],
-      };
-    }
+  webpack: (config: Configuration) => {
     // Configure SVGR for SVG imports
     config.module!.rules!.push({
       test: /\.svg$/i,
@@ -92,4 +80,12 @@ const config: NextConfig = {
   },
 };
 
-export default config;
+// Source maps are already public (`productionBrowserSourceMaps`), so uploading them is only a nicety - it
+// happens when a build has SENTRY_AUTH_TOKEN, and is skipped otherwise.
+export default withSentryConfig(config, {
+  org: "hack-club",
+  project: "lapse-client",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  telemetry: false,
+});

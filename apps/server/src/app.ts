@@ -1,6 +1,6 @@
 import "dotenv/config";
+import "@/instrument.js";
 
-import * as Sentry from "@sentry/node";
 import Fastify from "fastify"
 import fastifyCors from "@fastify/cors"
 import { implement, onError, ORPCError, ValidationError } from "@orpc/server"
@@ -16,7 +16,7 @@ import { apiErr } from "@/common.js"
 import type { Context } from "@/router.js"
 import { database, initDatabase } from "@/db.js";
 import { env } from "@/env.js"
-import { logError } from "@/logging.js";
+import { logError, logWarning } from "@/logging.js";
 import { generateOpenApiSpec } from "@/openapi.js";
 // New recordings go through Lookout, but the tus upload server is still needed so legacy drafts
 // (and unfinished OPFS recordings) can be recovered and published. See `legacyRecovery` on the client.
@@ -28,6 +28,7 @@ import { registerUserTimelapseRoutes } from "@/userTimelapses.js";
 import { registerPrivacyRoutes } from "@/privacy.js";
 import { registerLookoutDesktopRoutes } from "@/lookoutDesktop.js";
 import { startLookoutPublishSweeper } from "@/lookoutPublish.js";
+import { startAirtableUserSync } from "@/airtableSync.js";
 
 import user from "@/routers/user.js"
 import timelapse from "@/routers/timelapse.js"
@@ -58,11 +59,16 @@ const handler = new OpenAPIHandler(
     {
         interceptors: [
             onError(err => {
-                if (err instanceof ORPCError && err.cause instanceof ValidationError) {
-                    logError(z.prettifyError(err.cause), { err, zodError: err.cause });
+                const [message, data] = err instanceof ORPCError && err.cause instanceof ValidationError
+                    ? [z.prettifyError(err.cause), { err, zodError: err.cause }]
+                    : [`${err}`, { err }];
+
+                // Client mistakes like NOT_FOUND or a bad input are worth a log line, not a Sentry issue.
+                if (err instanceof ORPCError && err.status < 500) {
+                    logWarning(message, data);
                 }
                 else {
-                    logError(`${err}`, { err });
+                    logError(message, data);
                 }
             })
         ],
@@ -116,6 +122,9 @@ registerLookoutDesktopRoutes(server);
 // Lookout has no webhook, so a recording whose publish details were filled in before it finished
 // compiling needs someone to notice it is ready. See `lookoutPublish.ts`.
 startLookoutPublishSweeper();
+
+// Daily per-user stats for Loops. Does nothing unless the AIRTABLE_SYNC_* variables are set.
+startAirtableUserSync();
 
 server.all("/api/*", async (req, reply) => {
     const actor = await getAuthenticatedUser(req);
@@ -183,12 +192,6 @@ attachUploadServer(server);
 
 server.listen({ port: parseInt(env.PORT), host: env.HOST })
     .then(async (address) => {
-        if (env.SENTRY_DSN) {
-            Sentry.init({
-                dsn: env.SENTRY_DSN
-            });
-        }
-
         if (process.env["NODE_ENV"] === "development") {
             chalk.level = 3;
 

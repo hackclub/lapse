@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import dynamic from "next/dynamic";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import type { TimelapseVisibility } from "@hackclub/lapse-api";
@@ -8,7 +9,6 @@ import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useInterval } from "@/hooks/useInterval";
 import { getStoredSessions, removeStoredSession, type StoredLookoutSession } from "@/components/lookout/sessions";
-import { EditorModal } from "@/components/lookout/EditorModal";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Button } from "@/components/ui/Button";
@@ -19,6 +19,9 @@ import { VisibilityPicker } from "@/components/layout/VisibilityPicker";
 import { NOT_FOUND_STATUS, PageStatus, StatusPage, statusForApiError } from "@/components/layout/StatusPage";
 import { HackatimeProjectPicker, prefetchHackatimeProjects } from "@/components/entity/HackatimeProjectPicker";
 import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
+
+// The editor pulls in Lookout's whole player and its WebAssembly engine, and most people publish without opening it.
+const EditorModal = dynamic(() => import("@/components/lookout/EditorModal").then(m => m.EditorModal), { ssr: false });
 
 type CompilationStatus = "waiting" | "ready" | "failed";
 
@@ -207,7 +210,7 @@ export default function Page() {
   async function handleDiscard() {
     if (!draftId) return;
 
-    if (!window.confirm("Are you sure you want to discard this timelapse? This action cannot be undone."))
+    if (!window.confirm("Discard this timelapse? You can get it back from Archived recordings."))
       return;
 
     setIsDiscarding(true);

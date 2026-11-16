@@ -47,6 +47,8 @@ model KnownDevice {
 
   /// Legacy unpublished timelapses that were created on this device. Only this device can decrypt and migrate such a timelapse.
   legacyTimelapses    LegacyUnpublishedTimelapse[]
+
+  @@index([ownerId])
 }
 
 /// Represents a single user of Lapse.
@@ -81,6 +83,9 @@ model User {
   lookoutDevices        LookoutDevice[]
   lookoutPairingCodes   LookoutPairingCode[]
   adminAuditLogs        AdminAuditLog[]
+
+  @@index([hackatimeId])
+  @@index([slackId])
 }
 
 model AdminAuditLog {
@@ -192,6 +197,9 @@ model DraftTimelapse {
 
   ownerId               String
   owner                 User               @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([deviceId])
 }
 
 /// A draft timelapse recorded via Lookout that has not yet been published.
@@ -217,8 +225,50 @@ model DraftLookoutTimelapse {
   pendingHackatimeProject String?
   pendingAt               DateTime?
 
+  /// Set when the user discards the draft (or Lapse thinks its Lookout session is gone). An archived draft is hidden
+  /// everywhere a live one would show up, but kept so it can be restored from the archive page - discarding a
+  /// recording is too easy to do by accident for it to be irreversible.
+  archivedAt              DateTime?
+  /// `discarded` or `session-gone`.
+  archivedReason          String?
+
   ownerId             String
   owner               User     @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([pendingAt])
+}
+
+/// A permanent history of what happened to each `DraftLookoutTimelapse`, written in the same transaction as the change.
+/// A draft is the only link Lapse holds to a recording, so when one goes missing we need to be able to say why long
+/// after the server logs have rotated away. Deliberately has no foreign keys: it must outlive the draft it describes.
+model LookoutDraftEvent {
+  id                String   @id @default(uuid())
+  createdAt         DateTime @default(now())
+
+  draftId           String
+  lookoutSessionId  String
+  ownerId           String
+
+  /// `archived`, `restored`, `published`, or `publish-rejected`. Only `published` removes the draft row.
+  kind              String
+
+  /// Why, for `archived`: `discarded` or `session-gone`. For `publish-rejected`: e.g. `browser-recording-restricted`.
+  reason            String?
+
+  /// Who caused it, as rendered by `stringifyActor`. `null` for the server acting on its own.
+  actor             String?
+
+  /// The timelapse the draft became, for `published`.
+  timelapseId       String?
+
+  /// Anything else worth keeping - for `session-gone`, Lookout's exact status and response body, so a 404 from a
+  /// proxy can be told apart from Lookout saying the session doesn't exist.
+  detail            Json?
+
+  @@index([lookoutSessionId])
+  @@index([ownerId])
+  @@index([draftId])
 }
 
 /// A Lookout desktop install paired to a user, letting it start recordings without sending
@@ -314,6 +364,9 @@ model Timelapse {
 
   comments              Comment[]
   associatedDraft       DraftTimelapse?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
 }
 
 /// Represents a comment that belongs to a timelapse.
@@ -333,6 +386,8 @@ model Comment {
 
   /// The date when the comment was created.
   createdAt   DateTime                @default(now())
+
+  @@index([timelapseId])
 }
 
 /// Represents an OAuth2 service client (app).

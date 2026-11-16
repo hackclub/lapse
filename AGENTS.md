@@ -3,20 +3,30 @@ This is a repository for Lapse - a web app for tracking time spent on personal p
 This project features the following packages:
 - `apps/client`: a frontend built with Next.js, interfacing with the server via the `api` package.
 - `apps/server`: the main Fastify/oRPC backend for Lapse.
+- `apps/worker`: a BullMQ worker that encodes legacy draft timelapses on publish. Interfaces with `server`.
+- `apps/devscripts`: scripts for local development, like setting up a dev environment.
 - `packages/api`: contracts shared between `client` and `server`. This package also allows for third-party clients to be developed for Lapse.
-- `apps/worker`: a BullMQ worker responsible for tasks like encoding. Interfaces with `server`.
+- `packages/jobs`: BullMQ job contracts shared between `server` and `worker`.
+- `packages/shared`: utilities shared between unrelated packages.
+- `vendor/lookout`: a git submodule of Lookout, a separate Hack Club project. Its `packages/shared`, `packages/wasm` (`@lookout/wasm`, the Rust recorder engine compiled to WebAssembly - building it needs Rust and `wasm-bindgen`, see the README) and `clients/react` (`@lookout/react`) are part of this workspace.
 
 Database models are defined in @apps/server/prisma/schema.prisma.
 API contracts are defined in @packages/api/src/contracts.
 Server endpoints are implemented in @apps/server/src/routers.
 
-When a user records a video, it first becomes a *draft timelapse* (`DraftTimelapse`). The video content of draft timelapses is always encrypted with a private key only known by the user - the server only serves to synchronize them with different user devices. This allows users to record timelapses on one device, and then edit them on the other. As draft timelapses may potentially hold PII, they must always be encrypted.
+All recording goes through Lookout, a screen recording timelapse service. Lapse never handles the recorded frames itself: the server creates a Lookout session (`timelapse.createRecordingSession`) along with a `DraftLookoutTimelapse`, and the user records either in the browser via `@lookout/react` or in the Lookout desktop app. Lookout stores the screenshots and compiles the video. See @vendor/lookout/docs/integration.md.
 
-A user can choose to publish a draft timelapse, creating a `Timelapse` as a result. This involves transcoding and applying edit lists to the video via the `worker`. The contents of a regular, published timelapse are not encrypted and may be viewed by any other user.
+A user can choose to publish a draft, creating a `Timelapse` as a result. For Lookout drafts, this stores Lookout's video and thumbnail URLs on the timelapse - nothing is transcoded by Lapse. Published timelapses are not encrypted and may be viewed by any other user.
 
-Recordings made through the Lookout desktop app can also be started and published from inside the app itself, without a browser round-trip. That inverts one assumption worth knowing about: the publish flow used to require a compiled video, and now the user's answers are stored as a pending intent on the draft and applied once the video lands. See @docs/lookout-desktop.md.
+Publishing doesn't require a compiled video. The user's answers (name, description, visibility, Hackatime project) are stored as a pending intent on the draft (`pending*` columns), and the `Timelapse` is created once Lookout reports the session as complete - by whichever of `pollLookoutStatus`, `getLookoutDrafts`, or a background sweeper notices first. The Lookout desktop app can also pair with Lapse, start recordings, and show the publish form in its own panel without a browser round-trip. See @apps/server/src/lookoutPublish.ts and @docs/lookout-desktop.md.
 
-Lapse has the ability to import data to an API-compatible WakaTime fork called Hackatime. When importing, a WakaTime heartbeat will be created for each *snapshot* - a timestamp taken with each recorded frame on the client.
+Lookout drafts are never deleted except by publishing: discarding one (or Lapse failing to find its Lookout session) only sets `archivedAt`, and the user can restore it from `/timelapse/archive`. Archived drafts are hidden from the drafts list, the sweeper and the desktop panel. Change a draft's state through @apps/server/src/lookoutDraftEvents.ts, which records every change in `LookoutDraftEvent` - server logs don't last long enough to explain a missing recording.
+
+`DraftTimelapse` and `LegacyUnpublishedTimelapse` are left over from the pre-Lookout recorder, which encrypted videos on the client with a per-device key. New ones can't be created - `draftTimelapse.create` and `timelapse.publish` only accept recordings made before the cutoff - and they exist only so users can recover and publish old recordings (@apps/client/src/legacyRecovery.ts). Publishing one sends the device key to the `worker`, which decrypts the sessions, applies the edit list and encodes the video. Don't build new features on this path.
+
+Lapse has the ability to import data to an API-compatible WakaTime fork called Hackatime. When importing, a WakaTime heartbeat will be created for each *snapshot*. For Lookout recordings, snapshots are the screenshot timestamps returned by Lookout's timings endpoint.
+
+Loading states in the client use Skullet (https://skullet.lochie.me/docs). Wrap the real component in `<Skeleton data={x} sample={SAMPLE_X}>` from `skullet/react` rather than drawing grey boxes by hand - Skullet renders the sample unseen and traces it into the skeleton. Samples live in @apps/client/src/samples.ts. Use `loading` with plain children when there is no data object (e.g. the signed-in state), an `id` where the shape should be remembered across visits, and `<SkeletonBox>` only for things that don't measure (the video band, an avatar with no user). Theme and reveal are set once by `SkulletProvider` in `_app.tsx`, and `forgetShapes()` runs on sign-out.
 
 # Code style
 

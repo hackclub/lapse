@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Icon from "@hackclub/icons";
+import { Skeleton } from "skullet/react";
 
 import { api } from "@/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -65,17 +66,6 @@ export default function Page() {
             setError("This link is missing information the desktop app should have sent. Try linking again from the app.");
     }, [router.isReady, challenge, state]);
 
-    if (!router.isReady || auth.isLoading) {
-        return (
-            <RootLayout title="Link a device">
-                <div className="flex items-center justify-center gap-2 py-16 text-muted">
-                    <Icon glyph="clock" size={20} />
-                    <span>Loading…</span>
-                </div>
-            </RootLayout>
-        );
-    }
-
     if (handedOff) {
         return (
             <RootLayout title="Device linked">
@@ -101,44 +91,48 @@ export default function Page() {
         );
     }
 
+    // The device name comes from the URL, so the page is drawn in full even before the router and session are
+    // ready - Skullet traces that into the skeleton.
     return (
         <RootLayout title="Link a device">
-            <div className="flex flex-col gap-6 max-w-md mx-auto py-12">
-                <div className="flex flex-col gap-2">
-                    <h1 className="text-2xl font-bold">Link {device}?</h1>
-                    <p className="text-muted">
-                        After linking, the {device} app will be able to start timelapses on your account directly.
-                    </p>
+            <Skeleton loading={!router.isReady || auth.isLoading} label="Loading">
+                <div className="flex flex-col gap-6 max-w-md mx-auto py-12">
+                    <div className="flex flex-col gap-2">
+                        <h1 className="text-2xl font-bold">Link {device}?</h1>
+                        <p className="text-muted">
+                            After linking, the {device} app will be able to start timelapses on your account directly.
+                        </p>
+                    </div>
+
+                    <ul className="flex flex-col gap-2 text-muted">
+                        <li className="flex items-start gap-2">
+                            <Icon glyph="checkmark" size={20} className="text-green shrink-0" />
+                            <span>Start a timelapse straight from the app.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <Icon glyph="settings" size={20} className="shrink-0" />
+                            <span>Unlink it any time from Settings, or from the app itself.</span>
+                        </li>
+                    </ul>
+
+                    {error && <p className="text-red">{error}</p>}
+
+                    <div className="flex flex-col gap-2">
+                        <Button
+                            onClick={approve}
+                            disabled={isApproving || !challenge || !state}
+                            kind="primary"
+                            className="w-full"
+                        >
+                            {isApproving ? "Linking..." : `Link ${device}`}
+                        </Button>
+
+                        <Button onClick={() => router.push("/")} disabled={isApproving} className="w-full">
+                            Cancel
+                        </Button>
+                    </div>
                 </div>
-
-                <ul className="flex flex-col gap-2 text-muted">
-                    <li className="flex items-start gap-2">
-                        <Icon glyph="checkmark" size={20} className="text-green shrink-0" />
-                        <span>Start a timelapse straight from the app.</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                        <Icon glyph="settings" size={20} className="shrink-0" />
-                        <span>Unlink it any time from Settings, or from the app itself.</span>
-                    </li>
-                </ul>
-
-                {error && <p className="text-red">{error}</p>}
-
-                <div className="flex flex-col gap-2">
-                    <Button
-                        onClick={approve}
-                        disabled={isApproving || !challenge || !state}
-                        kind="primary"
-                        className="w-full"
-                    >
-                        {isApproving ? "Linking..." : `Link ${device}`}
-                    </Button>
-
-                    <Button onClick={() => router.push("/")} disabled={isApproving} className="w-full">
-                        Cancel
-                    </Button>
-                </div>
-            </div>
+            </Skeleton>
         </RootLayout>
     );
 }

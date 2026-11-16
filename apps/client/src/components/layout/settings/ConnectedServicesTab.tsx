@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
+import { Skeleton } from "skullet/react";
 import { OAUTH_SCOPE_GROUPS } from "@hackclub/lapse-api";
 
 import { Button } from "@/components/ui/Button";
@@ -42,7 +43,7 @@ function groupScopes(scopes: string[]) {
 export function ConnectedServicesTab({ isVisible }: { isVisible: boolean }) {
   const auth = useAuth(false);
   const [grants, setGrants] = useState<ServiceGrant[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,61 +99,57 @@ export function ConnectedServicesTab({ isVisible }: { isVisible: boolean }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {isLoading && (
-        <p className="text-muted">Loading connected services...</p>
-      )}
-
-      {!isLoading && error && (
-        <p className="text-red">{error}</p>
-      )}
-
-      {!isLoading && !error && grants.length === 0 && (
-        <p className="text-muted text-center">No connected services yet.</p>
-      )}
-
-      {!isLoading && !error && grants.length > 0 && (
-        <div className="flex flex-col gap-4">
-          {grants.map(grant => {
-            const grouped = groupScopes(grant.scopes);
-            return (
-              <div key={grant.id} className={clsx(
-                "border border-slate rounded-2xl bg-darker p-4",
-                "flex flex-col gap-3"
-              )}>
-                <div className="flex flex-col">
-                  <span className="font-bold text-lg">{grant.serviceName}</span>
-                  <span className="text-xs text-muted">Connected {new Date(grant.createdAt).toLocaleDateString()}</span>
-                  {grant.lastUsedAt && (
-                    <span className="text-xs text-muted">Last used {new Date(grant.lastUsedAt).toLocaleDateString()}</span>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  {Object.entries(grouped).map(([group, scopes]) => (
-                    <div key={group} className="text-sm">
-                      <span className="font-semibold">{group}</span>
-                      <ul className="text-muted text-xs mt-1">
-                        {scopes.map(scope => {
-                          const groupScopes = OAUTH_SCOPE_GROUPS[group as keyof typeof OAUTH_SCOPE_GROUPS] as Record<string, string> | undefined;
-                          return (
-                            <li key={scope}>&bull; {groupScopes?.[scope] ?? scope}</li>
-                          );
-                        })}
-                      </ul>
+      <Skeleton id="connected-services" loading={isLoading} label="Loading connected services">
+        {
+          error ? (
+            <p className="text-red">{error}</p>
+          ) : grants.length === 0 ? (
+            <p className="text-muted text-center">No connected services yet.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {grants.map(grant => {
+                const grouped = groupScopes(grant.scopes);
+                return (
+                  <div key={grant.id} className={clsx(
+                    "border border-slate rounded-2xl bg-darker p-4",
+                    "flex flex-col gap-3"
+                  )}>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-lg">{grant.serviceName}</span>
+                      <span className="text-xs text-muted">Connected {new Date(grant.createdAt).toLocaleDateString()}</span>
+                      {grant.lastUsedAt && (
+                        <span className="text-xs text-muted">Last used {new Date(grant.lastUsedAt).toLocaleDateString()}</span>
+                      )}
                     </div>
-                  ))}
-                </div>
 
-                <div className="flex justify-end">
-                  <Button kind="destructive" onClick={() => revokeGrant(grant.id)} className="px-6!">
-                    Revoke
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                    <div className="flex flex-col gap-2">
+                      {Object.entries(grouped).map(([group, scopes]) => (
+                        <div key={group} className="text-sm">
+                          <span className="font-semibold">{group}</span>
+                          <ul className="text-muted text-xs mt-1">
+                            {scopes.map(scope => {
+                              const groupScopes = OAUTH_SCOPE_GROUPS[group as keyof typeof OAUTH_SCOPE_GROUPS] as Record<string, string> | undefined;
+                              return (
+                                <li key={scope}>&bull; {groupScopes?.[scope] ?? scope}</li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button kind="destructive" onClick={() => revokeGrant(grant.id)} className="px-6!">
+                        Revoke
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        }
+      </Skeleton>
     </div>
   );
 }

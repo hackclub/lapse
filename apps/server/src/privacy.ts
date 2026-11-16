@@ -1,6 +1,7 @@
 import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import type { FastifyInstance } from "fastify";
 
+import { deleteAirtableRowsForEmails } from "@/airtableSync.js";
 import { database } from "@/db.js";
 import { env } from "@/env.js";
 import type * as db from "@/generated/prisma/client.js";
@@ -120,17 +121,39 @@ export async function eraseSubject(subject: PrivacySubject, dryRun: boolean): Pr
     const lookoutSessions = lookoutSessionIds(owned);
     const retained = await retainedRecords(userIds, owned);
 
-    if (!dryRun) {
-        await deleteObjects(objects);
-        await deleteLookoutSessions(lookoutSessions);
-
-        for (const timelapse of owned.timelapses) {
-            if (timelapse.associatedJobId)
-                await cancelRealizeJob(timelapse.associatedJobId);
-        }
+    // Before anything irreversible, so an Airtable outage leaves everything untouched for the retry. If a later step
+    // fails instead, the account survives and the next daily sync simply puts its row back.
+    const emails = [...subject.emails, ...users.map(user => user.email)];
+    let airtableRows: number;
+    try {
+        airtableRows = await deleteAirtableRowsForEmails(emails, dryRun);
+    }
+    catch {
+        throw new PrivacyError(503, "airtable_unavailable");
     }
 
-    const deleted = await deleteRows(userIds, owned, dryRun);
+    // Lookout deletions go first among the irreversible ones because they can be undone. If anything after them fails, the
+    // user keeps their account, so they must keep their videos too.
+    const scheduled = dryRun ? [] : await deleteLookoutSessions(lookoutSessions);
+
+    let deleted: Record<string, number>;
+    try {
+        if (!dryRun) {
+            await deleteObjects(objects);
+
+            for (const timelapse of owned.timelapses) {
+                if (timelapse.associatedJobId)
+                    await cancelRealizeJob(timelapse.associatedJobId);
+            }
+        }
+
+        deleted = await deleteRows(userIds, owned, dryRun);
+    }
+    catch (error) {
+        await restoreLookoutSessions(scheduled);
+        throw error;
+    }
+
     const objectCount = objects.encrypted.length + objects.public.length;
     if (objectCount > 0)
         deleted["S3 objects"] = objectCount;
@@ -138,10 +161,13 @@ export async function eraseSubject(subject: PrivacySubject, dryRun: boolean): Pr
     if (lookoutSessions.length > 0)
         deleted["Lookout sessions"] = lookoutSessions.length;
 
+    if (airtableRows > 0)
+        deleted["Airtable rows"] = airtableRows;
+
     return { found: true, deleted, retained };
 }
 
-async function matchingUsers(subject: PrivacySubject): Promise<{ id: string }[]> {
+async function matchingUsers(subject: PrivacySubject): Promise<{ id: string; email: string }[]> {
     const conditions: db.Prisma.UserWhereInput[] = subject.emails.map(email => ({ email: { equals: email, mode: "insensitive" } }));
     if (subject.slackId)
         conditions.push({ slackId: subject.slackId });
@@ -150,7 +176,7 @@ async function matchingUsers(subject: PrivacySubject): Promise<{ id: string }[]>
     if (conditions.length === 0)
         return [];
 
-    return await database().user.findMany({ where: { OR: conditions }, select: { id: true } });
+    return await database().user.findMany({ where: { OR: conditions }, select: { id: true, email: true } });
 }
 
 type OwnedRecords = Awaited<ReturnType<typeof ownedRecords>>;
@@ -249,23 +275,63 @@ function lookoutSessionIds(owned: OwnedRecords): string[] {
 }
 
 /**
- * Has Lookout delete each session. Lookout hides them at once and destroys them an hour later, which leaves staff a
- * window to restore them from Lookout's side if this erasure turns out to be a mistake.
+ * Has Lookout delete each session, returning the ones it scheduled. Lookout hides them at once and destroys them an
+ * hour later, which leaves staff a window to restore them from Lookout's side if this erasure turns out to be a mistake.
+ *
+ * All or nothing: if any session can't be deleted, the ones already scheduled are restored before this throws. A
+ * session we aren't allowed to delete fails every retry the same way, so without this each attempt would destroy the
+ * rest of the user's videos while leaving their account - and the timelapses pointing at those videos - in place.
  */
-async function deleteLookoutSessions(sessionIds: string[]) {
+async function deleteLookoutSessions(sessionIds: string[]): Promise<string[]> {
+    const scheduled: string[] = [];
+    const failures: PrivacyError[] = [];
+
     await forEachConcurrently(sessionIds, async sessionId => {
+        if (failures.length > 0)
+            return;
+
         try {
             await lookout.deleteSession(sessionId);
+            scheduled.push(sessionId);
         }
         catch (error) {
-            if (!lookout.isSessionGone(error))
-                throw new PrivacyError(503, "lookout_unavailable");
+            if (!lookout.isSessionGone(error)) {
+                failures.push(new PrivacyError(503, "lookout_unavailable"));
+                return;
+            }
 
             // A 404 is either a session that is already gone, or one our key isn't allowed to delete - such as one
             // created before Lapse had its own program key, or a Lookout that predates deletion. Only the first is safe
             // to count as done.
-            if (!await lookoutSessionGone(sessionId))
-                throw new PrivacyError(409, "manual_review_required");
+            try {
+                if (!await lookoutSessionGone(sessionId))
+                    failures.push(new PrivacyError(409, "manual_review_required"));
+            }
+            catch (goneError) {
+                failures.push(goneError instanceof PrivacyError ? goneError : new PrivacyError(503, "lookout_unavailable"));
+            }
+        }
+    });
+
+    if (failures.length > 0) {
+        await restoreLookoutSessions(scheduled);
+        throw failures[0];
+    }
+
+    return scheduled;
+}
+
+/**
+ * Undoes `deleteLookoutSessions` for an erasure that didn't go through. Failures are logged rather than thrown, as the
+ * caller is already failing with the error that matters; staff have until the grace period ends to restore by hand.
+ */
+async function restoreLookoutSessions(sessionIds: string[]) {
+    await forEachConcurrently(sessionIds, async sessionId => {
+        try {
+            await lookout.restoreSession(sessionId);
+        }
+        catch {
+            logError(`Privacy erasure failed, and Lookout session ${sessionId} could not be restored. Restore it by hand within the hour.`);
         }
     });
 }
@@ -309,6 +375,7 @@ async function deleteRows(userIds: string[], owned: OwnedRecords, dryRun: boolea
                 Timelapse: (await tx.timelapse.deleteMany({ where: ownedBy })).count,
                 KnownDevice: (await tx.knownDevice.deleteMany({ where: ownedBy })).count,
                 DraftLookoutTimelapse: (await tx.draftLookoutTimelapse.deleteMany({ where: ownedBy })).count,
+                LookoutDraftEvent: (await tx.lookoutDraftEvent.deleteMany({ where: ownedBy })).count,
                 LookoutDevice: (await tx.lookoutDevice.deleteMany({ where: ownedBy })).count,
                 LookoutPairingCode: (await tx.lookoutPairingCode.deleteMany({ where: ownedBy })).count,
                 ServiceTokenAudit: (await tx.serviceTokenAudit.deleteMany({ where: { userId: { in: userIds } } })).count,
