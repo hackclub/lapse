@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
+import NextLink from "next/link";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import { Skeleton } from "skullet/react";
@@ -465,9 +466,9 @@ function SessionSelector({ onSelectSession, onNewSession, onClose }: {
           </div>
         </Skeleton>
 
-        <a href="/timelapse/archive" className="block mt-4 text-center text-sm text-muted hover:underline">
+        <NextLink href="/timelapse/archive" className="block mt-4 text-center text-sm text-muted hover:underline">
           Looking for a recording you discarded? See archived recordings
-        </a>
+        </NextLink>
       </ModalContent>
     </Modal>
   );
