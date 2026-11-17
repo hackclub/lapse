@@ -217,6 +217,40 @@ export async function getSession(sessionId: string): Promise<LookoutSessionDetai
 }
 
 /**
+ * Lookout's batch endpoint takes at most this many sessions per request.
+ */
+const SESSION_BATCH_LIMIT = 100;
+
+export type LookoutSessionBatch = {
+    sessions: Map<string, LookoutSessionDetails>;
+    /** Sessions Lookout doesn't have (or that belong to another program) - the batch's version of a 404. */
+    missing: Set<string>;
+};
+
+/**
+ * `getSession` for many sessions at once. Listings used to send one `getSession` per draft at the same moment,
+ * and a user with a few dozen drafts queued every one of them on Lookout's database for seconds.
+ */
+export async function getSessions(sessionIds: string[]): Promise<LookoutSessionBatch> {
+    const unique = [...new Set(sessionIds)];
+    const chunks: string[][] = [];
+    for (let i = 0; i < unique.length; i += SESSION_BATCH_LIMIT)
+        chunks.push(unique.slice(i, i + SESSION_BATCH_LIMIT));
+
+    const answers = await Promise.all(chunks.map(chunk =>
+        lookoutFetch<{ sessions: LookoutSessionDetails[]; missing: string[] }>("/api/internal/sessions/batch", {
+            method: "POST",
+            body: JSON.stringify({ sessionIds: chunk }),
+        })
+    ));
+
+    return {
+        sessions: new Map(answers.flatMap(x => x.sessions).map(x => [x.session.id, x])),
+        missing: new Set(answers.flatMap(x => x.missing)),
+    };
+}
+
+/**
  * Whether a session was recorded through the Lookout desktop app, rather than in a browser through our own recorder.
  *
  * `clientInfo` is Lookout's User-Agent-like telemetry string, recorded on the session's *first* upload - so it's
