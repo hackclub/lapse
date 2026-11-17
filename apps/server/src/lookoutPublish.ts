@@ -9,7 +9,7 @@ import { logError, logInfo, logWarning } from "@/logging.js";
 import * as lookout from "@/lookout.js";
 import { rejectLookoutPublish, removePublishedLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
 import { isHackatimeRestricted } from "@/routers/hackatime.js";
-import { durationBySnapshots, syncTimelapseWithHackatime, TIMELAPSE_INCLUDES, type DbOwnedTimelapse } from "@/routers/timelapse.js";
+import { durationBySnapshots, syncTimelapseWithHackatime, TIMELAPSE_INCLUDES, TIMELAPSE_OMIT, type DbOwnedTimelapse } from "@/routers/timelapse.js";
 
 /**
  * Publishing a Lookout recording, split in two.
@@ -127,6 +127,7 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
     const existing = await database().timelapse.findFirst({
         where: { lookoutSessionId: draft.lookoutSessionId },
         include: TIMELAPSE_INCLUDES,
+        omit: TIMELAPSE_OMIT,
     });
 
     if (existing) {

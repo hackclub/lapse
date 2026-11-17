@@ -9,7 +9,7 @@ import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD
 import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
 import { env } from "@/env.js";
 import { encryptedS3 } from "@/storage.js";
-import { database } from "@/db.js";
+import { database, redis } from "@/db.js";
 
 import { apiOk, apiErr, lapseId, Err } from "@/common.js";
 import { logInfo, logWarning } from "@/logging.js";
@@ -25,6 +25,38 @@ import { issueUploadToken } from "@/upload.js";
  * fine - we only treat a key as missing when S3 affirmatively reports 404.
  */
 async function objectExists(key: string): Promise<boolean> {
+    const cacheKey = `lapse:s3exists:${key}`;
+
+    try {
+        const cached = await redis().get(cacheKey);
+        if (cached !== null)
+            return cached === "1";
+    }
+    catch (error) {
+        logWarning("Couldn't read the S3 existence cache.", { error });
+    }
+
+    const exists = await headObject(key);
+    if (exists === null)
+        return true;
+
+    // Every listing of a user's drafts used to HEAD each of their sessions. Uploaded objects stay put until the draft
+    // is deleted (which drops the row too), so a hit is remembered for long; a miss only briefly, as an upload that
+    // was still in flight can land later.
+    try {
+        await redis().set(cacheKey, exists ? "1" : "0", "EX", exists ? 7 * 24 * 60 * 60 : 5 * 60);
+    }
+    catch (error) {
+        logWarning("Couldn't write the S3 existence cache.", { error });
+    }
+
+    return exists;
+}
+
+/**
+ * Returns `null` when S3 failed with something other than a 404.
+ */
+async function headObject(key: string): Promise<boolean | null> {
     try {
         await encryptedS3.send(new HeadObjectCommand({ Bucket: env.S3_ENCRYPTED_BUCKET_NAME, Key: key }));
         return true;
@@ -36,7 +68,7 @@ async function objectExists(key: string): Promise<boolean> {
             return false;
 
         logWarning(`HeadObject for ${key} failed with a non-404 error; assuming the object exists`, { error });
-        return true;
+        return null;
     }
 }
 
@@ -89,7 +121,7 @@ const os = implement(draftTimelapseRouterContract)
     .$context<Context>()
     .use(logMiddleware);
 
-export function dtoDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }): DraftTimelapse {
+export function dtoDraftTimelapse(entity: Omit<db.DraftTimelapse, "snapshots"> & { owner: db.User }): DraftTimelapse {
     return {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
@@ -185,6 +217,7 @@ export default os.router({
 
             const drafts = await database().draftTimelapse.findMany({
                 include: { owner: true },
+                omit: { snapshots: true },
                 orderBy: { createdAt: "desc" },
                 where: { ownerId: req.input.user }
             });

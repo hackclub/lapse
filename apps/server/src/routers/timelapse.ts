@@ -23,7 +23,7 @@ import { archiveLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.j
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
 
-export type DbTimelapse = db.Timelapse & { owner: db.User, comments: DbComment[] };
+export type DbTimelapse = Omit<db.Timelapse, "snapshots"> & { owner: db.User, comments: DbComment[] };
 export type DbOwnedTimelapse = DbTimelapse & { owner: db.User };
 
 const os = implement(timelapseRouterContract)
@@ -44,7 +44,7 @@ function clampTimelapseName(name: string): string {
 /**
  * Converts a database representation of a timelapse to a runtime (API) one. This excludes private fields.
  */
-export function dtoPublicTimelapse(entity: Omit<DbTimelapse, "snapshots">): Timelapse {
+export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
     // This lacks `isPublished` so that we have to mark it explicitly when creating a DTO
     // that might hold private data (e.g. device names).
     return {
@@ -190,7 +190,8 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor | null):
 export async function getTimelapseById(id: string, actor: Actor | null): Promise<Result<Timelapse | OwnedTimelapse>> {
     const timelapse = await database().timelapse.findFirst({
         where: { id },
-        include: TIMELAPSE_INCLUDES
+        include: TIMELAPSE_INCLUDES,
+        omit: TIMELAPSE_OMIT
     });
 
     if (!timelapse)
@@ -251,6 +252,14 @@ export const TIMELAPSE_INCLUDES = {
     }
 } as const satisfies db.Prisma.TimelapseInclude;
 
+/**
+ * Specify this for `omit` alongside `TIMELAPSE_INCLUDES`. A timelapse can hold tens of thousands of snapshots, which
+ * no DTO returns - loading them made a heavy user's profile take seconds instead of milliseconds.
+ */
+export const TIMELAPSE_OMIT = {
+    snapshots: true
+} as const satisfies db.Prisma.TimelapseOmit;
+
 export default os.router({
     query: os.query
         .handler(async (req) => {
@@ -310,6 +319,7 @@ export default os.router({
             // We purposefully omit `s3Key` and `s3ThumbnailKey` here.
             await database().timelapse.create({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 data: {
                     id,
                     createdAt: draft.createdAt,
@@ -349,6 +359,7 @@ export default os.router({
             // Update the timelapse with the job ID
             const updatedTimelapse = await database().timelapse.update({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 where: { id },
                 data: {
                     associatedJobId: realizeJob.id
@@ -365,7 +376,8 @@ export default os.router({
             const actor = req.context.actor;
 
             const timelapse = await database().timelapse.findFirst({
-                where: { id: req.input.id }
+                where: { id: req.input.id },
+                omit: TIMELAPSE_OMIT
             });
 
             if (!timelapse)
@@ -401,7 +413,8 @@ export default os.router({
                 const updated = await tx.timelapse.update({
                     where: { id: req.input.id },
                     data: updateData,
-                    include: TIMELAPSE_INCLUDES
+                    include: TIMELAPSE_INCLUDES,
+                    omit: TIMELAPSE_OMIT
                 });
 
                 if (adminId !== null) {
@@ -439,6 +452,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: req.input.user,
@@ -460,6 +474,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 where: { ownerId: caller.id },
                 orderBy: { createdAt: "desc" },
                 take: limit + 1,
@@ -515,7 +530,8 @@ export default os.router({
             const updatedTimelapse = await database().timelapse.update({
                 where: { id: req.input.id, ownerId: caller.id },
                 data: { hackatimeProject: req.input.hackatimeProject },
-                include: TIMELAPSE_INCLUDES
+                include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT
             });
 
             return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
