@@ -23,7 +23,7 @@ import { archiveLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.j
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
 
-export type DbTimelapse = db.Timelapse & { owner: db.User, comments: DbComment[] };
+export type DbTimelapse = Omit<db.Timelapse, "snapshots"> & { owner: db.User, comments: DbComment[] };
 export type DbOwnedTimelapse = DbTimelapse & { owner: db.User };
 
 const os = implement(timelapseRouterContract)
@@ -44,7 +44,7 @@ function clampTimelapseName(name: string): string {
 /**
  * Converts a database representation of a timelapse to a runtime (API) one. This excludes private fields.
  */
-export function dtoPublicTimelapse(entity: Omit<DbTimelapse, "snapshots">): Timelapse {
+export function dtoPublicTimelapse(entity: DbTimelapse): Timelapse {
     // This lacks `isPublished` so that we have to mark it explicitly when creating a DTO
     // that might hold private data (e.g. device names).
     return {
@@ -190,7 +190,8 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor | null):
 export async function getTimelapseById(id: string, actor: Actor | null): Promise<Result<Timelapse | OwnedTimelapse>> {
     const timelapse = await database().timelapse.findFirst({
         where: { id },
-        include: TIMELAPSE_INCLUDES
+        include: TIMELAPSE_INCLUDES,
+        omit: TIMELAPSE_OMIT
     });
 
     if (!timelapse)
@@ -251,6 +252,14 @@ export const TIMELAPSE_INCLUDES = {
     }
 } as const satisfies db.Prisma.TimelapseInclude;
 
+/**
+ * Specify this for `omit` alongside `TIMELAPSE_INCLUDES`. A timelapse can hold tens of thousands of snapshots, which
+ * no DTO returns - loading them made a heavy user's profile take seconds instead of milliseconds.
+ */
+export const TIMELAPSE_OMIT = {
+    snapshots: true
+} as const satisfies db.Prisma.TimelapseOmit;
+
 export default os.router({
     query: os.query
         .handler(async (req) => {
@@ -310,6 +319,7 @@ export default os.router({
             // We purposefully omit `s3Key` and `s3ThumbnailKey` here.
             await database().timelapse.create({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 data: {
                     id,
                     createdAt: draft.createdAt,
@@ -349,6 +359,7 @@ export default os.router({
             // Update the timelapse with the job ID
             const updatedTimelapse = await database().timelapse.update({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 where: { id },
                 data: {
                     associatedJobId: realizeJob.id
@@ -365,7 +376,8 @@ export default os.router({
             const actor = req.context.actor;
 
             const timelapse = await database().timelapse.findFirst({
-                where: { id: req.input.id }
+                where: { id: req.input.id },
+                omit: TIMELAPSE_OMIT
             });
 
             if (!timelapse)
@@ -401,7 +413,8 @@ export default os.router({
                 const updated = await tx.timelapse.update({
                     where: { id: req.input.id },
                     data: updateData,
-                    include: TIMELAPSE_INCLUDES
+                    include: TIMELAPSE_INCLUDES,
+                    omit: TIMELAPSE_OMIT
                 });
 
                 if (adminId !== null) {
@@ -439,6 +452,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: req.input.user,
@@ -460,6 +474,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 where: { ownerId: caller.id },
                 orderBy: { createdAt: "desc" },
                 take: limit + 1,
@@ -515,7 +530,8 @@ export default os.router({
             const updatedTimelapse = await database().timelapse.update({
                 where: { id: req.input.id, ownerId: caller.id },
                 data: { hackatimeProject: req.input.hackatimeProject },
-                include: TIMELAPSE_INCLUDES
+                include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT
             });
 
             return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
@@ -624,23 +640,40 @@ export default os.router({
                 orderBy: { createdAt: "desc" },
             });
 
-            const results = await Promise.all(drafts.map(async (draft) => {
-                try {
-                    // A draft the user already answered in the desktop panel publishes as soon as its
-                    // video is ready. This runs at login, which is the first thing that happens after
-                    // someone closes the app mid-compile - so it is the likeliest place to notice.
-                    //
-                    // Gated on write scope: publishing creates a (possibly public) timelapse and pushes
-                    // Hackatime heartbeats, and this procedure is readable by tokens that hold neither.
-                    // A read-only caller just doesn't get the shortcut; the sweeper does it within a
-                    // minute regardless.
-                    if (mayPublish) {
-                        const finalized = await finalizeIfPending(draft);
-                        if (finalized?.kind === "published")
-                            return null;
-                    }
+            // A draft the user already answered in the desktop panel publishes as soon as its video is ready. This
+            // runs at login, which is the first thing that happens after someone closes the app mid-compile - so it
+            // is the likeliest place to notice.
+            //
+            // Gated on write scope: publishing creates a (possibly public) timelapse and pushes Hackatime heartbeats,
+            // and this procedure is readable by tokens that hold neither. A read-only caller just doesn't get the
+            // shortcut; the sweeper does it within a minute regardless.
+            const published = new Set<string>();
+            if (mayPublish) {
+                await Promise.all(drafts.map(async (draft) => {
+                    const finalized = await finalizeIfPending(draft);
+                    if (finalized?.kind === "published")
+                        published.add(draft.id);
+                }));
+            }
 
-                    const session = await lookout.getSession(draft.lookoutSessionId);
+            const remaining = drafts.filter(draft => !published.has(draft.id));
+
+            let batch: lookout.LookoutSessionBatch;
+            try {
+                batch = remaining.length > 0
+                    ? await lookout.getSessions(remaining.map(draft => draft.lookoutSessionId))
+                    : { sessions: new Map(), missing: new Set() };
+            }
+            catch (err) {
+                // Lookout being down is Lookout's problem for the moment, not the user's, and the drafts are the
+                // only link Lapse has to their recordings. List none of them rather than fail, and touch nothing.
+                logWarning("Couldn't check Lookout sessions for the drafts list; leaving them alone.", { err, ownerId: caller.id });
+                batch = { sessions: new Map(), missing: new Set() };
+            }
+
+            const results = await Promise.all(remaining.map(async (draft) => {
+                const session = batch.sessions.get(draft.lookoutSessionId);
+                if (session) {
                     return {
                         id: draft.id,
                         createdAt: draft.createdAt.getTime(),
@@ -651,26 +684,20 @@ export default os.router({
                         thumbnailUrl: session.session.thumbnailUrl as string | null,
                     };
                 }
-                catch (err) {
-                    // Only a definitive "no such session" from Lookout means the draft is dead. Anything else -
-                    // a timeout, an outage, a deploy - is Lookout's problem for the moment, not the user's, and the
-                    // draft is the only link Lapse has to their recording. Drop it from this listing and move on.
-                    if (!lookout.isSessionGone(err)) {
-                        logWarning(`Couldn't check Lookout session for draft ${draft.id}; leaving it alone.`, { err, draftId: draft.id });
-                        return null;
-                    }
 
-                    // Archived rather than deleted: a 404 from a proxy in front of Lookout looks just like Lookout's
-                    // own, and losing the draft over one would cut the user off from a recording that still exists.
+                // Only a definitive "no such session" from Lookout means the draft is dead; a session that simply
+                // didn't come back (because the whole lookup failed) is left alone.
+                //
+                // Archived rather than deleted: a proxy in front of Lookout can be wrong just as Lookout can, and
+                // losing the draft over it would cut the user off from a recording that still exists.
+                if (batch.missing.has(draft.lookoutSessionId)) {
                     await archiveLookoutDraft(draft, "session-gone", {
                         actor: stringifyActor(req.context.actor),
-                        detail: err instanceof lookout.LookoutApiError
-                            ? { status: err.status, body: err.body.slice(0, 2000) }
-                            : { error: String(err) },
+                        detail: { missingFromBatch: true },
                     });
-
-                    return null;
                 }
+
+                return null;
             }));
 
             return apiOk({

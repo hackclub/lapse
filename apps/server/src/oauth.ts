@@ -473,15 +473,15 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<Externa
         return null;
     }
 
-    if (await isAccessTokenRevoked(bearerToken))
-        return null;
-
     try {
-        const user = await database().user.findFirst({
-            where: { id: token.sub }
-        });
+        // Both run on every authenticated request, so they run side by side.
+        const [revoked, user] = await Promise.all([
+            isAccessTokenRevoked(bearerToken),
+            database().user.findFirst({ where: { id: token.sub } })
+        ]);
 
-        if (!user) return null;
+        if (revoked || !user)
+            return null;
 
         const allScopes = new Set(getAllOAuthScopes());
         if (!token.scp.every(x => allScopes.has(x as LapseOAuthScope))) {

@@ -3,10 +3,11 @@ import { implement } from "@orpc/server";
 import { hackatimeRouterContract, type HackatimeProject } from "@hackclub/lapse-api";
 
 import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
-import { dtoOwnedTimelapse, dtoTimelapse, TIMELAPSE_INCLUDES } from "@/routers/timelapse.js";
+import { dtoOwnedTimelapse, dtoTimelapse, TIMELAPSE_INCLUDES, TIMELAPSE_OMIT } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
-import { database } from "@/db.js";
-import { logError } from "@/logging.js";
+import { cachedJson, fingerprint } from "@/cache.js";
+import { database, redis } from "@/db.js";
+import { logError, logWarning } from "@/logging.js";
 import { apiErr } from "@/common.js";
 import { HackatimeApiError, HackatimeOAuthApi } from "@/hackatime.js";
 import { maybe } from "@hackclub/lapse-shared";
@@ -24,8 +25,14 @@ export async function hackatimeProjectsForUser(user: db.User): Promise<Hackatime
     if (!user.hackatimeId || !user.hackatimeAccessToken)
         return [];
 
-    const oauthApi = new HackatimeOAuthApi(user.hackatimeAccessToken);
-    const projects = await oauthApi.getProjects();
+    const token = user.hackatimeAccessToken;
+
+    // The project picker opens on every publish, and Hackatime takes a few hundred milliseconds to answer.
+    const projects = await cachedJson(
+        `lapse:hackatime:projects:${user.id}:${fingerprint(token)}`,
+        HACKATIME_PROJECTS_TTL_SECONDS,
+        () => new HackatimeOAuthApi(token).getProjects()
+    );
 
     return projects
         .filter(p => typeof p.name === "string" && p.name.trim().length > 0)
@@ -49,8 +56,62 @@ export async function isHackatimeRestricted(user: db.User): Promise<boolean> {
     if (!user.hackatimeId || !user.hackatimeAccessToken)
         return false;
 
-    const me = await new HackatimeOAuthApi(user.hackatimeAccessToken).me();
-    return me.trust_factor?.trust_level === "red";
+    const token = user.hackatimeAccessToken;
+    return await cachedJson(
+        `lapse:hackatime:restricted:${user.id}:${fingerprint(token)}`,
+        HACKATIME_RESTRICTED_TTL_SECONDS,
+        async () => (await new HackatimeOAuthApi(token).me()).trust_factor?.trust_level === "red"
+    );
+}
+
+const HACKATIME_PROJECTS_TTL_SECONDS = 30;
+const HACKATIME_STATUS_TTL_SECONDS = 10 * 60;
+/** Shorter, as this gates publishing: a fresh ban should take hold within a couple of minutes. */
+const HACKATIME_RESTRICTED_TTL_SECONDS = 2 * 60;
+
+type LinkStatus = { needsRelink: boolean; restricted: boolean };
+
+/**
+ * Asks Hackatime whether the user's link still works. `definitive` is `false` when Hackatime itself misbehaved, in
+ * which case the answer is only a guess that shouldn't be remembered.
+ */
+async function checkLinkStatus(userId: string, token: string): Promise<LinkStatus & { definitive: boolean }> {
+    const oauthApi = new HackatimeOAuthApi(token);
+
+    try {
+        await oauthApi.getProjects();
+        return { needsRelink: false, restricted: false, definitive: true };
+    }
+    catch (error) {
+        // 403 is Hackatime refusing a token minted before we asked for `read`; 401 is one that has stopped
+        // working altogether. Signing in again fixes both. Anything else is Hackatime's problem, not the
+        // user's, and nagging them about it would not help.
+        const status = error instanceof HackatimeApiError ? error.status : null;
+
+        if (status !== 401 && status !== 403)
+            logError("Couldn't check the Hackatime link status", { error, userId });
+
+        if (status === 403)
+            return { needsRelink: true, restricted: false, definitive: true };
+
+        if (status !== 401)
+            return { needsRelink: false, restricted: false, definitive: false };
+
+        // Hackatime also answers 401 for banned users. Their token still works for `/me` - so if it does, the
+        // token is fine, and signing in again wouldn't change a thing.
+        try {
+            await oauthApi.me();
+            return { needsRelink: false, restricted: true, definitive: true };
+        }
+        catch (meError) {
+            const meStatus = meError instanceof HackatimeApiError ? meError.status : null;
+
+            if (meStatus !== 401)
+                logError("Couldn't check whether the user is banned on Hackatime", { error: meError, userId });
+
+            return { needsRelink: meStatus === 401, restricted: false, definitive: meStatus === 401 };
+        }
+    }
 }
 
 const os = implement(hackatimeRouterContract)
@@ -64,19 +125,12 @@ export default os.router({
         .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
-            
-            const dbUser = await database().user.findFirst({
-                where: { id: caller.id }
-            });
 
-            if (!dbUser)
-                return apiErr("NOT_FOUND", "User not found");
-
-            if (!dbUser.hackatimeId || !dbUser.hackatimeAccessToken)
+            if (!caller.hackatimeId || !caller.hackatimeAccessToken)
                 return apiErr("ERROR", "You must have a linked Hackatime account!");
 
             try {
-                return apiOk({ projects: await hackatimeProjectsForUser(dbUser) });
+                return apiOk({ projects: await hackatimeProjectsForUser(caller) });
             }
             catch (error) {
                 logError("Failed to fetch Hackatime projects", { error, userId: caller.id });
@@ -89,51 +143,37 @@ export default os.router({
         .use(requiredScopes("timelapse:read"))
         .use(requiredImplicitUser())
         .handler(async (req) => {
-            const caller = req.context.user;
+            // The user was loaded fresh for this request while authenticating it.
+            const dbUser = req.context.user;
 
-            const dbUser = await database().user.findFirst({
-                where: { id: caller.id }
-            });
-
-            if (!dbUser?.hackatimeId || !dbUser.hackatimeAccessToken)
+            if (!dbUser.hackatimeId || !dbUser.hackatimeAccessToken)
                 return apiOk({ needsRelink: false, restricted: false });
 
-            const oauthApi = new HackatimeOAuthApi(dbUser.hackatimeAccessToken);
+            // Every page load asks this, and the answer only changes when the user signs in again (which changes
+            // the token, and with it the key) or Hackatime changes its mind about them.
+            const key = `lapse:hackatime:linkStatus:${dbUser.id}:${fingerprint(dbUser.hackatimeAccessToken)}`;
 
             try {
-                await oauthApi.getProjects();
-                return apiOk({ needsRelink: false, restricted: false });
+                const cached = await redis().get(key);
+                if (cached !== null)
+                    return apiOk(JSON.parse(cached) as LinkStatus);
             }
             catch (error) {
-                // 403 is Hackatime refusing a token minted before we asked for `read`; 401 is one that has stopped
-                // working altogether. Signing in again fixes both. Anything else is Hackatime's problem, not the
-                // user's, and nagging them about it would not help.
-                const status = error instanceof HackatimeApiError ? error.status : null;
+                logWarning("Couldn't read the cached Hackatime link status.", { error });
+            }
 
-                if (status !== 401 && status !== 403)
-                    logError("Couldn't check the Hackatime link status", { error, userId: caller.id });
+            const { definitive, ...status } = await checkLinkStatus(dbUser.id, dbUser.hackatimeAccessToken);
 
-                if (status === 403)
-                    return apiOk({ needsRelink: true, restricted: false });
-
-                if (status !== 401)
-                    return apiOk({ needsRelink: false, restricted: false });
-
-                // Hackatime also answers 401 for banned users. Their token still works for `/me` - so if it does, the
-                // token is fine, and signing in again wouldn't change a thing.
+            if (definitive) {
                 try {
-                    await oauthApi.me();
-                    return apiOk({ needsRelink: false, restricted: true });
+                    await redis().set(key, JSON.stringify(status), "EX", HACKATIME_STATUS_TTL_SECONDS);
                 }
-                catch (meError) {
-                    const meStatus = meError instanceof HackatimeApiError ? meError.status : null;
-
-                    if (meStatus !== 401)
-                        logError("Couldn't check whether the user is banned on Hackatime", { error: meError, userId: caller.id });
-
-                    return apiOk({ needsRelink: meStatus === 401, restricted: false });
+                catch (error) {
+                    logWarning("Couldn't cache the Hackatime link status.", { error });
                 }
             }
+
+            return apiOk(status);
         }),
 
     myTimelapsesForProject: os.myTimelapsesForProject
@@ -145,6 +185,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: caller.id,
@@ -179,6 +220,7 @@ export default os.router({
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
+                omit: TIMELAPSE_OMIT,
                 orderBy: { createdAt: "desc" },
                 where: {
                     ownerId: subject.id,
