@@ -110,6 +110,29 @@ export const authRouterContract = oc.tag(ROUTER_TAGS.auth).router({
             })
         })),
 
+    signInWithPassword: contract("POST", "/auth/password")
+        .route({
+            description: `
+                Signs in to an account that can't go through Hackatime, such as the one given to app store reviewers, and continues
+                the OAuth2 flow of the canonical client. Returns the URI the user-agent would have been redirected to, carrying the
+                authorization code, which is then exchanged at /auth/token like any other. Only enabled when the server is configured
+                with such an account; otherwise, every attempt fails.
+            `
+        })
+        .input(z.object({
+            email: z.string(),
+            password: z.string(),
+            clientId: z.string(),
+            redirectUri: z.url(),
+            scope: z.string(),
+            state: z.string(),
+            codeChallenge: z.string()
+                .describe("The S256 PKCE code challenge, as in /auth/authorize.")
+        }))
+        .output(apiResult({
+            redirectUri: z.url()
+        })),
+
     hackatimeCallback: contract()
         .route({
             method: "GET",

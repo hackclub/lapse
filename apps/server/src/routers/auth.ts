@@ -8,12 +8,13 @@ import { deleteCookie, getCookie, setCookie } from "@orpc/server/helpers";
 import { arraysEqual } from "@hackclub/lapse-shared";
 
 import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
-import { database } from "@/db.js";
+import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi } from "@/hackatime.js";
 import { slackQueryProfile } from "@/slack.js";
-import { oauthSrv } from "@/oauth.js";
+import { oauthSrv, verifySecretHash } from "@/oauth.js";
+import { apiErr, apiOk } from "@/common.js";
 import type * as db from "@/generated/prisma/client.js";
 
 const os = implement(authRouterContract)
@@ -22,6 +23,10 @@ const os = implement(authRouterContract)
 
 const OAUTH_COOKIE_NAME = "lapse_oauthdata";
 const THIRD_PARTY_OAUTH_COOKIE_NAME = "lapse_oauthdata_3p";
+const PASSWORD_FAILURES_KEY = "lapse:passwordSignIn:failures";
+const PASSWORD_MAX_FAILURES = 20;
+const PASSWORD_FAILURE_WINDOW = 15 * 60;
+
 const HKT_REDIRECT_URI = `${env.BASE_URL}/api/auth/hackatimeCallback`; // should point to an actual endpoint we have defined below!
 
 type OAuthCookie = z.infer<typeof OAuthCookieSchema>;
@@ -258,6 +263,108 @@ export default os.router({
                     scp: req.input.scopes
                 })
             };
+        }),
+
+    // For the one account that can't sign in through Hackatime (app store review). The rest of the flow is the regular
+    // one: the client gets an authorization code bound to its PKCE challenge, and exchanges it at /auth/token.
+    signInWithPassword: os.signInWithPassword
+        .handler(async (req) => {
+            const email = env.PASSWORD_SIGN_IN_EMAIL?.trim().toLowerCase();
+            const hash = env.PASSWORD_SIGN_IN_HASH;
+            const rejected = apiErr("NO_PERMISSION", "That e-mail and password don't match.");
+
+            if (!email || !hash)
+                return rejected;
+
+            if (req.input.clientId !== env.CANONICAL_OAUTH_CLIENT_ID)
+                return rejected;
+
+            // Any other e-mail can never sign in here, so it's turned down without counting against the account or
+            // spending a hash on it. Only guesses at the account's own password count, so nobody can lock App Review
+            // out without knowing its e-mail.
+            if (req.input.email.trim().toLowerCase() !== email)
+                return rejected;
+
+            let failures = 0;
+            try {
+                failures = Number(await redis().get(PASSWORD_FAILURES_KEY) ?? 0);
+            }
+            catch (err) {
+                logWarning("Couldn't read password sign-in failures from Redis.", { err });
+            }
+
+            if (failures >= PASSWORD_MAX_FAILURES)
+                return apiErr("NO_PERMISSION", "Too many attempts. Please try again later.");
+
+            if (!verifySecretHash(req.input.password, hash)) {
+                try {
+                    const count = await redis().incr(PASSWORD_FAILURES_KEY);
+                    if (count === 1)
+                        await redis().expire(PASSWORD_FAILURES_KEY, PASSWORD_FAILURE_WINDOW);
+                }
+                catch (err) {
+                    logWarning("Couldn't count a failed password sign-in in Redis.", { err });
+                }
+
+                logWarning("Failed password sign-in.", { failures: failures + 1 });
+                return rejected;
+            }
+
+            let user = await database().user.findFirst({ where: { email, hackatimeId: null } });
+            if (!user) {
+                let handle = "appreview";
+                for (let i = 1; await database().user.findFirst({ where: { handle } }); i++)
+                    handle = `appreview${i}`;
+
+                user = await database().user.create({
+                    data: {
+                        email,
+                        handle,
+                        displayName: "App Review",
+                        profilePictureUrl: env.DEFAULT_PFP_URL,
+                        urls: [],
+                        permissionLevel: "USER"
+                    }
+                });
+
+                logInfo(`Password sign-in account ${handle} created.`);
+            }
+
+            const oauthResponse = new OAuth2Server.Response();
+            try {
+                await oauthSrv.authorize(
+                    new OAuth2Server.Request({
+                        method: "GET",
+                        headers: {},
+                        query: {
+                            "response_type": "code",
+                            "client_id": req.input.clientId,
+                            "redirect_uri": req.input.redirectUri,
+                            "scope": req.input.scope,
+                            "state": req.input.state,
+                            "code_challenge": req.input.codeChallenge,
+                            "code_challenge_method": "S256"
+                        }
+                    }),
+                    oauthResponse,
+                    {
+                        authenticateHandler: {
+                            handle: () => ({ id: user.id })
+                        }
+                    }
+                );
+            }
+            catch (err) {
+                logWarning("Password sign-in couldn't issue an authorization code.", { err });
+                return apiErr("ERROR", "Something went wrong while signing in. Please try again.");
+            }
+
+            const location = oauthResponse.headers?.["location"];
+            if (typeof location !== "string")
+                return apiErr("ERROR", "Something went wrong while signing in. Please try again.");
+
+            logInfo(`Password sign-in for ${user.handle}.`);
+            return apiOk({ redirectUri: location });
         }),
 
     // The routes below are not defined in the contracts, as we don't want the client to be calling them directly! We only want to access them through redirects.
