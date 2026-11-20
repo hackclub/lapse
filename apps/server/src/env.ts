@@ -143,6 +143,19 @@ export const env = {
     get HACKATIME_RATE_LIMIT_BYPASS() { return optional("HACKATIME_RATE_LIMIT_BYPASS") },
 
     /**
+     * The e-mail of an account that signs in with a password instead of Hackatime, for app store reviewers, who can't get
+     * a Hack Club account. Off unless this and `PASSWORD_SIGN_IN_HASH` are both set. The account is created on its first
+     * sign-in if no user has this e-mail.
+     */
+    get PASSWORD_SIGN_IN_EMAIL() { return optional("PASSWORD_SIGN_IN_EMAIL") },
+
+    /**
+     * The scrypt hash of `PASSWORD_SIGN_IN_EMAIL`'s password, as `salt:hash` in hex (64-byte key), the same format as
+     * service client secrets. Generate with `node -e` and `hashServiceSecret` from `oauth.ts`.
+     */
+    get PASSWORD_SIGN_IN_HASH() { return optional("PASSWORD_SIGN_IN_HASH") },
+
+    /**
      * An Airtable personal access token for the daily Loops user sync (`airtableSync.ts`). Needs the
      * `data.records:read` and `data.records:write` scopes on the sync base. The sync is off unless this,
      * `AIRTABLE_SYNC_BASE_ID` and `AIRTABLE_SYNC_TABLE_ID` are all set.
