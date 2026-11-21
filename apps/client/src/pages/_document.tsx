@@ -15,6 +15,7 @@ export default function Document() {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="theme-color" content="#17171d" />
 
         {/* Every page talks to the API, and most show Lookout's videos and thumbnails - open those connections early. */}
         <link rel="preconnect" href={API_ORIGIN} crossOrigin="use-credentials" />
@@ -22,6 +23,13 @@ export default function Document() {
         <link rel="preconnect" href="https://lookout.hackclub-assets.com" />
       </Head>
       <body className="antialiased">
+        {/* Only shown when installed with the window controls overlay on - see `.titlebar` in globals.css. */}
+        <div className="titlebar" aria-hidden>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon0.svg" alt="" width={16} height={16} />
+          <span>Lapse</span>
+        </div>
+
         <Main />
         <NextScript />
       </body>

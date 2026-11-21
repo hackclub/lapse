@@ -247,7 +247,7 @@ export default function Page() {
         This uses "clip" rather than "hidden" so that the page keeps scrolling as one, instead of this becoming
         its own scroll container.
       */}
-      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-6 sm:py-12 overflow-x-clip">
+      <div className="min-h-app flex flex-col items-center justify-center px-4 py-6 sm:py-12 overflow-x-clip">
         {compilationStatus === "waiting" && (
           <div className="flex flex-col items-center justify-center gap-4">
             <div className="w-8 h-8 border-3 border-red border-t-transparent rounded-full animate-spin" />

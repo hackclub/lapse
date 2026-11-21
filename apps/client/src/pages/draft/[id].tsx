@@ -206,7 +206,7 @@ export default function Page() {
 
   return (
     <RootLayout>
-      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+      <div className="min-h-app flex flex-col items-center justify-center px-4 py-12">
         {draft && (
           <div className="flex flex-col gap-6 w-full max-w-2xl">
             <div className="flex flex-col gap-2">

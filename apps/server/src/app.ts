@@ -28,6 +28,7 @@ import { registerUserTimelapseRoutes } from "@/userTimelapses.js";
 import { registerPrivacyRoutes } from "@/privacy.js";
 import { registerLookoutDesktopRoutes } from "@/lookoutDesktop.js";
 import { startLookoutPublishSweeper } from "@/lookoutPublish.js";
+import { startRecordingClientBackfill } from "@/recordingClientBackfill.js";
 import { startAirtableUserSync } from "@/airtableSync.js";
 
 import user from "@/routers/user.js"
@@ -122,6 +123,9 @@ registerLookoutDesktopRoutes(server);
 // Lookout has no webhook, so a recording whose publish details were filled in before it finished
 // compiling needs someone to notice it is ready. See `lookoutPublish.ts`.
 startLookoutPublishSweeper();
+
+// Timelapses published before `recordedWith` existed learn it from Lookout. See `recordingClientBackfill.ts`.
+startRecordingClientBackfill();
 
 // Daily per-user stats for Loops. Does nothing unless the AIRTABLE_SYNC_* variables are set.
 startAirtableUserSync();

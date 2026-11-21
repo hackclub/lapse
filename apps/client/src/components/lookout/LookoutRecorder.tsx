@@ -738,7 +738,7 @@ export default function LookoutRecorder() {
   if (showCodeNotice && hackatimeStatus === null) {
     return (
       <RootLayout showHeader={false}>
-        <div className="flex items-center justify-center h-screen text-muted">Checking for sessions...</div>
+        <div className="flex items-center justify-center h-app text-muted">Checking for sessions...</div>
       </RootLayout>
     );
   }
@@ -757,7 +757,7 @@ export default function LookoutRecorder() {
   if (phase === "checking") {
     return (
       <RootLayout showHeader={false}>
-        <div className="flex items-center justify-center h-screen text-muted">Checking for sessions...</div>
+        <div className="flex items-center justify-center h-app text-muted">Checking for sessions...</div>
       </RootLayout>
     );
   }
@@ -787,7 +787,7 @@ export default function LookoutRecorder() {
 
     return (
       <RootLayout showHeader={false}>
-        <div className="min-h-screen flex items-center justify-center px-4 py-12">
+        <div className="min-h-app flex items-center justify-center px-4 py-12">
           <div className="flex flex-col items-center text-center gap-6 max-w-md">
             <img src="/images/lookout-icon.png" alt="Lookout" className="w-16 h-16 rounded-2xl" />
             <div className="flex flex-col gap-2">
@@ -1301,7 +1301,7 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, fullCaptureUrl, onSh
     const formattedTime = formatTrackedTime(state.displaySeconds);
     return (
       <RootLayout showHeader={false}>
-        <div className="flex w-screen h-screen bg-dark p-8 relative">
+        <div className="flex w-screen h-app bg-dark p-8 relative">
           <TimePill formattedTime={formattedTime} isRecording={false} displaySeconds={state.displaySeconds} />
 
           <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">
@@ -1331,7 +1331,7 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, fullCaptureUrl, onSh
 
   return (
     <RootLayout showHeader={false}>
-      <div className="flex w-screen h-screen bg-dark p-8 relative">
+      <div className="flex w-screen h-app bg-dark p-8 relative">
         <TimePill formattedTime={formattedTime} isRecording={state.isRecording} displaySeconds={state.displaySeconds} />
 
         <div className="z-10 absolute right-12 top-1/2 -translate-y-1/2 bg-dark border border-black rounded-[48px] shadow-xl px-2.5 py-11 flex flex-col gap-8">

@@ -114,6 +114,8 @@ async function computeStats(): Promise<GlobalStats> {
         publicCount,
         unlistedCount,
         lookoutCount,
+        browserCount,
+        desktopCount,
         hackatimeSynced,
         allTimelapses,
         drafts,
@@ -138,6 +140,8 @@ async function computeStats(): Promise<GlobalStats> {
         db.timelapse.count({ where: { visibility: "PUBLIC" } }),
         db.timelapse.count({ where: { visibility: "UNLISTED" } }),
         db.timelapse.count({ where: { ...valid, lookoutSessionId: { not: null } } }),
+        db.timelapse.count({ where: { ...valid, recordedWith: "BROWSER" } }),
+        db.timelapse.count({ where: { ...valid, recordedWith: "DESKTOP" } }),
         db.timelapse.count({ where: { ...valid, hackatimeProject: { not: null } } }),
         db.timelapse.count(),
         db.draftTimelapse.count({ where: { associatedTimelapseId: null } }),
@@ -184,7 +188,8 @@ async function computeStats(): Promise<GlobalStats> {
             public: publicCount,
             unlisted: unlistedCount,
             lookout: lookoutCount,
-            browser: published - lookoutCount,
+            browser: browserCount,
+            desktop: desktopCount,
             hackatimeSynced
         },
         recordings: {

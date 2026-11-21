@@ -8,7 +8,7 @@ const LegacyRecoveryView = dynamic(
     ssr: false,
     loading: () => (
       <RootLayout showHeader>
-        <div className="flex items-center justify-center h-screen text-muted">Looking for recordings...</div>
+        <div className="flex items-center justify-center h-app text-muted">Looking for recordings...</div>
       </RootLayout>
     ),
   },

@@ -69,7 +69,7 @@ export default function Page() {
   if (gone) {
     return (
       <RootLayout>
-        <div className="min-h-screen flex items-center justify-center px-4 py-12">
+        <div className="min-h-app flex items-center justify-center px-4 py-12">
           <div className="flex flex-col items-center text-center gap-6 max-w-md">
             <Icon glyph="checkmark" size={48} className="text-green" />
             <div className="flex flex-col gap-2">
@@ -92,7 +92,7 @@ export default function Page() {
   if (!isLoading && !currentUser) {
     return (
       <RootLayout>
-        <div className="min-h-screen flex items-center justify-center px-4 py-12">
+        <div className="min-h-app flex items-center justify-center px-4 py-12">
           <div className="flex flex-col items-center text-center gap-6 max-w-md">
             <Icon glyph="clock" size={48} className="text-red" />
             <div className="flex flex-col gap-2">

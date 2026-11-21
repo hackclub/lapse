@@ -1,6 +1,6 @@
 import { chunked, sleep } from "@hackclub/lapse-shared";
 import { env } from "@/env.js";
-import { logError } from "@/logging.js";
+import { logError, logWarning } from "@/logging.js";
 
 export interface WakaTimeCategorizedStat {
     name: string;
@@ -195,6 +195,21 @@ export class HackatimeApiError extends Error {
         super(`Hackatime API request failed with HTTP ${status}`);
         this.status = status;
     }
+
+    /**
+     * Whether Hackatime refused the user's token - it was revoked, predates a scope we now need, or the user is
+     * banned. That is the user's state rather than a fault, and the only fix is for them to sign in again.
+     */
+    get isAuthFailure(): boolean {
+        return this.status === 401 || this.status === 403;
+    }
+}
+
+function logFailedRequest(req: Response, method: string, params: object) {
+    if (req.status === 401 || req.status === 403)
+        logWarning("API request was refused.", { status: req.status, method, params });
+    else
+        logError("API request failed!", { req, method, params });
 }
 
 class HackatimeBase {
@@ -227,7 +242,7 @@ class HackatimeBase {
         });
 
         if (!req.ok) {
-            logError("API request failed!", { req, method, params });
+            logFailedRequest(req, method, params);
             throw new HackatimeApiError(req.status);
         }
 
@@ -252,7 +267,7 @@ class HackatimeBase {
             }
 
             if (!req.ok) {
-                logError("API request failed!", { req, method, params });
+                logFailedRequest(req, method, params);
                 throw new HackatimeApiError(req.status);
             }
 
