@@ -77,6 +77,83 @@ html, body, #__next {
     overscroll-behavior: none;
 }
 
+/*
+ * When installed as a desktop PWA with the window controls overlay on, the page draws into the title bar. The `env()`
+ * values are only defined while the overlay is showing, so everything below collapses to nothing otherwise.
+ *
+ * Pages with the desktop header use it as the title bar: it's dragged by, and padded clear of the window controls.
+ * Pages without one (and narrow windows, where the header moves to the bottom) get a slim `.titlebar` strip instead,
+ * with the page pushed down below it by `--titlebar-offset`.
+ */
+:root {
+    --titlebar-offset: env(titlebar-area-height, 0px);
+}
+
+body {
+    padding-top: var(--titlebar-offset);
+}
+
+#__next {
+    min-height: calc(100vh - var(--titlebar-offset));
+}
+
+.titlebar {
+    display: none;
+}
+
+/* `h-screen` and `min-h-screen`, less the title bar the body is pushed down by. */
+@utility h-app {
+    height: calc(100vh - var(--titlebar-offset));
+}
+
+@utility min-h-app {
+    min-height: calc(100vh - var(--titlebar-offset));
+}
+
+@media (display-mode: window-controls-overlay) {
+    .titlebar {
+        position: fixed;
+        z-index: 30;
+        left: env(titlebar-area-x, 0);
+        top: env(titlebar-area-y, 0);
+        width: env(titlebar-area-width, 100%);
+        height: env(titlebar-area-height, 0px);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        background: var(--color-dark);
+        color: var(--color-muted);
+        font: 12px system-ui, sans-serif;
+        user-select: none;
+        app-region: drag;
+        -webkit-app-region: drag;
+    }
+}
+
+@media (display-mode: window-controls-overlay) and (min-width: 40rem) {
+    :root:has(.titlebar-header) {
+        --titlebar-offset: 0px;
+    }
+
+    :root:has(.titlebar-header) .titlebar {
+        display: none;
+    }
+
+    .titlebar-header {
+        padding-left: max(3rem, calc(env(titlebar-area-x, 0px) + 1rem));
+        padding-right: max(3rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 1rem));
+        user-select: none;
+        app-region: drag;
+        -webkit-app-region: drag;
+    }
+
+    .titlebar-header :is(a, button, svg, [role="button"]) {
+        app-region: no-drag;
+        -webkit-app-region: no-drag;
+    }
+}
+
 .bg-grid-gradient {
     background:
         linear-gradient(-80deg, #00000000, color-mix(in srgb, var(--color-red) 25%, transparent)),
