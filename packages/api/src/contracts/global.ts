@@ -60,8 +60,12 @@ export const GlobalStatsSchema = z.object({
         published: z.number().nonnegative(),
         public: z.number().nonnegative(),
         unlisted: z.number().nonnegative(),
+        /** Recorded through Lookout, whether in the browser or the desktop app. */
         lookout: z.number().nonnegative(),
+        /** Recorded in a browser - Lapse's Lookout recorder or the legacy pre-Lookout one. */
         browser: z.number().nonnegative(),
+        /** Recorded with the Lookout desktop app. */
+        desktop: z.number().nonnegative(),
         hackatimeSynced: z.number().nonnegative()
     }),
     recordings: z.object({

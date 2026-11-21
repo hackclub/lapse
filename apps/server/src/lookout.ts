@@ -1,3 +1,5 @@
+import type { RecordingClient } from "@/generated/prisma/client.js";
+
 import { env } from "@/env.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 
@@ -260,6 +262,13 @@ export async function getSessions(sessionIds: string[]): Promise<LookoutSessionB
  */
 export function isDesktopClient(clientInfo: string | null): boolean {
     return /^Lookout Desktop\b/i.test(clientInfo ?? "");
+}
+
+export function recordingClientOf(clientInfo: string | null): RecordingClient {
+    if (clientInfo === null)
+        return "UNKNOWN";
+
+    return isDesktopClient(clientInfo) ? "DESKTOP" : "BROWSER";
 }
 
 export async function getTimings(token: string): Promise<LookoutTimings> {

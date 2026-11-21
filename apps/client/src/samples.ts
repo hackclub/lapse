@@ -72,7 +72,7 @@ export const SAMPLE_STATS: GlobalStats = {
     averageTimelapseSeconds: 75 * 60,
     longestTimelapseSeconds: 9 * 60 * 60
   },
-  timelapses: { published: 23456, public: 20000, unlisted: 3456, lookout: 12000, browser: 11456, hackatimeSynced: 19876 },
+  timelapses: { published: 23456, public: 20000, unlisted: 3456, lookout: 20000, browser: 9456, desktop: 14000, hackatimeSynced: 19876 },
   recordings: { started: 34567, drafts: 1234 },
   comments: 5678,
   weekly: Array.from({ length: 12 }, (_, i) => ({

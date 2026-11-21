@@ -327,6 +327,7 @@ export default os.router({
                     name: draft.name ?? `Timelapse at ${draft.createdAt.toLocaleString("en-US", { month: "long", day: "numeric", minute: "numeric", hour: "numeric" })}`,
                     description: draft.description,
                     visibility: req.input.visibility,
+                    recordedWith: "BROWSER",
                     snapshots: draft.snapshots,
                     duration: durationBySnapshots(draft.snapshots),
                     sourceDraftId: draft.id,

@@ -24,6 +24,18 @@ enum TimelapseVisibility {
   FAILED_PROCESSING
 }
 
+/// What a timelapse was recorded with.
+enum RecordingClient {
+  /// A browser - either Lapse's own Lookout recorder (`@lookout/react`) or the legacy pre-Lookout one.
+  BROWSER
+
+  /// The Lookout desktop app.
+  DESKTOP
+
+  /// Lookout couldn't tell us - the session never reported a client, or no longer exists.
+  UNKNOWN
+}
+
 enum VideoContainerKind {
   WEBM
   MP4
@@ -355,6 +367,10 @@ model Timelapse {
   /// The Lookout session token used for API calls (timings, status polling).
   lookoutToken          String?
 
+  /// What the timelapse was recorded with. `null` only for Lookout timelapses published before this was tracked
+  /// that `backfillRecordingClients` hasn't reached yet.
+  recordedWith          RecordingClient?
+
   /// The permanent Lookout media URL for the compiled video.
   lookoutVideoUrl       String?
 
@@ -369,6 +385,7 @@ model Timelapse {
 
   @@index([createdAt(sort: Desc)])
   @@index([ownerId, createdAt(sort: Desc)])
+  @@index([recordedWith])
 }
 
 /// Represents a comment that belongs to a timelapse.

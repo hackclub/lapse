@@ -164,6 +164,7 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
             lookoutToken: draft.lookoutToken,
             lookoutVideoUrl: session.session.videoUrl,
             lookoutThumbnailUrl: session.session.thumbnailUrl,
+            recordedWith: lookout.recordingClientOf(session.clientInfo),
             snapshots,
             duration: durationBySnapshots(snapshots),
             hackatimeProject: intent.hackatimeProject,

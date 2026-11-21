@@ -236,7 +236,7 @@ export default function Stats({ initialStats }: Props) {
                       title="Where timelapses are recorded"
                       segments={[
                         { label: "Browser", value: x.timelapses.browser, className: "bg-blue" },
-                        { label: "Desktop app", value: x.timelapses.lookout, className: "bg-orange" }
+                        { label: "Desktop app", value: x.timelapses.desktop, className: "bg-orange" }
                       ]}
                     />
                   </div>
