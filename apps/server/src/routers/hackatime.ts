@@ -133,7 +133,12 @@ export default os.router({
                 return apiOk({ projects: await hackatimeProjectsForUser(caller) });
             }
             catch (error) {
-                logError("Failed to fetch Hackatime projects", { error, userId: caller.id });
+                // A refused token is surfaced to the user by `linkStatus`, which asks them to sign in again.
+                if (error instanceof HackatimeApiError && error.isAuthFailure)
+                    logWarning("Hackatime refused the user's token while fetching projects.", { status: error.status, userId: caller.id });
+                else
+                    logError("Failed to fetch Hackatime projects", { error, userId: caller.id });
+
                 return apiOk({ projects: [] });
             }
         }),
