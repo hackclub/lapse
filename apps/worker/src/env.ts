@@ -54,11 +54,11 @@ export const env = {
     get SOURCE_COMMIT() { return optional("SOURCE_COMMIT") }
 };
 
-function optional(name: string) {
+function optional(name: string): string | undefined {
     return process.env[name];
 }
 
-function required(name: string) {
+function required(name: string): string {
     if (process.env[name] === undefined)
         throw new Error(`Environment variable ${name} not defined.`);
 
