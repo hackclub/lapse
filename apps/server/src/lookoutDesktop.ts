@@ -234,8 +234,10 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
     server.get("/lookout/panel/:panelToken", async (req: FastifyRequest, reply: FastifyReply) => {
         const { panelToken } = req.params as { panelToken: string };
 
+        // Archived drafts still get their panel: the desktop app keeps offering it after a discard on the website, and
+        // answering it restores the draft (see `storePublishIntent`). Hiding it here left "Continue" doing nothing.
         const draft = await database().draftLookoutTimelapse.findFirst({
-            where: { panelToken, archivedAt: null },
+            where: { panelToken },
             include: { owner: true },
         });
 
@@ -296,7 +298,7 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
         const { panelToken } = req.params as { panelToken: string };
         const body = (req.body ?? {}) as Record<string, unknown>;
 
-        const draft = await database().draftLookoutTimelapse.findFirst({ where: { panelToken, archivedAt: null } });
+        const draft = await database().draftLookoutTimelapse.findFirst({ where: { panelToken } });
         if (!draft)
             return reply.code(404).send({ error: "no draft for that panel" });
 
@@ -351,7 +353,7 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
         const { panelToken } = req.params as { panelToken: string };
 
         const draft = await database().draftLookoutTimelapse.findFirst({
-            where: { panelToken, archivedAt: null },
+            where: { panelToken },
             include: { owner: true },
         });
 
