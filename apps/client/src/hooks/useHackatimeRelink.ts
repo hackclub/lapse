@@ -45,9 +45,24 @@ export function useHackatimeLinkStatus(): HackatimeLinkStatus | null {
       return;
     }
 
+    // While loading, `currentUser` is the cached user, whose token may have expired - probing with it would trip the
+    // global 401 redirect.
+    if (auth.isLoading)
+      return;
+
     let cancelled = false;
     (async () => {
-      const res = await api.hackatime.linkStatus({});
+      let res: Awaited<ReturnType<typeof api.hackatime.linkStatus>>;
+      try {
+        res = await api.hackatime.linkStatus({});
+      }
+      catch {
+        if (!cancelled)
+          setStatus("linked");
+
+        return;
+      }
+
       if (cancelled)
         return;
 
@@ -70,7 +85,7 @@ export function useHackatimeLinkStatus(): HackatimeLinkStatus | null {
     })();
 
     return () => { cancelled = true; };
-  }, [auth.currentUser, isReauthenticating]);
+  }, [auth.currentUser, auth.isLoading, isReauthenticating]);
 
   return status;
 }

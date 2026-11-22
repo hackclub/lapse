@@ -1,13 +1,75 @@
-import NextLink from "next/link";
+import NextImage from "next/image";
+import { useRouter } from "next/router";
 import { AnimatePresence, motion } from "motion/react";
 import Icon from "@hackclub/icons";
 
-import { useReadyDrafts } from "@/context/ReadyDraftsContext";
-import { timeAgo } from "@/timeAgo";
+import { useReadyDrafts, type ReadyDraft } from "@/context/ReadyDraftsContext";
+import { ShelfHeader } from "@/components/layout/ShelfHeader";
+import { TimeAgo } from "@/components/TimeAgo";
+import { navigateTo } from "@/navigation";
+import { isOptimizableImage } from "@/remoteImages";
 
-const MotionLink = motion.create(NextLink);
+/** Laid out like `TimelapseCard`, so it sits naturally above the feed - with a Publish badge where the duration would be. */
+function ReadyCard({ draft, index }: {
+  draft: ReadyDraft;
+  index: number;
+}) {
+  const router = useRouter();
+  const href = `/timelapse/publish/${draft.id}`;
 
-/** The home page's row of recordings waiting for a name. Nothing at all when there are none. */
+  return (
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 320, damping: 30, delay: index * 0.05 }}
+      onClick={e => navigateTo(router, href, e)}
+      onAuxClick={e => e.button === 1 && navigateTo(router, href, e)}
+      role="button"
+      className="group flex flex-col gap-4 sm:gap-5 cursor-pointer sm:max-w-80"
+    >
+      <div role="img" className="relative w-full aspect-video rounded-lg sm:rounded-2xl overflow-hidden">
+        {draft.thumbnailUrl
+          ? (
+            <NextImage
+              src={draft.thumbnailUrl}
+              alt=""
+              fill
+              sizes="(min-width: 640px) 320px, 50vw"
+              unoptimized={!isOptimizableImage(draft.thumbnailUrl)}
+              className="block w-full h-full object-cover transition-all group-hover:brightness-75"
+            />
+          )
+          : (
+            <div className="bg-slate w-full h-full flex items-center justify-center">
+              <Icon glyph="clock" size={32} className="text-muted" />
+            </div>
+          )}
+
+        {draft.compiling && (
+          <div className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 flex items-center gap-1.5 bg-black/80 text-white text-xs sm:text-sm px-1 sm:px-1.5 py-0.5 rounded font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow animate-pulse" />
+            Finishing up
+          </div>
+        )}
+
+        <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 bg-red text-white text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded font-bold transition-transform group-hover:scale-105">
+          Publish
+        </div>
+      </div>
+
+      <div className="flex flex-col w-full">
+        <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl">Unpublished timelapse</h1>
+        <h2 className="text-md sm:text-xl text-secondary">
+          Recorded <b><TimeAgo date={draft.createdAt} /></b>
+        </h2>
+      </div>
+    </motion.article>
+  );
+}
+
+/** The home page's shelf of finished recordings that haven't been published. Absent when there are none. */
 export function ReadyToPublishShelf() {
   const drafts = useReadyDrafts();
 
@@ -19,53 +81,23 @@ export function ReadyToPublishShelf() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
-          transition={{ type: "spring", stiffness: 260, damping: 30 }}
-          className="flex flex-col w-full gap-4 overflow-hidden"
+          transition={{ type: "spring", stiffness: 260, damping: 32 }}
+          className="flex flex-col w-full overflow-hidden"
         >
-          <div className="flex items-center gap-3 pt-2">
-            <h2 className="font-bold text-2xl">Ready to publish</h2>
-            <span className="rounded-full bg-red text-white text-sm font-bold px-2.5 py-0.5 tabular-nums">
-              {drafts.length}
-            </span>
-          </div>
+          <div className="flex flex-col gap-12 pb-12 md:pb-20">
+            <ShelfHeader
+              icon="/images/orpheus-time.png"
+              title="Ready to Publish"
+              description={drafts.length === 1
+                ? "You've got a timelapse waiting - publish it to make it count!"
+                : `You've got ${drafts.length} timelapses waiting - publish them to make them count!`}
+            />
 
-          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-6 -mx-2 px-2">
-            <AnimatePresence initial={true} mode="popLayout">
-              {drafts.map((draft, i) => (
-                <MotionLink
-                  key={draft.id}
-                  href={`/timelapse/publish/${draft.id}`}
-                  layout
-                  initial={{ opacity: 0, y: 24, scale: 0.94 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  whileHover={{ y: -4 }}
-                  whileTap={{ scale: 0.97 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 26, delay: i * 0.04 }}
-                  className="group snap-start shrink-0 flex flex-col gap-3 w-64 p-2.5 rounded-3xl bg-darkless border border-white/5 shadow-[0_8px_24px_rgb(0_0_0/0.25)]"
-                >
-                  <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-darker flex items-center justify-center">
-                    {draft.thumbnailUrl
-                      ? <img src={draft.thumbnailUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                      : <Icon glyph="clock-fill" size={40} className="text-muted" />}
-
-                    {draft.compiling && (
-                      <span className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-dark/80 backdrop-blur px-2.5 py-1 text-xs font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow animate-pulse" />
-                        Finishing up
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 px-1.5 pb-0.5">
-                    <span className="text-sm text-muted">Recorded {timeAgo(draft.createdAt)}</span>
-                    <span className="rounded-full bg-red text-white text-sm font-bold px-3.5 py-1.5 transition-[filter] group-hover:brightness-110">
-                      Publish
-                    </span>
-                  </div>
-                </MotionLink>
-              ))}
-            </AnimatePresence>
+            <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,22rem)] justify-between w-full gap-4 sm:gap-y-12">
+              <AnimatePresence mode="popLayout">
+                {drafts.map((draft, i) => <ReadyCard key={draft.id} draft={draft} index={i} />)}
+              </AnimatePresence>
+            </div>
           </div>
         </motion.section>
       )}

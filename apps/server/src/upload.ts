@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify";
 import jwt from "jsonwebtoken";
 
 import { env } from "@/env.js";
-import { logError } from "@/logging.js";
+import { logError, logWarning } from "@/logging.js";
 import { Err } from "@/common.js";
 
 type UploadTokenJwt = z.infer<typeof UploadTokenJwtSchema>;
@@ -33,7 +33,7 @@ function requireUploadToken(req: Request) {
         );
     }
     catch (err) {
-        logError(`Attempted to upload a file with an invalid upload token (${authHeader})`, { err });
+        logWarning("Attempted to upload a file with an invalid upload token.", { err });
         return new Err("NO_PERMISSION", "Invalid upload token");
     }
 
@@ -113,6 +113,11 @@ export function attachUploadServer(app: FastifyInstance) {
         },
 
         onResponseError(req, err) {
+            if (!(err instanceof Error) && err.status_code < 500) {
+                logWarning(`tus: HTTP ${err.status_code}: ${err.body.trim()}`, { err, req });
+                return undefined;
+            }
+
             logError(`tus: ${err instanceof Error ? err.message.trim() : `HTTP ${err.status_code}: ${err.body.trim()}`}`, { err, req });
             return undefined;
         }

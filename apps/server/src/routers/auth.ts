@@ -399,7 +399,9 @@ export default os.router({
             }
 
             if (req.input.query.state !== oauthData.hst) {
-                logError(`Hackatime OAuth state mismatch! Expected ${oauthData.hst}, got ${req.input.query.state}.`);
+                // Expected when a second sign-in was started (e.g. in another tab) before the first came back, since
+                // that overwrites the cookie. The user is redirected with an error and can just try again.
+                logWarning(`Hackatime OAuth state mismatch! Expected ${oauthData.hst}, got ${req.input.query.state}.`);
                 return errorRedirect("upstream_state_mismatch");
             }
 
@@ -644,19 +646,33 @@ export default os.router({
     token: os.token
         .handler(async (req) => {
             const oauthResponse = new OAuth2Server.Response();
-            const token = await oauthSrv.token(
-                new OAuth2Server.Request({
-                    method: "POST",
-                    query: {},
-                    body: req.input.body,
-                    headers: {
-                        "content-type": "application/x-www-form-urlencoded",
-                        "content-length": req.context.req.headers["content-length"]!
-                    }
-                }),
-                oauthResponse
-            );
-        
+            const authorization = req.context.req.headers.authorization;
+
+            let token: OAuth2Server.Token;
+            try {
+                token = await oauthSrv.token(
+                    new OAuth2Server.Request({
+                        method: "POST",
+                        query: {},
+                        body: req.input.body,
+                        headers: {
+                            "content-type": "application/x-www-form-urlencoded",
+                            "content-length": req.context.req.headers["content-length"]!,
+                            // Confidential clients may authenticate with HTTP Basic (RFC 6749 section 2.3.1).
+                            ...(authorization ? { authorization } : {})
+                        }
+                    }),
+                    oauthResponse
+                );
+            }
+            catch (err) {
+                // Bad credentials, codes or grants are the caller's mistake - answer with the OAuth status, not a 500.
+                if (err instanceof OAuth2Server.OAuthError && err.code < 500)
+                    throw new ORPCError(err.name.toUpperCase(), { status: err.code, message: err.message, cause: err });
+
+                throw err;
+            }
+
             return {
                 status: 200,
                 headers: {},

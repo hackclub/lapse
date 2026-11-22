@@ -2,7 +2,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import type { KnownDevice } from "@hackclub/lapse-api";
 
 import { api } from "@/api";
-import { deviceStorage } from "@/deviceStorage";
+import { DeviceStorage, deviceStorage } from "@/deviceStorage";
 import { useAuthContext } from "@/context/AuthContext";
 import { useInterval } from "@/hooks/useInterval";
 import { KeyRelayApprovalModal } from "@/components/layout/KeyRelayApprovalModal";
@@ -15,7 +15,9 @@ export function KeyRelayProvider({ children }: { children: ReactNode }) {
   const [devices, setDevices] = useState<KnownDevice[]>([]);
 
   const pollRelayRequests = useCallback(async () => {
-    if (!currentUser)
+    // Browsers without OPFS (let through /update-browser via the bypass flag, or the /lookout/ embeds) have no
+    // local device store, so there is no device key to relay.
+    if (!currentUser || !DeviceStorage.isSupported())
       return;
 
     const thisDevice = (await deviceStorage.getAllDevices()).find(d => d.thisDevice);

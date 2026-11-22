@@ -12,6 +12,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/Button";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 import { ReadyToPublishShelf } from "@/components/lookout/ReadyToPublishShelf";
+import { ShelfHeader } from "@/components/layout/ShelfHeader";
 
 import { api } from "@/api";
 import { isOptimizableImage } from "@/remoteImages";
@@ -30,23 +31,6 @@ const SAMPLE_TOP_PROJECTS = [
   { name: "dotfiles", time: "2h 10m", percentage: 0.05 },
   { name: "weekend-hackathon", time: "1h 2m", percentage: 0.03 }
 ];
-
-function ShelfHeader({ title, description, icon }: {
-  title: string,
-  description: string,
-  icon: string
-}) {
-  return (
-    <div className="flex items-center gap-4 w-full h-min">
-      <img src={icon} alt="" className="block w-14 h-14" />
-
-      <div className="flex flex-col">
-        <h1 className="font-bold text-3xl">{title}</h1>
-        <p className="text-lg sm:text-xl">{description}</p>
-      </div>
-    </div>
-  );
-}
 
 type Props = {
   initialLeaderboard: { leaderboard: LeaderboardUserEntry[] } | null;
@@ -89,7 +73,8 @@ export default function Home({ initialLeaderboard, initialRecent }: Props) {
 
   useEffect(() => {
     (async () => {
-      if (!auth.currentUser)
+      // The cached user shown while loading may carry an expired token, which would trip the global 401 redirect.
+      if (!auth.currentUser || auth.isLoading)
         return;
 
       // Anything short of a list leaves the bars' skeleton up for good, so a failure has to settle on an empty one.
@@ -121,14 +106,22 @@ export default function Home({ initialLeaderboard, initialRecent }: Props) {
         }))
       );
     })();
-  }, [auth.currentUser]);
+  }, [auth.currentUser, auth.isLoading]);
 
   useEffect(() => {
     (async () => {
-      if (!auth.currentUser)
+      if (!auth.currentUser || auth.isLoading)
         return;
 
-      const res = await api.user.getTotalTimelapseTime({ id: auth.currentUser.id });
+      let res: Awaited<ReturnType<typeof api.user.getTotalTimelapseTime>>;
+      try {
+        res = await api.user.getTotalTimelapseTime({ id: auth.currentUser.id });
+      }
+      catch (err) {
+        console.error("(index.tsx) Could not fetch the user's total timelapse time!", err);
+        return;
+      }
+
       if (!res.ok) {
         console.error("(index.tsx) Could not fetch the user's total timelapse time!", res);
         return;
@@ -138,7 +131,7 @@ export default function Home({ initialLeaderboard, initialRecent }: Props) {
       setTotalTime(duration);
       setTotalTimeCache(duration);
     })();
-  }, [auth.currentUser]);
+  }, [auth.currentUser, auth.isLoading]);
 
   useEffect(() => {
     const { error } = router.query;

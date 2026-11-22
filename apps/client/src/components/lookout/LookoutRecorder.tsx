@@ -158,14 +158,25 @@ function TimePill({ formattedTime, isRecording, displaySeconds }: {
 function CameraPickerPreview({ deviceId }: { deviceId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setError(null);
 
     (async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId } },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } },
+        });
+      }
+      catch (err) {
+        // Android often refuses to reopen a camera that was just released (NotReadableError). The
+        // preview is only a convenience, so say so in its place rather than leaving an unhandled rejection.
+        if (!cancelled) setError(describeCameraError(err));
+        return;
+      }
       if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = stream;
       const video = videoRef.current;
@@ -183,6 +194,9 @@ function CameraPickerPreview({ deviceId }: { deviceId: string }) {
       if (video) { video.pause(); video.srcObject = null; }
     };
   }, [deviceId]);
+
+  if (error)
+    return <p className="w-full aspect-video rounded-lg bg-darker flex items-center justify-center p-4 text-center text-sm text-muted">{error}</p>;
 
   return (
     <video
@@ -1004,9 +1018,10 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, fullCaptureUrl, onSh
       : "Lapse";
   }, [state.status, state.isRecording]);
 
-  useInterval(async () => {
+  useInterval(() => {
     if (state.isRecording) {
-      await api.user.emitHeartbeat({});
+      // Best-effort presence ping: the next tick retries, so a network blip mustn't become an unhandled rejection.
+      api.user.emitHeartbeat({}).catch((err) => console.warn("(LookoutRecorder) heartbeat failed", err));
     }
   }, 30 * 1000);
 

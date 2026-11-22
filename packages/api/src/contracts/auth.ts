@@ -95,6 +95,7 @@ export const authRouterContract = oc.tag(ROUTER_TAGS.auth).router({
                 code: z.string(),
                 redirect_uri: z.url(),
                 client_id: z.string().optional(),
+                client_secret: z.string().optional(),
                 code_verifier: z.string().optional()
             })
         }))

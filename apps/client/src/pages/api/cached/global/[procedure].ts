@@ -62,7 +62,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   catch (error) {
     console.error(`(api/cached) upstream request for global.${procedure} failed`, error);
-    return sendUncached(res, 502, { ok: false, error: "ERROR", message: "The API could not be reached." });
+    // Sent with a 200, like the API's own `{ ok: false }` results: the oRPC client only decodes non-2xx bodies in its
+    // own error format, and would otherwise throw `MALFORMED_ORPC_ERROR_RESPONSE` instead of returning this.
+    return sendUncached(res, 200, { ok: false, error: "UNAVAILABLE", message: "The API could not be reached." });
   }
 
   // Errors (including `{ ok: false }` results, which the API returns with a 200) are passed through as-is, but never

@@ -28,7 +28,15 @@ export function Header() {
   const [usersActive, setUsersActive] = useCachedState<number | null>("usersActive", null);
 
   const fetchActiveUsers = useCallback(async () => {
-    const res = await cachedApi.global.activeUsers({});
+    let res: Awaited<ReturnType<typeof cachedApi.global.activeUsers>>;
+    try {
+      res = await cachedApi.global.activeUsers({});
+    }
+    catch (err) {
+      console.warn("(Header.tsx) could not reach the server for active users", err);
+      return;
+    }
+
     if (!res.ok) {
       console.error("(Header.tsx) could not query active users!", res);
       return;

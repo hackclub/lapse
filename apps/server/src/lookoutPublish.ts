@@ -124,16 +124,9 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
     if (!intent)
         throw new Error(`Draft ${draft.id} has no pending publish intent to finalize.`);
 
-    const existing = await database().timelapse.findFirst({
-        where: { lookoutSessionId: draft.lookoutSessionId },
-        include: TIMELAPSE_INCLUDES,
-        omit: TIMELAPSE_OMIT,
-    });
-
-    if (existing) {
-        await removePublishedLookoutDraft(draft, existing.id);
-        return { kind: "published", timelapse: existing };
-    }
+    const existing = await alreadyPublished(draft);
+    if (existing)
+        return existing;
 
     const session = await lookout.getSession(draft.lookoutSessionId);
     const status = session.session.status;
@@ -170,7 +163,22 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
             hackatimeProject: intent.hackatimeProject,
         },
         include: TIMELAPSE_INCLUDES,
+    }).catch((err: unknown) => {
+        if (err instanceof db.Prisma.PrismaClientKnownRequestError && err.code === "P2002")
+            return null;
+
+        throw err;
     });
+
+    // Another finalizer (a second poll, the drafts list, the sweeper) won the insert since we looked. It has
+    // already done the rest, so just report its timelapse.
+    if (!timelapse) {
+        const winner = await alreadyPublished(draft);
+        if (!winner)
+            throw new Error(`Draft ${draft.id} lost a publish race, but no timelapse exists for its Lookout session.`);
+
+        return winner;
+    }
 
     await removePublishedLookoutDraft(draft, timelapse.id);
 
@@ -193,6 +201,20 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
 
     logInfo(`Published Lookout draft ${draft.id} as timelapse ${timelapse.id}.`);
     return { kind: "published", timelapse };
+}
+
+async function alreadyPublished(draft: db.DraftLookoutTimelapse): Promise<FinalizeOutcome | null> {
+    const existing = await database().timelapse.findFirst({
+        where: { lookoutSessionId: draft.lookoutSessionId },
+        include: TIMELAPSE_INCLUDES,
+        omit: TIMELAPSE_OMIT,
+    });
+
+    if (!existing)
+        return null;
+
+    await removePublishedLookoutDraft(draft, existing.id);
+    return { kind: "published", timelapse: existing };
 }
 
 /**

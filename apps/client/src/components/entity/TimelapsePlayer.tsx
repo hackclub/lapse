@@ -195,8 +195,13 @@ export function TimelapsePlayer({ src, poster, realDuration = 0, keyboardShortcu
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
-    else {
+    else if (typeof container.requestFullscreen === "function") {
       container.requestFullscreen().catch(() => {});
+    }
+    else {
+      // iPhone Safari can't fullscreen arbitrary elements - only a video, in the system player.
+      const video = videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+      video?.webkitEnterFullscreen?.();
     }
 
     wakeControls();

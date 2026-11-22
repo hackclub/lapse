@@ -67,7 +67,9 @@ async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> 
     if (!res.ok) {
         const body = await res.text().catch(() => "(no body)");
         const msg = `Lookout API error: ${res.status} ${res.statusText} on ${path} — ${body}`;
-        logError(msg);
+        // Not an error log: the thrown error already reaches Sentry wherever it isn't handled, and callers that
+        // expect it (a 404 for a gone session, a cosmetic call during an outage) shouldn't raise a second issue.
+        logWarning(msg);
         throw new LookoutApiError(res.status, msg, body);
     }
 
