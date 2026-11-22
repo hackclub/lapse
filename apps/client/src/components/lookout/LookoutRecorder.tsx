@@ -568,6 +568,7 @@ export default function LookoutRecorder() {
   // Users banned on Hackatime have to record with the desktop app.
   const screenModeBlocked = hackatimeStatus === "restricted";
   const [browserLabelVariant, setBrowserLabelVariant] = useState<BrowserLabelVariant | null>(null);
+  const [browserLabelSettled, setBrowserLabelSettled] = useState(false);
   const browserLabelRequested = useRef(false);
   const [showScreenBlockedNotice, setShowScreenBlockedNotice] = useState(false);
   const initialized = useRef(false);
@@ -623,19 +624,23 @@ export default function LookoutRecorder() {
     checkLookoutDrafts();
   }, [router.isReady, desktopOnly, auth.isLoading, auth.currentUser, checkLookoutDrafts]);
 
-  // Assigned only once the mode picker is about to show, so an assignment means the user saw the label.
+  // Fetched alongside the drafts check rather than after it, and the picker waits for it, so the Browser tile never
+  // changes under the user. Someone who only resumes a draft is still counted as exposed, which is rare enough to live with.
   useEffect(() => {
-    if (phase !== "ready" || !auth.currentUser || browserLabelRequested.current)
+    if (!auth.currentUser || browserLabelRequested.current)
       return;
 
     browserLabelRequested.current = true;
+    // Never hold up recording for an experiment: past this, show the picker unlabelled.
+    setTimeout(() => setBrowserLabelSettled(true), 1500);
     api.timelapse.assignBrowserLabelVariant({})
       .then(res => {
         if (res.ok)
           setBrowserLabelVariant(res.data.variant);
       })
-      .catch(() => {});
-  }, [phase, auth.currentUser]);
+      .catch(() => {})
+      .finally(() => setBrowserLabelSettled(true));
+  }, [auth.currentUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -766,7 +771,7 @@ export default function LookoutRecorder() {
     }
   }
 
-  if (phase === "checking") {
+  if (phase === "checking" || (phase === "ready" && !browserLabelSettled)) {
     return (
       <RootLayout showHeader={false}>
         <div className="flex items-center justify-center h-app text-muted">Checking for sessions...</div>
