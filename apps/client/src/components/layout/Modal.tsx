@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactNode } from "react";
+import { PropsWithChildren, ReactNode, useRef, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
@@ -6,16 +6,33 @@ import Icon from "@hackclub/icons";
 import { phantomSans } from "@/fonts";
 import type { IconGlyph } from "@/common";
 
-export function Modal({ children, isOpen, className, size }: PropsWithChildren<{
+export function Modal({ children, isOpen, className, size, onClose }: PropsWithChildren<{
   isOpen: boolean;
-  setIsOpen?: (x: boolean) => void;
   className?: string;
-  size?: "SMALL" | "REGULAR" | "FULL"
+  size?: "SMALL" | "REGULAR" | "FULL";
+
+  /** Called when the dimmed backdrop is clicked. Leave unset for modals that must not be dismissed this way. */
+  onClose?: () => void;
 }>) {
   size ??= "REGULAR";
 
+  // Only a click that both starts and ends on the backdrop closes the modal - selecting text inside it and releasing
+  // the mouse outside shouldn't.
+  const pressedBackdrop = useRef(false);
+
+  function handleMouseDown(e: MouseEvent<HTMLDivElement>) {
+    pressedBackdrop.current = e.target === e.currentTarget;
+  }
+
+  function handleClick(e: MouseEvent<HTMLDivElement>) {
+    if (onClose && pressedBackdrop.current && e.target === e.currentTarget)
+      onClose();
+
+    pressedBackdrop.current = false;
+  }
+
   const modal = (
-    <div role="dialog" className={clsx(
+    <div role="dialog" onMouseDown={handleMouseDown} onClick={handleClick} className={clsx(
       "flex fixed w-screen h-[calc(100dvh-var(--titlebar-offset))] p-4 sm:p-8 top-(--titlebar-offset) left-0 text-text bg-[#00000088] duration-500 transition-colors justify-center items-center shadow z-20 overflow-y-auto",
       !isOpen && "hidden",
       className

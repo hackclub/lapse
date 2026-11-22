@@ -14,7 +14,7 @@ export function WindowedModal({ children, title, description, shortDescription, 
   shortDescription ??= description;
 
   return (
-    <Modal isOpen={isOpen}>
+    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
       <ModalHeader
         icon={icon}
         title={title}

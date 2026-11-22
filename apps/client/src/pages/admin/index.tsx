@@ -362,7 +362,7 @@ function RecordEditModal({ isOpen, entity, record, fields, onClose, onSave, isSa
   }
 
   return (
-    <Modal isOpen={isOpen} size="REGULAR">
+    <Modal isOpen={isOpen} size="REGULAR" onClose={onClose}>
       <ModalHeader
         title={`Edit ${entityName}`}
         description={`Applying edits to ${recordName}`}
@@ -616,7 +616,7 @@ function AdminProgramKeysTable() {
   return (
     <>
       {/* Create Key Modal */}
-      <Modal isOpen={createOpen} size="REGULAR">
+      <Modal isOpen={createOpen} size="REGULAR" onClose={() => setCreateOpen(false)}>
         <ModalHeader
           title="Create Program Key"
           description="Generate a new service-wide API key"
@@ -674,7 +674,7 @@ function AdminProgramKeysTable() {
       </Modal>
 
       {/* Revoke Confirmation Modal */}
-      <Modal isOpen={!!revokeId} size="SMALL">
+      <Modal isOpen={!!revokeId} size="SMALL" onClose={() => setRevokeId(null)}>
         <ModalHeader title="Revoke Program Key" description="This action cannot be undone" showCloseButton onClose={() => setRevokeId(null)} icon="delete" />
         <ModalContent className="gap-4 text-base">
           <p className="text-muted">Revoking this key will immediately prevent any service using it from authenticating.</p>
@@ -688,7 +688,7 @@ function AdminProgramKeysTable() {
       </Modal>
 
       {/* Rotate Confirmation Modal */}
-      <Modal isOpen={!!rotateId} size="SMALL">
+      <Modal isOpen={!!rotateId} size="SMALL" onClose={() => setRotateId(null)}>
         <ModalHeader title="Rotate Program Key" description="This will invalidate the existing key" showCloseButton onClose={() => setRotateId(null)} icon="announcement" />
         <ModalContent className="gap-4 text-base">
           <p className="text-muted">Rotating the key will immediately invalidate the existing key. The new key will be shown once.</p>
@@ -702,7 +702,7 @@ function AdminProgramKeysTable() {
       </Modal>
 
       {/* Edit Key Modal */}
-      <Modal isOpen={!!editKey} size="REGULAR">
+      <Modal isOpen={!!editKey} size="REGULAR" onClose={() => setEditKey(null)}>
         <ModalHeader
           title="Edit Program Key"
           description={editKey ? `Editing "${editKey.name}"` : ""}
@@ -924,7 +924,7 @@ function AdminAppEditModal({ app, isSaving, onClose, onSave }: {
   }
 
   return (
-    <Modal isOpen={app !== null} size="REGULAR">
+    <Modal isOpen={app !== null} size="REGULAR" onClose={onClose}>
       <ModalHeader
         title="Edit App"
         description={`Applying edits to ${app.name}`}
@@ -1477,7 +1477,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
         isSaving={isSaving}
       />
 
-      <Modal isOpen={resyncOpen} size="REGULAR">
+      <Modal isOpen={resyncOpen} size="REGULAR" onClose={() => setResyncOpen(false)}>
         <ModalHeader
           title="Resync Hackatime"
           description="Re-pushes heartbeats for timelapses created in this window"

@@ -9,7 +9,7 @@ export function PublishModal({ isOpen, setIsOpen, onSelect }: {
   onSelect: (visibility: TimelapseVisibility) => void;
 }) {
   return (
-    <Modal isOpen={isOpen} size="REGULAR">
+    <Modal isOpen={isOpen} size="REGULAR" onClose={() => setIsOpen(false)}>
       <ModalHeader
         icon="send-fill"
         title="Publish Timelapse"

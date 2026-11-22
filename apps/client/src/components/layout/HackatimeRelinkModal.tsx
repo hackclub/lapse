@@ -33,7 +33,7 @@ export function HackatimeRelinkModal() {
   const isOpen = needsRelink && !dismissed && router.pathname !== AUTH_ROUTE;
 
   return (
-    <Modal isOpen={isOpen} size="SMALL">
+    <Modal isOpen={isOpen} size="SMALL" onClose={dismiss}>
       <ModalHeader
         icon="clock"
         title="Reconnect Hackatime"
