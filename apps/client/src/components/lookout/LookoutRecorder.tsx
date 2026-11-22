@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import NextLink from "next/link";
 import clsx from "clsx";
 import Icon from "@hackclub/icons";
-import { Skeleton } from "skullet/react";
 import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
 import type { BrowserLabelVariant, RecordingMode } from "@hackclub/lapse-api";
@@ -15,11 +13,7 @@ import { useHackatimeLinkStatus } from "@/hooks/useHackatimeRelink";
 import { useInterval } from "@/hooks/useInterval";
 import { useRecordingKeepAwake } from "@/hooks/useRecordingKeepAwake";
 import { checkBrowserRecorderSupport } from "@/components/lookout/engineSupport";
-import {
-  type StoredLookoutSession,
-  storeSession,
-  removeStoredSession,
-} from "@/components/lookout/sessions";
+import { storeSession } from "@/components/lookout/sessions";
 import RootLayout from "@/components/layout/RootLayout";
 import { EditorModal } from "@/components/lookout/EditorModal";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
@@ -313,185 +307,6 @@ function CameraPickerModal({ onSelect, onClose }: {
   );
 }
 
-function timeAgo(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-type ServerDraft = {
-  id: string;
-  createdAt: number;
-  lookoutSessionId: string;
-  lookoutToken: string;
-  lookoutStatus: string;
-  videoUrl: string | null;
-  thumbnailUrl: string | null;
-};
-
-// Two drafts, for Skullet to measure the list from until the real ones arrive.
-const SAMPLE_SERVER_DRAFTS: ServerDraft[] = [0, 1].map(i => ({
-  id: `sampledraft${i}`,
-  createdAt: Date.UTC(2026, 0, 1),
-  lookoutSessionId: "",
-  lookoutToken: "",
-  lookoutStatus: i === 0 ? "complete" : "recording",
-  videoUrl: null,
-  thumbnailUrl: null
-}));
-
-function SessionSelector({ onSelectSession, onNewSession, onClose }: {
-  onSelectSession: (session: StoredLookoutSession) => void;
-  onNewSession: () => void;
-  onClose: () => void;
-}) {
-  const [drafts, setDrafts] = useState<ServerDraft[]>([]);
-  const [lookoutApiBaseUrl, setLookoutApiBaseUrl] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.timelapse.getLookoutDrafts({}).then(res => {
-      if (res.ok) {
-        setDrafts(res.data.drafts);
-        setLookoutApiBaseUrl(res.data.lookoutApiBaseUrl);
-      }
-    }).finally(() => setLoading(false));
-  }, []);
-
-  function handleContinue(draft: ServerDraft) {
-    onSelectSession({
-      draftId: draft.id,
-      lookoutToken: draft.lookoutToken,
-      lookoutApiBaseUrl: lookoutApiBaseUrl,
-      lookoutSessionId: draft.lookoutSessionId,
-      createdAt: draft.createdAt,
-    });
-  }
-
-  async function handleDiscard(draftId: string) {
-    // The cards don't say much about what's in a session, so a click here can throw away hours of recording that
-    // merely looked like an empty one. Discarding only archives it, but the user should still know where it went.
-    if (!window.confirm("Discard this recording? You can get it back from Archived recordings."))
-      return;
-
-    setBusy(draftId);
-    await api.timelapse.discardLookoutDraft({ id: draftId });
-    removeStoredSession(draftId);
-    setDrafts(drafts.filter(d => d.id !== draftId));
-    setBusy(null);
-
-    if (drafts.length <= 1) {
-      onNewSession();
-    }
-  }
-
-  const isReady = (d: ServerDraft) => d.lookoutStatus === "complete" || d.lookoutStatus === "stopped" || d.lookoutStatus === "compiling";
-
-  return (
-    <Modal isOpen>
-      <ModalHeader
-        icon="clock-fill"
-        showCloseButton
-        onClose={onClose}
-        title="Resume session"
-        description="Pick an existing session or start a new one"
-        shortDescription="Select a session"
-      />
-      <ModalContent>
-        <Skeleton id="lookout-resume" loading={loading} label="Loading drafts">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {(loading ? SAMPLE_SERVER_DRAFTS : drafts).map(draft => (
-              <div
-                key={draft.id}
-                className={clsx(
-                  "flex flex-col items-center gap-3 p-4 w-full rounded-lg border border-slate overflow-hidden",
-                  busy !== null && "opacity-50 pointer-events-none"
-                )}
-              >
-                {draft.thumbnailUrl ? (
-                  <img src={draft.thumbnailUrl} alt="" className="w-full aspect-video rounded-md object-cover" />
-                ) : (
-                  <div className="w-full aspect-video rounded-md bg-darker flex items-center justify-center">
-                    <Icon glyph="clock-fill" size={48} className="text-muted" />
-                  </div>
-                )}
-
-                <div className="flex flex-col items-center text-center gap-1">
-                  <span className="font-bold">
-                    {isReady(draft) ? "Ready to publish" : "Recording in progress"}
-                  </span>
-                  <span className="text-sm text-muted">
-                    {timeAgo(draft.createdAt)}
-                  </span>
-                </div>
-
-                <div className="flex gap-2 w-full">
-                  {isReady(draft) ? (
-                    <>
-                      <button
-                        onClick={() => window.location.href = `/timelapse/publish/${draft.id}`}
-                        className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
-                      >
-                        Publish
-                      </button>
-                      <button
-                        onClick={() => handleContinue(draft)}
-                        className="flex-1 border border-slate hover:bg-darkless font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
-                      >
-                        Continue
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleContinue(draft)}
-                        className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
-                      >
-                        Continue
-                      </button>
-                      <button
-                        onClick={() => handleDiscard(draft.id)}
-                        className="flex-1 border border-red text-red hover:bg-red/10 font-bold py-2 px-4 rounded-lg transition-colors cursor-pointer text-sm"
-                      >
-                        Discard
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => busy === null && onNewSession()}
-              onKeyDown={(e) => e.key === "Enter" && busy === null && onNewSession()}
-              className={clsx(
-                "flex flex-col items-center justify-center gap-3 p-4 w-full cursor-pointer transition-colors rounded-lg border border-dashed border-slate hover:bg-darkless",
-                busy !== null && "opacity-50 pointer-events-none"
-              )}
-              style={{ minHeight: "10rem" }}
-            >
-              <Icon glyph="plus" size={48} className="text-muted" />
-              <span className="font-bold">New session</span>
-            </div>
-          </div>
-        </Skeleton>
-
-        <NextLink href="/timelapse/archive" className="block mt-4 text-center text-sm text-muted hover:underline">
-          Looking for a recording you discarded? See archived recordings
-        </NextLink>
-      </ModalContent>
-    </Modal>
-  );
-}
-
 /**
  * Request the screen-share stream *now*, from within a user gesture, and make
  * the Lookout SDK reuse it.
@@ -555,8 +370,7 @@ export default function LookoutRecorder() {
   const [pickingCamera, setPickingCamera] = useState(false);
   const [desktopLaunched, setDesktopLaunched] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
-  const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
+  const [phase, setPhase] = useState<"checking" | "ready">("checking");
   const hackatimeStatus = useHackatimeLinkStatus();
   // Set when a previous Browser (screen) capture failed. Drives the warning blurb,
   // the dimmed Browser option, and the "are you sure?" confirmation on the selector.
@@ -571,6 +385,9 @@ export default function LookoutRecorder() {
   const [browserLabelSettled, setBrowserLabelSettled] = useState(false);
   const browserLabelRequested = useRef(false);
   const [showScreenBlockedNotice, setShowScreenBlockedNotice] = useState(false);
+  // Browser (screen) mode can be put under maintenance by the server.
+  const [browserRecordingAvailable, setBrowserRecordingAvailable] = useState(true);
+  const [showMaintenanceNotice, setShowMaintenanceNotice] = useState(false);
   const initialized = useRef(false);
   // Cleanup for an in-gesture screen-share primed by primeScreenShare(): stops
   // the stream and restores getDisplayMedia if the SDK never consumed it.
@@ -579,24 +396,6 @@ export default function LookoutRecorder() {
   const releasePendingStream = useCallback(() => {
     primeCleanupRef.current?.();
     primeCleanupRef.current = null;
-  }, []);
-
-  const desktopOnly = router.query.desktop === "true";
-
-  const checkLookoutDrafts = useCallback(async () => {
-    try {
-      const res = await api.timelapse.getLookoutDrafts({});
-      if (res.ok && res.data.drafts.length > 0) {
-        setHasDrafts(true);
-        setPhase("selecting");
-      } else {
-        setHasDrafts(false);
-        setPhase("ready");
-      }
-    } catch {
-      setHasDrafts(false);
-      setPhase("ready");
-    }
   }, []);
 
   // Each new capture replaces the last, so free the old frame's memory as soon as it's off screen.
@@ -612,20 +411,10 @@ export default function LookoutRecorder() {
     if (!router.isReady) return;
     if (auth.isLoading || !auth.currentUser) return;
     initialized.current = true;
+    setPhase("ready");
+  }, [router.isReady, auth.isLoading, auth.currentUser]);
 
-    if (desktopOnly) {
-      setHasDrafts(false);
-      setPhase("ready");
-      return;
-    }
-
-    // Legacy recordings (unfinished OPFS captures or unpublished drafts) are recovered from the dedicated
-    // `/timelapse/recover` page, surfaced by the site-wide banner - not from the create flow.
-    checkLookoutDrafts();
-  }, [router.isReady, desktopOnly, auth.isLoading, auth.currentUser, checkLookoutDrafts]);
-
-  // Fetched alongside the drafts check rather than after it, and the picker waits for it, so the Browser tile never
-  // changes under the user. Someone who only resumes a draft is still counted as exposed, which is rare enough to live with.
+  // The picker waits for this, so the Browser tile never changes under the user.
   useEffect(() => {
     if (!auth.currentUser || browserLabelRequested.current)
       return;
@@ -643,6 +432,21 @@ export default function LookoutRecorder() {
   }, [auth.currentUser]);
 
   useEffect(() => {
+    if (phase !== "ready" || !auth.currentUser)
+      return;
+
+    let cancelled = false;
+    api.timelapse.getRecordingAvailability({})
+      .then(res => {
+        if (!cancelled && res.ok)
+          setBrowserRecordingAvailable(res.data.browser);
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [phase, auth.currentUser]);
+
+  useEffect(() => {
     let cancelled = false;
     checkBrowserRecorderSupport().then((reason) => {
       if (!cancelled) setEngineError(reason);
@@ -654,6 +458,13 @@ export default function LookoutRecorder() {
     setIsCreating(true);
     try {
       const res = await api.timelapse.createRecordingSession({ mode });
+      if (!res.ok && res.error === "UNAVAILABLE") {
+        releasePendingStream();
+        setBrowserRecordingAvailable(false);
+        setSelectedMode("desktop");
+        setShowMaintenanceNotice(true);
+        return;
+      }
       if (!res.ok) {
         setInitError(res.message);
         releasePendingStream();
@@ -687,21 +498,6 @@ export default function LookoutRecorder() {
     }
   }
 
-  function handleResumeSession(session: StoredLookoutSession) {
-    const cfg: LookoutSessionConfig = {
-      draftId: session.draftId,
-      lookoutToken: session.lookoutToken,
-      lookoutApiBaseUrl: session.lookoutApiBaseUrl,
-      lookoutSessionId: session.lookoutSessionId,
-    };
-    setConfig(cfg);
-    storeSession({
-      ...session,
-      createdAt: Date.now(),
-    });
-    setPhase("ready");
-  }
-
   useEffect(() => {
     if (screenModeBlocked && selectedMode === "screen")
       setSelectedMode("desktop");
@@ -710,6 +506,11 @@ export default function LookoutRecorder() {
   function handleStart() {
     if (selectedMode === "screen" && screenModeBlocked) {
       setShowScreenBlockedNotice(true);
+      return;
+    }
+
+    if (selectedMode === "screen" && !browserRecordingAvailable) {
+      setShowMaintenanceNotice(true);
       return;
     }
 
@@ -774,19 +575,7 @@ export default function LookoutRecorder() {
   if (phase === "checking" || (phase === "ready" && !browserLabelSettled)) {
     return (
       <RootLayout showHeader={false}>
-        <div className="flex items-center justify-center h-app text-muted">Checking for sessions...</div>
-      </RootLayout>
-    );
-  }
-
-  if (phase === "selecting" && hasDrafts) {
-    return (
-      <RootLayout showHeader={false}>
-        <SessionSelector
-          onSelectSession={handleResumeSession}
-          onNewSession={() => { setHasDrafts(false); setPhase("ready"); }}
-          onClose={() => router.back()}
-        />
+        <div className="flex items-center justify-center h-app text-muted">Loading...</div>
       </RootLayout>
     );
   }
@@ -1016,6 +805,34 @@ export default function LookoutRecorder() {
                 {isCreating ? "Setting up..." : selectedMode === "desktop" ? "Open Lookout" : "Start Recording"}
               </button>
             )}
+          </div>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={showMaintenanceNotice} onClose={() => setShowMaintenanceNotice(false)}>
+        <ModalHeader
+          icon="settings"
+          showCloseButton={true}
+          onClose={() => setShowMaintenanceNotice(false)}
+          title="Under maintenance"
+          description="Browser recording is currently under maintenance."
+          shortDescription="Browser recording unavailable"
+        />
+        <ModalContent>
+          <div className="flex flex-col gap-6">
+            <p className="text-muted leading-relaxed">
+              Recording in the browser is temporarily unavailable. Please use the Lookout desktop app to record your timelapse instead.
+            </p>
+            <button
+              onClick={() => {
+                setSelectedMode("desktop");
+                setConfirmingBrowser(false);
+                setShowMaintenanceNotice(false);
+              }}
+              className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
+            >
+              Use Desktop
+            </button>
           </div>
         </ModalContent>
       </Modal>

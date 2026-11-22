@@ -286,11 +286,19 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
         .input(z.object({}))
         .output(apiResult({ variant: BrowserLabelVariantSchema.nullable() })),
 
+    getRecordingAvailability: contract("GET", "/timelapse/getRecordingAvailability")
+        .route({ description: "Returns which recording modes the user can start right now. The Browser (screen) mode can be unavailable, e.g. during maintenance." })
+        .input(z.object({}))
+        .output(apiResult({
+            browser: z.boolean()
+                .describe("Whether the Browser (screen) recording mode is available. When `false`, `createRecordingSession` refuses it with `UNAVAILABLE`."),
+        })),
+
     createRecordingSession: contract("POST", "/timelapse/createRecordingSession")
         .route({ description: "Creates a new Lookout-backed recording session and a server-side draft. Returns a Lookout token the client uses to initialize the Lookout SDK." })
         .input(z.object({
             mode: RecordingModeSchema.optional()
-                .describe("The recording mode the user picked. Only used to measure which modes people choose."),
+                .describe("The recording mode the user picked. Used to measure which modes people choose, and to refuse Browser mode while it is unavailable."),
         }))
         .output(
             apiResult({

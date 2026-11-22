@@ -4,15 +4,16 @@ import type { AppType } from "next/app";
 import { SkulletProvider } from "skullet/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { SkulletTheme } from "skullet";
+import { Toaster } from "sonner";
 
 import "@/styles/globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { KeyRelayProvider } from "@/context/KeyRelayContext";
 import { MaintenanceProvider } from "@/context/MaintenanceContext";
+import { ReadyDraftsProvider } from "@/context/ReadyDraftsContext";
 import { initLogBucket } from "@/logBucket";
 import { BYPASS_BROWSER_CHECK_KEY } from "@/pages/update-browser";
 import { DeviceStorage } from "@/deviceStorage";
-import { api } from "@/api";
 
 initLogBucket();
 
@@ -55,51 +56,24 @@ const App: AppType = ({ Component, pageProps }) => {
       router.replace("/update-browser");
   }, [router]);
 
-  useEffect(() => {
-    // `/timelapse/handoff` is exempt for the same reason as the other two: it's already taking the user to
-    // publish, and it has an unauthenticated state to show first that this redirect would trample.
-    if (router.pathname.startsWith("/timelapse/publish")
-      || router.pathname.startsWith("/timelapse/create")
-      || router.pathname.startsWith("/timelapse/handoff")
-      // Same reasoning, and more so: the panel IS the publish step for its own draft,
-      // so redirecting it to some other draft's publish page is nonsense.
-      || router.pathname.startsWith("/lookout/"))
-      return;
-
-    // Never probe a protected endpoint on the auth pages or without a session. The request would 401 and
-    // trip the global redirect-to-/auth interceptor in `api.ts` — which, on the auth callback, wipes the
-    // in-flight `?code=` exchange and bounces the user back into OAuth, looping forever. Logged-out users
-    // also shouldn't be force-redirected to sign in just for opening a public page.
-    if (router.pathname === "/auth" || router.pathname.startsWith("/oauth/"))
-      return;
-
-    if (!localStorage.getItem("lapse:token"))
-      return;
-
-    (async () => {
-      try {
-        const res = await api.timelapse.getLookoutDrafts({});
-        if (!res.ok) return;
-
-        for (const draft of res.data.drafts) {
-          if (draft.lookoutStatus === "complete" || draft.lookoutStatus === "stopped" || draft.lookoutStatus === "compiling") {
-            router.replace(`/timelapse/publish/${draft.id}`);
-            return;
-          }
-        }
-      } catch {
-        // Not logged in or network error — ignore
-      }
-    })();
-  }, [router]);
-
   return (
     <SkulletProvider mode="dark" theme={SKELETON_THEME} reveal="sweep">
       <AuthProvider>
         <MaintenanceProvider>
           <KeyRelayProvider>
-            <Component {...pageProps} />
-            { IS_VERCEL && <SpeedInsights /> }
+            <ReadyDraftsProvider>
+              <Component {...pageProps} />
+              {/* Toasts draw themselves (see ReadyToPublishToast). Sonner only stacks, animates and swipes them. On
+                  mobile they sit above the bottom navigation bar. */}
+              <Toaster
+                position="bottom-center"
+                offset={24}
+                mobileOffset={{ bottom: 104 }}
+                gap={10}
+                toastOptions={{ unstyled: true }}
+              />
+              { IS_VERCEL && <SpeedInsights /> }
+            </ReadyDraftsProvider>
           </KeyRelayProvider>
         </MaintenanceProvider>
       </AuthProvider>

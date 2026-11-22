@@ -27,7 +27,8 @@ export const LapseErrorSchema = z.enum([
     "HACKATIME_ERROR",
     "ALREADY_PUBLISHED",
     "NO_FILE",
-    "EXPIRED"
+    "EXPIRED",
+    "UNAVAILABLE"
 ]);
 
 /**

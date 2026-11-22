@@ -11,6 +11,7 @@ import type { LeaderboardUserEntry, Timelapse } from "@hackclub/lapse-api";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/Button";
 import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
+import { ReadyToPublishShelf } from "@/components/lookout/ReadyToPublishShelf";
 
 import { api } from "@/api";
 import { isOptimizableImage } from "@/remoteImages";
@@ -231,6 +232,8 @@ export default function Home({ initialLeaderboard, initialRecent }: Props) {
       </section>
 
       <div className="flex flex-col px-12 sm:px-16 md:px-24 lg:px-32 py-8">
+        <ReadyToPublishShelf />
+
         <Skeleton id="home-leaderboard" data={reqLeaderboard} sample={SAMPLE_LEADERBOARD}>
           {lb => lb.leaderboard.length != 0 && (
             <section className="flex flex-col w-full">

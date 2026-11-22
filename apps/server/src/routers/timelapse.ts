@@ -23,6 +23,7 @@ import { archiveLookoutDraft, createLookoutDraft, restoreLookoutDraft } from "@/
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
 import { assignBrowserLabelVariant } from "@/experiments.js";
+import { BROWSER_RECORDING_MAINTENANCE_MESSAGE, isBrowserRecordingAvailable } from "@/recordingAvailability.js";
 
 export type DbTimelapse = Omit<db.Timelapse, "snapshots"> & { owner: db.User, comments: DbComment[] };
 export type DbOwnedTimelapse = DbTimelapse & { owner: db.User };
@@ -588,12 +589,23 @@ export default os.router({
             return apiOk({ variant: await assignBrowserLabelVariant(req.context.user) });
         }),
 
+    getRecordingAvailability: os.getRecordingAvailability
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:read"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            return apiOk({ browser: await isBrowserRecordingAvailable(req.context.user) });
+        }),
+
     createRecordingSession: os.createRecordingSession
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
         .use(requiredImplicitUser())
         .handler(async (req) => {
             const caller = req.context.user;
+
+            if (req.input.mode === "screen" && !await isBrowserRecordingAvailable(caller))
+                return apiErr("UNAVAILABLE", BROWSER_RECORDING_MAINTENANCE_MESSAGE);
 
             // Lookout's redirect hook has to be set at creation and can never be changed, so the draft's ID - which
             // the hook's URL points at - has to exist before the session does. Mint it here instead of letting the

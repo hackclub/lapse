@@ -110,6 +110,23 @@ export const env = {
     get LOOKOUT_API_KEY() { return required("LOOKOUT_API_KEY") },
 
     /**
+     * Set to `true` to put Browser (screen) recording under maintenance for everyone.
+     */
+    get BROWSER_RECORDING_MAINTENANCE() { return optional("BROWSER_RECORDING_MAINTENANCE") === "true" },
+
+    /**
+     * An optional external service that decides, per user, whether Browser (screen) recording is available. See
+     * `recordingAvailability.ts` for the request it receives. When unset, availability only follows
+     * `BROWSER_RECORDING_MAINTENANCE`.
+     */
+    get RECORDING_AVAILABILITY_URL() { return optional("RECORDING_AVAILABILITY_URL") },
+
+    /**
+     * The bearer token sent to `RECORDING_AVAILABILITY_URL`.
+     */
+    get RECORDING_AVAILABILITY_SECRET() { return optional("RECORDING_AVAILABILITY_SECRET") },
+
+    /**
      * Narrow read-only bearer credential for the detection evidence endpoint.
      */
     get LAPSE_ADMIN_API_KEY() { return optional("LAPSE_ADMIN_API_KEY") },
