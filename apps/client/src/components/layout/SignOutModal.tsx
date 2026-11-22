@@ -44,7 +44,7 @@ export function SignOutModal({ isOpen, setIsOpen }: {
   }
 
   return (
-    <Modal isOpen={isOpen} size="SMALL">
+    <Modal isOpen={isOpen} size="SMALL" onClose={close}>
       <ModalHeader
         icon="door-leave"
         title="Sign out?"

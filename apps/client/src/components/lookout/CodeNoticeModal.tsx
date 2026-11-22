@@ -50,7 +50,7 @@ export function CodeNoticeModal({ onAcknowledge, onClose }: {
   }
 
   return (
-    <Modal isOpen>
+    <Modal isOpen onClose={onClose}>
       <ModalHeader
         image="/images/orpheus-cool.png"
         showCloseButton={true}

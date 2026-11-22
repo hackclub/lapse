@@ -30,7 +30,7 @@ export function SettingsView({ isOpen, setIsOpen }: {
 
   return (
     <>
-      <Modal isOpen={isOpen} className="sm:[&>section]:min-h-[70vh]">
+      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} className="sm:[&>section]:min-h-[70vh]">
         <ModalHeader
           icon="settings"
           title="Settings"

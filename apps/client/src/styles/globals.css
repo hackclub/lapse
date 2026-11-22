@@ -140,6 +140,14 @@ body {
         display: none;
     }
 
+    /* The header is the only thing to drag the window by, so it can't scroll away. */
+    header:has(.titlebar-header) {
+        position: sticky;
+        top: 0;
+        z-index: 15;
+        background: var(--color-dark);
+    }
+
     .titlebar-header {
         padding-left: max(3rem, calc(env(titlebar-area-x, 0px) + 1rem));
         padding-right: max(3rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 1rem));
