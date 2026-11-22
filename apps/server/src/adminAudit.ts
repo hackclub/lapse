@@ -1,8 +1,7 @@
 import type { AdminEntity } from "@hackclub/lapse-api";
-import { oneOf } from "@hackclub/lapse-shared";
 
 import { database, type TransactionClient } from "@/db.js";
-import type { Actor } from "@/ownership.js";
+import { isAdmin, type Actor } from "@/ownership.js";
 
 export type AuditValue = string | number | boolean | null;
 export type AuditChanges = Record<string, { from: AuditValue; to: AuditValue }>;
@@ -65,7 +64,7 @@ export function adminOverrideActorId(actor: Actor | null, ownerId: string): stri
     if (actor?.kind !== "USER" || actor.user.id === ownerId)
         return null;
 
-    return actor.user.permissionLevel in oneOf("ADMIN", "ROOT") ? actor.user.id : null;
+    return isAdmin(actor) ? actor.user.id : null;
 }
 
 export async function recordAdminChange(tx: AuditClient, actorId: string | null, entity: AdminEntity, entityId: string, changes: AuditChanges) {

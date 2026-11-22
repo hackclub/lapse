@@ -2,7 +2,8 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { hackatimeRouterContract, type HackatimeProject } from "@hackclub/lapse-api";
 
-import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
+import { logMiddleware, type Context } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { dtoOwnedTimelapse, dtoTimelapse, TIMELAPSE_INCLUDES, TIMELAPSE_OMIT } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
 import { cachedJson, fingerprint } from "@/cache.js";
@@ -11,7 +12,7 @@ import { logError, logWarning } from "@/logging.js";
 import { apiErr } from "@/common.js";
 import { HackatimeApiError, HackatimeOAuthApi, hackatimeTokenOf } from "@/hackatime.js";
 import { maybe } from "@hackclub/lapse-shared";
-import { actorEntitledTo } from "@/ownership.js";
+import { actorEntitledTo, actorHasScope } from "@/ownership.js";
 
 import type * as safe from "@/secrets.js";
 
@@ -123,9 +124,7 @@ const os = implement(hackatimeRouterContract)
 
 export default os.router({
     allProjects: os.allProjects
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("hackatime.allProjects"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -148,9 +147,7 @@ export default os.router({
         }),
 
     linkStatus: os.linkStatus
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("hackatime.linkStatus"))
         .handler(async (req) => {
             // The user was loaded fresh for this request while authenticating it.
             const dbUser = req.context.user;
@@ -187,9 +184,7 @@ export default os.router({
         }),
 
     myTimelapsesForProject: os.myTimelapsesForProject
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("hackatime.myTimelapsesForProject"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -211,6 +206,7 @@ export default os.router({
         }),
 
     timelapsesForProject: os.timelapsesForProject
+        .use(authorize("hackatime.timelapsesForProject"))
         .handler(async (req) => {
             const actor = req.context.actor;
 
@@ -223,10 +219,8 @@ export default os.router({
             if (!subject)
                 return apiOk({ count: 0, timelapses: [] });
 
-            const isPrivilidged = (actor != null) && (
-                (actor.kind == "PROGRAM" && actor.programKey.scopes.includes("timelapse:read")) ||
-                (actor.kind == "USER" && actor.scopes.includes("timelapse:read") && actorEntitledTo({ ownerId: subject.id }, actor))
-            );
+            // Unlisted timelapses take the `timelapse:read` scope on top of being allowed to see them at all.
+            const isPrivilidged = actorHasScope(actor, "timelapse:read") && actorEntitledTo({ ownerId: subject.id }, actor);
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,

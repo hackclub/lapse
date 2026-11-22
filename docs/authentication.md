@@ -38,3 +38,22 @@ A canonical client must perform these stops to authorize with the API:
     - **No consent checks are made.** This is important, as this means that we must absolutely trust the callback URL with our code and state.
 2. Receive the authorization code by handling the redirect from the API to `<CALLBACK URL>?code=AUTH_CODE&state=xyz`.
 3. Exchange the short-lived authorization code for an access and refresh token by calling `/auth/token`.
+
+## Who may call what
+Every procedure has a policy, in [`policies.ts`](/apps/server/src/policies.ts), and nothing else decides who may call it - handlers don't check permissions themselves. A policy says whether the procedure is public, for users only, or for users and program keys; which scopes a third-party app needs; and, where it acts on something that belongs to somebody, who besides the owner may act on it. [`policy.ts`](/apps/server/src/policy.ts) enforces it before the handler runs.
+
+Two rules hold everywhere, because they are enforced there rather than written into each policy:
+
+- **Administrators are only administrators on the Lapse website.** The `ADMIN` and `ROOT` permission levels count for nothing without the `elevated` scope. If an admin signs into a third-party app, that app acts for them as an ordinary user: it can't read other people's drafts, edit their timelapses, look users up by e-mail, or reach the admin panel.
+- **Program keys are administrators only as far as their scopes say.** A program key isn't a user and owns nothing. On top of the ordinary scopes above, it can hold:
+
+| Scope         | Lets a program key...                                                                   |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `admin:read`  | read what belongs to any user, the way an administrator can (unlisted timelapses, drafts) |
+| `admin:write` | change or delete what belongs to any user, the way an administrator can                 |
+| `admin:panel` | use the admin panel's own procedures (`admin.*`, `developer.getAllApps`)                |
+
+  The ordinary scope is still needed alongside: deleting somebody's timelapse takes `timelapse:write` and `admin:write`. Nothing lets a program key call a `ROOT`-only procedure, and `elevated` means nothing on one.
+
+`pnpm --filter @hackclub/lapse-server test` calls every procedure as every kind of caller and compares the outcome with what `test/authorization.test.ts` says it should be, so a policy can't be loosened without that file changing too. The server also refuses to start if a procedure isn't guarded by its own policy.
+

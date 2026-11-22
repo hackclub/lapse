@@ -4,12 +4,12 @@ import { commentRouterContract, type Comment } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
 
-import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
+import { logMiddleware, type Context } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { getTimelapseById } from "@/routers/timelapse.js";
 import { apiErr, apiOk, Err } from "@/common.js";
 import { database } from "@/db.js";
-import { actorEntitledTo } from "@/ownership.js";
 import { adminOverrideActorId, recordAdminDeletion } from "@/adminAudit.js";
 import type * as safe from "@/secrets.js";
 
@@ -36,9 +36,7 @@ export function dtoComment(comment: DbComment): Comment {
 
 export default os.router({
     create: os.create
-        .use(requiredAuth())
-        .use(requiredScopes("comment:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("comment.create"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -59,8 +57,7 @@ export default os.router({
         }),
 
     delete: os.delete
-        .use(requiredAuth())
-        .use(requiredScopes("comment:write"))
+        .use(authorize("comment.delete"))
         .handler(async (req) => {
             const comment = await database().comment.findUnique({
                 where: { id: req.input.commentId }
@@ -68,9 +65,6 @@ export default os.router({
 
             if (!comment)
                 return apiErr("NOT_FOUND", "Comment not found.");
-
-            if (!actorEntitledTo(comment, req.context.actor))
-                return apiErr("NO_PERMISSION", "You can only delete your own comments.");
 
             await database().comment.delete({
                 where: { id: req.input.commentId }

@@ -2,8 +2,8 @@ import "./env.js";
 
 import type { FastifyRequest } from "fastify";
 import type { Redis } from "ioredis";
-import { call, isProcedure, ORPCError, type AnyProcedure } from "@orpc/server";
-import { getAllOAuthScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
+import { call, isProcedure, ORPCError, Procedure, type AnyProcedure } from "@orpc/server";
+import { getAllOAuthScopes, type LapseOAuthScope, type ProgramKeyScope } from "@hackclub/lapse-api";
 
 import { setClientsForTesting } from "@/db.js";
 import { setRealizeQueueForTesting } from "@/job.js";
@@ -52,13 +52,19 @@ export function userActor(id: keyof typeof USERS, scopes: LapseOAuthScope[]): Ex
     return { kind: "USER", user: USERS[id], scopes };
 }
 
-export function programActor(scopes: LapseOAuthScope[]): ExternalActor {
+export function programActor(scopes: ProgramKeyScope[]): ExternalActor {
     return { kind: "PROGRAM", programKey: { id: "9b2c6c0e-6f0a-4d43-9d0a-3f1f6f0e7a11", name: "test key", scopes } };
 }
 
 export interface Outcome {
-    /** `allowed` if the handler ran; otherwise how the request was turned away. */
-    kind: "allowed" | "unauthorized" | "forbidden" | "no-permission";
+    /**
+     * How the request was answered: `allowed` if the procedure's policy let it through to the handler, `refused` if
+     * the policy answered it instead, and otherwise the error it was turned away with.
+     */
+    kind: "allowed" | "unauthorized" | "forbidden" | "refused";
+
+    /** Whether the handler ran at all. */
+    handlerRan: boolean;
     output?: unknown;
     error?: unknown;
     database: FakeDatabase;
@@ -203,20 +209,30 @@ export async function request(procedure: AnyProcedure, input: unknown, actor: Ex
         ...options.context,
     };
 
+    // The same procedure, with a handler that says whether it was reached.
+    let handlerRan = false;
+    const definition = procedure["~orpc"];
+    const observed = new Procedure({
+        ...definition,
+        handler: async options => {
+            handlerRan = true;
+            return await definition.handler(options);
+        },
+    });
+
     try {
-        const output = await call(procedure, input, { context });
-        const refused = typeof output === "object" && output !== null && "error" in output && output.error === "NO_PERMISSION";
-        return { kind: refused ? "no-permission" : "allowed", output, database, fetches };
+        const output = await call(observed, input, { context });
+        return { kind: handlerRan ? "allowed" : "refused", handlerRan, output, database, fetches };
     }
     catch (error) {
-        if (error instanceof ORPCError && error.code === "UNAUTHORIZED")
-            return { kind: "unauthorized", error, database, fetches };
+        if (!handlerRan && error instanceof ORPCError && error.code === "UNAUTHORIZED")
+            return { kind: "unauthorized", handlerRan, error, database, fetches };
 
-        if (error instanceof ORPCError && error.code === "FORBIDDEN")
-            return { kind: "forbidden", error, database, fetches };
+        if (!handlerRan && error instanceof ORPCError && error.code === "FORBIDDEN")
+            return { kind: "forbidden", handlerRan, error, database, fetches };
 
         // The handler ran and then failed on its own terms (say, an input the fake world can't satisfy).
-        return { kind: "allowed", error, database, fetches };
+        return { kind: handlerRan ? "allowed" : "refused", handlerRan, error, database, fetches };
     }
     finally {
         globalThis.fetch = realFetch;

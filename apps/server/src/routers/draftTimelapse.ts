@@ -2,11 +2,12 @@ import { z } from "zod";
 import { implement } from "@orpc/server";
 import { DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { oneOf, range, toHex } from "@hackclub/lapse-shared";
+import { range, toHex } from "@hackclub/lapse-shared";
 
 import * as db from "@/generated/prisma/client.js";
 import { draftTimelapseRouterContract, EditListEntrySchema, MAX_THUMBNAIL_UPLOAD_SIZE, MAX_VIDEO_UPLOAD_SIZE, type DraftTimelapse, type LegacyUnpublishedTimelapse } from "@hackclub/lapse-api";
-import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
+import { logMiddleware, type Context } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { env } from "@/env.js";
 import { encryptedS3 } from "@/storage.js";
 import { database, redis } from "@/db.js";
@@ -14,7 +15,7 @@ import { database, redis } from "@/db.js";
 import { apiOk, apiErr, lapseId, Err } from "@/common.js";
 import { logInfo, logWarning } from "@/logging.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { actorEntitledTo, stringifyActor, type Actor } from "@/ownership.js";
+import { stringifyActor, type Actor } from "@/ownership.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { issueUploadToken } from "@/upload.js";
 import type * as safe from "@/secrets.js";
@@ -159,6 +160,7 @@ export function dtoLegacyUnpublishedTimelapse(entity: db.LegacyUnpublishedTimela
 
 /**
  * Deletes a draft timelapse alongside all of its associated S3 resources. Does *not* delete any other database object.
+ * Whether `actor` may do so is decided by the caller's policy - `actor` is only here to say who asked.
  */
 export async function deleteDraftTimelapse(id: string, actor: Actor | null): Promise<Err | void> {
     logInfo(`Deleting draft timelapse ${id} (action triggered by ${stringifyActor(actor)})`);
@@ -168,9 +170,6 @@ export async function deleteDraftTimelapse(id: string, actor: Actor | null): Pro
 
     if (!draft)
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
-
-    if (!actorEntitledTo(draft, actor))
-        return new Err("NO_PERMISSION", "You don't have permission to delete this timelapse");
 
     // As the deletion of the draft is explicit (as opposed to implicit, which happens when we convert a draft to a published timelapse),
     // we can safely remove the S3 resources associated with it.
@@ -199,29 +198,22 @@ export async function deleteDraftTimelapse(id: string, actor: Actor | null): Pro
 
 export default os.router({
     query: os.query
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
+        .use(authorize("draftTimelapse.query"))
         .handler(async (req) => {
             const draft = await database().draftTimelapse.findFirst({
                 include: { owner: true },
                 where: { id: req.input.id }
             });
 
-            if (!draft || !actorEntitledTo(draft, req.context.actor))
+            if (!draft)
                 return apiErr("NOT_FOUND", "The requested draft timelapse doesn't exist.");
 
             return apiOk({ timelapse: dtoDraftTimelapse(draft) });
         }),
 
     findByUser: os.findByUser
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
+        .use(authorize("draftTimelapse.findByUser"))
         .handler(async (req) => {
-            const actor = req.context.actor;
-
-            if (actor.kind == "USER" && (actor.user.id != req.input.user && !(actor.user.permissionLevel in oneOf("ADMIN", "ROOT"))))
-                return apiErr("NO_PERMISSION", "You may only query draft timelapses for yourself.");
-
             const drafts = await database().draftTimelapse.findMany({
                 include: { owner: true },
                 omit: { snapshots: true },
@@ -236,9 +228,7 @@ export default os.router({
         }),
 
     create: os.create
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("draftTimelapse.create"))
         .handler(async (req) => {
             const caller = req.context.user;
             const id = lapseId();
@@ -315,26 +305,14 @@ export default os.router({
         }),
 
     update: os.update
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
+        .use(authorize("draftTimelapse.update"))
         .handler(async (req) => {
-            const actor = req.context.actor;
-
             const draft = await database().draftTimelapse.findFirst({
                 where: { id: req.input.id },
             });
 
             if (!draft)
                 return apiErr("NOT_FOUND", "Couldn't find that draft timelapse!");
-
-            const canEdit = actor.kind == "PROGRAM" || (
-                actor.user.id === draft.ownerId ||
-                actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
-            );
-
-
-            if (!canEdit)
-                return apiErr("NO_PERMISSION", "You don't have permission to edit this draft timelapse!");
 
             const updated = await database().draftTimelapse.update({
                 include: { owner: true },
@@ -346,11 +324,8 @@ export default os.router({
         }),
 
     delete: os.delete
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
+        .use(authorize("draftTimelapse.delete"))
         .handler(async (req) => {
-            const caller = req.context.user;
-
             const res = await deleteDraftTimelapse(req.input.id, req.context.actor);
             if (res instanceof Err)
                 return res.toApiError();
@@ -359,9 +334,7 @@ export default os.router({
         }),
 
     legacy: os.legacy
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("draftTimelapse.legacy"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -376,21 +349,14 @@ export default os.router({
         }),
 
     markAsMigrated: os.markAsMigrated
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("draftTimelapse.markAsMigrated"))
         .handler(async (req) => {
-            const caller = req.context.user;
-
             const legacy = await database().legacyUnpublishedTimelapse.findFirst({
                 where: { id: req.input.id }
             });
 
             if (!legacy)
                 return apiErr("NOT_FOUND", "Couldn't find that legacy timelapse!");
-
-            if (legacy.ownerId !== caller.id && !(caller.permissionLevel in oneOf("ADMIN", "ROOT")))
-                return apiErr("NO_PERMISSION", "You don't have permission to mark this legacy timelapse as migrated.");
 
             await database().legacyUnpublishedTimelapse.update({
                 where: { id: req.input.id },

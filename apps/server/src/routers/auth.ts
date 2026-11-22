@@ -7,7 +7,8 @@ import OAuth2Server from "@node-oauth/oauth2-server";
 import { deleteCookie, getCookie, setCookie } from "@orpc/server/helpers";
 import { arraysEqual } from "@hackclub/lapse-shared";
 
-import { logMiddleware, requiredAuth, requiredScopes, requiredImplicitUser, type Context } from "@/router.js";
+import { logMiddleware, type Context } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
@@ -191,6 +192,7 @@ function readHackatimeCallbackCookie(reqHeaders: Headers | undefined, state: str
 
 export default os.router({
     authorize: os.authorize // note: user-agent endpoint
+         .use(authorize("auth.authorize"))
          .handler(async (req) => {
             if (!req.context.resHeaders)
                 throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Couldn't access response headers." });
@@ -237,9 +239,7 @@ export default os.router({
          }),
 
     grantConsent: os.grantConsent
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("auth.grantConsent"))
         .handler(async (req) => {
             const client = await database().serviceClient.findFirst({
                 where: { clientId: req.input.clientId, revokedAt: null }
@@ -268,6 +268,7 @@ export default os.router({
     // For the one account that can't sign in through Hackatime (app store review). The rest of the flow is the regular
     // one: the client gets an authorization code bound to its PKCE challenge, and exchanges it at /auth/token.
     signInWithPassword: os.signInWithPassword
+        .use(authorize("auth.signInWithPassword"))
         .handler(async (req) => {
             const email = env.PASSWORD_SIGN_IN_EMAIL?.trim().toLowerCase();
             const hash = env.PASSWORD_SIGN_IN_HASH;
@@ -369,6 +370,7 @@ export default os.router({
 
     // The routes below are not defined in the contracts, as we don't want the client to be calling them directly! We only want to access them through redirects.
     hackatimeCallback: os.hackatimeCallback
+        .use(authorize("auth.hackatimeCallback"))
         .handler(async (req) => {
             const { name: cookieName, data: oauthData } = readHackatimeCallbackCookie(req.context.reqHeaders, req.input.query.state);
 
@@ -583,6 +585,7 @@ export default os.router({
     // This endpoint is called after the user gives the requesting app consent to get a token to their account. For canonical apps, as no consent modal has to be displayed, the user
     // is immidiately redirected to /auth/continue.
     continue: os.continue
+       .use(authorize("auth.continue"))
        .handler(async (req) => {
            let consent: ConsentJwt;
 
@@ -644,6 +647,7 @@ export default os.router({
        }),
 
     token: os.token
+        .use(authorize("auth.token"))
         .handler(async (req) => {
             const oauthResponse = new OAuth2Server.Response();
             const authorization = req.context.req.headers.authorization;

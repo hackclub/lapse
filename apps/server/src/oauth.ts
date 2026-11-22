@@ -9,7 +9,7 @@ import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
 import { logInfo, logWarning } from "@/logging.js";
 import type { FastifyRequest } from "fastify";
-import { getAllOAuthScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
+import { getAllOAuthScopes, getAllProgramKeyScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
 import type { ExternalActor, AuthenticatedProgramKey } from "@/ownership.js";
 import type * as safe from "@/secrets.js";
 
@@ -526,7 +526,9 @@ async function authenticateProgramKey(bearerToken: string): Promise<Authenticate
             return {
                 id: candidate.id,
                 name: candidate.name,
-                scopes: candidate.scopes as LapseOAuthScope[]
+                // Anything else a key was once given - `elevated` in particular, which is for the Lapse website's
+                // own sessions - means nothing on a program key.
+                scopes: getAllProgramKeyScopes().filter(scope => candidate.scopes.includes(scope))
             };
         }
     }

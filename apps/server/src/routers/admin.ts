@@ -1,10 +1,12 @@
 import { implement } from "@orpc/server";
-import { adminRouterContract, AdminAuditChangesSchema, AdminEntitySchema, ADMIN_ENTITY_FIELDS, getAllOAuthScopes, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLookoutDraftRow, type AdminLegacyTimelapseRow, type ProgramKeyMetadata } from "@hackclub/lapse-api";
+import { adminRouterContract, AdminAuditChangesSchema, AdminEntitySchema, ADMIN_ENTITY_FIELDS, getAllProgramKeyScopes, type AdminEntity, type AdminFilter, type AdminFilterOperator, type AdminSort, type AdminUserRow, type AdminTimelapseRow, type AdminCommentRow, type AdminDraftTimelapseRow, type AdminLookoutDraftRow, type AdminLegacyTimelapseRow, type ProgramKeyMetadata } from "@hackclub/lapse-api";
 import { match } from "@hackclub/lapse-shared";
 
-import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
+import { type Context, logMiddleware } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
+import { isAdmin } from "@/ownership.js";
 import { env } from "@/env.js";
 import { logError, logInfo } from "@/logging.js";
 import { HackatimeApiError } from "@/hackatime.js";
@@ -463,6 +465,16 @@ function pushSearchDescriptor(results: SearchResultRow[], query: string, descrip
     }
 }
 
+/**
+ * What a program key's scopes may be set to. `elevated` is accepted, since keys made before the admin scopes existed
+ * may still list it, but it's dropped rather than stored: it means nothing on a program key.
+ */
+const PROGRAM_KEY_SCOPES = new Set<string>([...getAllProgramKeyScopes(), "elevated"]);
+
+function isProgramKeyScope(scope: string) {
+    return scope !== "elevated";
+}
+
 function dtoProgramKey(key: safe.ProgramKey & { createdByUser: safe.User }): ProgramKeyMetadata {
     return {
         id: key.id,
@@ -483,8 +495,7 @@ function dtoProgramKey(key: safe.ProgramKey & { createdByUser: safe.User }): Pro
 
 export default os.router({
     auditLog: os.auditLog
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("admin.auditLog"))
         .handler(async (req) => {
             const { entity, entityId, permissionChangesOnly, page, pageSize } = req.input;
 
@@ -535,8 +546,7 @@ export default os.router({
         }),
 
     stats: os.stats
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("admin.stats"))
         .handler(async () => {
             const [userCount, durationAgg, projectCount] = await Promise.all([
                 database().user.count(),
@@ -555,8 +565,7 @@ export default os.router({
         }),
 
     list: os.list
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("admin.list"))
         .handler(async (req) => {
             const { entity, filters, sort, page, pageSize } = req.input;
             const fieldDefs = getFieldDefs(entity);
@@ -578,16 +587,14 @@ export default os.router({
         }),
 
     update: os.update
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("admin.update"))
         .handler(async (req) => {
             const caller = req.context.user;
             const { entity, id, changes } = req.input;
 
             // Sign-in matches users by these fields, so pointing them at an account the caller controls is a takeover
             // of the target - including ROOT accounts.
-            if (entity === "user" && caller.permissionLevel !== "ROOT" && ROOT_ONLY_USER_FIELDS.some(field => field in changes))
+            if (entity === "user" && !isAdmin(req.context.actor, "ROOT") && ROOT_ONLY_USER_FIELDS.some(field => field in changes))
                 return apiErr("NO_PERMISSION", `Only ROOT users can change ${ROOT_ONLY_USER_FIELDS.join(", ")}.`);
 
             const config = entityConfigs[entity];
@@ -627,8 +634,7 @@ export default os.router({
         }),
 
     export: os.export
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("admin.export"))
         .handler(async (req) => {
             const { entity, id } = req.input;
 
@@ -650,8 +656,7 @@ export default os.router({
         }),
 
     recalculateDurations: os.recalculateDurations
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("admin.recalculateDurations"))
         .handler(async () => {
             // Only recalculate durations for timelapses that haven't been realized yet.
             // Realized timelapses have their duration set from the compiled video, which is the source of truth.
@@ -695,8 +700,7 @@ export default os.router({
         }),
 
     resyncHackatime: os.resyncHackatime
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("admin.resyncHackatime"))
         .handler(async (req) => {
             const { id, from, to, dryRun, limit, after } = req.input;
 
@@ -784,19 +788,14 @@ export default os.router({
 
     programKey: os.programKey.router({
         create: os.programKey.create
-            .use(requiredAuth("ROOT"))
-            .use(requiredScopes("elevated"))
-            .use(requiredImplicitUser())
+            .use(authorize("admin.programKey.create"))
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { name, scopes, expiresAt } = req.input;
 
-                const validScopes = new Set(getAllOAuthScopes());
-                for (const scope of scopes) {
-                    if (!validScopes.has(scope as never)) {
-                        return apiErr("ERROR", `Unknown scope: "${scope}"`);
-                    }
-                }
+                const unknownScope = scopes.find(scope => !PROGRAM_KEY_SCOPES.has(scope));
+                if (unknownScope !== undefined)
+                    return apiErr("ERROR", `Unknown scope: "${unknownScope}"`);
 
                 const maxExpiry = Date.now() + 365 * 24 * 60 * 60 * 1000;
                 if (expiresAt > maxExpiry)
@@ -815,7 +814,7 @@ export default os.router({
                         name,
                         keyHash,
                         keyPrefix,
-                        scopes,
+                        scopes: scopes.filter(isProgramKeyScope),
                         createdByUserId: caller.id,
                         expiresAt: new Date(expiresAt),
                     }
@@ -831,8 +830,7 @@ export default os.router({
             }),
 
         list: os.programKey.list
-            .use(requiredAuth("ROOT"))
-            .use(requiredScopes("elevated"))
+            .use(authorize("admin.programKey.list"))
             .handler(async () => {
                 const keys = await database().programKey.findMany({
                     include: { createdByUser: true },
@@ -843,9 +841,7 @@ export default os.router({
             }),
 
         rotate: os.programKey.rotate
-            .use(requiredAuth("ROOT"))
-            .use(requiredScopes("elevated"))
-            .use(requiredImplicitUser())
+            .use(authorize("admin.programKey.rotate"))
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { id } = req.input;
@@ -880,9 +876,7 @@ export default os.router({
             }),
 
         revoke: os.programKey.revoke
-            .use(requiredAuth("ROOT"))
-            .use(requiredScopes("elevated"))
-            .use(requiredImplicitUser())
+            .use(authorize("admin.programKey.revoke"))
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { id } = req.input;
@@ -909,20 +903,14 @@ export default os.router({
             }),
 
         update: os.programKey.update
-            .use(requiredAuth("ROOT"))
-            .use(requiredScopes("elevated"))
-            .use(requiredImplicitUser())
+            .use(authorize("admin.programKey.update"))
             .handler(async (req) => {
                 const caller = req.context.user;
                 const { id, name, scopes } = req.input;
 
-                if (scopes) {
-                    const validScopes = new Set(getAllOAuthScopes());
-                    for (const scope of scopes) {
-                        if (!validScopes.has(scope as never))
-                            return apiErr("ERROR", `Unknown scope: "${scope}"`);
-                    }
-                }
+                const unknownScope = scopes?.find(scope => !PROGRAM_KEY_SCOPES.has(scope));
+                if (unknownScope !== undefined)
+                    return apiErr("ERROR", `Unknown scope: "${unknownScope}"`);
 
                 const existing = await database().programKey.findUnique({ where: { id } });
                 if (!existing)
@@ -931,7 +919,7 @@ export default os.router({
                 const key = await database().programKey.update({
                     where: { id },
                     include: { createdByUser: true },
-                    data: { name, scopes }
+                    data: { name, scopes: scopes?.filter(isProgramKeyScope) }
                 });
 
                 logInfo(`Program key "${existing.name}" updated by @${caller.handle}.`);
@@ -941,8 +929,7 @@ export default os.router({
     }),
 
     search: os.search
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("admin.search"))
         .handler(async (req) => {
             const query = req.input.query.trim();
             if (!query) {

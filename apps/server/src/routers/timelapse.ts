@@ -1,17 +1,17 @@
 import { z } from "zod";
 import { implement } from "@orpc/server";
 import { HeadObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { oneOf } from "@hackclub/lapse-shared";
 import { EditListEntrySchema, timelapseRouterContract, type OwnedTimelapse, type Timelapse, MIN_TIMELAPSE_NAME_LENGTH, MAX_TIMELAPSE_NAME_LENGTH, MAX_TIMELAPSE_DESCRIPTION_LENGTH } from "@hackclub/lapse-api";
 
 import * as db from "@/generated/prisma/client.js";
-import { logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes, type Context } from "@/router.js";
+import { logMiddleware, type Context } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { env } from "@/env.js";
 import { encryptedS3, publicS3 } from "@/storage.js";
 import { database } from "@/db.js";
 import { apiOk, apiErr, type Result, Err, lapseId } from "@/common.js";
-import { actorEntitledTo, actorHasAdminView, stringifyActor, type Actor } from "@/ownership.js";
+import { actorEntitledTo, actorHasScope, stringifyActor, type Actor } from "@/ownership.js";
 import { isLegacyRecording } from "@/routers/draftTimelapse.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi, HackatimeUserApi, hackatimeTokenOf, type WakaTimeHeartbeat } from "@/hackatime.js";
@@ -146,7 +146,8 @@ export async function syncTimelapseWithHackatime(timelapse: safe.Timelapse & { o
 }
 
 /**
- * Permanently deletes a timelapse, including all its snapshots and S3 files.
+ * Permanently deletes a timelapse, including all its snapshots and S3 files. Whether `actor` may do so is decided by
+ * the caller's policy - `actor` is only here so that an administrator deleting somebody else's timelapse is audited.
  */
 export async function deleteTimelapse(timelapseId: string, actor: Actor | null): Promise<Result<void>> {
     const timelapse = await database().timelapse.findFirst({
@@ -155,10 +156,6 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor | null):
 
     if (!timelapse)
         return new Err("NOT_FOUND", "Couldn't find that timelapse!");
-
-    if (!actorEntitledTo(timelapse, actor)) {
-        return new Err("NO_PERMISSION", "You don't have permission to delete this timelapse");
-    }
 
     // Scary stuff ahead! If we mess this up, we permanently lose data. We don't want that!
     if (timelapse.s3Key) {
@@ -266,6 +263,7 @@ export const TIMELAPSE_OMIT = {
 
 export default os.router({
     query: os.query
+        .use(authorize("timelapse.query"))
         .handler(async (req) => {
             const timelapse = await getTimelapseById(req.input.id, req.context.actor);
             if (timelapse instanceof Err)
@@ -275,9 +273,7 @@ export default os.router({
         }),
 
     publish: os.publish
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.publish"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -380,8 +376,7 @@ export default os.router({
         }),
 
     update: os.update
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
+        .use(authorize("timelapse.update"))
         .handler(async (req) => {
             const actor = req.context.actor;
 
@@ -392,14 +387,6 @@ export default os.router({
 
             if (!timelapse)
                 return apiErr("NOT_FOUND", "Couldn't find that timelapse!");
-
-            const canEdit = actor.kind == "PROGRAM" || (
-                actor.user.id === timelapse.ownerId ||
-                actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
-            );
-
-            if (!canEdit)
-                return apiErr("NOT_FOUND", "You don't have permission to edit this timelapse");
 
             if (timelapse.visibility === "FAILED_PROCESSING")
                 return apiErr("ERROR", "You can only delete timelapses that failed processing");
@@ -439,8 +426,7 @@ export default os.router({
         }),
 
     delete: os.delete
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
+        .use(authorize("timelapse.delete"))
         .handler(async (req) => {
             const res = await deleteTimelapse(req.input.id, req.context.actor);
             if (res instanceof Err)
@@ -450,15 +436,13 @@ export default os.router({
         }),
 
     findByUser: os.findByUser
+        .use(authorize("timelapse.findByUser"))
         .handler(async (req) => {
-            const caller = req.context.user;
             const actor = req.context.actor;
 
-            const isEntitled = (
-                (caller && caller.id === req.input.user) || // viewing self
-                actorHasAdminView(actor) || // caller is an admin on the canonical client
-                actor?.kind === "PROGRAM" // program keys can always view
-            );
+            // The owner, an administrator, or a program key with `admin:read` sees everything. Everyone else only
+            // sees what is public and has finished processing.
+            const isEntitled = actorEntitledTo({ ownerId: req.input.user }, actor);
 
             const timelapses = await database().timelapse.findMany({
                 include: TIMELAPSE_INCLUDES,
@@ -475,9 +459,7 @@ export default os.router({
         }),
 
     myPublishedTimelapses: os.myPublishedTimelapses
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.myPublishedTimelapses"))
         .handler(async (req) => {
             const caller = req.context.user;
             const limit = req.input.limit;
@@ -507,9 +489,7 @@ export default os.router({
         }),
 
     syncWithHackatime: os.syncWithHackatime
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.syncWithHackatime"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -550,18 +530,14 @@ export default os.router({
     // Only the Lapse website may pair a device: the token it leads to never expires and outlives any OAuth grant, so a
     // third-party app with `timelapse:write` must not be able to mint one for itself.
     approveDesktopPairing: os.approveDesktopPairing
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.approveDesktopPairing"))
         .handler(async (req) => {
             const code = await createPairingCode(req.context.user.id, req.input.challenge, req.input.label);
             return apiOk({ code });
         }),
 
     listDesktopDevices: os.listDesktopDevices
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.listDesktopDevices"))
         .handler(async (req) => {
             const devices = await database().lookoutDevice.findMany({
                 where: { ownerId: req.context.user.id },
@@ -579,9 +555,7 @@ export default os.router({
         }),
 
     revokeDesktopDevice: os.revokeDesktopDevice
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.revokeDesktopDevice"))
         .handler(async (req) => {
             const deleted = await database().lookoutDevice.deleteMany({
                 where: { id: req.input.id, ownerId: req.context.user.id },
@@ -591,33 +565,25 @@ export default os.router({
         }),
 
     assignBrowserLabelVariant: os.assignBrowserLabelVariant
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.assignBrowserLabelVariant"))
         .handler(async (req) => {
             return apiOk({ variant: await assignBrowserLabelVariant(req.context.user) });
         }),
 
     assignBrowserWarningVariant: os.assignBrowserWarningVariant
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.assignBrowserWarningVariant"))
         .handler(async (req) => {
             return apiOk({ variant: await assignBrowserWarningVariant(req.context.user) });
         }),
 
     getRecordingAvailability: os.getRecordingAvailability
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.getRecordingAvailability"))
         .handler(async (req) => {
             return apiOk({ browser: await isBrowserRecordingAvailable(req.context.user) });
         }),
 
     createRecordingSession: os.createRecordingSession
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.createRecordingSession"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -664,13 +630,11 @@ export default os.router({
         }),
 
     getLookoutDrafts: os.getLookoutDrafts
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.getLookoutDrafts"))
         .handler(async (req) => {
             const caller = req.context.user;
 
-            const mayPublish = req.context.scopes.includes("timelapse:write") || req.context.scopes.includes("elevated");
+            const mayPublish = actorHasScope(req.context.actor, "timelapse:write");
 
             // The recorder resumes a draft with its Lookout token, so this is one of the few places that reads it.
             const drafts = await database().draftLookoutTimelapse.findMany({
@@ -748,9 +712,7 @@ export default os.router({
         }),
 
     discardLookoutDraft: os.discardLookoutDraft
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.discardLookoutDraft"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -767,9 +729,7 @@ export default os.router({
         }),
 
     getArchivedLookoutDrafts: os.getArchivedLookoutDrafts
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.getArchivedLookoutDrafts"))
         .handler(async (req) => {
             const drafts = await database().draftLookoutTimelapse.findMany({
                 where: { ownerId: req.context.user.id, archivedAt: { not: null } },
@@ -804,9 +764,7 @@ export default os.router({
         }),
 
     restoreLookoutDraft: os.restoreLookoutDraft
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.restoreLookoutDraft"))
         .handler(async (req) => {
             const draft = await database().draftLookoutTimelapse.findFirst({
                 where: { id: req.input.id, ownerId: req.context.user.id, archivedAt: { not: null } }
@@ -836,9 +794,7 @@ export default os.router({
         }),
 
     pollLookoutStatus: os.pollLookoutStatus
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.pollLookoutStatus"))
         .handler(async (req) => {
             const draft = await database().draftLookoutTimelapse.findFirst({
                 where: { id: req.input.draftId, ownerId: req.context.user.id }
@@ -853,7 +809,7 @@ export default os.router({
             //
             // Write scope required, for the same reason as in getLookoutDrafts: this creates a
             // timelapse and pushes heartbeats, and polling status is otherwise a read.
-            const mayPublish = req.context.scopes.includes("timelapse:write") || req.context.scopes.includes("elevated");
+            const mayPublish = actorHasScope(req.context.actor, "timelapse:write");
             const finalized = mayPublish ? await finalizeIfPending(draft) : null;
             if (finalized?.kind === "published") {
                 return apiOk({
@@ -879,9 +835,7 @@ export default os.router({
         }),
 
     publishFromLookout: os.publishFromLookout
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("timelapse.publishFromLookout"))
         .handler(async (req) => {
             const caller = req.context.user;
 

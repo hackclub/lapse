@@ -32,6 +32,8 @@ Loading states in the client use Skullet (https://skullet.lochie.me/docs). Wrap 
 
 Columns that would let their reader act as somebody else (Hackatime tokens, Lookout tokens, panel tokens, and the hashes of device tokens, client secrets and program keys) are listed in @apps/server/src/secrets.ts, and the database client leaves them out of every result. Use the types from that file (`safe.User`, `safe.Timelapse`, ...) rather than `db.User`, and when code really needs a secret, ask for it by name with `omit: { column: false }` or a `select`. A new column of this kind goes on that list - `pnpm --filter @hackclub/lapse-server test` fails otherwise.
 
+Who may call a procedure is declared in @apps/server/src/policies.ts and enforced by `authorize` (@apps/server/src/policy.ts), which every procedure starts with: `os.update.use(authorize("timelapse.update"))`. Handlers don't check permissions themselves - no comparing `permissionLevel`, no "is this the owner" - so a new rule goes in the policy, and a new procedure needs a policy (it won't compile otherwise) and an entry in `test/authorization.test.ts`. Where a handler decides what to *show* rather than whether to allow, it asks `actorEntitledTo` or `isAdmin` from @apps/server/src/ownership.ts. See @docs/authentication.md.
+
 # Code style
 
 - Avoid braces for if/else blocks that return or throw.

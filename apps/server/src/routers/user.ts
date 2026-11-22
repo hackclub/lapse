@@ -3,7 +3,8 @@ import { deleteCookie } from "@orpc/server/helpers"
 import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS, MAX_BIO_LENGTH, MAX_DISPLAY_NAME_LENGTH } from "@hackclub/lapse-api"
 import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
-import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
+import { type Context, logMiddleware } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
@@ -84,6 +85,7 @@ export function dtoUser(entity: DbCompositeUser): User {
 
 export default os.router({
     myself: os.myself
+        .use(authorize("user.myself"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -102,6 +104,7 @@ export default os.router({
         }),
 
     query: os.query
+        .use(authorize("user.query"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -141,8 +144,7 @@ export default os.router({
         }),
 
     queryByEmail: os.queryByEmail
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("user:read"))
+        .use(authorize("user.queryByEmail"))
         .handler(async (req) => {
             const user = await database().user.findFirst({
                 where: { email: req.input.email }
@@ -155,14 +157,8 @@ export default os.router({
         }),
 
     update: os.update
-        .use(requiredAuth())
-        .use(requiredScopes("user:write"))
+        .use(authorize("user.update"))
         .handler(async (req) => {
-            const actor = req.context.actor;
-
-            if (actor.kind == "USER" && actor.user.permissionLevel === "USER" && actor.user.id !== req.input.id)
-                return apiErr("NO_PERMISSION", "You can only edit your own profile");
-
             const user = await database().user.findFirst({
                 where: { id: req.input.id }
             });
@@ -197,9 +193,7 @@ export default os.router({
         }),
 
     getDevices: os.getDevices
-        .use(requiredAuth())
-        .use(requiredScopes("user:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.getDevices"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -211,9 +205,7 @@ export default os.router({
         }),
 
     registerDevice: os.registerDevice
-        .use(requiredAuth())
-        .use(requiredScopes("user:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.registerDevice"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -228,9 +220,7 @@ export default os.router({
         }),
 
     removeDevice: os.removeDevice
-        .use(requiredAuth())
-        .use(requiredScopes("user:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.removeDevice"))
         .handler(async (req) => {
             const caller = req.context.user;
             
@@ -266,6 +256,7 @@ export default os.router({
         }),
 
     signOut: os.signOut
+        .use(authorize("user.signOut"))
         .handler(async (req) => {
             const authorization = req.context.req.headers.authorization;
             if (authorization?.startsWith("Bearer ")) {
@@ -289,9 +280,7 @@ export default os.router({
         }),
 
     hackatimeProjects: os.hackatimeProjects
-        .use(requiredAuth())
-        .use(requiredScopes("user:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.hackatimeProjects"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -329,15 +318,10 @@ export default os.router({
         }),
 
     getTotalTimelapseTime: os.getTotalTimelapseTime
-        .use(requiredAuth())
-        .use(requiredScopes("timelapse:read"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.getTotalTimelapseTime"))
         .handler(async (req) => {
             const caller = req.context.user;
 
-            if (!req.input.id && !caller)
-                return apiErr("MISSING_PARAMS", "'id' is required when not authenticated.");
-            
             const ownerId = req.input.id ?? caller.id;
             const isEntitled = actorEntitledTo({ ownerId }, req.context.actor);
 
@@ -353,9 +337,7 @@ export default os.router({
         }),
 
     emitHeartbeat: os.emitHeartbeat
-        .use(requiredAuth())
-        .use(requiredScopes("user:write"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.emitHeartbeat"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -368,9 +350,7 @@ export default os.router({
         }),
 
     requestKeyRelay: os.requestKeyRelay
-        .use(requiredAuth())
-        .use(requiredScopes("user:keyrelay"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.requestKeyRelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -407,9 +387,7 @@ export default os.router({
         }),
 
     queryKeyRelayRequest: os.queryKeyRelayRequest
-        .use(requiredAuth())
-        .use(requiredScopes("user:keyrelay"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.queryKeyRelayRequest"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -434,9 +412,7 @@ export default os.router({
         }),
 
     provideKeyRelay: os.provideKeyRelay
-        .use(requiredAuth())
-        .use(requiredScopes("user:keyrelay"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.provideKeyRelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -452,9 +428,7 @@ export default os.router({
         }),
 
     denyKeyRelay: os.denyKeyRelay
-        .use(requiredAuth())
-        .use(requiredScopes("user:keyrelay"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.denyKeyRelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -467,9 +441,7 @@ export default os.router({
         }),
 
     receiveKeyRelay: os.receiveKeyRelay
-        .use(requiredAuth())
-        .use(requiredScopes("user:keyrelay"))
-        .use(requiredImplicitUser())
+        .use(authorize("user.receiveKeyRelay"))
         .handler(async (req) => {
             const caller = req.context.user;
 

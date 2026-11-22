@@ -1,5 +1,4 @@
-import { oneOf } from "@hackclub/lapse-shared";
-import type { LapseOAuthScope } from "@hackclub/lapse-api";
+import { permissionLevelOrdinal, type LapseOAuthScope, type ProgramKeyAdminScope, type ProgramKeyScope } from "@hackclub/lapse-api";
 
 import type * as safe from "@/secrets.js";
 
@@ -9,7 +8,7 @@ import type * as safe from "@/secrets.js";
 export interface AuthenticatedProgramKey {
     id: string;
     name: string;
-    scopes: LapseOAuthScope[];
+    scopes: ProgramKeyScope[];
 }
 
 /**
@@ -67,33 +66,64 @@ export function actorIsProgram(actor: Actor): actor is ProgramActor {
 export type OwnedObject = { ownerId: string; } | { authorId: string; };
 
 /**
- * Returns `true` if the actor is entitled to elevated access to the given `entity`.
- * SERVER and PROGRAM actors are always entitled. USER actors are entitled if they own the entity or are ADMIN/ROOT.
+ * Returns `true` if the actor holds administrator power at `level` or above.
+ *
+ * That takes more than the permission level: the user has to be on the Lapse website itself (the `elevated` scope).
+ * A third-party app an admin has signed into acts for them as an ordinary user and nothing more, so a compromised or
+ * careless app can't spend their authority. Every check of somebody's permission level goes through here.
+ */
+export function isAdmin(actor: Actor | null, level: "ADMIN" | "ROOT" = "ADMIN"): boolean {
+    return (
+        actor?.kind === "USER" &&
+        actor.scopes.includes("elevated") &&
+        permissionLevelOrdinal(actor.user.permissionLevel) >= permissionLevelOrdinal(level)
+    );
+}
+
+/**
+ * Returns `true` if the actor is a program key holding the admin scope `scope`. Program keys aren't users and own
+ * nothing, so this is the only way one gets to touch what belongs to somebody.
+ */
+export function programHasAdminScope(actor: Actor | null, scope: ProgramKeyAdminScope): boolean {
+    return actor?.kind === "PROGRAM" && actor.programKey.scopes.includes(scope);
+}
+
+/**
+ * Returns `true` if the actor's token or key carries `scope`. The Lapse website's own sessions carry every scope.
+ */
+export function actorHasScope(actor: Actor | null, scope: Exclude<LapseOAuthScope, "elevated">): boolean {
+    if (!actor || actor.kind === "SERVER")
+        return actor !== null;
+
+    if (actor.kind === "PROGRAM")
+        return actor.programKey.scopes.includes(scope);
+
+    return actor.scopes.includes(scope) || actor.scopes.includes("elevated");
+}
+
+/**
+ * Returns `true` if the actor may see `entity` the way its owner does, private fields and all: the owner, an
+ * administrator, the server, or a program key with `admin:read`. This only ever decides what is *shown* - whether a
+ * request may change something is decided by its policy (see `policy.ts`).
  */
 export function actorEntitledTo(entity: OwnedObject, actor: Actor | null): boolean {
     if (!actor)
         return false;
 
-    if (actor.kind === "SERVER" || actor.kind === "PROGRAM")
+    if (actor.kind === "SERVER")
         return true;
 
-    return (
-        actor.user.id === ("ownerId" in entity ? entity.ownerId : entity.authorId) ||
-        actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
-    );
+    if (actor.kind === "PROGRAM")
+        return programHasAdminScope(actor, "admin:read");
+
+    return actor.user.id === ("ownerId" in entity ? entity.ownerId : entity.authorId) || isAdmin(actor);
 }
 
 /**
- * Returns `true` if the actor may discover every timelapse, regardless of its visibility. This requires an ADMIN/ROOT
- * user acting through the canonical client (i.e. holding the `elevated` scope), so that a third-party app an admin
- * has authorized can't use their grant to enumerate unlisted or unfinished timelapses.
+ * Returns `true` if the actor may discover every timelapse, regardless of its visibility. Only administrators do.
  */
 export function actorHasAdminView(actor: Actor | null): boolean {
-    return (
-        actor?.kind === "USER" &&
-        actor.scopes.includes("elevated") &&
-        actor.user.permissionLevel in oneOf("ADMIN", "ROOT")
-    );
+    return isAdmin(actor);
 }
 
 /**

@@ -51,3 +51,41 @@ export function getScopeDescriptions() {
 
     return entries as Record<LapseOAuthScope, string>;
 }
+
+/**
+ * Scopes that only program keys can hold. They stand in for the permission level a user would have: without one, a
+ * program key can do nothing that an ordinary user couldn't do to somebody else's data.
+ */
+export const PROGRAM_KEY_ADMIN_SCOPES = {
+    "admin:read": "Read what belongs to any user, the way an administrator can",
+    "admin:write": "Change or delete what belongs to any user, the way an administrator can",
+    "admin:panel": "Use the admin panel's own tools: listings, exports, the audit log, bulk fixes",
+} as const;
+
+/**
+ * Every scope a program key can hold, sorted into user-friendly groups.
+ */
+export const PROGRAM_KEY_SCOPE_GROUPS = {
+    ...OAUTH_SCOPE_GROUPS,
+    Administration: PROGRAM_KEY_ADMIN_SCOPES
+} as const;
+
+/**
+ * Represents a scope that only a program key can hold.
+ */
+export type ProgramKeyAdminScope = keyof typeof PROGRAM_KEY_ADMIN_SCOPES;
+
+/**
+ * Represents a scope a program key can hold: any scope a third-party app can be granted, plus the admin scopes.
+ */
+export type ProgramKeyScope = Exclude<LapseOAuthScope, "elevated"> | ProgramKeyAdminScope;
+
+/**
+ * Gets all possible `ProgramKeyScope` values.
+ */
+export function getAllProgramKeyScopes(): ProgramKeyScope[] {
+    return [
+        ...getAllOAuthScopes().filter((x): x is Exclude<LapseOAuthScope, "elevated"> => x !== "elevated"),
+        ...Object.keys(PROGRAM_KEY_ADMIN_SCOPES) as ProgramKeyAdminScope[]
+    ];
+}

@@ -1,11 +1,13 @@
 import { implement } from "@orpc/server"
 import { developerRouterContract, getAllOAuthScopes, type LapseOAuthScope, type OAuthApp, type OAuthGrant } from "@hackclub/lapse-api"
 
-import { type Context, logMiddleware, requiredAuth, requiredImplicitUser, requiredScopes } from "@/router.js";
+import { type Context, logMiddleware } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { createServiceClient, normalizeRedirectUris, normalizeScopes, rotateServiceClientSecret } from "@/oauth.js";
 import { env } from "@/env.js";
+import { isAdmin } from "@/ownership.js";
 
 import * as db from "@/generated/prisma/client.js";
 import type * as safe from "@/secrets.js";
@@ -57,21 +59,10 @@ export function dtoOAuthGrant(entity: DbOAuthGrant): OAuthGrant {
 
 export default os.router({
     rotateAppSecret: os.rotateAppSecret
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.rotateAppSecret"))
         .handler(async (req) => {
-            const caller = req.context.user;
-
             const app = await database().serviceClient.findFirst({
-                where: {
-                    id: req.input.id,
-                    revokedAt: null,
-                    OR: [
-                        { createdByUserId: caller.id },
-                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
-                    ]
-                }
+                where: { id: req.input.id, revokedAt: null }
             });
 
             if (!app)
@@ -82,19 +73,10 @@ export default os.router({
         }),
 
     updateApp: os.updateApp
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.updateApp"))
         .handler(async (req) => {
-            const caller = req.context.user;
-            const canAdministerAnyApp = caller.permissionLevel === "ADMIN" || caller.permissionLevel === "ROOT";
-
             const app = await database().serviceClient.findFirst({
-                where: {
-                    id: req.input.id,
-                    revokedAt: null,
-                    ...(!canAdministerAnyApp ? { createdByUserId: caller.id } : {})
-                }
+                where: { id: req.input.id, revokedAt: null }
             });
 
             if (!app)
@@ -146,21 +128,10 @@ export default os.router({
         }),
 
     revokeApp: os.revokeApp
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.revokeApp"))
         .handler(async (req) => {
-            const caller = req.context.user;
-            
             const app = await database().serviceClient.findFirst({
-                where: {
-                    id: req.input.id,
-                    revokedAt: null,
-                    OR: [
-                        { createdByUserId: caller.id },
-                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
-                    ]
-                }
+                where: { id: req.input.id, revokedAt: null }
             });
         
             if (!app)
@@ -175,9 +146,7 @@ export default os.router({
         }),
 
     getAllOwnedApps: os.getAllOwnedApps
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.getAllOwnedApps"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -186,7 +155,7 @@ export default os.router({
                     revokedAt: null,
                     OR: [
                         { createdByUserId: caller.id },
-                        ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
+                        ...(isAdmin(req.context.actor, "ROOT") ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
                     ]
                 },
                 orderBy: { createdAt: "desc" },
@@ -197,9 +166,7 @@ export default os.router({
         }),
 
     createApp: os.createApp
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.createApp"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -229,8 +196,7 @@ export default os.router({
         }),
 
     getAllApps: os.getAllApps
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
+        .use(authorize("developer.getAllApps"))
         .handler(async (req) => {
             const apps = await database().serviceClient.findMany({
                 include: { createdByUser: true },
@@ -243,9 +209,7 @@ export default os.router({
         }),
 
     updateAppTrustLevel: os.updateAppTrustLevel
-        .use(requiredAuth("ADMIN"))
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.updateAppTrustLevel"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -273,9 +237,7 @@ export default os.router({
         }),
 
     getOwnedOAuthGrants: os.getOwnedOAuthGrants
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.getOwnedOAuthGrants"))
         .handler(async (req) => {
             const caller = req.context.user;
 
@@ -291,22 +253,8 @@ export default os.router({
         }),
 
     revokeOAuthGrant: os.revokeOAuthGrant
-        .use(requiredAuth())
-        .use(requiredScopes("elevated"))
-        .use(requiredImplicitUser())
+        .use(authorize("developer.revokeOAuthGrant"))
         .handler(async (req) => {
-            const caller = req.context.user;
-
-            const grant = await database().serviceGrant.findUnique({
-                where: { id: req.input.grantId }
-            });
-
-            if (!grant)
-                return apiErr("NOT_FOUND", `Grant with ID ${req.input.grantId} not found.`);
-
-            if (grant.userId !== caller.id)
-                return apiErr("NO_PERMISSION", "You do not have permission to revoke this grant.");
-
             await database().serviceGrant.update({
                 where: { id: req.input.grantId },
                 data: { revokedAt: new Date() }
@@ -316,6 +264,7 @@ export default os.router({
         }),
 
     getAppByClientId: os.getAppByClientId
+        .use(authorize("developer.getAppByClientId"))
         .handler(async (req) => {
             const app = await database().serviceClient.findFirst({
                 where: { clientId: req.input.clientId, revokedAt: null }

@@ -4,6 +4,7 @@ import { globalRouterContract, type GlobalStats, type Timelapse, type GlobalStat
 import { daysAgo, descending } from "@hackclub/lapse-shared";
 
 import { logMiddleware, type Context } from "@/router.js";
+import { authorize } from "@/policies.js";
 import { dtoPublicTimelapse } from "@/routers/timelapse.js";
 import { apiOk } from "@/common.js";
 import { database } from "@/db.js";
@@ -203,6 +204,7 @@ async function computeStats(): Promise<GlobalStats> {
 
 export default os.router({
     weeklyLeaderboard: os.weeklyLeaderboard
+        .use(authorize("global.weeklyLeaderboard"))
         .handler(async (req) => {
             const now = new Date();
 
@@ -262,6 +264,7 @@ export default os.router({
         }),
 
     recentTimelapses: os.recentTimelapses
+        .use(authorize("global.recentTimelapses"))
         .handler(async (req) => {
             // Admins see every timelapse, including unlisted, failed, and still-processing ones, so they can moderate.
             if (actorHasAdminView(req.context.actor))
@@ -271,6 +274,7 @@ export default os.router({
         }),
 
     activeUsers: os.activeUsers
+        .use(authorize("global.activeUsers"))
         .handler(async () => {
             if (activeUsersCache == null || activeUsersCache.expiresAt <= Date.now()) {
                 const count = countActiveUsers();
@@ -282,6 +286,7 @@ export default os.router({
         }),
 
     stats: os.stats
+        .use(authorize("global.stats"))
         .handler(async () => {
             if (statsCache == null || statsCache.expiresAt <= Date.now()) {
                 const stats = computeStats();
@@ -293,6 +298,7 @@ export default os.router({
         }),
 
     maintenance: os.maintenance
+        .use(authorize("global.maintenance"))
         .handler(async (req) => {
             const maintenance = await database().maintenance.findFirst();
 

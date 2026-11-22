@@ -523,7 +523,7 @@ model ProgramKey {
   /// The first 8 hex characters after the `pk_lapse_` prefix, stored in plaintext for efficient lookup.
   keyPrefix         String
 
-  /// The scopes granted to this program key (e.g., "program:read", "program:write", "program:admin").
+  /// The scopes granted to this program key (e.g. "timelapse:read", "admin:read"). See `ProgramKeyScope`.
   scopes            String[]    @default([])
 
   /// The ROOT user who created this key.

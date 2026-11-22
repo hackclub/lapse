@@ -5,7 +5,7 @@ import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import { Skeleton } from "skullet/react";
 import { formatDuration, match } from "@hackclub/lapse-shared";
-import { ADMIN_ENTITY_FIELDS, OAUTH_SCOPE_GROUPS, type AdminEntity, type AdminFilter, type AdminSort, type AdminSearchResult, type OAuthApp, type OAuthTrustLevel, type ProgramKeyMetadata } from "@hackclub/lapse-api";
+import { ADMIN_ENTITY_FIELDS, OAUTH_SCOPE_GROUPS, PROGRAM_KEY_SCOPE_GROUPS, type AdminEntity, type AdminFilter, type AdminSort, type AdminSearchResult, type OAuthApp, type OAuthTrustLevel, type ProgramKeyMetadata } from "@hackclub/lapse-api";
 
 import RootLayout from "@/components/layout/RootLayout";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
@@ -639,7 +639,7 @@ function AdminProgramKeysTable() {
           <AdminFieldRow label="Scopes" align="start">
             <div className="rounded-xl border border-slate bg-dark p-4">
               <div className="grid gap-4">
-                {Object.entries(OAUTH_SCOPE_GROUPS).map(([group, scopes]) => (
+                {Object.entries(PROGRAM_KEY_SCOPE_GROUPS).map(([group, scopes]) => (
                   <div key={group} className="grid gap-2">
                     <span className="text-sm font-semibold text-white">{group}</span>
                     <div className="grid gap-2">
@@ -718,7 +718,7 @@ function AdminProgramKeysTable() {
           <AdminFieldRow label="Scopes" align="start">
             <div className="rounded-xl border border-slate bg-dark p-4">
               <div className="grid gap-4">
-                {Object.entries(OAUTH_SCOPE_GROUPS).map(([group, scopes]) => (
+                {Object.entries(PROGRAM_KEY_SCOPE_GROUPS).map(([group, scopes]) => (
                   <div key={group} className="grid gap-2">
                     <span className="text-sm font-semibold text-white">{group}</span>
                     <div className="grid gap-2">
