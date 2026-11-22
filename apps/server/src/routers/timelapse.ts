@@ -22,7 +22,7 @@ import * as lookout from "@/lookout.js";
 import { archiveLookoutDraft, createLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
-import { assignBrowserWarningVariant } from "@/experiments.js";
+import { assignBrowserLabelVariant, assignBrowserWarningVariant } from "@/experiments.js";
 import { BROWSER_RECORDING_MAINTENANCE_MESSAGE, isBrowserRecordingAvailable } from "@/recordingAvailability.js";
 
 export type DbTimelapse = Omit<db.Timelapse, "snapshots"> & { owner: db.User, comments: DbComment[] };
@@ -288,6 +288,11 @@ export default os.router({
 
             if (!draft)
                 return apiErr("NOT_FOUND", `The draft timelapse ${req.input.id} couldn't be found.`);
+
+            // A draft with an associated timelapse is already being processed - publishing it again would mint a second
+            // timelapse (and second set of Hackatime heartbeats) from the same recording.
+            if (draft.associatedTimelapseId)
+                return apiErr("ERROR", "This draft is already being published.");
 
             if (!isLegacyRecording(draft.snapshots)) {
                 logWarning(`Refused to publish draft ${draft.id} for ${stringifyActor(req.context.actor)}.`);
@@ -579,6 +584,14 @@ export default os.router({
             });
 
             return apiOk({ revoked: deleted.count > 0 });
+        }),
+
+    assignBrowserLabelVariant: os.assignBrowserLabelVariant
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            return apiOk({ variant: await assignBrowserLabelVariant(req.context.user) });
         }),
 
     assignBrowserWarningVariant: os.assignBrowserWarningVariant

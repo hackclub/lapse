@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
-import type { BrowserWarningVariant, RecordingMode } from "@hackclub/lapse-api";
+import type { BrowserLabelVariant, BrowserWarningVariant, RecordingMode } from "@hackclub/lapse-api";
 
 import type { IconGlyph } from "@/common";
 import { api } from "@/api";
@@ -47,14 +47,25 @@ interface LookoutSessionConfig {
   lookoutSessionId: string;
 }
 
+const BROWSER_LABELS: Record<BrowserLabelVariant, { badge?: string; note?: string }> = {
+  "none": {},
+  "badge-less-stable": { badge: "Less stable" },
+  "badge-legacy": { badge: "Legacy" },
+  "text-less-stable": { note: "Less stable" },
+  "text-legacy": { note: "Legacy" },
+};
 
-function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed, unavailable }: {
+function RecordingModeOption({ icon, title, description, selected, onClick, recommended, badge, note, dimmed, unavailable }: {
   icon: IconGlyph;
   title: string;
   description: string;
   selected: boolean;
   onClick: () => void;
   recommended?: boolean;
+  /** A muted badge in the same spot as "Recommended". */
+  badge?: string;
+  /** Small muted text under the description. */
+  note?: string;
   dimmed?: boolean;
   /** Greyed out for good. Still clickable, so the click can explain why. */
   unavailable?: boolean;
@@ -76,10 +87,18 @@ function RecordingModeOption({ icon, title, description, selected, onClick, reco
           Recommended
         </span>
       )}
+      {!recommended && badge && (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-darkless border border-slate text-muted text-xs font-bold px-3 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap">
+          {badge}
+        </span>
+      )}
       <Icon glyph={icon} size={48} className="shrink-0" />
       <div className="flex flex-col items-center text-center gap-1">
         <span className="font-bold text-lg">{title}</span>
         <span className={clsx("text-sm", selected ? "text-white/80" : "text-muted")}>{description}</span>
+        {note && (
+          <span className={clsx("text-xs italic", selected ? "text-white/60" : "text-muted/70")}>({note})</span>
+        )}
       </div>
     </button>
   );
@@ -378,6 +397,8 @@ export default function LookoutRecorder() {
   const screenModeBlocked = hackatimeStatus === "restricted";
   const [browserWarningVariant, setBrowserWarningVariant] = useState<BrowserWarningVariant | null>(null);
   const browserWarningRequested = useRef(false);
+  const [browserLabelVariant, setBrowserLabelVariant] = useState<BrowserLabelVariant | null>(null);
+  const [browserLabelSettled, setBrowserLabelSettled] = useState(false);
   const [showBrowserWarning, setShowBrowserWarning] = useState(false);
   const [showScreenBlockedNotice, setShowScreenBlockedNotice] = useState(false);
   // Browser (screen) mode can be put under maintenance by the server.
@@ -489,6 +510,16 @@ export default function LookoutRecorder() {
           setBrowserWarningVariant(res.data.variant);
       })
       .catch(() => {});
+
+    // The picker waits for the label so the Browser tile never changes under the user, but never for more than this.
+    setTimeout(() => setBrowserLabelSettled(true), 1500);
+    api.timelapse.assignBrowserLabelVariant({})
+      .then(res => {
+        if (res.ok)
+          setBrowserLabelVariant(res.data.variant);
+      })
+      .catch(() => {})
+      .finally(() => setBrowserLabelSettled(true));
   }, [auth.currentUser]);
 
   useEffect(() => {
@@ -638,7 +669,7 @@ export default function LookoutRecorder() {
     }
   }
 
-  if (phase === "checking") {
+  if (phase === "checking" || (phase === "ready" && !browserLabelSettled)) {
     return (
       <RootLayout showHeader={false}>
         <div className="flex items-center justify-center h-app text-muted">Loading...</div>
@@ -866,6 +897,7 @@ export default function LookoutRecorder() {
                   setSelectedMode("screen");
                   setConfirmingBrowser(false);
                 }}
+                {...(browserLabelVariant ? BROWSER_LABELS[browserLabelVariant] : {})}
               />
               <RecordingModeOption
                 icon="camera"
