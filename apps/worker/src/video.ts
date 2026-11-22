@@ -70,7 +70,7 @@ function parseLastFfmpegTime(stderr: string): number {
 /**
  * Selects the dominant resolution - i.e., the one that'd be most suitable when combining - from the given video probes.
  */
-export function selectDominantResolution(videos: ProbedVideo[]) {
+export function selectDominantResolution(videos: ProbedVideo[]): Pick<ProbedVideo, "width" | "height"> {
     if (videos.length == 1)
         return { width: videos[0].width, height: videos[0].height };
 
@@ -99,7 +99,7 @@ export function selectDominantResolution(videos: ProbedVideo[]) {
 /**
  * Measures the duration of a video in seconds. 
  */
-export async function measureVideoDuration(file: string) {
+export async function measureVideoDuration(file: string): Promise<number> {
     const { stdout } = await execFileAsync("ffprobe", [
         "-v", "error",
         "-show_entries", "format=duration",
