@@ -17,7 +17,6 @@ import { storeSession } from "@/components/lookout/sessions";
 import {
   dismissPausedNotice,
   finishPausedDraft,
-  formatTimeUntil,
   formatTrackedTime,
   getDismissedPausedNotices,
   type PausedDraft,
@@ -800,16 +799,9 @@ export default function LookoutRecorder() {
               <div className="flex flex-col gap-3 text-sm bg-yellow/10 border border-yellow/30 rounded-lg p-3">
                 <div className="flex items-start gap-3">
                   <PauseIcon width={20} height={20} className="shrink-0 mt-0.5" />
-                  <div className="flex flex-col flex-1 leading-relaxed">
-                    <span>
-                      You have a paused <b>{formatTrackedTime(pausedNotice.trackedSeconds)}</b> recording.
-                    </span>
-                    {pausedNotice.autoStopsAt && (
-                      <span className="text-muted text-xs">
-                        It finishes by itself {formatTimeUntil(pausedNotice.autoStopsAt)} if you leave it.
-                      </span>
-                    )}
-                  </div>
+                  <span className="flex-1 leading-relaxed">
+                    You have a paused <b>{formatTrackedTime(pausedNotice.trackedSeconds)}</b> recording.
+                  </span>
                   <button
                     onClick={() => dismissNotice(pausedNotice.id)}
                     title="Dismiss"

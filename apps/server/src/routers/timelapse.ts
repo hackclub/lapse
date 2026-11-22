@@ -703,7 +703,6 @@ export default os.router({
                         videoUrl: session.session.videoUrl as string | null,
                         thumbnailUrl: session.session.thumbnailUrl as string | null,
                         trackedSeconds: session.trackedSeconds,
-                        lastCapturedAt: session.session.lastScreenshotAt ? new Date(session.session.lastScreenshotAt).getTime() : null,
                         recordedOnDesktop: lookout.isDesktopClient(session.clientInfo),
                     };
                 }

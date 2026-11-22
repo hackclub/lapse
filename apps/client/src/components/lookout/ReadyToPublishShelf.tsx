@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Icon from "@hackclub/icons";
 
 import { usePausedDrafts, useReadyDrafts, type ReadyDraft } from "@/context/ReadyDraftsContext";
-import { finishPausedDraft, formatTimeUntil, formatTrackedTime, type PausedDraft } from "@/components/lookout/pausedDrafts";
+import { finishPausedDraft, formatTrackedTime, type PausedDraft } from "@/components/lookout/pausedDrafts";
 import { ShelfHeader } from "@/components/layout/ShelfHeader";
 import { TimeAgo } from "@/components/TimeAgo";
 import { navigateTo } from "@/navigation";
@@ -125,9 +125,6 @@ function PausedCard({ draft, index }: {
           <h2 className="text-md sm:text-xl text-secondary">
             Started <b><TimeAgo date={draft.createdAt} /></b>
           </h2>
-          {draft.autoStopsAt && (
-            <p className="text-sm text-secondary">Finishes by itself {formatTimeUntil(draft.autoStopsAt)}</p>
-          )}
         </div>
 
         <div className="flex gap-2">

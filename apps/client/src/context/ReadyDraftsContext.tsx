@@ -4,7 +4,7 @@ import { useRouter } from "next/router";
 import { api } from "@/api";
 import { useAuthContext } from "@/context/AuthContext";
 import { showReadyToPublishToast } from "@/components/lookout/ReadyToPublishToast";
-import { autoStopTime, type PausedDraft } from "@/components/lookout/pausedDrafts";
+import type { PausedDraft } from "@/components/lookout/pausedDrafts";
 
 export type ReadyDraft = {
   id: string;
@@ -98,7 +98,6 @@ export function ReadyDraftsProvider({ children }: {
             id: d.id,
             createdAt: d.createdAt,
             trackedSeconds: d.trackedSeconds,
-            autoStopsAt: autoStopTime(d.lastCapturedAt),
             recordedOnDesktop: d.recordedOnDesktop,
             lookoutToken: d.lookoutToken,
             lookoutSessionId: d.lookoutSessionId,

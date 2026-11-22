@@ -1,23 +1,14 @@
 import type { NextRouter } from "next/router";
 
-/** Lookout stops (and compiles) a session on its own once it has gone this long without a screenshot. */
-const AUTO_STOP_AFTER_MS = 24 * 60 * 60 * 1000;
-
 export type PausedDraft = {
   id: string;
   createdAt: number;
   trackedSeconds: number;
-  /** When Lookout will finish the recording by itself if nobody touches it. */
-  autoStopsAt: number | null;
   recordedOnDesktop: boolean;
   lookoutToken: string;
   lookoutSessionId: string;
   lookoutApiBaseUrl: string;
 };
-
-export function autoStopTime(lastCapturedAt: number | null): number | null {
-  return lastCapturedAt === null ? null : lastCapturedAt + AUTO_STOP_AFTER_MS;
-}
 
 export function formatTrackedTime(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -25,15 +16,6 @@ export function formatTrackedTime(totalSeconds: number): string {
   if (h > 0 && m > 0) return `${h}h ${m}min`;
   if (h > 0) return `${h}h`;
   return `${m}min`;
-}
-
-/** "in 19h", "in 25min" - how long until a paused recording finishes by itself. */
-export function formatTimeUntil(timestamp: number): string {
-  const minutes = Math.max(1, Math.round((timestamp - Date.now()) / 60_000));
-  if (minutes < 60)
-    return `in ${minutes}min`;
-
-  return `in ${Math.round(minutes / 60)}h`;
 }
 
 /**
