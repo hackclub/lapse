@@ -2,7 +2,7 @@ import { z } from "zod";
 import { raise } from "@hackclub/lapse-shared";
 import { oc } from "@orpc/contract";
 
-import { LapseId, LapseDate, apiResult } from "@/common";
+import { LapseId, LapseDate, WebUrl, apiResult } from "@/common";
 import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
 import { ROUTER_TAGS } from "@/tags";
 
@@ -208,7 +208,7 @@ export const userRouterContract = oc.tag(ROUTER_TAGS.user).router({
                     handle: UserHandle.optional(),
                     displayName: UserDisplayName.optional(),
                     bio: UserBio.optional(),
-                    urls: UserUrlList.optional()
+                    urls: z.array(WebUrl.max(64).min(1)).max(4).optional()
                 })
                     .describe("The changes to apply to the user profile.")
             })

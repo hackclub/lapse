@@ -5,8 +5,28 @@ import type { Configuration } from "webpack";
 import { withSentryConfig } from "@sentry/nextjs/config";
 
 import { OPTIMIZED_IMAGE_HOSTS } from "./src/remoteImages";
+import { SENTRY_DSN, sentrySecurityReportUrl } from "./src/sentryDsn";
 
 const root = path.resolve(__dirname, "..", "..");
+
+const CSP_REPORT_URL = sentrySecurityReportUrl(SENTRY_DSN);
+
+// The session token lives in `localStorage`, so any script running on this origin owns the account. These
+// directives can't break a page that loads its scripts the normal way, so they are enforced.
+const ENFORCED_CSP = [
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+];
+
+// The policy we want to enforce once Sentry shows it breaks nothing: scripts only from our own origin (the
+// client has no inline scripts), plus WebAssembly and blob workers for the recorder and legacy recovery.
+const REPORT_ONLY_CSP = [
+  "script-src 'self' 'wasm-unsafe-eval' blob: 'report-sample'",
+  "worker-src 'self' blob:",
+  ...ENFORCED_CSP,
+  ...(CSP_REPORT_URL ? [`report-uri ${CSP_REPORT_URL}`] : []),
+];
 
 function resolveSquircle(): Record<string, string> {
   const candidates = [
@@ -88,7 +108,30 @@ const config: NextConfig = {
           {
             key: "Cross-Origin-Opener-Policy",
             value: "same-origin",
-          }
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "Content-Security-Policy",
+            value: ENFORCED_CSP.join("; "),
+          },
+        ],
+      },
+      {
+        // Everywhere except the publish panel: the Lookout desktop app embeds it, and its URL carries the panel token,
+        // which violation reports would otherwise send to Sentry.
+        source: "/((?!lookout/panel/).*)",
+        headers: [
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: REPORT_ONLY_CSP.join("; "),
+          },
         ],
       },
     ];

@@ -21,6 +21,11 @@ export const TIMELAPSE_FACTOR = 60; // 1 minute = 1 second
 export const MAX_VIDEO_FRAME_COUNT = 86400;
 
 /**
+ * The maximum number of separately recorded sessions a legacy draft may consist of.
+ */
+export const MAX_DRAFT_SESSIONS = 256;
+
+/**
  * The number of pixels that a single extent of generated thumbnails should span. For example, if a 16:9 thumbnail would be generated,
  * it would have a resolution of `w=THUMBNAIL_SIZE, h=THUMBNAIL_SIZE / (16 / 9)`.
  */

@@ -545,9 +545,11 @@ export default os.router({
             return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
         }),
 
+    // Only the Lapse website may pair a device: the token it leads to never expires and outlives any OAuth grant, so a
+    // third-party app with `timelapse:write` must not be able to mint one for itself.
     approveDesktopPairing: os.approveDesktopPairing
         .use(requiredAuth())
-        .use(requiredScopes("timelapse:write"))
+        .use(requiredScopes("elevated"))
         .use(requiredImplicitUser())
         .handler(async (req) => {
             const code = await createPairingCode(req.context.user.id, req.input.challenge, req.input.label);

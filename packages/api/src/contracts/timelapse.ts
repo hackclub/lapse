@@ -253,7 +253,7 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
         ),
 
     approveDesktopPairing: contract("POST", "/timelapse/approveDesktopPairing")
-        .route({ description: "Approves a Lookout desktop install to start recordings as the authenticated user, returning a one-time code for it to redeem." })
+        .route({ description: "Approves a Lookout desktop install to start recordings as the authenticated user, returning a one-time code for it to redeem. Requires an `elevated` grant, so only the Lapse website can call it." })
         .input(z.object({
             challenge: z.string().min(1).max(512)
                 .describe("The PKCE challenge the desktop app generated. It proves it holds the matching verifier when redeeming the code, so an intercepted code is useless on its own."),

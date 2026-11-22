@@ -92,17 +92,17 @@ export default os.router({
                 where: {
                     id: req.input.id,
                     revokedAt: null,
-                    ...(!canAdministerAnyApp ? {
-                        OR: [
-                            { createdByUserId: caller.id },
-                            ...(caller.permissionLevel === "ROOT" ? [{ clientId: env.CANONICAL_OAUTH_CLIENT_ID }] : [])
-                        ]
-                    } : {})
+                    ...(!canAdministerAnyApp ? { createdByUserId: caller.id } : {})
                 }
             });
-        
+
             if (!app)
                 return apiErr("NOT_FOUND", `App with ID ${req.input.id} not found.`);
+
+            // The canonical client skips the consent screen and is the only one granted `elevated`, so whoever controls
+            // its redirect URIs can collect anyone's full-access token. It is configured from the environment, never here.
+            if (app.clientId === env.CANONICAL_OAUTH_CLIENT_ID)
+                return apiErr("NO_PERMISSION", "The canonical client can only be changed through the server's environment.");
         
             let normalizedScopes: LapseOAuthScope[] | undefined = undefined;
 

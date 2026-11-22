@@ -1,10 +1,38 @@
-import type { FastifyRequest } from "fastify";
 import * as Sentry from "@sentry/node";
 import * as path from "node:path";
 import { inspect, getCallSites } from "node:util";
 
 import * as db from "@/generated/prisma/client.js";
 import type { ExternalActor } from "@/ownership.js";
+
+// Logs go to stdout and to Sentry, both of which far more people can read than the database. Anything that would let a
+// reader act as a user - our tokens, Hackatime's, device keys, OAuth codes, passwords - is blanked out before either.
+const SENSITIVE_KEY = /token|secret|password|passkey|devicekey|verifier|authorization|cookie|apikey|api_key|hash$|^code$|^key$/i;
+const MAX_REDACT_DEPTH = 8;
+
+export function redact(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
+    if (typeof value !== "object" || value === null || value instanceof Error || value instanceof Date)
+        return value;
+
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer)
+        return `[${value.byteLength} bytes]`;
+
+    if (seen.has(value) || depth >= MAX_REDACT_DEPTH)
+        return "[omitted]";
+
+    seen.add(value);
+
+    if (Array.isArray(value))
+        return value.map(item => redact(item, depth + 1, seen));
+
+    return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k, SENSITIVE_KEY.test(k) && v != null ? "[redacted]" : redact(v, depth + 1, seen)])
+    );
+}
+
+function redactData(data: Record<string, unknown>): Record<string, unknown> {
+    return redact(data) as Record<string, unknown>;
+}
 
 function inlineStringify(x: unknown) {
     return inspect(x, {
@@ -33,7 +61,7 @@ function getPlain(severity: string, scope: string, message: string, data: Record
     const prefix = `(${severity}) ${scope}:`;
 
     const stringified = dataToLogString(
-        [ message, ...Object.entries(data).map(x => `${x[0]}: ${inlineStringify(x[1])}`) ]
+        [ message, ...Object.entries(redactData(data)).map(x => `${x[0]}: ${inlineStringify(x[1])}`) ]
     ).replaceAll("\n", `\n${prefix} `);
 
     let colorPrefix = process.env["NODE_ENV"] !== "development" ? "" :
@@ -46,7 +74,7 @@ function getPlain(severity: string, scope: string, message: string, data: Record
 
 function remapData(data: Record<string, unknown>): Record<string, unknown> {
     return Object.fromEntries(
-        Object.entries(data)
+        Object.entries(redactData(data))
             .flatMap(([k, v]) => {
                 // Apparently, when we log an Error to Sentry, the field is always empty.
                 if (v instanceof Error) {
@@ -142,7 +170,7 @@ export function logError(message: string, data: Record<string, unknown> = {}) {
  */
 function captureIssue(scope: string, message: string, data: Record<string, unknown>) {
     const error = Object.values(data).find(x => x instanceof Error);
-    const extra = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== error));
+    const extra = Object.fromEntries(Object.entries(redactData(data)).filter(([, v]) => v !== error));
 
     Sentry.withScope(sentryScope => {
         sentryScope.setTag("lapse_scope", scope);
@@ -155,12 +183,17 @@ function captureIssue(scope: string, message: string, data: Record<string, unkno
     });
 }
 
-export function logRequest(endpoint: string, input: unknown, actor: ExternalActor | null) {
-    Sentry.logger.info(`(request) ${endpoint}`, { input, actor });
-    console.log(getPlain("info", "request", `${endpoint}(${inlineStringify(input)}) from ${actor ? (actor.kind == "USER" ? `@${actor.user.handle}` : actor.programKey.name) : "<anon>"}`, {}));
+function describeActor(actor: ExternalActor | null) {
+    if (!actor)
+        return null;
+
+    return actor.kind == "USER"
+        ? { kind: actor.kind, id: actor.user.id, handle: actor.user.handle }
+        : { kind: actor.kind, programKey: actor.programKey.name };
 }
 
-export function logFastifyRequest(endpoint: string, req: FastifyRequest) {
-    Sentry.logger.info(`(request) ${endpoint}`, { req });
-    console.log(getPlain("info", "request", endpoint, { url: req.url }));
+export function logRequest(endpoint: string, input: unknown, actor: ExternalActor | null) {
+    const safeInput = redact(input);
+    Sentry.logger.info(`(request) ${endpoint}`, { input: safeInput, actor: describeActor(actor) });
+    console.log(getPlain("info", "request", `${endpoint}(${inlineStringify(safeInput)}) from ${actor ? (actor.kind == "USER" ? `@${actor.user.handle}` : actor.programKey.name) : "<anon>"}`, {}));
 }

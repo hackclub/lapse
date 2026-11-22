@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { oc } from "@orpc/contract";
 
-import { apiResult } from "@/common";
+import { apiResult, WebUrl } from "@/common";
 import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
 import { ROUTER_TAGS } from "@/tags";
 
@@ -66,8 +66,8 @@ export const developerRouterContract = oc.tag(ROUTER_TAGS.developer).router({
 
                 name: OAuthAppSchema.shape.name.optional(),
                 description: OAuthAppSchema.shape.description.optional(),
-                homepageUrl: OAuthAppSchema.shape.homepageUrl.optional(),
-                iconUrl: OAuthAppSchema.shape.iconUrl.optional(),
+                homepageUrl: WebUrl.optional(),
+                iconUrl: z.union([WebUrl, z.literal("")]).optional(),
                 redirectUris: OAuthAppSchema.shape.redirectUris.optional(),
                 scopes: OAuthAppSchema.shape.scopes.optional()
             })
@@ -96,8 +96,8 @@ export const developerRouterContract = oc.tag(ROUTER_TAGS.developer).router({
         .input(z.object({
             name: OAuthAppSchema.shape.name,
             description: OAuthAppSchema.shape.description.default(""),
-            homepageUrl: OAuthAppSchema.shape.homepageUrl,
-            iconUrl: OAuthAppSchema.shape.iconUrl,
+            homepageUrl: WebUrl,
+            iconUrl: z.union([WebUrl, z.literal("")]),
             redirectUris: OAuthAppSchema.shape.redirectUris,
             scopes: OAuthAppSchema.shape.scopes
         }))

@@ -239,6 +239,7 @@ interface EntityConfig {
 }
 
 const EDITABLE_USER_FIELDS = new Set(["email", "handle", "displayName", "bio", "hackatimeId", "slackId", "permissionLevel"]);
+const ROOT_ONLY_USER_FIELDS = ["permissionLevel", "email", "hackatimeId", "slackId"];
 const EDITABLE_TIMELAPSE_FIELDS = new Set(["name", "description", "visibility", "hackatimeProject"]);
 const EDITABLE_COMMENT_FIELDS = new Set(["content"]);
 const EDITABLE_DRAFT_FIELDS = new Set(["name", "description"]);
@@ -576,11 +577,10 @@ export default os.router({
             const caller = req.context.user;
             const { entity, id, changes } = req.input;
 
-            if (entity === "user" && "permissionLevel" in changes) {
-                if (caller.permissionLevel !== "ROOT") {
-                    return apiErr("NO_PERMISSION", "Only ROOT users can change permission levels.");
-                }
-            }
+            // Sign-in matches users by these fields, so pointing them at an account the caller controls is a takeover
+            // of the target - including ROOT accounts.
+            if (entity === "user" && caller.permissionLevel !== "ROOT" && ROOT_ONLY_USER_FIELDS.some(field => field in changes))
+                return apiErr("NO_PERMISSION", `Only ROOT users can change ${ROOT_ONLY_USER_FIELDS.join(", ")}.`);
 
             const config = entityConfigs[entity];
 
@@ -625,8 +625,8 @@ export default os.router({
             const { entity, id } = req.input;
 
             const record = await (
-                entity === "user" ? database().user.findUnique({ where: { id } })
-                : entity === "timelapse" ? database().timelapse.findUnique({ where: { id } })
+                entity === "user" ? database().user.findUnique({ where: { id }, omit: { hackatimeAccessToken: true, hackatimeRefreshToken: true } })
+                : entity === "timelapse" ? database().timelapse.findUnique({ where: { id }, omit: { lookoutToken: true } })
                 : entity === "comment" ? database().comment.findUnique({ where: { id } })
                 : entity === "draftTimelapse" ? database().draftTimelapse.findUnique({ where: { id } })
                 : entity === "lookoutDraft" ? database().draftLookoutTimelapse.findUnique({ where: { id }, omit: { lookoutToken: true, panelToken: true } })

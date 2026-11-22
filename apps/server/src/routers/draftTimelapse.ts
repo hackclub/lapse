@@ -79,6 +79,12 @@ async function headObject(key: string): Promise<boolean | null> {
 const LEGACY_RECORDER_CUTOFF = new Date("2026-06-27T00:00:00Z");
 
 /**
+ * How many legacy recordings one user may recover after the cutoff. Each browser held at most one unfinished recording,
+ * so this only needs to cover the handful of browsers someone recorded in.
+ */
+const MAX_LEGACY_RECOVERIES_PER_OWNER = 5;
+
+/**
  * Returns `true` if `snapshots` could have been captured by the legacy in-browser recorder.
  */
 export function isLegacyRecording(snapshots: Date[]) {
@@ -255,16 +261,26 @@ export default os.router({
                 return apiErr("DEVICE_NOT_FOUND", `The specified known device ${req.input.deviceId} could not be found.`);
 
             // A device only ever holds a single unfinished legacy recording, so it only ever needs one draft to recover it.
+            // Devices can still be registered (recovery needs that on a browser whose device was removed), so the
+            // per-device rule alone doesn't bound anything - the per-owner cap does. The timestamps come from the client,
+            // so they must at least fall within the account's lifetime before the cutoff.
             const snapshots = req.input.snapshots.map(x => new Date(x));
-            const recentDrafts = await database().draftTimelapse.count({
-                where: {
-                    deviceId: device.id,
-                    createdAt: { gte: LEGACY_RECORDER_CUTOFF }
-                }
-            });
+            const [recentDeviceDrafts, recentOwnerDrafts] = await Promise.all([
+                database().draftTimelapse.count({
+                    where: { deviceId: device.id, createdAt: { gte: LEGACY_RECORDER_CUTOFF } }
+                }),
+                database().draftTimelapse.count({
+                    where: { ownerId: caller.id, createdAt: { gte: LEGACY_RECORDER_CUTOFF } }
+                })
+            ]);
 
-            if (!isLegacyRecording(snapshots) || recentDrafts > 0) {
-                logWarning(`Refused draft creation for ${stringifyActor(req.context.actor)} on device ${device.id}.`, { recentDrafts });
+            const plausible =
+                isLegacyRecording(snapshots) &&
+                caller.createdAt < LEGACY_RECORDER_CUTOFF &&
+                snapshots.every(x => x >= caller.createdAt);
+
+            if (!plausible || recentDeviceDrafts > 0 || recentOwnerDrafts >= MAX_LEGACY_RECOVERIES_PER_OWNER) {
+                logWarning(`Refused draft creation for ${stringifyActor(req.context.actor)} on device ${device.id}.`, { plausible, recentDeviceDrafts, recentOwnerDrafts });
                 return apiErr("ERROR", "This recording couldn't be uploaded.");
             }
 

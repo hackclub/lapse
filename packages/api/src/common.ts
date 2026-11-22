@@ -12,6 +12,12 @@ export const LapseId = z.string();
 export const LapseDate = z.number().nonnegative();
 
 /**
+ * A URL people will be sent to by clicking it. Only accepted on input: rejecting other schemes on output would break
+ * reading records saved before this was enforced.
+ */
+export const WebUrl = z.url({ protocol: /^https?$/ });
+
+/**
  * Represents errors that are shared between both the client and the server. These identifiers specify the exact
  * class of error that an `ApiResult<T>` *or* `Result<T>` describe.
  */

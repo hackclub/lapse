@@ -34,7 +34,10 @@ export async function enqueueRealizeJob(timelapseId: string, sessionUrls: string
         iv,
         editList
     }, {
-        attempts: 3
+        attempts: 3,
+        // The job carries the owner's device key. The completion handler only needs the event's return value, so
+        // nothing should keep the key in Redis once the job is done; failed jobs are removed by the failure handler.
+        removeOnComplete: true
     });
 }
 
@@ -164,5 +167,13 @@ realizeEvents.waitUntilReady()
                     }
                 })
             ]);
+
+            // Retrying means publishing the draft again, which enqueues a new job - this one only holds the device key.
+            try {
+                await job.remove();
+            }
+            catch (err) {
+                logWarning(`Could not remove failed realize job ${jobId}.`, { err });
+            }
         });
     });

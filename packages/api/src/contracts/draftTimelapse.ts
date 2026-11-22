@@ -2,7 +2,7 @@ import { z } from "zod";
 import { oc } from "@orpc/contract";
 
 import { apiResult, LapseDate, LapseId } from "@/common";
-import { MAX_VIDEO_FRAME_COUNT } from "@/constants";
+import { MAX_DRAFT_SESSIONS, MAX_VIDEO_FRAME_COUNT } from "@/constants";
 import { contract, NO_INPUT, NO_OUTPUT } from "@/internal";
 import { ROUTER_TAGS } from "@/tags";
 import { TimelapseDescription, TimelapseName } from "@/contracts/timelapse";
@@ -142,19 +142,19 @@ export const draftTimelapseRouterContract = oc.tag(ROUTER_TAGS.draftTimelapse).r
                 
             sessions: z.array(
                 z.object({
-                    fileSize: z.number()
+                    fileSize: z.int().positive()
                         .describe(`
                             The size, in bytes, of this session. The session is expected to be *exactly* this
                             large - the PUT upload URL for this session will enforce the \`Content-Length\`
                             HTTP header to be equal to this value.
                         `)
                 })
-            ).describe(`
+            ).min(1).max(MAX_DRAFT_SESSIONS).describe(`
                 The sessions that make up this draft. A session is a separately recorded video stream - all sessions are concatenated
                 together into one master video during server re-encoding.
             `),
 
-            thumbnailSize: z.number()
+            thumbnailSize: z.int().positive()
                 .describe("The size, in bytes, of the user-generated preview thumbnail for this draft. As is the case for sessions, the size of the thumbnail is expected to match this value exactly.")
         }))
         .output(
