@@ -146,11 +146,11 @@ export type RecordingMode = z.infer<typeof RecordingModeSchema>;
 export const RecordingModeSchema = z.enum(["desktop", "screen", "camera"]);
 
 /**
- * How the Browser option in the recording mode picker is labelled, as part of an A/B test: no label, or "Less stable"
- * / "Legacy" shown either as a badge on the tile or as small text under its description.
+ * Whether starting a Browser recording first asks the user to confirm, recommending the desktop app instead, as part
+ * of an A/B test.
  */
-export type BrowserLabelVariant = z.infer<typeof BrowserLabelVariantSchema>;
-export const BrowserLabelVariantSchema = z.enum(["none", "badge-less-stable", "badge-legacy", "text-less-stable", "text-legacy"]);
+export type BrowserWarningVariant = z.infer<typeof BrowserWarningVariantSchema>;
+export const BrowserWarningVariantSchema = z.enum(["none", "warning"]);
 
 export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
     query: contract("GET", "/timelapse/query")
@@ -281,10 +281,10 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
         }))
         .output(apiResult({ revoked: z.boolean() })),
 
-    assignBrowserLabelVariant: contract("POST", "/timelapse/assignBrowserLabelVariant")
-        .route({ description: "Puts the user in a variant of the Browser recording mode label A/B test, or returns the one they already have. `null` when the user isn't part of the test." })
+    assignBrowserWarningVariant: contract("POST", "/timelapse/assignBrowserWarningVariant")
+        .route({ description: "Puts the user in a variant of the Browser recording warning A/B test, or returns the one they already have. `null` when the user isn't part of the test." })
         .input(z.object({}))
-        .output(apiResult({ variant: BrowserLabelVariantSchema.nullable() })),
+        .output(apiResult({ variant: BrowserWarningVariantSchema.nullable() })),
 
     getRecordingAvailability: contract("GET", "/timelapse/getRecordingAvailability")
         .route({ description: "Returns which recording modes the user can start right now. The Browser (screen) mode can be unavailable, e.g. during maintenance." })

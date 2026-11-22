@@ -22,7 +22,7 @@ import * as lookout from "@/lookout.js";
 import { archiveLookoutDraft, createLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
-import { assignBrowserLabelVariant } from "@/experiments.js";
+import { assignBrowserWarningVariant } from "@/experiments.js";
 import { BROWSER_RECORDING_MAINTENANCE_MESSAGE, isBrowserRecordingAvailable } from "@/recordingAvailability.js";
 
 export type DbTimelapse = Omit<db.Timelapse, "snapshots"> & { owner: db.User, comments: DbComment[] };
@@ -581,12 +581,12 @@ export default os.router({
             return apiOk({ revoked: deleted.count > 0 });
         }),
 
-    assignBrowserLabelVariant: os.assignBrowserLabelVariant
+    assignBrowserWarningVariant: os.assignBrowserWarningVariant
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
         .use(requiredImplicitUser())
         .handler(async (req) => {
-            return apiOk({ variant: await assignBrowserLabelVariant(req.context.user) });
+            return apiOk({ variant: await assignBrowserWarningVariant(req.context.user) });
         }),
 
     getRecordingAvailability: os.getRecordingAvailability

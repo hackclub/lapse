@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Icon from "@hackclub/icons";
 import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
-import type { BrowserLabelVariant, RecordingMode } from "@hackclub/lapse-api";
+import type { BrowserWarningVariant, RecordingMode } from "@hackclub/lapse-api";
 
 import type { IconGlyph } from "@/common";
 import { api } from "@/api";
@@ -47,25 +47,14 @@ interface LookoutSessionConfig {
   lookoutSessionId: string;
 }
 
-const BROWSER_LABELS: Record<BrowserLabelVariant, { badge?: string; note?: string }> = {
-  "none": {},
-  "badge-less-stable": { badge: "Less stable" },
-  "badge-legacy": { badge: "Legacy" },
-  "text-less-stable": { note: "Less stable" },
-  "text-legacy": { note: "Legacy" },
-};
 
-function RecordingModeOption({ icon, title, description, selected, onClick, recommended, badge, note, dimmed, unavailable }: {
+function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed, unavailable }: {
   icon: IconGlyph;
   title: string;
   description: string;
   selected: boolean;
   onClick: () => void;
   recommended?: boolean;
-  /** A muted badge in the same spot as "Recommended". */
-  badge?: string;
-  /** Small muted text under the description. */
-  note?: string;
   dimmed?: boolean;
   /** Greyed out for good. Still clickable, so the click can explain why. */
   unavailable?: boolean;
@@ -87,18 +76,10 @@ function RecordingModeOption({ icon, title, description, selected, onClick, reco
           Recommended
         </span>
       )}
-      {!recommended && badge && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-darkless border border-slate text-muted text-xs font-bold px-3 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap">
-          {badge}
-        </span>
-      )}
       <Icon glyph={icon} size={48} className="shrink-0" />
       <div className="flex flex-col items-center text-center gap-1">
         <span className="font-bold text-lg">{title}</span>
         <span className={clsx("text-sm", selected ? "text-white/80" : "text-muted")}>{description}</span>
-        {note && (
-          <span className={clsx("text-xs italic", selected ? "text-white/60" : "text-muted/70")}>({note})</span>
-        )}
       </div>
     </button>
   );
@@ -395,9 +376,9 @@ export default function LookoutRecorder() {
   const [engineError, setEngineError] = useState<string | null>(null);
   // Users banned on Hackatime have to record with the desktop app.
   const screenModeBlocked = hackatimeStatus === "restricted";
-  const [browserLabelVariant, setBrowserLabelVariant] = useState<BrowserLabelVariant | null>(null);
-  const [browserLabelSettled, setBrowserLabelSettled] = useState(false);
-  const browserLabelRequested = useRef(false);
+  const [browserWarningVariant, setBrowserWarningVariant] = useState<BrowserWarningVariant | null>(null);
+  const browserWarningRequested = useRef(false);
+  const [showBrowserWarning, setShowBrowserWarning] = useState(false);
   const [showScreenBlockedNotice, setShowScreenBlockedNotice] = useState(false);
   // Browser (screen) mode can be put under maintenance by the server.
   const [browserRecordingAvailable, setBrowserRecordingAvailable] = useState(true);
@@ -495,21 +476,19 @@ export default function LookoutRecorder() {
 
   const pausedNotice = pausedDrafts?.find(d => !dismissedNotices.includes(d.id)) ?? null;
 
-  // The picker waits for this, so the Browser tile never changes under the user.
+  // Fetched up front so the warning is ready by the time the user presses Start. Nothing visible depends on it until
+  // then, so the picker doesn't wait for it.
   useEffect(() => {
-    if (!auth.currentUser || browserLabelRequested.current)
+    if (!auth.currentUser || browserWarningRequested.current)
       return;
 
-    browserLabelRequested.current = true;
-    // Never hold up recording for an experiment: past this, show the picker unlabelled.
-    setTimeout(() => setBrowserLabelSettled(true), 1500);
-    api.timelapse.assignBrowserLabelVariant({})
+    browserWarningRequested.current = true;
+    api.timelapse.assignBrowserWarningVariant({})
       .then(res => {
         if (res.ok)
-          setBrowserLabelVariant(res.data.variant);
+          setBrowserWarningVariant(res.data.variant);
       })
-      .catch(() => {})
-      .finally(() => setBrowserLabelSettled(true));
+      .catch(() => {});
   }, [auth.currentUser]);
 
   useEffect(() => {
@@ -584,7 +563,7 @@ export default function LookoutRecorder() {
       setSelectedMode("desktop");
   }, [screenModeBlocked, selectedMode]);
 
-  function handleStart() {
+  function handleStart(options?: { warningAccepted?: boolean }) {
     if (selectedMode === "screen" && screenModeBlocked) {
       setShowScreenBlockedNotice(true);
       return;
@@ -604,6 +583,12 @@ export default function LookoutRecorder() {
       return;
     }
     setConfirmingBrowser(false);
+
+    // Skipped when the user was already warned above, so nobody gets asked twice.
+    if (selectedMode === "screen" && browserWarningVariant === "warning" && !browserRecordingDoubtful && !options?.warningAccepted) {
+      setShowBrowserWarning(true);
+      return;
+    }
 
     // For Browser (screen) mode, request the screen-share *synchronously* here
     // in the click — Safari requires getDisplayMedia to fire from the gesture
@@ -653,7 +638,7 @@ export default function LookoutRecorder() {
     }
   }
 
-  if (phase === "checking" || (phase === "ready" && !browserLabelSettled)) {
+  if (phase === "checking") {
     return (
       <RootLayout showHeader={false}>
         <div className="flex items-center justify-center h-app text-muted">Loading...</div>
@@ -881,7 +866,6 @@ export default function LookoutRecorder() {
                   setSelectedMode("screen");
                   setConfirmingBrowser(false);
                 }}
-                {...(browserLabelVariant ? BROWSER_LABELS[browserLabelVariant] : {})}
               />
               <RecordingModeOption
                 icon="camera"
@@ -917,7 +901,7 @@ export default function LookoutRecorder() {
                     Use Desktop
                   </button>
                   <button
-                    onClick={handleStart}
+                    onClick={() => handleStart()}
                     disabled={isCreating}
                     className="flex-1 border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -927,13 +911,50 @@ export default function LookoutRecorder() {
               </div>
             ) : (
               <button
-                onClick={handleStart}
+                onClick={() => handleStart()}
                 disabled={isCreating}
                 className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isCreating ? "Setting up..." : selectedMode === "desktop" ? "Open Lookout" : resumingDraft ? "Resume Recording" : "Start Recording"}
               </button>
             )}
+          </div>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={showBrowserWarning} onClose={() => setShowBrowserWarning(false)}>
+        <ModalHeader
+          icon="important"
+          showCloseButton={true}
+          onClose={() => setShowBrowserWarning(false)}
+          title="Are you sure?"
+        />
+        <ModalContent>
+          <div className="flex flex-col gap-6">
+            <p className="text-muted leading-relaxed">
+              Lapse&apos;s browser recorder is legacy and might be unstable. We recommend the Lookout desktop app instead.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setSelectedMode("desktop");
+                  setShowBrowserWarning(false);
+                }}
+                className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer"
+              >
+                Use Desktop
+              </button>
+              <button
+                onClick={() => {
+                  setShowBrowserWarning(false);
+                  handleStart({ warningAccepted: true });
+                }}
+                disabled={isCreating}
+                className="flex-1 border border-slate hover:bg-darkless font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continue with Browser
+              </button>
+            </div>
           </div>
         </ModalContent>
       </Modal>

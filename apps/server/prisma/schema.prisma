@@ -109,7 +109,7 @@ model ExperimentAssignment {
   id          String   @id @default(uuid())
   createdAt   DateTime @default(now())
 
-  /// e.g. `browser-label`.
+  /// e.g. `browser-warning`.
   experiment  String
   variant     String
 
