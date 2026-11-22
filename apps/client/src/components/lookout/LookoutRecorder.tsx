@@ -14,6 +14,15 @@ import { useInterval } from "@/hooks/useInterval";
 import { useRecordingKeepAwake } from "@/hooks/useRecordingKeepAwake";
 import { checkBrowserRecorderSupport } from "@/components/lookout/engineSupport";
 import { storeSession } from "@/components/lookout/sessions";
+import {
+  dismissPausedNotice,
+  finishPausedDraft,
+  formatTimeUntil,
+  formatTrackedTime,
+  getDismissedPausedNotices,
+  type PausedDraft,
+} from "@/components/lookout/pausedDrafts";
+import { usePausedDrafts } from "@/context/ReadyDraftsContext";
 import RootLayout from "@/components/layout/RootLayout";
 import { EditorModal } from "@/components/lookout/EditorModal";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
@@ -25,14 +34,6 @@ import { PillControlButton } from "@/components/ui/PillControlButton";
 /** The deep link that hands a recording session to the Lookout desktop app. */
 function desktopSessionLink(token: string): string {
   return `lookout://session?token=${token}`;
-}
-
-function formatTrackedTime(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  if (h > 0 && m > 0) return `${h}h ${m}min`;
-  if (h > 0) return `${h}h`;
-  return `${m}min`;
 }
 
 import RecordIcon from "@/assets/icons/record.svg";
@@ -403,6 +404,13 @@ export default function LookoutRecorder() {
   const [browserRecordingAvailable, setBrowserRecordingAvailable] = useState(true);
   const [showMaintenanceNotice, setShowMaintenanceNotice] = useState(false);
   const initialized = useRef(false);
+  const pausedDrafts = usePausedDrafts();
+  // The paused draft the next Start continues, picked from the notice below or the home page's shelf (`?draft=`).
+  const [resumingDraft, setResumingDraft] = useState<PausedDraft | null>(null);
+  const resumedFromQuery = useRef(false);
+  const [dismissedNotices, setDismissedNotices] = useState<string[]>([]);
+  const [finishingPaused, setFinishingPaused] = useState(false);
+  const [finishPausedError, setFinishPausedError] = useState<string | null>(null);
   // Cleanup for an in-gesture screen-share primed by primeScreenShare(): stops
   // the stream and restores getDisplayMedia if the SDK never consumed it.
   const primeCleanupRef = useRef<(() => void) | null>(null);
@@ -427,6 +435,66 @@ export default function LookoutRecorder() {
     initialized.current = true;
     setPhase("ready");
   }, [router.isReady, auth.isLoading, auth.currentUser]);
+
+  useEffect(() => {
+    setDismissedNotices(getDismissedPausedNotices());
+  }, []);
+
+  useEffect(() => {
+    if (resumedFromQuery.current || !router.isReady || !pausedDrafts)
+      return;
+
+    resumedFromQuery.current = true;
+    const draft = pausedDrafts.find(d => d.id === router.query.draft);
+    if (draft)
+      resumeDraft(draft);
+  }, [router.isReady, router.query.draft, pausedDrafts]);
+
+  function resumeDraft(draft: PausedDraft) {
+    setConfig({
+      draftId: draft.id,
+      lookoutToken: draft.lookoutToken,
+      lookoutApiBaseUrl: draft.lookoutApiBaseUrl,
+      lookoutSessionId: draft.lookoutSessionId,
+    });
+    storeSession({
+      draftId: draft.id,
+      lookoutToken: draft.lookoutToken,
+      lookoutApiBaseUrl: draft.lookoutApiBaseUrl,
+      lookoutSessionId: draft.lookoutSessionId,
+      createdAt: Date.now(),
+    });
+    setResumingDraft(draft);
+
+    if (draft.recordedOnDesktop)
+      setSelectedMode("desktop");
+  }
+
+  function startNewInstead() {
+    setConfig(null);
+    setResumingDraft(null);
+    if (router.query.draft)
+      router.replace("/timelapse/create", undefined, { shallow: true });
+  }
+
+  async function finishPaused(draft: PausedDraft) {
+    setFinishingPaused(true);
+    setFinishPausedError(null);
+    try {
+      await finishPausedDraft(draft, router);
+    }
+    catch (err) {
+      setFinishPausedError(err instanceof Error ? err.message : "Couldn't finish the recording.");
+      setFinishingPaused(false);
+    }
+  }
+
+  function dismissNotice(draftId: string) {
+    dismissPausedNotice(draftId);
+    setDismissedNotices([...dismissedNotices, draftId]);
+  }
+
+  const pausedNotice = pausedDrafts?.find(d => !dismissedNotices.includes(d.id)) ?? null;
 
   // The picker waits for this, so the Browser tile never changes under the user.
   useEffect(() => {
@@ -718,6 +786,61 @@ export default function LookoutRecorder() {
         />
         <ModalContent>
           <div className="flex flex-col gap-6">
+            {resumingDraft ? (
+              <div className="flex items-center gap-3 text-sm bg-darkless border border-slate rounded-lg p-3">
+                <PauseIcon width={20} height={20} className="shrink-0" />
+                <span className="flex-1 leading-relaxed">
+                  Resuming your paused <b>{formatTrackedTime(resumingDraft.trackedSeconds)}</b> recording.
+                </span>
+                <button onClick={startNewInstead} className="shrink-0 text-muted hover:underline cursor-pointer">
+                  Start a new one
+                </button>
+              </div>
+            ) : pausedNotice && (
+              <div className="flex flex-col gap-3 text-sm bg-yellow/10 border border-yellow/30 rounded-lg p-3">
+                <div className="flex items-start gap-3">
+                  <PauseIcon width={20} height={20} className="shrink-0 mt-0.5" />
+                  <div className="flex flex-col flex-1 leading-relaxed">
+                    <span>
+                      You have a paused <b>{formatTrackedTime(pausedNotice.trackedSeconds)}</b> recording.
+                    </span>
+                    {pausedNotice.autoStopsAt && (
+                      <span className="text-muted text-xs">
+                        It finishes by itself {formatTimeUntil(pausedNotice.autoStopsAt)} if you leave it.
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => dismissNotice(pausedNotice.id)}
+                    title="Dismiss"
+                    aria-label="Dismiss"
+                    className="shrink-0 text-muted hover:text-text cursor-pointer"
+                  >
+                    <Icon glyph="view-close" size={20} />
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => finishPaused(pausedNotice)}
+                    disabled={finishingPaused}
+                    className="flex-1 bg-red hover:bg-red/90 text-white font-bold py-2 px-3 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {finishingPaused ? "Finishing..." : "Finish & publish"}
+                  </button>
+                  <button
+                    onClick={() => resumeDraft(pausedNotice)}
+                    disabled={finishingPaused}
+                    className="flex-1 border border-slate hover:bg-darkless font-bold py-2 px-3 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Resume
+                  </button>
+                </div>
+
+                {finishPausedError && <span role="alert" className="text-red">{finishPausedError}</span>}
+              </div>
+            )}
+
             {engineError && !browserError && (
               <div className="flex items-start gap-3 text-sm bg-red/10 border border-red/30 text-red rounded-lg p-3">
                 <Icon glyph="important" size={20} className="shrink-0 mt-0.5" />
@@ -816,7 +939,7 @@ export default function LookoutRecorder() {
                 disabled={isCreating}
                 className="w-full bg-red hover:bg-red/90 text-white font-bold py-3 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isCreating ? "Setting up..." : selectedMode === "desktop" ? "Open Lookout" : "Start Recording"}
+                {isCreating ? "Setting up..." : selectedMode === "desktop" ? "Open Lookout" : resumingDraft ? "Resume Recording" : "Start Recording"}
               </button>
             )}
           </div>

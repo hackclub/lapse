@@ -20,6 +20,7 @@ interface LookoutSessionDetails {
         thumbnailUrl: string | null;
         trackingMode: string;
         totalActiveSeconds: number;
+        lastScreenshotAt: string | null;
     };
     trackedSeconds: number;
     screenshotCount: number;

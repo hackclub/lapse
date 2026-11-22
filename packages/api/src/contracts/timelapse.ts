@@ -326,6 +326,9 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
                     lookoutStatus: z.string(),
                     videoUrl: z.string().nullable(),
                     thumbnailUrl: z.string().nullable(),
+                    trackedSeconds: z.number().nonnegative().describe("Recorded time that counts towards the timelapse, in seconds."),
+                    lastCapturedAt: LapseDate.nullable().describe("When Lookout last received a screenshot for this session. `null` if it has never recorded anything."),
+                    recordedOnDesktop: z.boolean().describe("Whether the session was recorded with the Lookout desktop app rather than in the browser."),
                 })),
                 lookoutApiBaseUrl: z.string(),
             })

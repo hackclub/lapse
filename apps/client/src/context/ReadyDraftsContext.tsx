@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { api } from "@/api";
 import { useAuthContext } from "@/context/AuthContext";
 import { showReadyToPublishToast } from "@/components/lookout/ReadyToPublishToast";
+import { autoStopTime, type PausedDraft } from "@/components/lookout/pausedDrafts";
 
 export type ReadyDraft = {
   id: string;
@@ -43,18 +44,26 @@ function takeUntoasted(drafts: ReadyDraft[]): ReadyDraft[] {
   return fresh;
 }
 
-const ReadyDraftsContext = createContext<ReadyDraft[] | null>(null);
+type DraftsState = {
+  ready: ReadyDraft[];
+  paused: PausedDraft[];
+};
+
+const ReadyDraftsContext = createContext<DraftsState | null>(null);
 
 /**
  * Keeps track of the signed-in user's recordings that are done but unpublished, refreshed on every navigation. The
  * home page lists them; everywhere else, a new one gets a toast.
+ *
+ * Paused recordings ride along: Lookout only finishes them after a day without a screenshot, and until then they'd
+ * otherwise be invisible - which reads as "my recording got deleted".
  */
 export function ReadyDraftsProvider({ children }: {
   children: ReactNode;
 }) {
   const router = useRouter();
   const { currentUser, isLoading } = useAuthContext();
-  const [drafts, setDrafts] = useState<ReadyDraft[] | null>(null);
+  const [drafts, setDrafts] = useState<DraftsState | null>(null);
 
   const path = router.pathname;
 
@@ -79,7 +88,24 @@ export function ReadyDraftsProvider({ children }: {
             compiling: d.lookoutStatus !== "complete",
           }));
 
-        setDrafts(ready);
+        // Only paused ones: an "active" session may be recording in another tab or the desktop app right now, and
+        // offering to finish it would cut that recording short. Lookout pauses idle sessions after 10 minutes, so an
+        // abandoned one shows up here soon enough. Nothing recorded means nothing to finish or resume.
+        const paused = res.data.drafts
+          .filter(d => d.lookoutStatus === "paused" && d.trackedSeconds > 0)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .map(d => ({
+            id: d.id,
+            createdAt: d.createdAt,
+            trackedSeconds: d.trackedSeconds,
+            autoStopsAt: autoStopTime(d.lastCapturedAt),
+            recordedOnDesktop: d.recordedOnDesktop,
+            lookoutToken: d.lookoutToken,
+            lookoutSessionId: d.lookoutSessionId,
+            lookoutApiBaseUrl: res.data.lookoutApiBaseUrl,
+          }));
+
+        setDrafts({ ready, paused });
 
         if (path !== "/" && !NO_TOAST_ON.some(p => path.startsWith(p))) {
           const fresh = takeUntoasted(ready);
@@ -101,5 +127,10 @@ export function ReadyDraftsProvider({ children }: {
 
 /** Ready-to-publish recordings, oldest first. `null` until known, or when signed out. */
 export function useReadyDrafts(): ReadyDraft[] | null {
-  return useContext(ReadyDraftsContext);
+  return useContext(ReadyDraftsContext)?.ready ?? null;
+}
+
+/** Paused recordings with something in them, newest first. `null` until known, or when signed out. */
+export function usePausedDrafts(): PausedDraft[] | null {
+  return useContext(ReadyDraftsContext)?.paused ?? null;
 }

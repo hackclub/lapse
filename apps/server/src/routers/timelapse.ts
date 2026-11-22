@@ -702,6 +702,9 @@ export default os.router({
                         lookoutStatus: session.session.status as string,
                         videoUrl: session.session.videoUrl as string | null,
                         thumbnailUrl: session.session.thumbnailUrl as string | null,
+                        trackedSeconds: session.trackedSeconds,
+                        lastCapturedAt: session.session.lastScreenshotAt ? new Date(session.session.lastScreenshotAt).getTime() : null,
+                        recordedOnDesktop: lookout.isDesktopClient(session.clientInfo),
                     };
                 }
 
