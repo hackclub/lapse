@@ -924,7 +924,7 @@ function AdminAppEditModal({ app, isSaving, onClose, onSave }: {
   }
 
   return (
-    <Modal isOpen={app !== null} size="REGULAR" onClose={onClose}>
+    <Modal isOpen size="REGULAR" onClose={onClose}>
       <ModalHeader
         title="Edit App"
         description={`Applying edits to ${app.name}`}
