@@ -1,11 +1,9 @@
 import type { NextRouter } from "next/router";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import clsx from "clsx";
 import Icon from "@hackclub/icons";
 
 import type { ReadyDraft } from "@/context/ReadyDraftsContext";
-import { phantomSans } from "@/fonts";
 import { timeAgo } from "@/timeAgo";
 
 const TOAST_ID = "ready-to-publish";
@@ -37,65 +35,19 @@ export function ThumbnailStack({ drafts, size = 56 }: {
   );
 }
 
-function ReadyToPublishToast({ drafts, router }: {
-  drafts: ReadyDraft[];
-  router: NextRouter;
-}) {
-  const oldest = drafts[0];
-  const title = drafts.length === 1
-    ? "Your timelapse is ready"
-    : `${drafts.length} timelapses are ready`;
-
-  const subtitle = drafts.length === 1
-    ? `Recorded ${timeAgo(oldest.createdAt)}`
-    : "Publish them to make them count";
-
-  function publish() {
-    toast.dismiss(TOAST_ID);
-    router.push(`/timelapse/publish/${oldest.id}`);
-  }
-
-  return (
-    <div className={clsx(
-      "flex items-center gap-3.5 w-[min(calc(100vw-32px),420px)] p-3 rounded-2xl",
-      "bg-dark border border-slate shadow-[0_16px_48px_rgb(0_0_0/0.5)] text-white",
-      phantomSans.className
-    )}>
-      <ThumbnailStack drafts={drafts} />
-
-      <div className="flex flex-col flex-1 min-w-0">
-        <span className="font-bold leading-tight">{title}</span>
-        <span className="text-sm text-secondary truncate">{subtitle}</span>
-      </div>
-
-      <motion.button
-        onClick={publish}
-        whileHover={{ scale: 1.04 }}
-        whileTap={{ scale: 0.92 }}
-        transition={{ type: "spring", stiffness: 500, damping: 25 }}
-        className="shrink-0 rounded-2xl h-10 bg-red text-white font-bold px-5 cursor-pointer"
-      >
-        Publish
-      </motion.button>
-
-      <motion.button
-        onClick={() => toast.dismiss(TOAST_ID)}
-        whileTap={{ scale: 0.85 }}
-        transition={{ type: "spring", stiffness: 500, damping: 25 }}
-        aria-label="Close"
-        className="shrink-0 -ml-1 flex items-center justify-center w-8 h-8 rounded-xl text-secondary hover:text-white hover:bg-darkless transition-colors cursor-pointer"
-      >
-        <Icon glyph="view-close" size={20} />
-      </motion.button>
-    </div>
-  );
-}
-
 export function showReadyToPublishToast(drafts: ReadyDraft[], router: NextRouter) {
-  toast.custom(() => <ReadyToPublishToast drafts={drafts} router={router} />, {
+  const oldest = drafts[0];
+
+  toast(drafts.length === 1 ? "Your timelapse is ready" : `${drafts.length} timelapses are ready`, {
     id: TOAST_ID,
-    // Stays until the close button: no timeout, no swipe.
+    description: drafts.length === 1 ? `Recorded ${timeAgo(oldest.createdAt)}` : "Publish them to make them count",
+    icon: <ThumbnailStack drafts={drafts} />,
+    action: {
+      label: "Publish",
+      onClick: () => router.push(`/timelapse/publish/${oldest.id}`),
+    },
+    // Stays until closed: no timeout, and the Toaster has swiping off.
     duration: Infinity,
-    dismissible: false,
+    closeButton: true,
   });
 }
