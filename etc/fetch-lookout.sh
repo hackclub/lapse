@@ -3,7 +3,7 @@
 # Keep LOOKOUT_REF in step with the vendor/lookout submodule and client.Dockerfile.
 set -euo pipefail
 
-LOOKOUT_REF=c5e9a60f7a54671314131085ef207fc3e42edbf5
+LOOKOUT_REF=e393f4c98bfb563adfdfb818438b469c7554e424
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$root/vendor/lookout"
