@@ -1,10 +1,10 @@
 import { randomInt } from "node:crypto";
 import type { BrowserLabelVariant, BrowserWarningVariant } from "@hackclub/lapse-api";
 
-import type * as db from "@/generated/prisma/client.js";
 
 import { database } from "@/db.js";
 import { isHackatimeRestricted } from "@/routers/hackatime.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * Two A/B tests on the recording mode picker, run side by side and assigned independently, to see what moves people
@@ -28,7 +28,7 @@ const BROWSER_WARNING_VARIANTS: readonly BrowserWarningVariant[] = ["none", "war
  * Returns the user's variant, assigning one at random the first time. Users who can't record in the browser at all
  * are left out, since neither test can change what they do.
  */
-async function assignVariant<T extends string>(user: db.User, experiment: string, variants: readonly T[]): Promise<T | null> {
+async function assignVariant<T extends string>(user: safe.User, experiment: string, variants: readonly T[]): Promise<T | null> {
     const isVariant = (value: string): value is T => (variants as readonly string[]).includes(value);
     const key = { userId_experiment: { userId: user.id, experiment } };
 
@@ -49,14 +49,14 @@ async function assignVariant<T extends string>(user: db.User, experiment: string
     return isVariant(assignment.variant) ? assignment.variant : null;
 }
 
-export async function assignBrowserLabelVariant(user: db.User): Promise<BrowserLabelVariant | null> {
+export async function assignBrowserLabelVariant(user: safe.User): Promise<BrowserLabelVariant | null> {
     if (!BROWSER_LABEL_TEST_ACTIVE)
         return null;
 
     return await assignVariant(user, BROWSER_LABEL_EXPERIMENT, BROWSER_LABEL_VARIANTS);
 }
 
-export async function assignBrowserWarningVariant(user: db.User): Promise<BrowserWarningVariant | null> {
+export async function assignBrowserWarningVariant(user: safe.User): Promise<BrowserWarningVariant | null> {
     if (!BROWSER_WARNING_TEST_ACTIVE)
         return null;
 

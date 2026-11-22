@@ -11,6 +11,7 @@ import { apiErr, apiOk, Err } from "@/common.js";
 import { database } from "@/db.js";
 import { actorEntitledTo } from "@/ownership.js";
 import { adminOverrideActorId, recordAdminDeletion } from "@/adminAudit.js";
+import type * as safe from "@/secrets.js";
 
 const os = implement(commentRouterContract)
     .$context<Context>()
@@ -19,7 +20,7 @@ const os = implement(commentRouterContract)
 /**
  * Represents a `Comment` ORM entity with all of its associated fields.
  */
-export type DbComment = db.Comment & { author: db.User };
+export type DbComment = db.Comment & { author: safe.User };
 
 /**
  * Converts a database representation of a comment to a runtime (API) one.

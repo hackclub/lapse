@@ -4,7 +4,6 @@ import { assert } from "@hackclub/lapse-shared";
 import z from "zod";
 import jwt from "jsonwebtoken";
 
-import * as db from "@/generated/prisma/client.js";
 
 import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
@@ -12,6 +11,7 @@ import { logInfo, logWarning } from "@/logging.js";
 import type { FastifyRequest } from "fastify";
 import { getAllOAuthScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
 import type { ExternalActor, AuthenticatedProgramKey } from "@/ownership.js";
+import type * as safe from "@/secrets.js";
 
 export function hashServiceSecret(secret: string): string {
     const salt = randomBytes(16).toString("hex");
@@ -285,7 +285,7 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
         return client && !client.revokedAt ? this.dtoDbClient(client) : null;
     }
 
-    private dtoDbClient(client: db.ServiceClient): OAuth2Server.Client {
+    private dtoDbClient(client: safe.ServiceClient): OAuth2Server.Client {
         return {
             id: client.clientId,
             redirectUris: client.redirectUris,
@@ -296,6 +296,7 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
     async getClient(clientId: string, clientSecret: string | null): Promise<OAuth2Server.Client | OAuth2Server.Falsey> {
         const client = await database().serviceClient.findFirst({
             include: { grants: true },
+            omit: { clientSecretHash: false },
             where: {
                 clientId
             }
@@ -510,7 +511,8 @@ async function authenticateProgramKey(bearerToken: string): Promise<Authenticate
             keyPrefix: prefix,
             revokedAt: null,
             expiresAt: { gt: new Date() }
-        }
+        },
+        omit: { keyHash: false }
     });
 
     for (const candidate of candidates) {

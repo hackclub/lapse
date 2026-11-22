@@ -8,8 +8,10 @@ import { lapseId } from "@/common.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import * as lookout from "@/lookout.js";
 import { rejectLookoutPublish, removePublishedLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
+import { hackatimeTokenOf } from "@/hackatime.js";
 import { isHackatimeRestricted } from "@/routers/hackatime.js";
 import { durationBySnapshots, syncTimelapseWithHackatime, TIMELAPSE_INCLUDES, TIMELAPSE_OMIT, type DbOwnedTimelapse } from "@/routers/timelapse.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * Publishing a Lookout recording, split in two.
@@ -60,7 +62,7 @@ async function isRestrictedBrowserRecording(ownerId: string, clientInfo: string 
     return await isHackatimeRestricted(owner);
 }
 
-export function intentOf(draft: db.DraftLookoutTimelapse): PublishIntent | null {
+export function intentOf(draft: safe.DraftLookoutTimelapse): PublishIntent | null {
     if (!draft.pendingAt || !draft.pendingName || !draft.pendingVisibility)
         return null;
 
@@ -83,7 +85,7 @@ export function timelapseUrl(timelapseId: string): string {
  * here rather than after the video lands, because from the user's point of view they are done - and
  * a card nagging them for details they already gave would be a lie.
  */
-export async function storePublishIntent(draft: db.DraftLookoutTimelapse, intent: PublishIntent): Promise<db.DraftLookoutTimelapse> {
+export async function storePublishIntent(draft: safe.DraftLookoutTimelapse, intent: PublishIntent): Promise<safe.DraftLookoutTimelapse> {
     // Answering for an archived draft brings it back: filling in its details is as clear a sign as any that the
     // user wants it after all - and the desktop panel can still be open on a draft discarded from the website.
     const updated = await database().$transaction(async tx => {
@@ -119,7 +121,7 @@ export async function storePublishIntent(draft: db.DraftLookoutTimelapse, intent
  * Idempotent by way of `Timelapse.lookoutSessionId` being unique - two sweepers racing on the same
  * draft means one of them loses the insert, not two timelapses.
  */
-export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Promise<FinalizeOutcome> {
+export async function finalizeLookoutDraft(draft: safe.DraftLookoutTimelapse): Promise<FinalizeOutcome> {
     const intent = intentOf(draft);
     if (!intent)
         throw new Error(`Draft ${draft.id} has no pending publish intent to finalize.`);
@@ -142,7 +144,22 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
     if (status !== "complete")
         return { kind: "waiting", status };
 
-    const timings = await lookout.getTimings(draft.lookoutToken);
+    // The draft was loaded without its Lookout token, like every other row, and this is where it's needed.
+    const secrets = await database().draftLookoutTimelapse.findUnique({
+        where: { id: draft.id },
+        select: { lookoutToken: true },
+    });
+
+    // Gone since we were handed it: another finalizer published it and removed the draft.
+    if (!secrets) {
+        const winner = await alreadyPublished(draft);
+        if (!winner)
+            throw new Error(`Draft ${draft.id} disappeared while it was being published.`);
+
+        return winner;
+    }
+
+    const timings = await lookout.getTimings(secrets.lookoutToken);
     const snapshots = timings.timestamps.map(ts => new Date(ts));
 
     const timelapse = await database().timelapse.create({
@@ -154,7 +171,7 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
             description: intent.description,
             visibility: intent.visibility,
             lookoutSessionId: draft.lookoutSessionId,
-            lookoutToken: draft.lookoutToken,
+            lookoutToken: secrets.lookoutToken,
             lookoutVideoUrl: session.session.videoUrl,
             lookoutThumbnailUrl: session.session.thumbnailUrl,
             recordedWith: lookout.recordingClientOf(session.clientInfo),
@@ -190,7 +207,7 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
         logWarning("Couldn't set the Lookout view URL.", { err, timelapseId: timelapse.id });
     }
 
-    if (intent.hackatimeProject && timelapse.owner.hackatimeId && timelapse.owner.hackatimeAccessToken) {
+    if (intent.hackatimeProject && await hackatimeTokenOf(timelapse.ownerId) !== null) {
         try {
             await syncTimelapseWithHackatime(timelapse, timelapse.owner);
         }
@@ -203,7 +220,7 @@ export async function finalizeLookoutDraft(draft: db.DraftLookoutTimelapse): Pro
     return { kind: "published", timelapse };
 }
 
-async function alreadyPublished(draft: db.DraftLookoutTimelapse): Promise<FinalizeOutcome | null> {
+async function alreadyPublished(draft: safe.DraftLookoutTimelapse): Promise<FinalizeOutcome | null> {
     const existing = await database().timelapse.findFirst({
         where: { lookoutSessionId: draft.lookoutSessionId },
         include: TIMELAPSE_INCLUDES,
@@ -223,7 +240,7 @@ async function alreadyPublished(draft: db.DraftLookoutTimelapse): Promise<Finali
  * For call sites that are really doing something else - polling status, listing drafts - and just
  * want to take the opportunity. They must not fail because a finalize did.
  */
-export async function finalizeIfPending(draft: db.DraftLookoutTimelapse): Promise<FinalizeOutcome | null> {
+export async function finalizeIfPending(draft: safe.DraftLookoutTimelapse): Promise<FinalizeOutcome | null> {
     if (!intentOf(draft))
         return null;
 

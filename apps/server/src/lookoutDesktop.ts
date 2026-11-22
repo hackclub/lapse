@@ -1,7 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import * as db from "@/generated/prisma/client.js";
 
 import { database } from "@/db.js";
 import { env } from "@/env.js";
@@ -10,7 +9,9 @@ import { logInfo, logWarning } from "@/logging.js";
 import * as lookout from "@/lookout.js";
 import { createLookoutDraft } from "@/lookoutDraftEvents.js";
 import { finalizeIfPending, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
+import { hackatimeTokenOf } from "@/hackatime.js";
 import { hackatimeProjectsForUser, isHackatimeRestricted } from "@/routers/hackatime.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * The endpoints Lookout's desktop app talks to directly.
@@ -79,7 +80,7 @@ export async function createPairingCode(userId: string, challenge: string, label
 }
 
 /** Resolves a `Authorization: Bearer` device token to its (non-revoked) device row. */
-async function deviceFromRequest(req: FastifyRequest): Promise<(db.LookoutDevice & { owner: db.User }) | null> {
+async function deviceFromRequest(req: FastifyRequest): Promise<(safe.LookoutDevice & { owner: safe.User }) | null> {
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer "))
         return null;
@@ -278,7 +279,7 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
             draftId: draft.id,
             createdAt: draft.createdAt.toISOString(),
             handle: draft.owner.handle,
-            hackatimeLinked: Boolean(draft.owner.hackatimeId && draft.owner.hackatimeAccessToken),
+            hackatimeLinked: await hackatimeTokenOf(draft.owner.id) !== null,
             hackatimeRestricted,
             suggestedName,
             // Non-null when the user has already answered: the panel then has nothing to ask and
@@ -358,9 +359,6 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
 
         if (!draft)
             return reply.code(404).send({ error: "no draft for that panel" });
-
-        if (!draft.owner.hackatimeId || !draft.owner.hackatimeAccessToken)
-            return reply.send({ projects: [] });
 
         try {
             return reply.send({ projects: await hackatimeProjectsForUser(draft.owner) });

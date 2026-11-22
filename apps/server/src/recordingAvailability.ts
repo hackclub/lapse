@@ -1,10 +1,10 @@
 import z from "zod";
 
-import type * as db from "@/generated/prisma/client.js";
 
 import { cachedJson } from "@/cache.js";
 import { env } from "@/env.js";
 import { logWarning } from "@/logging.js";
+import type * as safe from "@/secrets.js";
 
 export const BROWSER_RECORDING_MAINTENANCE_MESSAGE = "Browser recording is currently under maintenance. Please use the Lookout desktop app instead.";
 
@@ -23,7 +23,7 @@ const AVAILABILITY_TIMEOUT_MS = 3_000;
  * `{ browserRecording: boolean }`. If it can't be reached, recording stays available - an outage there shouldn't
  * take recording down with it.
  */
-export async function isBrowserRecordingAvailable(user: db.User): Promise<boolean> {
+export async function isBrowserRecordingAvailable(user: safe.User): Promise<boolean> {
     if (env.BROWSER_RECORDING_MAINTENANCE)
         return false;
 
@@ -44,7 +44,7 @@ export async function isBrowserRecordingAvailable(user: db.User): Promise<boolea
     }
 }
 
-async function askAvailabilityService(url: string, user: db.User): Promise<boolean> {
+async function askAvailabilityService(url: string, user: safe.User): Promise<boolean> {
     const res = await fetch(url, {
         method: "POST",
         headers: {

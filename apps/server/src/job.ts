@@ -14,8 +14,21 @@ import { syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 // Callers are expected to queue jobs and disregard what happens after the completion (we handle that here!),
 // but are encouraged to store job IDs in the entities that will be affected by the jobs.
 
-const realizeQueue = new Queue<RealizeJobInputs, RealizeJobOutputs>(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
-const realizeEvents = new QueueEvents(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
+type RealizeQueue = Pick<Queue<RealizeJobInputs, RealizeJobOutputs>, "add" | "remove" | "getJob">;
+
+let _realizeQueue: RealizeQueue | null = null;
+
+function realizeQueue() {
+    _realizeQueue ??= new Queue<RealizeJobInputs, RealizeJobOutputs>(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
+    return _realizeQueue;
+}
+
+/**
+ * Replaces the queue, so that publishing a legacy draft can be exercised without a worker.
+ */
+export function setRealizeQueueForTesting(queue: RealizeQueue) {
+    _realizeQueue = queue;
+}
 
 /**
  * Enqueues a job in the worker to realize the video for a timelapse from encrypted sessions belonging to a (potentially removed) draft timelapse.
@@ -27,7 +40,7 @@ const realizeEvents = new QueueEvents(REALIZE_JOB_QUEUE_NAME, { connection: redi
  * @param editList The edits to apply while encoding.
  */
 export async function enqueueRealizeJob(timelapseId: string, sessionUrls: string[], passkey: string, iv: string, editList: EditListEntry[]) {
-    return await realizeQueue.add(`realize-${timelapseId}`, {
+    return await realizeQueue().add(`realize-${timelapseId}`, {
         timelapseId,
         sessionUrls,
         passkey,
@@ -47,133 +60,140 @@ export async function enqueueRealizeJob(timelapseId: string, sessionUrls: string
  */
 export async function cancelRealizeJob(jobId: string) {
     try {
-        await realizeQueue.remove(jobId);
+        await realizeQueue().remove(jobId);
     }
     catch (err) {
         logWarning(`Could not remove realize job ${jobId}; it is probably running.`, { err });
     }
 }
 
-realizeEvents.waitUntilReady()
-    .then(() => {
-        realizeEvents.on("completed", async ({ jobId, returnvalue }) => {
-            const result = RealizeJobOutputsSchema.parse(typeof returnvalue === "object" ? returnvalue : JSON.parse(returnvalue));
-            const { videoKey, thumbnailKey, timelapseId, realTimeDuration } = result;
+/**
+ * Starts listening for realize jobs finishing or failing. Called once, when the server starts.
+ */
+export function startRealizeJobEvents() {
+    const realizeEvents = new QueueEvents(REALIZE_JOB_QUEUE_NAME, { connection: redis() });
 
-            logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey, realTimeDuration });
+    realizeEvents.waitUntilReady()
+        .then(() => {
+            realizeEvents.on("completed", async ({ jobId, returnvalue }) => {
+                const result = RealizeJobOutputsSchema.parse(typeof returnvalue === "object" ? returnvalue : JSON.parse(returnvalue));
+                const { videoKey, thumbnailKey, timelapseId, realTimeDuration } = result;
 
-            // The timelapse was deleted while it was encoding (by its owner, or a privacy erasure), so nothing will
-            // ever point at what the worker just uploaded.
-            if (!await database().timelapse.findFirst({ where: { id: timelapseId }, select: { id: true } })) {
-                for (const key of [videoKey, thumbnailKey]) {
-                    await publicS3.send(new DeleteObjectCommand({ Bucket: env.S3_PUBLIC_BUCKET_NAME, Key: key }));
+                logInfo(`Timelapse ${timelapseId} finished processing! job=${jobId}`, { videoKey, thumbnailKey, realTimeDuration });
+
+                // The timelapse was deleted while it was encoding (by its owner, or a privacy erasure), so nothing will
+                // ever point at what the worker just uploaded.
+                if (!await database().timelapse.findFirst({ where: { id: timelapseId }, select: { id: true } })) {
+                    for (const key of [videoKey, thumbnailKey]) {
+                        await publicS3.send(new DeleteObjectCommand({ Bucket: env.S3_PUBLIC_BUCKET_NAME, Key: key }));
+                    }
+
+                    logInfo(`Timelapse ${timelapseId} was deleted while processing; removed its realized files.`);
+                    return;
                 }
 
-                logInfo(`Timelapse ${timelapseId} was deleted while processing; removed its realized files.`);
-                return;
-            }
-
-            const draft = await database().draftTimelapse.findFirst({
-                where: {
-                    associatedTimelapseId: result.timelapseId
-                }
-            });
-
-            if (draft) {
-                // We're doing a complete delete of the draft timelapse - alongside the now consumed encrypted S3 objects.
-                const err = await deleteDraftTimelapse(draft.id, { kind: "SERVER" });
-                if (err) {
-                    logWarning(`Could not delete draft timelapse ${draft.id} when publishing ${timelapseId}! ${err.message}`);
-                }
-            }
-            else {
-                logWarning(`No corresponding draft found for timelapse ${timelapseId}.`);
-            }
-
-            const currentTimelapse = await database().timelapse.findFirst({
-                where: { id: timelapseId },
-                include: { associatedDraft: true }
-            });
-
-            if (currentTimelapse?.sourceDraftId) {
-                await database().timelapse.deleteMany({
+                const draft = await database().draftTimelapse.findFirst({
                     where: {
-                        sourceDraftId: currentTimelapse.sourceDraftId,
-                        visibility: "FAILED_PROCESSING",
-                        id: { not: timelapseId }
+                        associatedTimelapseId: result.timelapseId
                     }
                 });
-            }
 
-            // This basically marks the timelapse as having its processing finished (we assume any timelapse with an associated job ID is still being processed).
-            const completedTimelapse = await database().timelapse.update({
-                where: {
-                    id: timelapseId
-                },
-                data: {
-                    associatedJobId: null,
-                    s3Key: videoKey,
-                    thumbnailS3Key: thumbnailKey,
-                    ...(realTimeDuration != null && { duration: realTimeDuration })
-                },
-                include: { owner: true }
+                if (draft) {
+                    // We're doing a complete delete of the draft timelapse - alongside the now consumed encrypted S3 objects.
+                    const err = await deleteDraftTimelapse(draft.id, { kind: "SERVER" });
+                    if (err) {
+                        logWarning(`Could not delete draft timelapse ${draft.id} when publishing ${timelapseId}! ${err.message}`);
+                    }
+                }
+                else {
+                    logWarning(`No corresponding draft found for timelapse ${timelapseId}.`);
+                }
+
+                const currentTimelapse = await database().timelapse.findFirst({
+                    where: { id: timelapseId },
+                    include: { associatedDraft: true }
+                });
+
+                if (currentTimelapse?.sourceDraftId) {
+                    await database().timelapse.deleteMany({
+                        where: {
+                            sourceDraftId: currentTimelapse.sourceDraftId,
+                            visibility: "FAILED_PROCESSING",
+                            id: { not: timelapseId }
+                        }
+                    });
+                }
+
+                // This basically marks the timelapse as having its processing finished (we assume any timelapse with an associated job ID is still being processed).
+                const completedTimelapse = await database().timelapse.update({
+                    where: {
+                        id: timelapseId
+                    },
+                    data: {
+                        associatedJobId: null,
+                        s3Key: videoKey,
+                        thumbnailS3Key: thumbnailKey,
+                        ...(realTimeDuration != null && { duration: realTimeDuration })
+                    },
+                    include: { owner: true }
+                });
+
+                logInfo(`Successfully updated timelapse ${timelapseId} with transcoded data.`);
+
+                if (completedTimelapse.hackatimeProject) {
+                    try {
+                        await syncTimelapseWithHackatime(completedTimelapse, completedTimelapse.owner);
+                        logInfo(`Hackatime sync completed for timelapse ${timelapseId}, project ${completedTimelapse.hackatimeProject}.`);
+                    }
+                    catch (err) {
+                        logError(`Hackatime sync failed for timelapse ${timelapseId}.`, { err });
+                    }
+                }
             });
 
-            logInfo(`Successfully updated timelapse ${timelapseId} with transcoded data.`);
+            realizeEvents.on("failed", async ({ jobId, failedReason }) => {
+                const job = await realizeQueue().getJob(jobId);
+                if (!job) {
+                    logError(`Non-existent realize job with ID ${jobId} failed: ${failedReason}`);
+                    return;
+                }
 
-            if (completedTimelapse.hackatimeProject) {
+                logError(`Realize job for ${job.data.timelapseId} failed: ${failedReason}`);
+
+                if (job.attemptsMade < (job.opts.attempts ?? 1))
+                    return;
+
+                // We keep the draft timelapse, mark the associated timelapse as failed processing, and unlink the two so that
+                // the publishing of the draft can be retried by the user at a later time. Either may already be gone if the
+                // timelapse was deleted while it was processing.
+                await database().$transaction([
+                    database().draftTimelapse.updateMany({
+                        where: {
+                            associatedTimelapseId: job.data.timelapseId
+                        },
+                        data: {
+                            associatedTimelapseId: null
+                        }
+                    }),
+
+                    database().timelapse.updateMany({
+                        where: {
+                            id: job.data.timelapseId
+                        },
+                        data: {
+                            visibility: "FAILED_PROCESSING",
+                            associatedJobId: null
+                        }
+                    })
+                ]);
+
+                // Retrying means publishing the draft again, which enqueues a new job - this one only holds the device key.
                 try {
-                    await syncTimelapseWithHackatime(completedTimelapse, completedTimelapse.owner);
-                    logInfo(`Hackatime sync completed for timelapse ${timelapseId}, project ${completedTimelapse.hackatimeProject}.`);
+                    await job.remove();
                 }
                 catch (err) {
-                    logError(`Hackatime sync failed for timelapse ${timelapseId}.`, { err });
+                    logWarning(`Could not remove failed realize job ${jobId}.`, { err });
                 }
-            }
+            });
         });
-
-        realizeEvents.on("failed", async ({ jobId, failedReason }) => {
-            const job = await realizeQueue.getJob(jobId);
-            if (!job) {
-                logError(`Non-existent realize job with ID ${jobId} failed: ${failedReason}`);
-                return;
-            }
-
-            logError(`Realize job for ${job.data.timelapseId} failed: ${failedReason}`);
-
-            if (job.attemptsMade < (job.opts.attempts ?? 1))
-                return;
-
-            // We keep the draft timelapse, mark the associated timelapse as failed processing, and unlink the two so that
-            // the publishing of the draft can be retried by the user at a later time. Either may already be gone if the
-            // timelapse was deleted while it was processing.
-            await database().$transaction([
-                database().draftTimelapse.updateMany({
-                    where: {
-                        associatedTimelapseId: job.data.timelapseId
-                    },
-                    data: {
-                        associatedTimelapseId: null
-                    }
-                }),
-
-                database().timelapse.updateMany({
-                    where: {
-                        id: job.data.timelapseId
-                    },
-                    data: {
-                        visibility: "FAILED_PROCESSING",
-                        associatedJobId: null
-                    }
-                })
-            ]);
-
-            // Retrying means publishing the draft again, which enqueues a new job - this one only holds the device key.
-            try {
-                await job.remove();
-            }
-            catch (err) {
-                logWarning(`Could not remove failed realize job ${jobId}.`, { err });
-            }
-        });
-    });
+}

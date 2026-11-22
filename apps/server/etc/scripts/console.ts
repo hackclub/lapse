@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import * as repl from "node:repl";
 
 import { PrismaClient } from "../../src/generated/prisma/client.js";
+import { SECRET_COLUMNS } from "../../src/secrets.js";
 
 let term: repl.REPLServer | null = null;
 
@@ -18,7 +19,9 @@ const ctx = {
         }
 
         const adapter = new PrismaPg({ connectionString: url });
-        ctx.db = new PrismaClient({ adapter });
+        // Secret columns stay out of whatever gets printed here, as they do on the server. Ask for one by name
+        // (`omit: { hackatimeAccessToken: false }`) if you really need it.
+        ctx.db = new PrismaClient({ adapter, omit: SECRET_COLUMNS });
 
         if (term) {
             term.context.db = ctx.db;

@@ -17,6 +17,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { actorEntitledTo, stringifyActor, type Actor } from "@/ownership.js";
 import { dtoPublicUser } from "@/routers/user.js";
 import { issueUploadToken } from "@/upload.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * Whether `key` exists in the encrypted bucket.
@@ -127,7 +128,7 @@ const os = implement(draftTimelapseRouterContract)
     .$context<Context>()
     .use(logMiddleware);
 
-export function dtoDraftTimelapse(entity: Omit<db.DraftTimelapse, "snapshots"> & { owner: db.User }): DraftTimelapse {
+export function dtoDraftTimelapse(entity: Omit<db.DraftTimelapse, "snapshots"> & { owner: safe.User }): DraftTimelapse {
     return {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),

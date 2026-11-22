@@ -1,7 +1,8 @@
 import type * as db from "@/generated/prisma/client.js";
 
-import { database } from "@/db.js";
+import { database, type TransactionClient } from "@/db.js";
 import { logInfo } from "@/logging.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * Every state change of a `DraftLookoutTimelapse` goes through here, and each one writes a `LookoutDraftEvent` in
@@ -16,7 +17,7 @@ export type LookoutDraftArchiveReason = "discarded" | "session-gone";
 
 export const ARCHIVE_REASONS: readonly LookoutDraftArchiveReason[] = ["discarded", "session-gone"];
 
-type DraftRef = Pick<db.DraftLookoutTimelapse, "id" | "lookoutSessionId" | "ownerId">;
+type DraftRef = Pick<safe.DraftLookoutTimelapse, "id" | "lookoutSessionId" | "ownerId">;
 
 function describe(draft: DraftRef): string {
     return `Lookout draft ${draft.id} (session ${draft.lookoutSessionId}, owner ${draft.ownerId})`;
@@ -29,7 +30,7 @@ function describe(draft: DraftRef): string {
 export async function createLookoutDraft(
     data: db.Prisma.DraftLookoutTimelapseUncheckedCreateInput,
     options: { actor: string | null; mode: string | null }
-): Promise<db.DraftLookoutTimelapse> {
+): Promise<safe.DraftLookoutTimelapse> {
     return await database().$transaction(async tx => {
         const draft = await tx.draftLookoutTimelapse.create({ data });
 
@@ -95,9 +96,9 @@ export async function archiveLookoutDraft(
  */
 export async function restoreLookoutDraft(
     draft: DraftRef,
-    options?: { actor?: string; tx?: db.Prisma.TransactionClient }
+    options?: { actor?: string; tx?: TransactionClient }
 ): Promise<boolean> {
-    const run = async (tx: db.Prisma.TransactionClient) => {
+    const run = async (tx: TransactionClient) => {
         const { count } = await tx.draftLookoutTimelapse.updateMany({
             where: { id: draft.id, archivedAt: { not: null } },
             data: { archivedAt: null, archivedReason: null },
@@ -163,7 +164,7 @@ export async function removePublishedLookoutDraft(draft: DraftRef, timelapseId: 
  * it. The draft itself stays where it is; the user's answers are kept in the event's `detail`.
  */
 export async function rejectLookoutPublish(
-    draft: db.DraftLookoutTimelapse,
+    draft: safe.DraftLookoutTimelapse,
     reason: string,
     options?: { detail?: db.Prisma.InputJsonValue }
 ): Promise<void> {

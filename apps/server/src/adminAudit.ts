@@ -1,13 +1,12 @@
 import type { AdminEntity } from "@hackclub/lapse-api";
 import { oneOf } from "@hackclub/lapse-shared";
 
-import { database } from "@/db.js";
+import { database, type TransactionClient } from "@/db.js";
 import type { Actor } from "@/ownership.js";
-import type * as db from "@/generated/prisma/client.js";
 
 export type AuditValue = string | number | boolean | null;
 export type AuditChanges = Record<string, { from: AuditValue; to: AuditValue }>;
-export type AuditClient = db.Prisma.TransactionClient;
+export type AuditClient = TransactionClient;
 
 /**
  *  tldr new audit logs in case smth
@@ -37,7 +36,7 @@ export async function findAuditedEntity(tx: AuditClient, entity: AdminEntity, id
         case "draftTimelapse":
             return await tx.draftTimelapse.findUnique({ where: { id } });
         case "lookoutDraft":
-            return await tx.draftLookoutTimelapse.findUnique({ where: { id }, omit: { lookoutToken: true, panelToken: true } });
+            return await tx.draftLookoutTimelapse.findUnique({ where: { id } });
         case "legacyTimelapse":
             return await tx.legacyUnpublishedTimelapse.findUnique({ where: { id } });
     }

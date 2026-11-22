@@ -12,6 +12,7 @@ import { revokeAccessToken } from "@/oauth.js";
 
 import * as db from "@/generated/prisma/client.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * The TTL for keys being stored in `keysPendingRelay`, in milliseconds. After this time, keys will be automatically removed.
@@ -32,9 +33,9 @@ const os = implement(userRouterContract)
     .use(logMiddleware);
 
 /**
- * Represents a `db.User` with related tables included.
+ * Represents a `safe.User` with related tables included.
  */
-export type DbCompositeUser = db.User & { devices: db.KnownDevice[] };
+export type DbCompositeUser = safe.User & { devices: db.KnownDevice[] };
 
 /**
  * Converts a database representation of a known device to a runtime (API) one.
@@ -49,7 +50,7 @@ export function dtoKnownDevice(entity: db.KnownDevice): KnownDevice {
 /**
  * Converts a database representation of a user to a runtime (API) one.
  */
-export function dtoPublicUser(entity: db.User): PublicUser {
+export function dtoPublicUser(entity: safe.User): PublicUser {
     return {
         id: entity.id,
         createdAt: entity.createdAt.getTime(),
@@ -179,7 +180,7 @@ export default os.router({
             }
 
             const changes = req.input.changes;
-            const updateData: Partial<db.User> = {
+            const updateData: Partial<safe.User> = {
                 ...when(changes.displayName !== undefined, { displayName: changes.displayName! }),
                 ...when(changes.bio !== undefined, { bio: changes.bio! }),
                 ...when(changes.handle !== undefined, { handle: changes.handle!, lastHandleChangeAt: new Date() }),

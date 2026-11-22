@@ -137,7 +137,8 @@ export async function handleDetectionRequest(
 const dependencies = (): DetectionDependencies => ({
     findTimelapses: ids => database().timelapse.findMany({
         where: { id: { in: ids } },
-        include: { owner: true }
+        include: { owner: true },
+        omit: { lookoutToken: false }
     }),
     getSession: lookout.getSession,
     getTimings: lookout.getTimings,

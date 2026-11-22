@@ -4,10 +4,10 @@ import { oo, type OpenAPI } from "@orpc/openapi";
 import { permissionLevelOrdinal, type LapseOAuthScope, type PermissionLevel } from "@hackclub/lapse-api";
 import type { RequestHeadersPluginContext, ResponseHeadersPluginContext } from "@orpc/server/plugins";
 
-import type * as db from "@/generated/prisma/client.js";
 
 import type { ExternalActor, UserActor } from "@/ownership.js";
 import { logRequest } from "@/logging.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * Represents Lapse-specific server-side information about an incoming API request.
@@ -26,7 +26,7 @@ export interface Context extends
     /** 
      * **Extracted from `actor`.** The authenticated user, or `null` if the actor is a program key or unauthenticated.
      */
-    user: db.User | null;
+    user: safe.User | null;
 
     /**
      * **Extracted from `scopes`.** The scopes granted to the authenticated actor, or [] if unauthenticated.
@@ -47,7 +47,7 @@ export interface ProtectedContext extends Context {
  */
 export interface ImplicitUserContext extends ProtectedContext {
     actor: UserActor;
-    user: db.User;
+    user: safe.User;
 }
 
 /**

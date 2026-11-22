@@ -1,14 +1,30 @@
 import { PrismaPg } from "@prisma/adapter-pg";
+import type { SqlDriverAdapterFactory } from "@prisma/client/runtime/client";
 import { Redis } from "ioredis";
 
 import { PrismaClient } from "@/generated/prisma/client.js";
 import { env } from "@/env.js";
 import { logInfo, logWarning } from "@/logging.js";
+import { SECRET_COLUMNS } from "@/secrets.js";
 
-let _database: PrismaClient | null = null;
+/**
+ * Creates the database client. Secret columns are left out of every result unless a query asks for one by name.
+ */
+export function createDatabaseClient(adapter: SqlDriverAdapterFactory) {
+    return new PrismaClient({ adapter, omit: SECRET_COLUMNS });
+}
+
+export type Database = ReturnType<typeof createDatabaseClient>;
+
+/**
+ * The client handed to an interactive transaction.
+ */
+export type TransactionClient = Omit<Database, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">;
+
+let _database: Database | null = null;
 let _redis: Redis | null = null;
 
-export function database(): PrismaClient {
+export function database(): Database {
     if (!_database)
         throw new Error("Attempted to access the database before initialization.");
 
@@ -28,6 +44,14 @@ export function redis(): Redis {
     return _redis;
 }
 
+/**
+ * Replaces the database and Redis clients, so the routers can be exercised without either.
+ */
+export function setClientsForTesting(clients: { database: Database; redis: Redis }) {
+    _database = clients.database;
+    _redis = clients.redis;
+}
+
 export function initDatabase() {
     if (_database)
         throw new Error("Attempted to initialize the database twice.");
@@ -43,7 +67,7 @@ export function initDatabase() {
         keepAlive: true,
     });
 
-    _database = new PrismaClient({ adapter });
+    _database = createDatabaseClient(adapter);
     logInfo("Successfully connected to the database.");
 
     void warmDatabasePool();

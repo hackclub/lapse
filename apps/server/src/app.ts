@@ -3,12 +3,11 @@ import "@/instrument.js";
 
 import Fastify from "fastify"
 import fastifyCors from "@fastify/cors"
-import { implement, onError, ORPCError, ValidationError } from "@orpc/server"
+import { onError, ORPCError, ValidationError } from "@orpc/server"
 import { OpenAPIHandler } from "@orpc/openapi/fastify"
 import { RequestHeadersPlugin, ResponseHeadersPlugin } from "@orpc/server/plugins"
 import chalk from "chalk";
 import dedent from "dedent";
-import { compositeRouterContract } from "@hackclub/lapse-api";
 import z from "zod";
 
 import { ensureCanonicalClient, getAuthenticatedUser } from "@/oauth.js"
@@ -31,29 +30,8 @@ import { startLookoutPublishSweeper } from "@/lookoutPublish.js";
 import { startRecordingClientBackfill } from "@/recordingClientBackfill.js";
 import { startAirtableUserSync } from "@/airtableSync.js";
 
-import user from "@/routers/user.js"
-import timelapse from "@/routers/timelapse.js"
-import draftTimelapse from "@/routers/draftTimelapse.js"
-import comment from "@/routers/comment.js"
-import developer from "@/routers/developer.js"
-import global from "@/routers/global.js"
-import hackatime from "@/routers/hackatime.js"
-import auth from "@/routers/auth.js"
-import admin from "@/routers/admin.js"
-
-const router = implement(compositeRouterContract)
-    .$context<Context>()
-    .router({
-        user,
-        timelapse,
-        draftTimelapse,
-        comment,
-        developer,
-        global,
-        hackatime,
-        auth,
-        admin,
-    });
+import { router } from "@/appRouter.js";
+import { startRealizeJobEvents } from "@/job.js";
 
 const handler = new OpenAPIHandler(
     router,
@@ -126,6 +104,9 @@ startLookoutPublishSweeper();
 
 // Timelapses published before `recordedWith` existed learn it from Lookout. See `recordingClientBackfill.ts`.
 startRecordingClientBackfill();
+
+// Legacy drafts are encoded by the worker; this is where we hear that one finished or failed. See `job.ts`.
+startRealizeJobEvents();
 
 // Daily per-user stats for Loops. Does nothing unless the AIRTABLE_SYNC_* variables are set.
 startAirtableUserSync();

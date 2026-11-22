@@ -14,7 +14,7 @@ import { apiOk, apiErr, type Result, Err, lapseId } from "@/common.js";
 import { actorEntitledTo, actorHasAdminView, stringifyActor, type Actor } from "@/ownership.js";
 import { isLegacyRecording } from "@/routers/draftTimelapse.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
-import { HackatimeOAuthApi, HackatimeUserApi, type WakaTimeHeartbeat } from "@/hackatime.js";
+import { HackatimeOAuthApi, HackatimeUserApi, hackatimeTokenOf, type WakaTimeHeartbeat } from "@/hackatime.js";
 import { dtoComment, type DbComment } from "@/routers/comment.js";
 import { enqueueRealizeJob } from "@/job.js";
 import { adminOverrideActorId, diffAuditedFields, recordAdminChange, recordAdminDeletion } from "@/adminAudit.js";
@@ -24,9 +24,10 @@ import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, 
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
 import { assignBrowserLabelVariant, assignBrowserWarningVariant } from "@/experiments.js";
 import { BROWSER_RECORDING_MAINTENANCE_MESSAGE, isBrowserRecordingAvailable } from "@/recordingAvailability.js";
+import type * as safe from "@/secrets.js";
 
-export type DbTimelapse = Omit<db.Timelapse, "snapshots"> & { owner: db.User, comments: DbComment[] };
-export type DbOwnedTimelapse = DbTimelapse & { owner: db.User };
+export type DbTimelapse = Omit<safe.Timelapse, "snapshots"> & { owner: safe.User, comments: DbComment[] };
+export type DbOwnedTimelapse = DbTimelapse & { owner: safe.User };
 
 const os = implement(timelapseRouterContract)
     .$context<Context>()
@@ -96,14 +97,15 @@ export function dtoTimelapse(entity: DbTimelapse | DbOwnedTimelapse, actor: Acto
 /**
  * Resolves the Hackatime API key belonging to a user.
  */
-export async function hackatimeApiKeyFor(owner: db.User): Promise<string> {
-    if (!owner.hackatimeId || !owner.hackatimeAccessToken)
+export async function hackatimeApiKeyFor(owner: safe.User): Promise<string> {
+    const token = await hackatimeTokenOf(owner.id);
+    if (!token)
         throw new Error(`User ${owner.id} does not have a linked Hackatime account.`);
 
     if (process.env["NODE_ENV"] !== "production" && env.DEV_HACKATIME_FALLBACK_KEY)
         return env.DEV_HACKATIME_FALLBACK_KEY;
 
-    const oauthApi = new HackatimeOAuthApi(owner.hackatimeAccessToken);
+    const oauthApi = new HackatimeOAuthApi(token);
     const userApiKey = await oauthApi.apiKey();
 
     if (!userApiKey)
@@ -118,7 +120,7 @@ export async function hackatimeApiKeyFor(owner: db.User): Promise<string> {
  *
  * `apiKey` may be supplied to avoid one token exchange per timelapse when syncing many at once.
  */
-export async function syncTimelapseWithHackatime(timelapse: db.Timelapse & { owner: db.User }, owner: db.User, apiKey?: string) {
+export async function syncTimelapseWithHackatime(timelapse: safe.Timelapse & { owner: safe.User }, owner: safe.User, apiKey?: string) {
     if (!timelapse.hackatimeProject)
         throw new Error(`Timelapse ${timelapse.id} has no hackatimeProject set.`);
 
@@ -402,7 +404,7 @@ export default os.router({
             if (timelapse.visibility === "FAILED_PROCESSING")
                 return apiErr("ERROR", "You can only delete timelapses that failed processing");
 
-            const updateData: Partial<db.Timelapse> = {};
+            const updateData: Partial<safe.Timelapse> = {};
             if (req.input.changes.name) {
                 updateData.name = req.input.changes.name;
             }
@@ -522,7 +524,7 @@ export default os.router({
             if (timelapse.hackatimeProject)
                 return apiErr("HACKATIME_ERROR", "Timelapse already has an associated Hackatime project");
 
-            if (!timelapse.owner.hackatimeId || !timelapse.owner.hackatimeAccessToken)
+            if (await hackatimeTokenOf(timelapse.ownerId) === null)
                 return apiErr("ERROR", "You must have a linked Hackatime account to sync with Hackatime!");
 
             const timelapseWithProject = { ...timelapse, hackatimeProject: req.input.hackatimeProject };
@@ -670,9 +672,11 @@ export default os.router({
 
             const mayPublish = req.context.scopes.includes("timelapse:write") || req.context.scopes.includes("elevated");
 
+            // The recorder resumes a draft with its Lookout token, so this is one of the few places that reads it.
             const drafts = await database().draftLookoutTimelapse.findMany({
                 where: { ownerId: caller.id, archivedAt: null },
                 orderBy: { createdAt: "desc" },
+                omit: { lookoutToken: false },
             });
 
             // A draft the user already answered in the desktop panel publishes as soon as its video is ready. This

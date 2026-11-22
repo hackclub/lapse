@@ -1,7 +1,7 @@
 import { oneOf } from "@hackclub/lapse-shared";
 import type { LapseOAuthScope } from "@hackclub/lapse-api";
 
-import type * as db from "@/generated/prisma/client.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * Represents the identity of an authenticated program key.
@@ -21,7 +21,7 @@ export type ServerActor = { kind: "SERVER" };
 /**
  * Represents an actor authenticated as a user via OAuth2.
  */
-export type UserActor = { kind: "USER"; user: db.User; scopes: LapseOAuthScope[] };
+export type UserActor = { kind: "USER"; user: safe.User; scopes: LapseOAuthScope[] };
 
 /**
  * Represents an actor authenticated via a program key (machine-to-machine).

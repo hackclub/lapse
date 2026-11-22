@@ -1,6 +1,23 @@
 import { chunked, sleep } from "@hackclub/lapse-shared";
+import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { logError, logWarning } from "@/logging.js";
+
+/**
+ * Reads a user's Hackatime access token, or `null` if they have no linked Hackatime account. The token is left out
+ * of every `User` the database returns (see `secrets.ts`), so anything that talks to Hackatime as a user asks here.
+ */
+export async function hackatimeTokenOf(userId: string): Promise<string | null> {
+    const user = await database().user.findUnique({
+        where: { id: userId },
+        select: { hackatimeId: true, hackatimeAccessToken: true }
+    });
+
+    if (!user?.hackatimeId || !user.hackatimeAccessToken)
+        return null;
+
+    return user.hackatimeAccessToken;
+}
 
 export interface WakaTimeCategorizedStat {
     name: string;

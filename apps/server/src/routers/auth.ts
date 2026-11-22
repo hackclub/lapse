@@ -15,7 +15,7 @@ import { HackatimeOAuthApi } from "@/hackatime.js";
 import { slackQueryProfile } from "@/slack.js";
 import { oauthSrv, verifySecretHash } from "@/oauth.js";
 import { apiErr, apiOk } from "@/common.js";
-import type * as db from "@/generated/prisma/client.js";
+import type * as safe from "@/secrets.js";
 
 const os = implement(authRouterContract)
     .$context<Context>()
@@ -107,7 +107,7 @@ const HackatimeTokenResponseSchema = z.object({
  * look the same. Those are left alone - unless the bio is empty, which has nothing to lose, or already matches the
  * Slack title, which is as good as having copied it.
  */
-function bioFromSlack(user: db.User, title: string): Pick<db.User, "bio" | "slackTitle"> | null {
+function bioFromSlack(user: safe.User, title: string): Pick<safe.User, "bio" | "slackTitle"> | null {
     if (user.slackTitle === null ? (user.bio === "" || user.bio === title) : user.bio === user.slackTitle)
         return { bio: title, slackTitle: title };
 

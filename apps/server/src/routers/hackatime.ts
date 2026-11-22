@@ -9,11 +9,11 @@ import { cachedJson, fingerprint } from "@/cache.js";
 import { database, redis } from "@/db.js";
 import { logError, logWarning } from "@/logging.js";
 import { apiErr } from "@/common.js";
-import { HackatimeApiError, HackatimeOAuthApi } from "@/hackatime.js";
+import { HackatimeApiError, HackatimeOAuthApi, hackatimeTokenOf } from "@/hackatime.js";
 import { maybe } from "@hackclub/lapse-shared";
 import { actorEntitledTo } from "@/ownership.js";
 
-import * as db from "@/generated/prisma/client.js";
+import type * as safe from "@/secrets.js";
 
 /**
  * The user's Hackatime projects, most recently worked on first.
@@ -21,15 +21,18 @@ import * as db from "@/generated/prisma/client.js";
  * Extracted from `allProjects` so the Lookout publish panel can offer the same picker. The panel is
  * authenticated by its own URL rather than by a signed-in user, so it cannot call the procedure.
  */
-export async function hackatimeProjectsForUser(user: db.User): Promise<HackatimeProject[]> {
-    if (!user.hackatimeId || !user.hackatimeAccessToken)
+export async function hackatimeProjectsForUser(user: safe.User): Promise<HackatimeProject[]> {
+    const token = await hackatimeTokenOf(user.id);
+    if (!token)
         return [];
 
-    const token = user.hackatimeAccessToken;
+    return await hackatimeProjectsWithToken(user.id, token);
+}
 
+async function hackatimeProjectsWithToken(userId: string, token: string): Promise<HackatimeProject[]> {
     // The project picker opens on every publish, and Hackatime takes a few hundred milliseconds to answer.
     const projects = await cachedJson(
-        `lapse:hackatime:projects:${user.id}:${fingerprint(token)}`,
+        `lapse:hackatime:projects:${userId}:${fingerprint(token)}`,
         HACKATIME_PROJECTS_TTL_SECONDS,
         () => new HackatimeOAuthApi(token).getProjects()
     );
@@ -52,11 +55,11 @@ export async function hackatimeProjectsForUser(user: db.User): Promise<Hackatime
  * Whether Hackatime has banned the user (marked them as `red`). Banned users can still sign in, but Hackatime refuses
  * to give us their projects or their API key - so there is nothing to sync with, and signing in again won't change that.
  */
-export async function isHackatimeRestricted(user: db.User): Promise<boolean> {
-    if (!user.hackatimeId || !user.hackatimeAccessToken)
+export async function isHackatimeRestricted(user: safe.User): Promise<boolean> {
+    const token = await hackatimeTokenOf(user.id);
+    if (!token)
         return false;
 
-    const token = user.hackatimeAccessToken;
     return await cachedJson(
         `lapse:hackatime:restricted:${user.id}:${fingerprint(token)}`,
         HACKATIME_RESTRICTED_TTL_SECONDS,
@@ -126,11 +129,12 @@ export default os.router({
         .handler(async (req) => {
             const caller = req.context.user;
 
-            if (!caller.hackatimeId || !caller.hackatimeAccessToken)
+            const token = await hackatimeTokenOf(caller.id);
+            if (!token)
                 return apiErr("ERROR", "You must have a linked Hackatime account!");
 
             try {
-                return apiOk({ projects: await hackatimeProjectsForUser(caller) });
+                return apiOk({ projects: await hackatimeProjectsWithToken(caller.id, token) });
             }
             catch (error) {
                 // A refused token is surfaced to the user by `linkStatus`, which asks them to sign in again.
@@ -151,12 +155,13 @@ export default os.router({
             // The user was loaded fresh for this request while authenticating it.
             const dbUser = req.context.user;
 
-            if (!dbUser.hackatimeId || !dbUser.hackatimeAccessToken)
+            const token = await hackatimeTokenOf(dbUser.id);
+            if (!token)
                 return apiOk({ needsRelink: false, restricted: false });
 
             // Every page load asks this, and the answer only changes when the user signs in again (which changes
             // the token, and with it the key) or Hackatime changes its mind about them.
-            const key = `lapse:hackatime:linkStatus:${dbUser.id}:${fingerprint(dbUser.hackatimeAccessToken)}`;
+            const key = `lapse:hackatime:linkStatus:${dbUser.id}:${fingerprint(token)}`;
 
             try {
                 const cached = await redis().get(key);
@@ -167,7 +172,7 @@ export default os.router({
                 logWarning("Couldn't read the cached Hackatime link status.", { error });
             }
 
-            const { definitive, ...status } = await checkLinkStatus(dbUser.id, dbUser.hackatimeAccessToken);
+            const { definitive, ...status } = await checkLinkStatus(dbUser.id, token);
 
             if (definitive) {
                 try {

@@ -8,20 +8,21 @@ import { createServiceClient, normalizeRedirectUris, normalizeScopes, rotateServ
 import { env } from "@/env.js";
 
 import * as db from "@/generated/prisma/client.js";
+import type * as safe from "@/secrets.js";
 
 const os = implement(developerRouterContract)
     .$context<Context>()
     .use(logMiddleware);
 
 /**
- * Represents a `db.ServiceClient` with related tables included.
+ * Represents a `safe.ServiceClient` with related tables included.
  */
-export type DbOAuthApp = db.ServiceClient & { createdByUser: db.User | null };
+export type DbOAuthApp = safe.ServiceClient & { createdByUser: safe.User | null };
 
 /**
  * Represents a `db.ServiceGrant` with related tables included.
  */
-export type DbOAuthGrant = db.ServiceGrant & { serviceClient: db.ServiceClient };
+export type DbOAuthGrant = db.ServiceGrant & { serviceClient: safe.ServiceClient };
 
 export function dtoOAuthApp(entity: DbOAuthApp): OAuthApp {
     return {

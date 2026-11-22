@@ -14,6 +14,8 @@ import { durationBySnapshots, hackatimeApiKeyFor, syncTimelapseWithHackatime } f
 import { diffAuditedFields, findAuditedEntity, recordAdminChange, type AuditClient } from "@/adminAudit.js";
 
 import * as db from "@/generated/prisma/client.js";
+import { SECRET_COLUMNS, withoutSecrets } from "@/secrets.js";
+import type * as safe from "@/secrets.js";
 
 const os = implement(adminRouterContract)
     .$context<Context>()
@@ -128,7 +130,7 @@ function sortDraftTimelapseRows(rows: AdminDraftTimelapseRow[], sort: AdminSort 
     });
 }
 
-function dtoAdminUser(entity: db.User): AdminUserRow {
+function dtoAdminUser(entity: safe.User): AdminUserRow {
     return {
         id: entity.id,
         email: entity.email,
@@ -144,7 +146,7 @@ function dtoAdminUser(entity: db.User): AdminUserRow {
     };
 }
 
-function dtoAdminTimelapse(entity: db.Timelapse & { owner: db.User }): AdminTimelapseRow {
+function dtoAdminTimelapse(entity: safe.Timelapse & { owner: safe.User }): AdminTimelapseRow {
     return {
         id: entity.id,
         name: entity.name,
@@ -160,7 +162,7 @@ function dtoAdminTimelapse(entity: db.Timelapse & { owner: db.User }): AdminTime
     };
 }
 
-function dtoAdminComment(entity: db.Comment & { author: db.User }): AdminCommentRow {
+function dtoAdminComment(entity: db.Comment & { author: safe.User }): AdminCommentRow {
     return {
         id: entity.id,
         content: entity.content,
@@ -171,7 +173,7 @@ function dtoAdminComment(entity: db.Comment & { author: db.User }): AdminComment
     };
 }
 
-function dtoAdminDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }): AdminDraftTimelapseRow {
+function dtoAdminDraftTimelapse(entity: db.DraftTimelapse & { owner: safe.User }): AdminDraftTimelapseRow {
     return {
         id: entity.id,
         name: entity.name,
@@ -190,7 +192,7 @@ function dtoAdminDraftTimelapse(entity: db.DraftTimelapse & { owner: db.User }):
  * Lookout draft rows carry the session's live state, since the draft itself is only a pointer and "does this
  * recording still exist, and is it compiled?" is the question an admin opening this table is asking.
  */
-async function dtoAdminLookoutDraft(entity: db.DraftLookoutTimelapse & { owner: db.User }): Promise<AdminLookoutDraftRow> {
+async function dtoAdminLookoutDraft(entity: safe.DraftLookoutTimelapse & { owner: safe.User }): Promise<AdminLookoutDraftRow> {
     let lookoutStatus: string | null = null;
     let trackedSeconds: number | null = null;
     let hasVideo = false;
@@ -219,7 +221,7 @@ async function dtoAdminLookoutDraft(entity: db.DraftLookoutTimelapse & { owner: 
     };
 }
 
-function dtoAdminLegacyTimelapse(entity: db.LegacyUnpublishedTimelapse & { owner: db.User }): AdminLegacyTimelapseRow {
+function dtoAdminLegacyTimelapse(entity: db.LegacyUnpublishedTimelapse & { owner: safe.User }): AdminLegacyTimelapseRow {
     return {
         id: entity.id,
         name: entity.name,
@@ -235,7 +237,7 @@ function dtoAdminLegacyTimelapse(entity: db.LegacyUnpublishedTimelapse & { owner
 interface EntityConfig {
     list: (where: Record<string, unknown>, sort: AdminSort | undefined, orderBy: Record<string, unknown> | undefined, skip: number, take: number) => Promise<Record<string, unknown>[]>;
     count: (where: Record<string, unknown>) => Promise<number>;
-    update: (tx: AuditClient, id: string, changes: Record<string, unknown>, caller: db.User) => Promise<Record<string, unknown> | null>;
+    update: (tx: AuditClient, id: string, changes: Record<string, unknown>, caller: safe.User) => Promise<Record<string, unknown> | null>;
 }
 
 const EDITABLE_USER_FIELDS = new Set(["email", "handle", "displayName", "bio", "hackatimeId", "slackId", "permissionLevel"]);
@@ -243,6 +245,12 @@ const ROOT_ONLY_USER_FIELDS = ["permissionLevel", "email", "hackatimeId", "slack
 const EDITABLE_TIMELAPSE_FIELDS = new Set(["name", "description", "visibility", "hackatimeProject"]);
 const EDITABLE_COMMENT_FIELDS = new Set(["content"]);
 const EDITABLE_DRAFT_FIELDS = new Set(["name", "description"]);
+
+const EXPORTED_MODELS: Partial<Record<AdminEntity, keyof typeof SECRET_COLUMNS>> = {
+    user: "user",
+    timelapse: "timelapse",
+    lookoutDraft: "draftLookoutTimelapse"
+};
 
 const EDITABLE_FIELDS: Record<AdminEntity, Set<string>> = {
     user: EDITABLE_USER_FIELDS,
@@ -455,7 +463,7 @@ function pushSearchDescriptor(results: SearchResultRow[], query: string, descrip
     }
 }
 
-function dtoProgramKey(key: db.ProgramKey & { createdByUser: db.User }): ProgramKeyMetadata {
+function dtoProgramKey(key: safe.ProgramKey & { createdByUser: safe.User }): ProgramKeyMetadata {
     return {
         id: key.id,
         name: key.name,
@@ -625,18 +633,20 @@ export default os.router({
             const { entity, id } = req.input;
 
             const record = await (
-                entity === "user" ? database().user.findUnique({ where: { id }, omit: { hackatimeAccessToken: true, hackatimeRefreshToken: true } })
-                : entity === "timelapse" ? database().timelapse.findUnique({ where: { id }, omit: { lookoutToken: true } })
+                entity === "user" ? database().user.findUnique({ where: { id } })
+                : entity === "timelapse" ? database().timelapse.findUnique({ where: { id } })
                 : entity === "comment" ? database().comment.findUnique({ where: { id } })
                 : entity === "draftTimelapse" ? database().draftTimelapse.findUnique({ where: { id } })
-                : entity === "lookoutDraft" ? database().draftLookoutTimelapse.findUnique({ where: { id }, omit: { lookoutToken: true, panelToken: true } })
+                : entity === "lookoutDraft" ? database().draftLookoutTimelapse.findUnique({ where: { id } })
                 : database().legacyUnpublishedTimelapse.findUnique({ where: { id } })
             );
 
             if (!record)
                 return apiErr("NOT_FOUND", "Record not found.");
 
-            return apiOk({ data: record });
+            // The whole row goes out as-is, so it's stripped again here in case a secret was ever loaded on purpose.
+            const model = EXPORTED_MODELS[entity];
+            return apiOk({ data: model ? withoutSecrets(model, record) : record });
         }),
 
     recalculateDurations: os.recalculateDurations
