@@ -97,9 +97,27 @@ model User {
   lookoutDevices        LookoutDevice[]
   lookoutPairingCodes   LookoutPairingCode[]
   adminAuditLogs        AdminAuditLog[]
+  experimentAssignments ExperimentAssignment[]
 
   @@index([hackatimeId])
   @@index([slackId])
+}
+
+/// Which variant of an A/B test a user was put in. Assigned once, the first time the user reaches the thing being
+/// tested, so a row here also means the user was exposed to it.
+model ExperimentAssignment {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+
+  /// e.g. `browser-label`.
+  experiment  String
+  variant     String
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, experiment])
+  @@index([experiment])
 }
 
 model AdminAuditLog {
@@ -264,7 +282,7 @@ model LookoutDraftEvent {
   lookoutSessionId  String
   ownerId           String
 
-  /// `archived`, `restored`, `published`, or `publish-rejected`. Only `published` removes the draft row.
+  /// `created`, `archived`, `restored`, `published`, or `publish-rejected`. Only `published` removes the draft row.
   kind              String
 
   /// Why, for `archived`: `discarded` or `session-gone`. For `publish-rejected`: e.g. `browser-recording-restricted`.
@@ -276,7 +294,7 @@ model LookoutDraftEvent {
   /// The timelapse the draft became, for `published`.
   timelapseId       String?
 
-  /// Anything else worth keeping - for `session-gone`, Lookout's exact status and response body, so a 404 from a
+  /// Anything else worth keeping - for `created`, the recording mode picked in the browser; for `session-gone`, Lookout's exact status and response body, so a 404 from a
   /// proxy can be told apart from Lookout saying the session doesn't exist.
   detail            Json?
 

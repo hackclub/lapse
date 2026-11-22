@@ -19,9 +19,10 @@ import { dtoComment, type DbComment } from "@/routers/comment.js";
 import { enqueueRealizeJob } from "@/job.js";
 import { adminOverrideActorId, diffAuditedFields, recordAdminChange, recordAdminDeletion } from "@/adminAudit.js";
 import * as lookout from "@/lookout.js";
-import { archiveLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
+import { archiveLookoutDraft, createLookoutDraft, restoreLookoutDraft } from "@/lookoutDraftEvents.js";
 import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
+import { assignBrowserLabelVariant } from "@/experiments.js";
 
 export type DbTimelapse = Omit<db.Timelapse, "snapshots"> & { owner: db.User, comments: DbComment[] };
 export type DbOwnedTimelapse = DbTimelapse & { owner: db.User };
@@ -579,6 +580,14 @@ export default os.router({
             return apiOk({ revoked: deleted.count > 0 });
         }),
 
+    assignBrowserLabelVariant: os.assignBrowserLabelVariant
+        .use(requiredAuth())
+        .use(requiredScopes("timelapse:write"))
+        .use(requiredImplicitUser())
+        .handler(async (req) => {
+            return apiOk({ variant: await assignBrowserLabelVariant(req.context.user) });
+        }),
+
     createRecordingSession: os.createRecordingSession
         .use(requiredAuth())
         .use(requiredScopes("timelapse:write"))
@@ -609,15 +618,13 @@ export default os.router({
                 panelUrl: `${env.WEB_BASE_URL}/lookout/panel/${panelToken}`,
             });
 
-            const draft = await database().draftLookoutTimelapse.create({
-                data: {
-                    id: draftId,
-                    lookoutSessionId: session.sessionId,
-                    lookoutToken: session.token,
-                    panelToken,
-                    ownerId: caller.id,
-                }
-            });
+            const draft = await createLookoutDraft({
+                id: draftId,
+                lookoutSessionId: session.sessionId,
+                lookoutToken: session.token,
+                panelToken,
+                ownerId: caller.id,
+            }, { actor: stringifyActor(req.context.actor), mode: req.input.mode ?? null });
 
             return apiOk({
                 draftId: draft.id,

@@ -23,6 +23,32 @@ function describe(draft: DraftRef): string {
 }
 
 /**
+ * Creates a draft. `mode` is the recording mode picked in the browser, kept so the recording mode picker can be
+ * measured - `null` when the draft wasn't started from it.
+ */
+export async function createLookoutDraft(
+    data: db.Prisma.DraftLookoutTimelapseUncheckedCreateInput,
+    options: { actor: string | null; mode: string | null }
+): Promise<db.DraftLookoutTimelapse> {
+    return await database().$transaction(async tx => {
+        const draft = await tx.draftLookoutTimelapse.create({ data });
+
+        await tx.lookoutDraftEvent.create({
+            data: {
+                draftId: draft.id,
+                lookoutSessionId: draft.lookoutSessionId,
+                ownerId: draft.ownerId,
+                kind: "created",
+                actor: options.actor,
+                detail: options.mode ? { mode: options.mode } : undefined,
+            },
+        });
+
+        return draft;
+    });
+}
+
+/**
  * Hides a draft from the user's live drafts, keeping it restorable. Returns `false` if it was already archived or
  * no longer exists.
  */

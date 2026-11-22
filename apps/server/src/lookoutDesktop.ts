@@ -8,6 +8,7 @@ import { env } from "@/env.js";
 import { lapseId } from "@/common.js";
 import { logInfo, logWarning } from "@/logging.js";
 import * as lookout from "@/lookout.js";
+import { createLookoutDraft } from "@/lookoutDraftEvents.js";
 import { finalizeIfPending, intentOf, storePublishIntent, timelapseUrl } from "@/lookoutPublish.js";
 import { hackatimeProjectsForUser, isHackatimeRestricted } from "@/routers/hackatime.js";
 
@@ -206,15 +207,13 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
             panelUrl: `${env.WEB_BASE_URL}/lookout/panel/${panelToken}`,
         });
 
-        await database().draftLookoutTimelapse.create({
-            data: {
-                id: draftId,
-                lookoutSessionId: session.sessionId,
-                lookoutToken: session.token,
-                panelToken,
-                ownerId: device.owner.id,
-            },
-        });
+        await createLookoutDraft({
+            id: draftId,
+            lookoutSessionId: session.sessionId,
+            lookoutToken: session.token,
+            panelToken,
+            ownerId: device.owner.id,
+        }, { actor: `desktop device ${device.id}`, mode: null });
 
         await database().lookoutDevice.update({
             where: { id: device.id },

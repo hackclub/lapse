@@ -139,6 +139,19 @@ export const TimelapseSchema = OwnedTimelapseSchema.partial({ private: true }).e
         .describe("Always `false`. This field is provided for convenience when using strongly-typed clients.")
 });
 
+/**
+ * How the user chose to record from Lapse's recording mode picker.
+ */
+export type RecordingMode = z.infer<typeof RecordingModeSchema>;
+export const RecordingModeSchema = z.enum(["desktop", "screen", "camera"]);
+
+/**
+ * How the Browser option in the recording mode picker is labelled, as part of an A/B test: no label, or "Less stable"
+ * / "Legacy" shown either as a badge on the tile or as small text under its description.
+ */
+export type BrowserLabelVariant = z.infer<typeof BrowserLabelVariantSchema>;
+export const BrowserLabelVariantSchema = z.enum(["none", "badge-less-stable", "badge-legacy", "text-less-stable", "text-legacy"]);
+
 export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
     query: contract("GET", "/timelapse/query")
         .route({ description: "Finds a timelapse by its ID. This endpoint will return a different view if the user owns the timelapse." })
@@ -268,9 +281,17 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
         }))
         .output(apiResult({ revoked: z.boolean() })),
 
+    assignBrowserLabelVariant: contract("POST", "/timelapse/assignBrowserLabelVariant")
+        .route({ description: "Puts the user in a variant of the Browser recording mode label A/B test, or returns the one they already have. `null` when the user isn't part of the test." })
+        .input(z.object({}))
+        .output(apiResult({ variant: BrowserLabelVariantSchema.nullable() })),
+
     createRecordingSession: contract("POST", "/timelapse/createRecordingSession")
         .route({ description: "Creates a new Lookout-backed recording session and a server-side draft. Returns a Lookout token the client uses to initialize the Lookout SDK." })
-        .input(z.object({}))
+        .input(z.object({
+            mode: RecordingModeSchema.optional()
+                .describe("The recording mode the user picked. Only used to measure which modes people choose."),
+        }))
         .output(
             apiResult({
                 draftId: LapseId

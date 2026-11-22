@@ -6,6 +6,7 @@ import Icon from "@hackclub/icons";
 import { Skeleton } from "skullet/react";
 import { LookoutProvider, useLookout } from "@lookout/react";
 import type { CaptureMode } from "@lookout/react";
+import type { BrowserLabelVariant, RecordingMode } from "@hackclub/lapse-api";
 
 import type { IconGlyph } from "@/common";
 import { api } from "@/api";
@@ -21,7 +22,6 @@ import {
 } from "@/components/lookout/sessions";
 import RootLayout from "@/components/layout/RootLayout";
 import { EditorModal } from "@/components/lookout/EditorModal";
-import { CodeNoticeModal, isCodeNoticeDismissed } from "@/components/lookout/CodeNoticeModal";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { LoadingModal } from "@/components/layout/LoadingModal";
 import { ErrorModal } from "@/components/layout/ErrorModal";
@@ -53,15 +53,25 @@ interface LookoutSessionConfig {
   lookoutSessionId: string;
 }
 
-type RecordingMode = "desktop" | "screen" | "camera";
+const BROWSER_LABELS: Record<BrowserLabelVariant, { badge?: string; note?: string }> = {
+  "none": {},
+  "badge-less-stable": { badge: "Less stable" },
+  "badge-legacy": { badge: "Legacy" },
+  "text-less-stable": { note: "Less stable" },
+  "text-legacy": { note: "Legacy" },
+};
 
-function RecordingModeOption({ icon, title, description, selected, onClick, recommended, dimmed, unavailable }: {
+function RecordingModeOption({ icon, title, description, selected, onClick, recommended, badge, note, dimmed, unavailable }: {
   icon: IconGlyph;
   title: string;
   description: string;
   selected: boolean;
   onClick: () => void;
   recommended?: boolean;
+  /** A muted badge in the same spot as "Recommended". */
+  badge?: string;
+  /** Small muted text under the description. */
+  note?: string;
   dimmed?: boolean;
   /** Greyed out for good. Still clickable, so the click can explain why. */
   unavailable?: boolean;
@@ -83,10 +93,18 @@ function RecordingModeOption({ icon, title, description, selected, onClick, reco
           Recommended
         </span>
       )}
+      {!recommended && badge && (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-darkless border border-slate text-muted text-xs font-bold px-3 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap">
+          {badge}
+        </span>
+      )}
       <Icon glyph={icon} size={48} className="shrink-0" />
       <div className="flex flex-col items-center text-center gap-1">
         <span className="font-bold text-lg">{title}</span>
         <span className={clsx("text-sm", selected ? "text-white/80" : "text-muted")}>{description}</span>
+        {note && (
+          <span className={clsx("text-xs italic", selected ? "text-white/60" : "text-muted/70")}>({note})</span>
+        )}
       </div>
     </button>
   );
@@ -539,9 +557,6 @@ export default function LookoutRecorder() {
   const [isCreating, setIsCreating] = useState(false);
   const [hasDrafts, setHasDrafts] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<"checking" | "selecting" | "ready">("checking");
-  // Reviewers can't make sense of a timelapse of an editor, so we say so before every recording.
-  // Banned users are the exception - we ask them to record their code with Lapse.
-  const [showCodeNotice, setShowCodeNotice] = useState(() => !isCodeNoticeDismissed());
   const hackatimeStatus = useHackatimeLinkStatus();
   // Set when a previous Browser (screen) capture failed. Drives the warning blurb,
   // the dimmed Browser option, and the "are you sure?" confirmation on the selector.
@@ -552,6 +567,8 @@ export default function LookoutRecorder() {
   const [engineError, setEngineError] = useState<string | null>(null);
   // Users banned on Hackatime have to record with the desktop app.
   const screenModeBlocked = hackatimeStatus === "restricted";
+  const [browserLabelVariant, setBrowserLabelVariant] = useState<BrowserLabelVariant | null>(null);
+  const browserLabelRequested = useRef(false);
   const [showScreenBlockedNotice, setShowScreenBlockedNotice] = useState(false);
   const initialized = useRef(false);
   // Cleanup for an in-gesture screen-share primed by primeScreenShare(): stops
@@ -606,6 +623,20 @@ export default function LookoutRecorder() {
     checkLookoutDrafts();
   }, [router.isReady, desktopOnly, auth.isLoading, auth.currentUser, checkLookoutDrafts]);
 
+  // Assigned only once the mode picker is about to show, so an assignment means the user saw the label.
+  useEffect(() => {
+    if (phase !== "ready" || !auth.currentUser || browserLabelRequested.current)
+      return;
+
+    browserLabelRequested.current = true;
+    api.timelapse.assignBrowserLabelVariant({})
+      .then(res => {
+        if (res.ok)
+          setBrowserLabelVariant(res.data.variant);
+      })
+      .catch(() => {});
+  }, [phase, auth.currentUser]);
+
   useEffect(() => {
     let cancelled = false;
     checkBrowserRecorderSupport().then((reason) => {
@@ -614,10 +645,10 @@ export default function LookoutRecorder() {
     return () => { cancelled = true; };
   }, []);
 
-  async function createSessionAndStart(onReady: (cfg: LookoutSessionConfig) => void) {
+  async function createSessionAndStart(mode: RecordingMode, onReady: (cfg: LookoutSessionConfig) => void) {
     setIsCreating(true);
     try {
-      const res = await api.timelapse.createRecordingSession({});
+      const res = await api.timelapse.createRecordingSession({ mode });
       if (!res.ok) {
         setInitError(res.message);
         releasePendingStream();
@@ -707,7 +738,7 @@ export default function LookoutRecorder() {
       return;
     }
 
-    createSessionAndStart(startWithConfig);
+    createSessionAndStart(selectedMode, startWithConfig);
   }
 
   function startWithConfig(cfg: LookoutSessionConfig) {
@@ -731,27 +762,8 @@ export default function LookoutRecorder() {
     if (config) {
       setCaptureMode("camera");
     } else {
-      createSessionAndStart(() => setCaptureMode("camera"));
+      createSessionAndStart("camera", () => setCaptureMode("camera"));
     }
-  }
-
-  if (showCodeNotice && hackatimeStatus === null) {
-    return (
-      <RootLayout showHeader={false}>
-        <div className="flex items-center justify-center h-app text-muted">Checking for sessions...</div>
-      </RootLayout>
-    );
-  }
-
-  if (showCodeNotice && hackatimeStatus !== "restricted") {
-    return (
-      <RootLayout showHeader={false}>
-        <CodeNoticeModal
-          onAcknowledge={() => setShowCodeNotice(false)}
-          onClose={() => router.back()}
-        />
-      </RootLayout>
-    );
   }
 
   if (phase === "checking") {
@@ -946,6 +958,7 @@ export default function LookoutRecorder() {
                   setSelectedMode("screen");
                   setConfirmingBrowser(false);
                 }}
+                {...(browserLabelVariant ? BROWSER_LABELS[browserLabelVariant] : {})}
               />
               <RecordingModeOption
                 icon="camera"
