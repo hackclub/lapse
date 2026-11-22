@@ -10,7 +10,8 @@ import { env } from "@/env.js";
 import { logInfo, logWarning } from "@/logging.js";
 import type { FastifyRequest } from "fastify";
 import { getAllOAuthScopes, getAllProgramKeyScopes, type LapseOAuthScope } from "@hackclub/lapse-api";
-import type { ExternalActor, AuthenticatedProgramKey } from "@/ownership.js";
+import type { ExternalActor, AuthenticatedProgramKey, UserActor } from "@/ownership.js";
+import { sessionCookieOf, setSessionCookie } from "@/session.js";
 import type * as safe from "@/secrets.js";
 
 export function hashServiceSecret(secret: string): string {
@@ -28,6 +29,7 @@ export function generateServiceClientSecret() {
 }
 
 const PROGRAM_KEY_PREFIX = "pk_lapse_";
+const ACCESS_TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 30; // 30d
 
 export function generateProgramKey() {
     return `${PROGRAM_KEY_PREFIX}${randomBytes(32).toString("hex")}`;
@@ -221,7 +223,18 @@ const AccessTokenJwtSchema = AccessTokenPayloadSchema.extend({
     /**
      * The expiration date of the authorization code, specified in seconds from the Unix epoch. 
      */
-    exp: z.number()
+    exp: z.number(),
+
+    /**
+     * When the token was issued, in seconds from the Unix epoch.
+     */
+    iat: z.number().optional(),
+
+    /**
+     * When the user actually signed in, in seconds from the Unix epoch, if that was before the token was issued -
+     * which is the case for a session cookie that took over from an older token (see `adoptSession`).
+     */
+    aut: z.number().optional()
 })
 
 /**
@@ -451,16 +464,100 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
 
 export const oauthSrv = new OAuth2Server({
     model: new LapseAuthorizationCodeModel(),
-    accessTokenLifetime: 60 * 60 * 24 * 30, // 30d
+    accessTokenLifetime: ACCESS_TOKEN_LIFETIME_SECONDS,
 });
 
+type AccessTokenCheck =
+    | { status: "valid"; actor: UserActor; token: AccessTokenJwt }
+    /** Expired, forged, revoked, or for a user or client that no longer exists. */
+    | { status: "invalid" }
+    /** We couldn't tell, because the database or Redis didn't answer. */
+    | { status: "unknown" };
+
+/**
+ * Checks an access token, whichever way it reached us - `Authorization: Bearer`, or the website's session cookie.
+ */
+export async function checkAccessToken(accessToken: string): Promise<AccessTokenCheck> {
+    const token = decodeAccessToken(accessToken);
+    if (token instanceof Error)
+        return { status: "invalid" };
+
+    try {
+        // Both run on every authenticated request, so they run side by side.
+        const [revoked, user] = await Promise.all([
+            isAccessTokenRevoked(accessToken),
+            database().user.findFirst({ where: { id: token.sub } })
+        ]);
+
+        if (revoked || !user)
+            return { status: "invalid" };
+
+        const allScopes = new Set(getAllOAuthScopes());
+        if (!token.scp.every(x => allScopes.has(x as LapseOAuthScope))) {
+            logWarning(`Unknown scopes present in access token; denying auth! All scopes: ${token.scp.join(", ")}`);
+            return { status: "invalid" };
+        }
+
+        if (token.scp.includes("elevated") && token.cid !== env.CANONICAL_OAUTH_CLIENT_ID) {
+            logWarning(`Access token for client ${token.cid} carries the elevated scope; denying auth!`, { token });
+            return { status: "invalid" };
+        }
+
+        // Tokens have always been valid for 30 days, which dates the rare one that doesn't say when it was issued.
+        const authenticatedAt = token.aut ?? token.iat ?? token.exp - ACCESS_TOKEN_LIFETIME_SECONDS;
+
+        return {
+            status: "valid",
+            token,
+            actor: { kind: "USER", user, scopes: token.scp as LapseOAuthScope[], authenticatedAt: new Date(authenticatedAt * 1000) }
+        };
+    }
+    catch (error) {
+        logWarning(`Could not fetch user ${token.sub} (authenticated via client ${token.cid})!`, { error });
+        return { status: "unknown" };
+    }
+}
+
+/**
+ * Issues the token for a website session that takes over from `token`, an access token the website used to keep in
+ * `localStorage`. It is for the same user and client, expires when `token` would have, and remembers when the user
+ * really signed in - moving a session into a cookie isn't signing in again.
+ */
+export function issueSessionTokenFrom(token: AccessTokenJwt, authenticatedAt: Date): { accessToken: string; expiresAt: Date } {
+    const accessToken = jwt.sign(
+        {
+            sub: token.sub,
+            cid: token.cid,
+            scp: token.scp,
+            aut: Math.floor(authenticatedAt.getTime() / 1000),
+            exp: token.exp
+        } satisfies AccessTokenPayload & { aut: number; exp: number },
+        env.JWT_SECRET_ACCESS_TOKENS
+    );
+
+    return { accessToken, expiresAt: new Date(token.exp * 1000) };
+}
+
+/**
+ * Sends the session cookie again, unchanged and due to expire when it always was. See `user.myself`.
+ */
+export function renewSessionCookie(resHeaders: Headers | undefined, sessionToken: string) {
+    const token = decodeAccessToken(sessionToken);
+    if (token instanceof Error || !resHeaders)
+        return;
+
+    setSessionCookie(resHeaders, sessionToken, new Date(token.exp * 1000));
+}
+
+function bearerTokenOf(req: FastifyRequest): string | null {
+    const authorization = req.headers.authorization;
+    return authorization?.startsWith("Bearer ") ? authorization.substring("Bearer ".length) : null;
+}
+
 export async function getAuthenticatedUser(req: FastifyRequest): Promise<ExternalActor | null> {
-    if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer "))
-        return null;
+    const bearerToken = bearerTokenOf(req);
 
-    const bearerToken = req.headers.authorization.substring("Bearer ".length);
-
-    if (bearerToken.startsWith(PROGRAM_KEY_PREFIX)) {
+    if (bearerToken?.startsWith(PROGRAM_KEY_PREFIX)) {
         const programKey = await authenticateProgramKey(bearerToken);
         if (!programKey)
             return null;
@@ -468,39 +565,20 @@ export async function getAuthenticatedUser(req: FastifyRequest): Promise<Externa
         return { kind: "PROGRAM", programKey };
     }
 
-    const token = decodeAccessToken(bearerToken);
-    if (token instanceof Error) {
-        logWarning("Could not decode access token!", { error: token });
+    // The website's session cookie comes first. A tab that was open before the session moved into the cookie may
+    // still send the token it had, which has been revoked since - that tab is signed in all the same.
+    const sessionToken = sessionCookieOf(req);
+    if (sessionToken) {
+        const session = await checkAccessToken(sessionToken);
+        if (session.status === "valid" && session.token.cid === env.CANONICAL_OAUTH_CLIENT_ID)
+            return session.actor;
+    }
+
+    if (!bearerToken)
         return null;
-    }
 
-    try {
-        // Both run on every authenticated request, so they run side by side.
-        const [revoked, user] = await Promise.all([
-            isAccessTokenRevoked(bearerToken),
-            database().user.findFirst({ where: { id: token.sub } })
-        ]);
-
-        if (revoked || !user)
-            return null;
-
-        const allScopes = new Set(getAllOAuthScopes());
-        if (!token.scp.every(x => allScopes.has(x as LapseOAuthScope))) {
-            logWarning(`Unknown scopes present in access token; denying auth! All scopes: ${token.scp.join(", ")}`);
-            return null;
-        }
-
-        if (token.scp.includes("elevated") && token.cid !== env.CANONICAL_OAUTH_CLIENT_ID) {
-            logWarning(`Access token for client ${token.cid} carries the elevated scope; denying auth!`, { token });
-            return null;
-        }
-
-        return { kind: "USER", user, scopes: token.scp as LapseOAuthScope[] };
-    }
-    catch (error) {
-        logWarning(`Could not fetch user ${token.sub} (authenticated via client ${token.cid})!`, { error });
-        return null;
-    }
+    const bearer = await checkAccessToken(bearerToken);
+    return bearer.status === "valid" ? bearer.actor : null;
 }
 
 async function authenticateProgramKey(bearerToken: string): Promise<AuthenticatedProgramKey | null> {

@@ -14,7 +14,8 @@ import { env } from "@/env.js";
 import { logError, logInfo, logWarning } from "@/logging.js";
 import { HackatimeOAuthApi } from "@/hackatime.js";
 import { slackQueryProfile } from "@/slack.js";
-import { oauthSrv, verifySecretHash } from "@/oauth.js";
+import { checkAccessToken, issueSessionTokenFrom, oauthSrv, revokeAccessToken, verifySecretHash } from "@/oauth.js";
+import { isFromWebsite, sessionCookieOf, setSessionCookie } from "@/session.js";
 import { apiErr, apiOk } from "@/common.js";
 import type * as safe from "@/secrets.js";
 
@@ -247,6 +248,12 @@ export default os.router({
 
             if (!client)
                 throw new ORPCError("NOT_FOUND", { message: "That app doesn't exist." });
+
+            // Consent for the website's own client is only ever given by signing in through Hackatime (see
+            // `hackatimeCallback`). If a session could grant it to itself here, it could mint itself a brand new
+            // session - and with it a fresh sign-in time - without anybody having signed in at all.
+            if (client.clientId === env.CANONICAL_OAUTH_CLIENT_ID)
+                throw new ORPCError("FORBIDDEN", { message: "Consent for this app can't be granted here." });
 
             const disallowedScopes = req.input.scopes.filter(scope =>
                 !client.scopes.includes(scope) ||
@@ -646,6 +653,52 @@ export default os.router({
            };
        }),
 
+    // The website used to keep its access token in `localStorage`. This moves it into the session cookie, in two
+    // calls: the first hands out the cookie, and the second - which the browser makes *with* that cookie - revokes
+    // the old token. A browser that turns out not to keep the cookie never makes the second call, so it is left
+    // with a token that still works rather than signed out.
+    session: os.session
+        .use(authorize("auth.session"))
+        .handler(async (req) => {
+            // Only pages of the website have a session cookie. Anything else keeps its token.
+            if (env.SESSION_COOKIES === "off" || !isFromWebsite(req.context.req))
+                return apiOk({ mode: "bearer" as const });
+
+            const presented = await checkAccessToken(req.input.token);
+            if (presented.status === "unknown")
+                throw new ORPCError("SERVICE_UNAVAILABLE", { message: "Couldn't check that token right now." });
+
+            // Already moved (by another tab, most likely), or simply dead. Either way it's of no more use to the
+            // browser, and whether there is a session is now up to the cookie.
+            if (presented.status === "invalid")
+                return apiOk({ mode: "cookie" as const });
+
+            const { token, actor } = presented;
+            if (token.cid !== env.CANONICAL_OAUTH_CLIENT_ID || !token.scp.includes("elevated"))
+                return apiOk({ mode: "bearer" as const });
+
+            const current = req.context.actor;
+            const hasSession = sessionCookieOf(req.context.req) !== null && current?.kind === "USER" && current.user.id === actor.user.id;
+
+            if (!req.input.confirm) {
+                if (!hasSession) {
+                    const session = issueSessionTokenFrom(token, actor.authenticatedAt);
+                    setSessionCookie(req.context.resHeaders, session.accessToken, session.expiresAt);
+                }
+
+                return apiOk({ mode: "cookie" as const });
+            }
+
+            // The cookie didn't come back, so this browser can't be relying on it.
+            if (!hasSession)
+                return apiOk({ mode: "bearer" as const });
+
+            await revokeAccessToken(req.input.token);
+            logInfo(`Moved the session of ${actor.user.handle} into a cookie.`);
+
+            return apiOk({ mode: "cookie" as const });
+        }),
+
     token: os.token
         .use(authorize("auth.token"))
         .handler(async (req) => {
@@ -677,11 +730,19 @@ export default os.router({
                 throw err;
             }
 
+            // The website's own sign-in ends here with a cookie its scripts can't read, and no token at all in the
+            // response - so nothing running on the page can walk away with one, not even by signing in afresh.
+            // Everyone else (third-party apps, the mobile app) gets their token back as they always have.
+            const wanted = env.SESSION_COOKIES === "only" || (env.SESSION_COOKIES === "on" && req.input.body.session === "cookie");
+            const forWebsite = wanted && token.client.id === env.CANONICAL_OAUTH_CLIENT_ID && isFromWebsite(req.context.req);
+            if (forWebsite)
+                setSessionCookie(req.context.resHeaders, token.accessToken, token.accessTokenExpiresAt!);
+
             return {
                 status: 200,
                 headers: {},
                 body: {
-                    access_token: token.accessToken,
+                    access_token: forWebsite ? "" : token.accessToken,
                     expires_in: Math.max(
                         0,
                         Math.floor((token.accessTokenExpiresAt!.getTime() - Date.now()) / 1000)

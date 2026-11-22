@@ -29,6 +29,7 @@ const TEST_ENV: Record<string, string> = {
     CANONICAL_OAUTH_CLIENT_DESCRIPTION: "The Lapse website",
     CANONICAL_OAUTH_CLIENT_HOMEPAGE_URL: "https://lapse.test",
     CANONICAL_OAUTH_CLIENT_REDIRECT_URIS: "https://lapse.test/auth",
+    SESSION_COOKIES: "on",
 };
 
 for (const [name, value] of Object.entries(TEST_ENV))

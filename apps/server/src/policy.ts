@@ -9,6 +9,7 @@ import { database } from "@/db.js";
 import { env } from "@/env.js";
 import { isAdmin, programHasAdminScope, type ExternalActor, type ProgramActor, type UserActor } from "@/ownership.js";
 import type { Context } from "@/router.js";
+import { ADMIN_REAUTH_WINDOW_MS } from "@/session.js";
 import type * as safe from "@/secrets.js";
 
 /**
@@ -174,6 +175,9 @@ export async function decide(policy: Policy, actor: ExternalActor | null, input:
     if (missing)
         throw missingScope(missing, required);
 
+    if (policy.level)
+        requireRecentSignIn(actor);
+
     if (!policy.resource)
         return { kind: "allow" };
 
@@ -185,10 +189,35 @@ export async function decide(policy: Policy, actor: ExternalActor | null, input:
     if (resource.ownerId === actor.user.id)
         return { kind: "allow" };
 
-    if (rule.alsoFor && isAdmin(actor, rule.alsoFor) && (rule.onlyIf?.(resource) ?? true))
+    if (rule.alsoFor && isAdmin(actor, rule.alsoFor) && (rule.onlyIf?.(resource) ?? true)) {
+        requireRecentSignIn(actor);
         return { kind: "allow" };
+    }
 
     return { kind: "refuse", refusal: rule.denied(input) };
+}
+
+/**
+ * The error an administrator gets when they haven't signed in recently enough to act as one. The website answers
+ * it by sending them through sign-in again, after which the same call goes through.
+ */
+export const REAUTHENTICATION_REQUIRED = "REAUTHENTICATION_REQUIRED";
+
+/**
+ * Administrator powers are only good for a while after signing in. A session lasts thirty days, and whoever gets
+ * to act through an admin's session during that time - a script injected into a page they have open, say - should
+ * find that being an administrator took something they can't do: sign in.
+ *
+ * Only ever reached by somebody who is an administrator, so nobody else can run into it.
+ */
+function requireRecentSignIn(actor: UserActor) {
+    if (Date.now() - actor.authenticatedAt.getTime() <= ADMIN_REAUTH_WINDOW_MS)
+        return;
+
+    throw new ORPCError(REAUTHENTICATION_REQUIRED, {
+        status: 403,
+        message: "Please sign in again to use administrator powers."
+    });
 }
 
 async function decideForProgram(policy: Exclude<Policy, { access: "public" }>, actor: ProgramActor, input: unknown): Promise<Decision> {

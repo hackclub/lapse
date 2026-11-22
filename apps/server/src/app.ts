@@ -60,6 +60,10 @@ const handler = new OpenAPIHandler(
 
 const server = Fastify();
 
+// Open to every origin, credentials included, on purpose. Third-party web apps call the API from their own origins,
+// and our SDK's README long told them to send `credentials: "include"` - which browsers refuse to complete unless
+// the response allows credentials for that origin. What keeps other origins away from the website's session is not
+// this header but `session.ts`: the session cookie is ignored unless the request's `Origin` is the website's.
 server.register(fastifyCors, {
     origin: true,
     credentials: true,

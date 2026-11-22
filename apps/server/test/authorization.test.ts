@@ -17,6 +17,8 @@ import { FakeDatabase, type FakeDatabaseOptions } from "./support/fakeDatabase.j
 import { INPUTS } from "./support/inputs.js";
 import { ADMIN_ID, OTHER_ID, OWNER_ID, proceduresOf, programActor, request, ROOT_ID, THIRD_PARTY_SCOPES, userActor, type Outcome } from "./support/world.js";
 
+const YESTERDAY = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
 /**
  * Everyone who might call the API. Every row in the fake database belongs to the owner, so "other", "admin" and
  * "root" are always acting on somebody else's things.
@@ -32,6 +34,9 @@ const CALLERS = {
     "an admin, on the website": userActor(ADMIN_ID, ["elevated"]),
     "ROOT, through an app with every scope": userActor(ROOT_ID, THIRD_PARTY_SCOPES),
     "ROOT, on the website": userActor(ROOT_ID, ["elevated"]),
+    "an admin, on the website, who signed in yesterday": userActor(ADMIN_ID, ["elevated"], YESTERDAY),
+    "ROOT, on the website, who signed in yesterday": userActor(ROOT_ID, ["elevated"], YESTERDAY),
+    "the owner, on the website, who signed in yesterday": userActor(OWNER_ID, ["elevated"], YESTERDAY),
     "a program key with every ordinary scope": programActor(THIRD_PARTY_SCOPES),
     "a program key with no scopes": programActor([]),
     "a program key with every scope, admin:read and admin:write": programActor([...THIRD_PARTY_SCOPES, "admin:read", "admin:write"]),
@@ -143,6 +148,7 @@ const EXPECTED: Record<string, Expectation> = {
 
     "auth.authorize": anyone,
     "auth.grantConsent": website,
+    "auth.session": anyone,
     "auth.token": anyone,
     "auth.signInWithPassword": anyone,
     "auth.hackatimeCallback": anyone,
@@ -195,11 +201,17 @@ function expectedOutcome(expectation: Expectation, actor: ExternalActor | null, 
     const onWebsite = actor.scopes.includes("elevated");
     const level = LEVELS[actor.user.permissionLevel];
 
+    // Being an administrator wears off an hour after signing in. Everything else about a session doesn't.
+    const signedInRecently = Date.now() - actor.authenticatedAt.getTime() < 60 * 60 * 1000;
+
     if (expectation.for === "admins") {
         if (level < LEVELS[expectation.level])
             return "unauthorized";
 
-        return onWebsite ? "allowed" : "forbidden";
+        if (!onWebsite)
+            return "forbidden";
+
+        return signedInRecently ? "allowed" : "reauthenticate";
     }
 
     if (!onWebsite && (expectation.for === "website" || (expectation.for === "owner" && expectation.websiteOnly) || scopes.some(scope => !actor.scopes.includes(scope))))
@@ -214,7 +226,10 @@ function expectedOutcome(expectation: Expectation, actor: ExternalActor | null, 
         false;
 
     // An administrator's powers only exist on the website: through an app they are an ordinary user.
-    return asAdmin && onWebsite ? "allowed" : "refused";
+    if (!asAdmin || !onWebsite)
+        return "refused";
+
+    return signedInRecently ? "allowed" : "reauthenticate";
 }
 
 const PROCEDURES = proceduresOf(router);
@@ -304,7 +319,11 @@ function showsPrivateFields(outcome: Outcome) {
 }
 
 test("what belongs to a user is only shown in full to them, an admin on the website, or a key with admin:read", async () => {
+    // Seeing more isn't acting, so unlike everything an administrator can *do*, it doesn't take a recent sign-in.
     const mayLook = new Set<string>([
+        "an admin, on the website, who signed in yesterday",
+        "ROOT, on the website, who signed in yesterday",
+        "the owner, on the website, who signed in yesterday",
         "the owner, on the website",
         "the owner, through an app with every scope",
         "the owner, through an app with no scopes",
@@ -338,7 +357,7 @@ test("what belongs to a user is only shown in full to them, an admin on the webs
         const outcome = await request(PROCEDURES.get("global.recentTimelapses")!, {}, actor);
         const everything = outcome.database.calls.some(x => x.model === "timelapse" && x.method === "findMany" && Object.keys(x.args["where"] as object).length === 0);
 
-        assert.equal(everything, who === "an admin, on the website" || who === "ROOT, on the website", `global.recentTimelapses, called by ${who}`);
+        assert.equal(everything, /^(an admin|ROOT), on the website/.test(who), `global.recentTimelapses, called by ${who}`);
     }
 });
 

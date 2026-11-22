@@ -7,6 +7,7 @@ import { getAllOAuthScopes, type LapseOAuthScope, type ProgramKeyScope } from "@
 
 import { setClientsForTesting } from "@/db.js";
 import { setRealizeQueueForTesting } from "@/job.js";
+import { REAUTHENTICATION_REQUIRED } from "@/policy.js";
 import type { Context } from "@/router.js";
 import type { ExternalActor } from "@/ownership.js";
 import type * as safe from "@/secrets.js";
@@ -48,8 +49,11 @@ const USERS = {
 /** Every scope a third-party app can be granted. */
 export const THIRD_PARTY_SCOPES = getAllOAuthScopes().filter(x => x !== "elevated");
 
-export function userActor(id: keyof typeof USERS, scopes: LapseOAuthScope[]): ExternalActor {
-    return { kind: "USER", user: USERS[id], scopes };
+/**
+ * A signed-in user. `signedIn` is when they last actually signed in - just now, unless a test is about that.
+ */
+export function userActor(id: keyof typeof USERS, scopes: LapseOAuthScope[], signedIn = new Date()): ExternalActor {
+    return { kind: "USER", user: USERS[id], scopes, authenticatedAt: signedIn };
 }
 
 export function programActor(scopes: ProgramKeyScope[]): ExternalActor {
@@ -61,7 +65,7 @@ export interface Outcome {
      * How the request was answered: `allowed` if the procedure's policy let it through to the handler, `refused` if
      * the policy answered it instead, and otherwise the error it was turned away with.
      */
-    kind: "allowed" | "unauthorized" | "forbidden" | "refused";
+    kind: "allowed" | "unauthorized" | "forbidden" | "refused" | "reauthenticate";
 
     /** Whether the handler ran at all. */
     handlerRan: boolean;
@@ -70,9 +74,12 @@ export interface Outcome {
     database: FakeDatabase;
     /** Requests made to other services (Lookout, Hackatime, Slack). */
     fetches: string[];
+
+    /** Headers the procedure set on its response, like `Set-Cookie`. */
+    responseHeaders: Headers;
 }
 
-function fakeRedis(): Redis {
+export function fakeRedis(): Redis {
     const store = new Map<string, string>();
 
     const commands: Record<string, (...args: string[]) => unknown> = {
@@ -178,6 +185,9 @@ export interface RequestOptions {
     database?: Partial<FakeDatabaseOptions>;
     headers?: Record<string, string>;
     context?: Partial<Context>;
+
+    /** A Redis to use instead of a fresh one, for tests that span several requests. */
+    redis?: Redis;
 }
 
 /**
@@ -188,7 +198,7 @@ export async function request(procedure: AnyProcedure, input: unknown, actor: Ex
     const fetches: string[] = [];
     const realFetch = globalThis.fetch;
 
-    setClientsForTesting({ database: database.client, redis: fakeRedis() });
+    setClientsForTesting({ database: database.client, redis: options.redis ?? fakeRedis() });
     globalThis.fetch = fakeFetch(fetches);
     setRealizeQueueForTesting({
         add: async () => ({ id: "job-1" }) as Awaited<ReturnType<Parameters<typeof setRealizeQueueForTesting>[0]["add"]>>,
@@ -199,10 +209,11 @@ export async function request(procedure: AnyProcedure, input: unknown, actor: Ex
     publicS3.send = async () => ({});
 
     const headers = { "content-length": "0", ...options.headers };
+    const responseHeaders = new Headers();
     const context: Context = {
         req: { url: "/api/test", headers, ip: "127.0.0.1" } as FastifyRequest,
         reqHeaders: new Headers(headers),
-        resHeaders: new Headers(),
+        resHeaders: responseHeaders,
         actor,
         user: actor?.kind === "USER" ? actor.user : null,
         scopes: actor === null ? [] : actor.kind === "USER" ? actor.scopes : actor.programKey.scopes,
@@ -222,17 +233,20 @@ export async function request(procedure: AnyProcedure, input: unknown, actor: Ex
 
     try {
         const output = await call(observed, input, { context });
-        return { kind: handlerRan ? "allowed" : "refused", handlerRan, output, database, fetches };
+        return { kind: handlerRan ? "allowed" : "refused", handlerRan, output, database, fetches, responseHeaders };
     }
     catch (error) {
         if (!handlerRan && error instanceof ORPCError && error.code === "UNAUTHORIZED")
-            return { kind: "unauthorized", handlerRan, error, database, fetches };
+            return { kind: "unauthorized", handlerRan, error, database, fetches, responseHeaders };
 
         if (!handlerRan && error instanceof ORPCError && error.code === "FORBIDDEN")
-            return { kind: "forbidden", handlerRan, error, database, fetches };
+            return { kind: "forbidden", handlerRan, error, database, fetches, responseHeaders };
+
+        if (!handlerRan && error instanceof ORPCError && error.code === REAUTHENTICATION_REQUIRED)
+            return { kind: "reauthenticate", handlerRan, error, database, fetches, responseHeaders };
 
         // The handler ran and then failed on its own terms (say, an input the fake world can't satisfy).
-        return { kind: handlerRan ? "allowed" : "refused", handlerRan, error, database, fetches };
+        return { kind: handlerRan ? "allowed" : "refused", handlerRan, error, database, fetches, responseHeaders };
     }
     finally {
         globalThis.fetch = realFetch;

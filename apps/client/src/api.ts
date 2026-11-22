@@ -5,6 +5,7 @@ import { OpenAPILink } from "@orpc/openapi-client/fetch";
 import { compositeRouterContract, globalRouterContract } from "@hackclub/lapse-api";
 import * as tus from "tus-js-client";
 import { sfetch } from "@/safety";
+import { askToSignInAgain, sessionCredentials, storedToken, whenSessionReady } from "@/session";
 
 /**
  * The absolute URL at which the API is hosted at.
@@ -13,9 +14,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.c
 
 const link = new OpenAPILink(compositeRouterContract, {
   url: `${API_URL}/api`,
-  headers: () => {
-    const token = localStorage.getItem("lapse:token");
-    
+  headers: async () => {
+    await whenSessionReady();
+
+    // The session normally lives in a cookie only the API can read, which `credentials: "include"` sends along.
+    const token = storedToken();
+
     return {
       "Authorization": token ? `Bearer ${token}` : undefined,
     };
@@ -23,7 +27,7 @@ const link = new OpenAPILink(compositeRouterContract, {
   fetch: (request, init) => {
     return sfetch(request, {
       ...init,
-      credentials: "include" // Include cookies for cross-origin requests
+      credentials: sessionCredentials()
     });
   },
   interceptors: [
@@ -44,6 +48,9 @@ const link = new OpenAPILink(compositeRouterContract, {
 
         const redirect = encodeURIComponent(window.location.pathname + window.location.search);
         location.href = `/auth?redirect=${redirect}`;
+      }
+      else if (error && typeof error === "object" && "code" in error && error.code === "REAUTHENTICATION_REQUIRED") {
+        askToSignInAgain();
       }
       else {
         console.error(error);

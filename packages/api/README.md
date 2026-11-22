@@ -22,12 +22,6 @@ const link = new OpenAPILink(contract, {
   headers: () => ({
     "Authorization": `Bearer ${TOKEN}`,
   }),
-  fetch: (request, init) => {
-    return globalThis.fetch(request, {
-      ...init,
-      credentials: 'include', // Include cookies for cross-origin requests
-    });
-  },
   interceptors: [
     onError((error) => {
       console.error(error)

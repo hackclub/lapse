@@ -5,6 +5,7 @@ import { forgetShapes } from "skullet";
 import { api } from "@/api";
 import { SESSIONS_KEY } from "@/components/lookout/sessions";
 import { useOnce } from "@/hooks/useOnce";
+import { markSignedIn, SESSION_KEY, signOutLater } from "@/session";
 import { useCache } from "@/hooks/useCache";
 
 interface AuthContextValue {
@@ -16,13 +17,12 @@ interface AuthContextValue {
 
 export interface SignOutOptions {
   /**
-   * When `true`, the session is forgotten locally even if the server couldn't revoke its token. Used as an escape
-   * hatch for when the API is unreachable - the token then stays valid until it expires on its own.
+   * When `true`, the session is forgotten locally even if the server couldn't revoke it. Used as an escape hatch for
+   * when the API is unreachable - this browser stops using the session at once, and the server is told to end it the
+   * next time a page loads.
    */
   skipRevocation?: boolean;
 }
-
-const TOKEN_KEY = "lapse:token";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -32,7 +32,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * exists nowhere else.
  */
 function forgetLocalSession() {
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SESSIONS_KEY);
 
   for (const key of Object.keys(localStorage)) {
@@ -73,6 +73,7 @@ export function AuthProvider({ children }: {
         return;
       }
 
+      markSignedIn();
       setUserCache(req.data.user);
       setCurrentUser(req.data.user);
     }
@@ -105,6 +106,9 @@ export function AuthProvider({ children }: {
       if (!res.ok)
         throw new Error(res.message);
     }
+    else {
+      signOutLater();
+    }
 
     forgetLocalSession();
 
@@ -116,7 +120,7 @@ export function AuthProvider({ children }: {
   // no longer there. Tabs never receive their own `storage` events, so this only reacts to other tabs.
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key === TOKEN_KEY && e.oldValue !== null && e.newValue === null)
+      if (e.key === SESSION_KEY && e.oldValue !== null && e.newValue === null)
         window.location.replace("/");
     }
 

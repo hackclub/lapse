@@ -39,6 +39,19 @@ A canonical client must perform these stops to authorize with the API:
 2. Receive the authorization code by handling the redirect from the API to `<CALLBACK URL>?code=AUTH_CODE&state=xyz`.
 3. Exchange the short-lived authorization code for an access and refresh token by calling `/auth/token`.
 
+## The website's session
+The Lapse website doesn't keep its access token where scripts can read it. When it exchanges its authorization code at `/auth/token` it adds `session=cookie`, and the API answers with an empty `access_token` and a session cookie instead (`__Host-lapse_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, bound to the API's host). Everything else about tokens is unchanged: third-party apps, the mobile app, the Lookout desktop app and program keys send `Authorization: Bearer` as they always have. See [`session.ts`](/apps/server/src/session.ts).
+
+- **The cookie only counts for requests the website made.** A browser sends cookies whoever asked for the request, so the API ignores the session cookie unless the request's `Origin` header is the website's (`WEB_BASE_URL`). That is the CSRF protection, for reads and writes alike, and it holds against other `hackclub.com` subdomains too - which `SameSite` does not. It is also why CORS can stay open to third-party apps.
+- **Browsers that still hold a token trade it in.** On its next page load, a browser with a token in `localStorage["lapse:token"]` calls `/auth/session` twice: the first call hands out the cookie, and the second, which only succeeds if the browser sent that cookie back, revokes the old token. Then the stored token is emptied. If anything goes wrong in between, the token is kept and still works. (`localStorage["lapse:token"]` stays as an empty entry while somebody is signed in, because that is what tabs watch to notice a sign-out in another tab.)
+- **Being an administrator wears off.** Calls that need administrator powers answer `403 REAUTHENTICATION_REQUIRED` unless the session was signed into within the last hour (`ADMIN_REAUTH_WINDOW_MS`). The website then asks the admin to sign in again and carries on. Nobody who isn't an administrator can get this answer.
+
+Cookies are switched on with the server's `SESSION_COOKIES` variable, in two steps, so that no browser is ever handed a cookie that some instance wouldn't understand:
+
+1. Deploy with it unset. Nothing changes: no cookie is handed out, though one would be accepted.
+2. Set `SESSION_COOKIES=on` once every instance runs this build. Browsers start moving their sessions into cookies as they load pages. From here on, don't roll the server back to a build from before session cookies: it would ignore them, and everyone who has moved would be signed out.
+3. Set `SESSION_COOKIES=only` once the website build that asks for a cookie is the only one being served. From then on the website can't be given a token in a response at all, whatever it asks for, so a script injected into it can't get one by signing in afresh.
+
 ## Who may call what
 Every procedure has a policy, in [`policies.ts`](/apps/server/src/policies.ts), and nothing else decides who may call it - handlers don't check permissions themselves. A policy says whether the procedure is public, for users only, or for users and program keys; which scopes a third-party app needs; and, where it acts on something that belongs to somebody, who besides the owner may act on it. [`policy.ts`](/apps/server/src/policy.ts) enforces it before the handler runs.
 

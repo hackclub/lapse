@@ -173,6 +173,23 @@ export const env = {
     get PASSWORD_SIGN_IN_HASH() { return optional("PASSWORD_SIGN_IN_HASH") },
 
     /**
+     * Whether the Lapse website's session is kept in a cookie its scripts can't read, rather than as a token in the
+     * browser's storage. See `session.ts`.
+     *
+     * - unset, or `off`: no session cookie is ever handed out. The server still accepts one, so this is safe to set
+     *   again at any time - but not to roll back to a build from before session cookies existed, which would sign
+     *   out every browser that has moved to one.
+     * - `on`: the website gets a cookie when it asks for one, and browsers holding an old token trade it in the
+     *   next time they load a page. Turn this on once every instance is running a build that knows about cookies.
+     * - `only`: as `on`, and the website is never given a token in a response again, even if it doesn't ask for a
+     *   cookie. Turn this on once the website build that asks for cookies is the only one being served.
+     */
+    get SESSION_COOKIES(): "off" | "on" | "only" {
+        const value = optional("SESSION_COOKIES");
+        return value === "on" || value === "only" ? value : "off";
+    },
+
+    /**
      * An Airtable personal access token for the daily Loops user sync (`airtableSync.ts`). Needs the
      * `data.records:read` and `data.records:write` scopes on the sync base. The sync is off unless this,
      * `AIRTABLE_SYNC_BASE_ID` and `AIRTABLE_SYNC_TABLE_ID` are all set.

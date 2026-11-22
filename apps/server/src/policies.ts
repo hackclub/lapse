@@ -229,6 +229,9 @@ export const POLICIES = {
         authorize: { access: "public" },
         grantConsent: { access: "user", firstParty: true },
         token: { access: "public" },
+
+        // The token being moved is the credential, so there's nobody to be signed in as yet.
+        session: { access: "public" },
         signInWithPassword: { access: "public" },
         hackatimeCallback: { access: "public" },
         continue: { access: "public" }

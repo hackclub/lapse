@@ -8,6 +8,7 @@ import RootLayout from "@/components/layout/RootLayout";
 import { useAuthContext } from "@/context/AuthContext";
 import { LINK_STATUS_SESSION_KEY } from "@/hooks/useHackatimeRelink";
 import { sfetch } from "@/safety";
+import { REAUTH_KEY, rememberSignIn } from "@/session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.lapse.hackclub.com";
 const OAUTH_CLIENT_ID = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID!;
@@ -59,12 +60,16 @@ export default function Auth() {
     if (isLoading)
       return;
 
-    if (currentUser && !currentUser.private.needsReauth && router.query.force !== "1") {
+    const { code, state, error } = router.query;
+
+    // An administrator confirming it's them is already signed in, and still needs the sign-in they just went through
+    // to count - which it only does once its code has been exchanged for a new session.
+    const reauthenticating = typeof code === "string" && sessionStorage.getItem(REAUTH_KEY) === "1";
+
+    if (currentUser && !currentUser.private.needsReauth && router.query.force !== "1" && !reauthenticating) {
       router.push(getSafeRedirect(router.query.redirect) ?? "/");
       return;
     }
-
-    const { code, state, error } = router.query;
 
     if (error)
       return;
@@ -125,10 +130,13 @@ export default function Auth() {
 
     sessionStorage.removeItem("lapse:oauth_state");
     sessionStorage.removeItem("lapse:oauth_code_verifier");
+    sessionStorage.removeItem(REAUTH_KEY);
 
     try {
       const response = await sfetch(`${API_URL}/api/auth/token`, {
         method: "POST",
+        // So the browser keeps the session cookie this sets.
+        credentials: "include",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           "Accept": "application/json"
@@ -139,6 +147,7 @@ export default function Auth() {
           redirect_uri: `${window.location.origin}/auth`,
           client_id: OAUTH_CLIENT_ID,
           code_verifier: codeVerifier,
+          session: "cookie",
         })
       });
 
@@ -149,8 +158,9 @@ export default function Auth() {
         return;
       }
 
+      // Empty on the website proper, where the session is in that cookie instead.
       const data = await response.json();
-      localStorage.setItem("lapse:token", data.access_token);
+      rememberSignIn(typeof data.access_token === "string" ? data.access_token : "");
       sessionStorage.removeItem(LINK_STATUS_SESSION_KEY);
       await refreshUser();
 

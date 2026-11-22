@@ -81,6 +81,20 @@ export const authRouterContract = oc.tag(ROUTER_TAGS.auth).router({
                 .describe("The token that should be passed to /auth/continue in order to continue the OAuth2 authorization flow.")
         })),
 
+    session: contract("POST", "/auth/session")
+        .route({ description: "Moves an access token the Lapse website used to keep in the browser's storage into its session cookie. Only the website has any use for this: for a request from anywhere else it does nothing, and answers `bearer`." })
+        .input(z.object({
+            token: z.string().max(4096)
+                .describe("The access token to move."),
+
+            confirm: z.boolean().optional()
+                .describe("Set on a second call, which the browser makes with the cookie it was given by the first. Only then is `token` revoked.")
+        }))
+        .output(apiResult({
+            mode: z.enum(["cookie", "bearer"])
+                .describe("`cookie` if the session lives in the cookie now and `token` should be forgotten; `bearer` if `token` should go on being sent.")
+        })),
+
     token: contract("POST", "/auth/token")
         .route({
             description: "Exchanges an authorization code for an access token.",
@@ -96,7 +110,10 @@ export const authRouterContract = oc.tag(ROUTER_TAGS.auth).router({
                 redirect_uri: z.url(),
                 client_id: z.string().optional(),
                 client_secret: z.string().optional(),
-                code_verifier: z.string().optional()
+                code_verifier: z.string().optional(),
+
+                // Sent by the Lapse website, which is then given its session as a cookie, and an empty `access_token`.
+                session: z.literal("cookie").optional()
             })
         }))
         .output(z.object({

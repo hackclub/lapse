@@ -20,7 +20,14 @@ export type ServerActor = { kind: "SERVER" };
 /**
  * Represents an actor authenticated as a user via OAuth2.
  */
-export type UserActor = { kind: "USER"; user: safe.User; scopes: LapseOAuthScope[] };
+export type UserActor = {
+    kind: "USER";
+    user: safe.User;
+    scopes: LapseOAuthScope[];
+
+    /** When the user last actually signed in. Administrator powers need this to be recent - see `policy.ts`. */
+    authenticatedAt: Date;
+};
 
 /**
  * Represents an actor authenticated via a program key (machine-to-machine).

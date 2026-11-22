@@ -102,6 +102,7 @@ export const INPUTS: Record<string, unknown> = {
         },
     },
     "auth.grantConsent": { clientId: "svc_app", state: "state", scopes: ["timelapse:read"] },
+    "auth.session": { token: "not-a-token" },
     "auth.token": { body: { grant_type: "authorization_code", code: "code", redirect_uri: "https://lapse.test/auth", client_id: CANONICAL_CLIENT_ID, code_verifier: "verifier" } },
     "auth.signInWithPassword": { email: "review@lapse.test", password: "password", clientId: CANONICAL_CLIENT_ID, redirectUri: "https://lapse.test/auth", scope: "elevated", state: "state", codeChallenge: "challenge" },
     "auth.hackatimeCallback": { query: { code: "code", state: "state" } },

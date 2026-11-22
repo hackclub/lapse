@@ -1,5 +1,4 @@
 import { implement } from "@orpc/server"
-import { deleteCookie } from "@orpc/server/helpers"
 import { userRouterContract, type KnownDevice, type PublicUser, type User, HANDLE_CHANGE_COOLDOWN_MS, MAX_BIO_LENGTH, MAX_DISPLAY_NAME_LENGTH } from "@hackclub/lapse-api"
 import { assert, when, descending, removeFromArray } from "@hackclub/lapse-shared"
 
@@ -9,7 +8,8 @@ import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
 import { logError } from "@/logging.js";
 import { actorEntitledTo } from "@/ownership.js";
-import { revokeAccessToken } from "@/oauth.js";
+import { renewSessionCookie, revokeAccessToken } from "@/oauth.js";
+import { clearSessionCookie, sessionCookieOf } from "@/session.js";
 
 import * as db from "@/generated/prisma/client.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
@@ -99,6 +99,12 @@ export default os.router({
 
             if (!user)
                 return apiErr("NOT_FOUND", "Could not find your user account.");
+
+            // Every page load asks who is signed in, which makes this the place to keep the session cookie fresh:
+            // Safari forgets some cookies a week after they were last set, however long they say they live for.
+            const session = sessionCookieOf(req.context.req);
+            if (session)
+                renewSessionCookie(req.context.resHeaders, session);
 
             return apiOk({ user: dtoUser(user) });
         }),
@@ -259,22 +265,24 @@ export default os.router({
         .use(authorize("user.signOut"))
         .handler(async (req) => {
             const authorization = req.context.req.headers.authorization;
-            if (authorization?.startsWith("Bearer ")) {
-                try {
-                    await revokeAccessToken(authorization.substring("Bearer ".length));
-                }
-                catch (error) {
-                    logError("Could not revoke the caller's access token!", { error });
-                    return apiErr("ERROR", "We couldn't sign you out right now. Please try again in a moment.");
-                }
+            const session = sessionCookieOf(req.context.req);
+
+            // Both, if a request carries both: a tab from before the session moved into the cookie can.
+            const tokens = [
+                ...(authorization?.startsWith("Bearer ") ? [authorization.substring("Bearer ".length)] : []),
+                ...(session ? [session] : [])
+            ];
+
+            try {
+                for (const token of tokens)
+                    await revokeAccessToken(token);
+            }
+            catch (error) {
+                logError("Could not revoke the caller's access token!", { error });
+                return apiErr("ERROR", "We couldn't sign you out right now. Please try again in a moment.");
             }
 
-            if (req.context.resHeaders) {
-                deleteCookie(req.context.resHeaders, "lapse-auth", {
-                    httpOnly: true,
-                    sameSite: "lax"
-                });
-            }
+            clearSessionCookie(req.context.resHeaders);
 
             return apiOk({});
         }),
