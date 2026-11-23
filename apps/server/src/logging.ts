@@ -11,7 +11,10 @@ const SENSITIVE_KEY = /token|secret|password|passkey|devicekey|verifier|authoriz
 const MAX_REDACT_DEPTH = 8;
 
 export function redact(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
-    if (typeof value !== "object" || value === null || value instanceof Error || value instanceof Date)
+    if (value instanceof Error)
+        return redactError(value, depth, seen);
+
+    if (typeof value !== "object" || value === null || value instanceof Date)
         return value;
 
     if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer)
@@ -28,6 +31,35 @@ export function redact(value: unknown, depth = 0, seen = new WeakSet<object>()):
     return Object.fromEntries(
         Object.entries(value).map(([k, v]) => [k, SENSITIVE_KEY.test(k) && v != null ? "[redacted]" : redact(v, depth + 1, seen)])
     );
+}
+
+/**
+ * Errors carry whatever their thrower attached - oRPC's validation errors hold the raw request input, headers and all -
+ * and `inspect` prints every bit of it. This copies the error with those properties (and its cause) redacted, keeping
+ * its class, message and stack, so it still logs and reports as the error it was.
+ */
+function redactError(err: Error, depth: number, seen: WeakSet<object>): Error {
+    if (seen.has(err) || depth >= MAX_REDACT_DEPTH)
+        return err;
+
+    seen.add(err);
+
+    const copy = Object.create(Object.getPrototypeOf(err) as object) as Error;
+    for (const property of ["name", "message", "stack"] as const) {
+        if (Object.hasOwn(err, property))
+            Object.defineProperty(copy, property, { value: err[property], writable: true, configurable: true, enumerable: false });
+    }
+
+    // An error's own `code` is what went wrong (`BAD_REQUEST`, `P2002`), never an OAuth code.
+    for (const [k, v] of Object.entries(err)) {
+        const sensitive = k !== "code" && SENSITIVE_KEY.test(k) && v != null;
+        Object.defineProperty(copy, k, { value: sensitive ? "[redacted]" : redact(v, depth + 1, seen), writable: true, configurable: true, enumerable: true });
+    }
+
+    if (err.cause !== undefined)
+        Object.defineProperty(copy, "cause", { value: redact(err.cause, depth + 1, seen), writable: true, configurable: true, enumerable: false });
+
+    return copy;
 }
 
 function redactData(data: Record<string, unknown>): Record<string, unknown> {

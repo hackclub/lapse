@@ -14,7 +14,7 @@ import { ensureCanonicalClient, getAuthenticatedUser } from "@/oauth.js"
 import { apiErr } from "@/common.js"
 import type { Context } from "@/router.js"
 import { database, initDatabase } from "@/db.js";
-import { env } from "@/env.js"
+import { assertNoExampleSecrets, env } from "@/env.js"
 import { logError, logWarning } from "@/logging.js";
 import { generateOpenApiSpec } from "@/openapi.js";
 // New recordings go through Lookout, but the tus upload server is still needed so legacy drafts
@@ -39,7 +39,7 @@ const handler = new OpenAPIHandler(
         interceptors: [
             onError(err => {
                 const [message, data] = err instanceof ORPCError && err.cause instanceof ValidationError
-                    ? [z.prettifyError(err.cause), { err, zodError: err.cause }]
+                    ? [z.prettifyError(err.cause), { err }]
                     : [`${err}`, { err }];
 
                 // Client mistakes like NOT_FOUND or a bad input are worth a log line, not a Sentry issue.
@@ -57,6 +57,8 @@ const handler = new OpenAPIHandler(
         ]
     }
 );
+
+assertNoExampleSecrets();
 
 const server = Fastify();
 
@@ -161,7 +163,7 @@ server.all("/docs", async (req, reply) => {
             <body>
                 <div id="app"></div>
 
-                <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+                <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4" integrity="sha384-28+p9NyLFAl2b71X2XembwoB3f1K1iY0PyATQvkWJJ9k8E3sFW8FeGMbguBzasxv" crossorigin="anonymous"></script>
                 <script>
                     Scalar.createApiReference("#app", {
                         url: "/openapi.json",

@@ -273,6 +273,21 @@ export const env = {
     get CANONICAL_OAUTH_CLIENT_REDIRECT_URIS() { return required("CANONICAL_OAUTH_CLIENT_REDIRECT_URIS") }
 };
 
+const EXAMPLE_SECRETS = ["PRIVATE_KEY_UPLOAD_KEY", "JWT_CONSENT_TOKENS", "JWT_UPLOAD_TOKEN", "JWT_SECRET_ACCESS_TOKENS"];
+
+/**
+ * `.env.example` ships placeholder secrets starting with `deadc0de` so a dev environment works out of the box. Anyone
+ * who has seen that file could forge sign-ins with them, so production refuses to start while any is still in use.
+ */
+export function assertNoExampleSecrets() {
+    if (process.env["NODE_ENV"] !== "production")
+        return;
+
+    const placeholders = EXAMPLE_SECRETS.filter(name => process.env[name]?.startsWith("deadc0de"));
+    if (placeholders.length > 0)
+        throw new Error(`Refusing to start: ${placeholders.join(", ")} still hold the placeholder values from .env.example.`);
+}
+
 function required(name: string) {
     if (process.env[name] === undefined)
         throw new Error(`Environment variable ${name} not defined.`);

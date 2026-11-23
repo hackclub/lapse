@@ -11,8 +11,8 @@ const root = path.resolve(__dirname, "..", "..");
 
 const CSP_REPORT_URL = sentrySecurityReportUrl(SENTRY_DSN);
 
-// The session token lives in `localStorage`, so any script running on this origin owns the account. These
-// directives can't break a page that loads its scripts the normal way, so they are enforced.
+// The session lives in a cookie scripts can't read, but a script running on this origin can still act as the user
+// through the API. These directives can't break a page that loads its scripts the normal way, so they are enforced.
 const ENFORCED_CSP = [
   "object-src 'none'",
   "base-uri 'self'",

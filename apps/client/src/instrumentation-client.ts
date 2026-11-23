@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 
-import { SENTRY_OPTIONS } from "@/sentry";
+import { scrubPanelTokens, SENTRY_OPTIONS } from "@/sentry";
 
 Sentry.init({
     ...SENTRY_OPTIONS,
@@ -50,7 +50,7 @@ Sentry.init({
         if (translated && domMismatch)
             return null;
 
-        return event;
+        return scrubPanelTokens(event);
     },
 });
 
