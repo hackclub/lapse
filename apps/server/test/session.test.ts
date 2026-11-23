@@ -178,11 +178,10 @@ test("a token is only moved into a cookie for the website", async () => {
 });
 
 /** Signs in as the website's sign-in page does, up to the point of exchanging the authorization code. */
-async function exchangeCode(headers: Record<string, string>, asksForCookie = true) {
+async function exchangeCode(headers: Record<string, string>, asksForCookie = true, redirectUri = `${WEBSITE}/auth`) {
     const redis = fakeRedis();
     const verifier = "a-code-verifier-that-is-long-enough-to-be-accepted-0123456789";
     const challenge = createHash("sha256").update(verifier).digest("base64url");
-    const redirectUri = `${WEBSITE}/auth`;
 
     await redis.set("lapse:auth:authcode:the-code", JSON.stringify({
         cid: CANONICAL_CLIENT_ID,
@@ -277,9 +276,14 @@ test("a build of the website from before session cookies still gets its token, u
         assert.equal((outcome.output as { body: { access_token: string } }).body.access_token, "");
         assert.notEqual(sessionCookieIn(outcome.responseHeaders), null);
 
-        // Still only for the website.
-        const mobile = await exchangeCode({}, false);
+        // Still only for the website. The mobile app signs in through its own redirect URI.
+        const mobile = await exchangeCode({}, false, "com.hackclub.lapse://oauth");
         assert.ok((mobile.outcome.output as { body: { access_token: string } }).body.access_token.length > 20);
+
+        // A code for the website's sign-in page, redeemed anywhere but the website, gets no token at all.
+        const elsewhere = await exchangeCode({}, false);
+        assert.equal(elsewhere.outcome.output, undefined);
+        assert.equal(sessionCookieIn(elsewhere.outcome.responseHeaders), null);
     });
 });
 

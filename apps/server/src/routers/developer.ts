@@ -5,7 +5,7 @@ import { type Context, logMiddleware } from "@/router.js";
 import { authorize } from "@/policies.js";
 import { apiErr, apiOk } from "@/common.js";
 import { database } from "@/db.js";
-import { createServiceClient, normalizeRedirectUris, normalizeScopes, rotateServiceClientSecret } from "@/oauth.js";
+import { createServiceClient, normalizeRedirectUris, normalizeScopes, revokeGrantTokens, rotateServiceClientSecret } from "@/oauth.js";
 import { env } from "@/env.js";
 import { isAdmin } from "@/ownership.js";
 
@@ -255,10 +255,13 @@ export default os.router({
     revokeOAuthGrant: os.revokeOAuthGrant
         .use(authorize("developer.revokeOAuthGrant"))
         .handler(async (req) => {
-            await database().serviceGrant.update({
+            const grant = await database().serviceGrant.update({
                 where: { id: req.input.grantId },
-                data: { revokedAt: new Date() }
+                data: { revokedAt: new Date() },
+                include: { serviceClient: { select: { clientId: true } } }
             });
+
+            await revokeGrantTokens(grant.serviceClient.clientId, grant.userId);
 
             return apiOk({});
         }),

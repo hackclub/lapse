@@ -198,6 +198,19 @@ export default os.router({
             if (!req.context.resHeaders)
                 throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Couldn't access response headers." });
 
+            // Everything after this sends the browser to `redirect_uri` - including when Hackatime reports an error,
+            // which happens before /auth/continue gets to check it. So check it now, the same way that will: it must be
+            // one the app registered, exactly. Otherwise this would bounce anyone to any site from our own domain.
+            const client = await database().serviceClient.findFirst({
+                where: { clientId: req.input.query.client_id, revokedAt: null },
+                select: { redirectUris: true }
+            });
+
+            if (!client || !client.redirectUris.includes(req.input.query.redirect_uri)) {
+                logWarning(`Refused to start OAuth for client ${req.input.query.client_id}: unknown or revoked client, or unregistered redirect URI.`, { redirectUri: req.input.query.redirect_uri });
+                throw new ORPCError("BAD_REQUEST", { message: "That app doesn't exist, or it isn't allowed to send you there." });
+            }
+
             const state = randomBytes(16).toString("base64url");
             const codeVerifier = randomBytes(32).toString("base64url");
             const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
@@ -704,6 +717,16 @@ export default os.router({
         .handler(async (req) => {
             const oauthResponse = new OAuth2Server.Response();
             const authorization = req.context.req.headers.authorization;
+
+            // Once the website's sessions live only in cookies, a code issued for the website's own sign-in page may
+            // only be redeemed by the website - as a cookie. Otherwise a script on the page could start a sign-in of its
+            // own, read the code off the redirect, and redeem it somewhere else for a token. The mobile app has its own
+            // redirect URI, so it isn't affected. Checked before the exchange, which uses up the code.
+            const websiteCode = req.input.body.client_id === env.CANONICAL_OAUTH_CLIENT_ID
+                && req.input.body.redirect_uri.startsWith(`${env.WEB_BASE_URL}/`);
+
+            if (env.SESSION_COOKIES === "only" && websiteCode && !isFromWebsite(req.context.req))
+                throw new ORPCError("FORBIDDEN", { message: "Sign-ins to the Lapse website can only be completed by the website." });
 
             let token: OAuth2Server.Token;
             try {

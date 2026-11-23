@@ -153,6 +153,23 @@ async function isAccessTokenRevoked(accessToken: string) {
     return (await redis().exists(revokedAccessTokenKey(accessToken))) === 1;
 }
 
+function revokedGrantKey(clientId: string, userId: string) {
+    return `lapse:auth:revoked-grant:${clientId}:${userId}`;
+}
+
+/**
+ * Cuts off every token `clientId` holds for `userId` that was issued up to now. Kept apart from the grant row, which
+ * reconnecting the app clears - that must not bring the old tokens back. Lasts as long as the longest-lived token.
+ */
+export async function revokeGrantTokens(clientId: string, userId: string) {
+    await redis().set(revokedGrantKey(clientId, userId), Date.now().toString(), "EX", ACCESS_TOKEN_LIFETIME_SECONDS);
+}
+
+async function grantRevokedAt(clientId: string, userId: string): Promise<number | null> {
+    const value = await redis().get(revokedGrantKey(clientId, userId));
+    return value === null ? null : Number(value);
+}
+
 /**
  * Defines the fields of an authorization code stored on Redis.
  */
@@ -286,6 +303,33 @@ export async function ensureCanonicalClient() {
     }
 }
 
+/**
+ * Remembers that the user connected a third-party app, which is what lists it under their connected apps and lets
+ * them disconnect it again. Connecting again after disconnecting clears the revocation; tokens from before it stay
+ * dead (see `checkAccessToken`). Never fails the sign-in: the token is good either way.
+ */
+async function recordGrant(clientId: string, userId: string, scopes: string[]) {
+    try {
+        const client = await database().serviceClient.findFirst({ where: { clientId }, select: { id: true } });
+        if (!client)
+            return;
+
+        const now = new Date();
+        await database().serviceGrant.upsert({
+            where: { serviceClientId_userId: { serviceClientId: client.id, userId } },
+            create: { serviceClientId: client.id, userId, scopes, lastUsedAt: now },
+            update: { scopes, revokedAt: null, lastUsedAt: now }
+        });
+
+        await database().serviceTokenAudit.create({
+            data: { serviceClientId: client.id, userId, scope: scopes.join(" ") }
+        });
+    }
+    catch (err) {
+        logWarning(`Couldn't record the grant of client ${clientId} for user ${userId}.`, { err });
+    }
+}
+
 // reference: https://github.com/14gasher/oauth-example/blob/master/auth/oauth/model.js
 
 class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel {
@@ -372,7 +416,7 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
     async getAuthorizationCode(authorizationCode: string): Promise<OAuth2Server.AuthorizationCode | OAuth2Server.Falsey> {
         const raw = await redis().get(`lapse:auth:authcode:${authorizationCode}`);
         if (!raw) {
-            logWarning(`Could not get OAuth authorization code - ${authorizationCode} is either expired or doesn't exist.`);
+            logWarning("Could not get an OAuth authorization code - it is either expired or doesn't exist.");
             return null;
         }
 
@@ -382,13 +426,13 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
             payload = AuthorizationCodePayloadSchema.parse(JSON.parse(raw));
         }
         catch (err) {
-            logWarning(`OAuth authorization code ${authorizationCode} stored in Redis is malformed!`, { err });
+            logWarning("An OAuth authorization code stored in Redis is malformed!", { err });
             return null;
         }
 
         const client = await this.clientById(payload.cid);
         if (!client) {
-            logWarning(`The client ${payload.cid} that issued authorization code ${authorizationCode} either doesn't exist or has been revoked.`, { payload });
+            logWarning(`The client ${payload.cid} that issued an authorization code either doesn't exist or has been revoked.`, { payload });
             return null;
         }
 
@@ -429,7 +473,11 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
 
     async saveToken(token: OAuth2Server.Token, client: OAuth2Server.Client, user: OAuth2Server.User): Promise<OAuth2Server.Token | OAuth2Server.Falsey> {
         // Our tokens are JWTs, so there's no need to save them. We still do a sanity check on them - just in case!
-        return this.getAccessToken(token.accessToken);
+        const saved = await this.getAccessToken(token.accessToken);
+        if (saved && client.id !== env.CANONICAL_OAUTH_CLIENT_ID)
+            await recordGrant(client.id, String(user["id"]), saved.scope ?? []);
+
+        return saved;
     }
 
     async getAccessToken(accessToken: string): Promise<OAuth2Server.Token | OAuth2Server.Falsey> {
@@ -489,14 +537,32 @@ export async function checkAccessToken(accessToken: string): Promise<AccessToken
         return { status: "invalid" };
 
     try {
-        // Both run on every authenticated request, so they run side by side.
-        const [revoked, user] = await Promise.all([
+        // These run on every authenticated request, so they run side by side.
+        const [revoked, user, client] = await Promise.all([
             isAccessTokenRevoked(accessToken),
-            database().user.findFirst({ where: { id: token.sub } })
+            database().user.findFirst({ where: { id: token.sub } }),
+            database().serviceClient.findFirst({ where: { clientId: token.cid }, select: { revokedAt: true } })
         ]);
 
         if (revoked || !user)
             return { status: "invalid" };
+
+        // Revoking an app has to cut off the tokens it already holds, not just stop it getting new ones.
+        if (!client || client.revokedAt) {
+            logWarning(`Access token for user ${token.sub} was issued to client ${token.cid}, which no longer exists or has been revoked.`);
+            return { status: "invalid" };
+        }
+
+        // Tokens have always been valid for 30 days, which dates the rare one that doesn't say when it was issued.
+        const issuedAt = token.iat ?? token.exp - ACCESS_TOKEN_LIFETIME_SECONDS;
+
+        // Likewise for a user disconnecting one app from their account. Only tokens from before then are cut off - the
+        // user connecting it again afterwards is a fresh start.
+        if (token.cid !== env.CANONICAL_OAUTH_CLIENT_ID) {
+            const revokedAt = await grantRevokedAt(token.cid, token.sub);
+            if (revokedAt !== null && issuedAt * 1000 <= revokedAt)
+                return { status: "invalid" };
+        }
 
         const allScopes = new Set(getAllOAuthScopes());
         if (!token.scp.every(x => allScopes.has(x as LapseOAuthScope))) {
@@ -509,8 +575,7 @@ export async function checkAccessToken(accessToken: string): Promise<AccessToken
             return { status: "invalid" };
         }
 
-        // Tokens have always been valid for 30 days, which dates the rare one that doesn't say when it was issued.
-        const authenticatedAt = token.aut ?? token.iat ?? token.exp - ACCESS_TOKEN_LIFETIME_SECONDS;
+        const authenticatedAt = token.aut ?? issuedAt;
 
         return {
             status: "valid",
