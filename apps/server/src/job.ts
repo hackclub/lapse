@@ -9,6 +9,7 @@ import { env } from "@/env.js";
 import { publicS3 } from "@/storage.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
 import { capSnapshotsToVideo, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
+import { notifyTimelapseChanged } from "@/changeWebhook.js";
 
 // This file handles enqueuing jobs on the worker, as well as listening for completion/failed events.
 // Callers are expected to queue jobs and disregard what happens after the completion (we handle that here!),
@@ -115,13 +116,35 @@ export function startRealizeJobEvents() {
                 });
 
                 if (currentTimelapse?.sourceDraftId) {
-                    await database().timelapse.deleteMany({
-                        where: {
-                            sourceDraftId: currentTimelapse.sourceDraftId,
-                            visibility: "FAILED_PROCESSING",
-                            id: { not: timelapseId }
-                        }
+                    // Earlier attempts at publishing the same draft, which this one replaces.
+                    const superseded = await database().$transaction(async tx => {
+                        const rows = await tx.timelapse.findMany({
+                            where: {
+                                sourceDraftId: currentTimelapse.sourceDraftId,
+                                visibility: "FAILED_PROCESSING",
+                                id: { not: timelapseId }
+                            },
+                            select: { id: true, ownerId: true }
+                        });
+
+                        if (rows.length === 0)
+                            return rows;
+
+                        const deletedAt = new Date();
+                        await tx.timelapseDeletion.createMany({
+                            data: rows.map(x => ({ timelapseId: x.id, ownerId: x.ownerId, deletedAt })),
+                            skipDuplicates: true
+                        });
+
+                        await tx.timelapse.deleteMany({
+                            where: { id: { in: rows.map(x => x.id) } }
+                        });
+
+                        return rows;
                     });
+
+                    for (const row of superseded)
+                        notifyTimelapseChanged("timelapse.deleted", row.id);
                 }
 
                 // The snapshots become Hackatime heartbeats, so they can't claim much more time than the video holds.
@@ -148,6 +171,7 @@ export function startRealizeJobEvents() {
                 });
 
                 logInfo(`Successfully updated timelapse ${timelapseId} with transcoded data.`);
+                notifyTimelapseChanged("timelapse.updated", timelapseId);
 
                 if (completedTimelapse.hackatimeProject) {
                     try {
@@ -175,7 +199,7 @@ export function startRealizeJobEvents() {
                 // We keep the draft timelapse, mark the associated timelapse as failed processing, and unlink the two so that
                 // the publishing of the draft can be retried by the user at a later time. Either may already be gone if the
                 // timelapse was deleted while it was processing.
-                await database().$transaction([
+                const [, failed] = await database().$transaction([
                     database().draftTimelapse.updateMany({
                         where: {
                             associatedTimelapseId: job.data.timelapseId
@@ -195,6 +219,9 @@ export function startRealizeJobEvents() {
                         }
                     })
                 ]);
+
+                if (failed.count > 0)
+                    notifyTimelapseChanged("timelapse.updated", job.data.timelapseId);
 
                 // Retrying means publishing the draft again, which enqueues a new job - this one only holds the device key.
                 try {

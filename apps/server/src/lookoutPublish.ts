@@ -11,6 +11,7 @@ import { rejectLookoutPublish, removePublishedLookoutDraft, restoreLookoutDraft 
 import { hackatimeTokenOf } from "@/hackatime.js";
 import { isHackatimeRestricted } from "@/routers/hackatime.js";
 import { durationBySnapshots, syncTimelapseWithHackatime, TIMELAPSE_INCLUDES, TIMELAPSE_OMIT, type DbOwnedTimelapse } from "@/routers/timelapse.js";
+import { notifyTimelapseChanged } from "@/changeWebhook.js";
 import type * as safe from "@/secrets.js";
 
 /**
@@ -198,6 +199,7 @@ export async function finalizeLookoutDraft(draft: safe.DraftLookoutTimelapse): P
     }
 
     await removePublishedLookoutDraft(draft, timelapse.id);
+    notifyTimelapseChanged("timelapse.published", timelapse.id);
 
     // Now that the timelapse has a page, point the desktop app's "Open in Lapse" action at it.
     try {
@@ -248,9 +250,17 @@ export async function finalizeIfPending(draft: safe.DraftLookoutTimelapse): Prom
         return await finalizeLookoutDraft(draft);
     }
     catch (err) {
-        logError("Couldn't finalize a pending Lookout publish.", { err, draftId: draft.id });
+        reportFinalizeError(err, draft);
         return null;
     }
+}
+
+function reportFinalizeError(err: unknown, draft: safe.DraftLookoutTimelapse): void {
+    // An outage isn't a bug: the intent stays stored, and the next poll or sweep picks it up once Lookout is back.
+    if (lookout.isLookoutUnavailable(err))
+        logWarning("Lookout is unavailable; leaving the pending publish for later.", { err, draftId: draft.id });
+    else
+        logError("Couldn't finalize a pending Lookout publish.", { err, draftId: draft.id });
 }
 
 const SWEEP_LOCK_KEY = "lapse:lookout_publish_sweep";
@@ -285,12 +295,25 @@ export async function sweepPendingLookoutPublishes(): Promise<void> {
         });
 
         for (const draft of pending) {
-            const outcome = await finalizeIfPending(draft);
+            let outcome: FinalizeOutcome;
+            try {
+                outcome = await finalizeLookoutDraft(draft);
+            }
+            catch (err) {
+                reportFinalizeError(err, draft);
+
+                // Every other draft would hit the same outage. Back off until the next sweep instead of
+                // sending Lookout up to a hundred more requests while it is struggling.
+                if (lookout.isLookoutUnavailable(err))
+                    break;
+
+                continue;
+            }
 
             // A failed compile leaves the draft alone: the recording is gone, but the user's
             // answers are the only record of what they wanted, and the publish page can still
             // show them the failure.
-            if (outcome?.kind === "failed")
+            if (outcome.kind === "failed")
                 logWarning(`Lookout session for draft ${draft.id} failed; leaving the draft for the user.`, { draftId: draft.id });
         }
     }

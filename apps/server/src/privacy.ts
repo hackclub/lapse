@@ -2,7 +2,8 @@ import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import type { FastifyInstance } from "fastify";
 
 import { deleteAirtableRowsForEmails } from "@/airtableSync.js";
-import { database } from "@/db.js";
+import { notifyTimelapseChanged } from "@/changeWebhook.js";
+import { database, type TransactionClient } from "@/db.js";
 import type * as db from "@/generated/prisma/client.js";
 import { cancelRealizeJob } from "@/job.js";
 import { logError, logInfo } from "@/logging.js";
@@ -353,15 +354,36 @@ function auditedEntities(owned: OwnedRecords): db.Prisma.AdminAuditLogWhereInput
         .map(([entity, ids]) => ({ entity, entityId: { in: ids } }));
 }
 
+/**
+ * Deletes timelapses, recording each one in `TimelapseDeletion` so that services following `timelapse.listChanged`
+ * delete their copies too. Their IDs are added to `deleted`.
+ */
+async function deleteTimelapses(tx: TransactionClient, where: db.Prisma.TimelapseWhereInput, deleted: string[]): Promise<number> {
+    const rows = await tx.timelapse.findMany({ where, select: { id: true, ownerId: true } });
+    if (rows.length === 0)
+        return 0;
+
+    const deletedAt = new Date();
+    await tx.timelapseDeletion.createMany({
+        data: rows.map(x => ({ timelapseId: x.id, ownerId: x.ownerId, deletedAt })),
+        skipDuplicates: true
+    });
+
+    deleted.push(...rows.map(x => x.id));
+    return (await tx.timelapse.deleteMany({ where: { id: { in: rows.map(x => x.id) } } })).count;
+}
+
 async function deleteRows(userIds: string[], owned: OwnedRecords, dryRun: boolean): Promise<Record<string, number>> {
+    const deletedTimelapses: string[] = [];
+
     try {
-        return await database().$transaction(async tx => {
+        const result = await database().$transaction(async tx => {
             const ownedBy = { ownerId: { in: userIds } };
             const counts: Record<string, number> = {
                 Comment: (await tx.comment.deleteMany({ where: { id: { in: owned.comments.map(comment => comment.id) } } })).count,
                 DraftTimelapse: (await tx.draftTimelapse.deleteMany({ where: ownedBy })).count,
                 LegacyUnpublishedTimelapse: (await tx.legacyUnpublishedTimelapse.deleteMany({ where: ownedBy })).count,
-                Timelapse: (await tx.timelapse.deleteMany({ where: ownedBy })).count,
+                Timelapse: await deleteTimelapses(tx, ownedBy, deletedTimelapses),
                 KnownDevice: (await tx.knownDevice.deleteMany({ where: ownedBy })).count,
                 DraftLookoutTimelapse: (await tx.draftLookoutTimelapse.deleteMany({ where: ownedBy })).count,
                 LookoutDraftEvent: (await tx.lookoutDraftEvent.deleteMany({ where: ownedBy })).count,
@@ -383,6 +405,11 @@ async function deleteRows(userIds: string[], owned: OwnedRecords, dryRun: boolea
 
             return deleted;
         }, { timeout: 60_000 });
+
+        for (const id of deletedTimelapses)
+            notifyTimelapseChanged("timelapse.deleted", id);
+
+        return result;
     }
     catch (error) {
         if (error instanceof DryRunRollback)

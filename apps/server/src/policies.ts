@@ -75,6 +75,8 @@ export const POLICIES = {
             }
         },
         findByUser: { access: "public" },
+        // Every timelapse there is, unlisted and failed ones included, with what only owners see.
+        listChanged: { access: "any", scopes: ["timelapse:read"], level: "ADMIN", program: "admin:read" },
         myPublishedTimelapses: { access: "user", scopes: ["timelapse:read"] },
         syncWithHackatime: { access: "user", scopes: ["timelapse:write"] },
 

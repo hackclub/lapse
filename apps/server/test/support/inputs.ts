@@ -49,6 +49,7 @@ export const INPUTS: Record<string, unknown> = {
     "timelapse.publishFromLookout": { draftId: ENTITY_ID, name: "A timelapse", visibility: "PUBLIC" },
     "timelapse.pollLookoutStatus": { draftId: ENTITY_ID },
     "timelapse.myPublishedTimelapses": { limit: 20 },
+    "timelapse.listChanged": { limit: 200 },
 
     "draftTimelapse.findByUser": { user: OWNER_ID },
     "draftTimelapse.query": { id: ENTITY_ID },

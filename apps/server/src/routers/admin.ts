@@ -14,6 +14,7 @@ import * as lookout from "@/lookout.js";
 import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "@/oauth.js";
 import { durationBySnapshots, hackatimeApiKeyFor, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 import { diffAuditedFields, findAuditedEntity, recordAdminChange, type AuditClient } from "@/adminAudit.js";
+import { notifyTimelapseChanged } from "@/changeWebhook.js";
 
 import * as db from "@/generated/prisma/client.js";
 import { SECRET_COLUMNS, withoutSecrets } from "@/secrets.js";
@@ -619,6 +620,9 @@ export default os.router({
 
             if (!row)
                 return apiErr("ERROR", "No valid changes provided.");
+
+            if (entity === "timelapse")
+                notifyTimelapseChanged("timelapse.updated", id);
 
             logInfo(`Admin update: ${entity} ${id}`, {
                 actor: caller.id,

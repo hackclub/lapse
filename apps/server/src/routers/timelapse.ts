@@ -24,6 +24,8 @@ import { finalizeIfPending, finalizeLookoutDraft, intentOf, storePublishIntent, 
 import { createPairingCode, generatePanelToken } from "@/lookoutDesktop.js";
 import { assignBrowserLabelVariant, assignBrowserWarningVariant } from "@/experiments.js";
 import { BROWSER_RECORDING_MAINTENANCE_MESSAGE, isBrowserRecordingAvailable } from "@/recordingAvailability.js";
+import { notifyTimelapseChanged } from "@/changeWebhook.js";
+import { decodeChangeCursor, listTimelapseChanges } from "@/timelapseChanges.js";
 import type * as safe from "@/secrets.js";
 
 export type DbTimelapse = Omit<safe.Timelapse, "snapshots"> & { owner: safe.User, comments: DbComment[] };
@@ -172,9 +174,18 @@ export async function deleteTimelapse(timelapseId: string, actor: Actor | null):
         }));
     }
 
-    await database().timelapse.delete({
-        where: { id: timelapse.id }
+    // The deletion is recorded alongside, so that services following `timelapse.listChanged` find out it's gone.
+    await database().$transaction(async tx => {
+        await tx.timelapseDeletion.create({
+            data: { timelapseId: timelapse.id, ownerId: timelapse.ownerId, deletedAt: new Date() }
+        });
+
+        await tx.timelapse.delete({
+            where: { id: timelapse.id }
+        });
     });
+
+    notifyTimelapseChanged("timelapse.deleted", timelapse.id);
 
     const adminId = adminOverrideActorId(actor, timelapse.ownerId);
     if (adminId !== null) {
@@ -405,6 +416,8 @@ export default os.router({
                 }
             });
 
+            notifyTimelapseChanged("timelapse.published", id);
+
             return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
         }),
 
@@ -458,6 +471,8 @@ export default os.router({
                 return updated;
             });
 
+            notifyTimelapseChanged("timelapse.updated", updatedTimelapse.id);
+
             return apiOk({ timelapse: dtoOwnedTimelapse(updatedTimelapse) });
         }),
 
@@ -492,6 +507,15 @@ export default os.router({
             });
 
             return apiOk({ timelapses: timelapses.map(x => dtoTimelapse(x, actor)) });
+        }),
+
+    listChanged: os.listChanged
+        .use(authorize("timelapse.listChanged"))
+        .handler(async (req) => {
+            if (req.input.cursor !== undefined && decodeChangeCursor(req.input.cursor) === undefined)
+                return apiErr("ERROR", "That cursor isn't one this endpoint gave out. Start again without a cursor.");
+
+            return apiOk(await listTimelapseChanges(req.input.cursor, req.input.limit));
         }),
 
     myPublishedTimelapses: os.myPublishedTimelapses
@@ -559,6 +583,8 @@ export default os.router({
                 include: TIMELAPSE_INCLUDES,
                 omit: TIMELAPSE_OMIT
             });
+
+            notifyTimelapseChanged("timelapse.updated", updatedTimelapse.id);
 
             return apiOk({ timelapse: dtoTimelapse(updatedTimelapse, req.context.actor) });
         }),

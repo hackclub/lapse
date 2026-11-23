@@ -127,6 +127,17 @@ export const env = {
     get RECORDING_AVAILABILITY_SECRET() { return optional("RECORDING_AVAILABILITY_SECRET") },
 
     /**
+     * Where to send a webhook when a timelapse is published, changed or deleted, for a service that keeps a copy of
+     * the catalog. See `changeWebhook.ts`. Nothing is sent unless this and `TIMELAPSE_WEBHOOK_SECRET` are both set.
+     */
+    get TIMELAPSE_WEBHOOK_URL() { return optional("TIMELAPSE_WEBHOOK_URL") },
+
+    /**
+     * The key the change webhook's requests are signed with (HMAC-SHA256, in the `x-lapse-signature` header).
+     */
+    get TIMELAPSE_WEBHOOK_SECRET() { return optional("TIMELAPSE_WEBHOOK_SECRET") },
+
+    /**
      * Narrow read-only bearer credential for the detection evidence endpoint.
      */
     get LAPSE_ADMIN_API_KEY() { return optional("LAPSE_ADMIN_API_KEY") },
@@ -286,6 +297,17 @@ export function assertNoExampleSecrets() {
     const placeholders = EXAMPLE_SECRETS.filter(name => process.env[name]?.startsWith("deadc0de"));
     if (placeholders.length > 0)
         throw new Error(`Refusing to start: ${placeholders.join(", ")} still hold the placeholder values from .env.example.`);
+
+    // The change webhook carries every timelapse, unlisted ones and private fields included: it must go over TLS and
+    // be signed with a key nobody can guess.
+    const webhookUrl = process.env["TIMELAPSE_WEBHOOK_URL"];
+    if (webhookUrl) {
+        if (!webhookUrl.startsWith("https://"))
+            throw new Error("Refusing to start: TIMELAPSE_WEBHOOK_URL must be an https:// URL.");
+
+        if ((process.env["TIMELAPSE_WEBHOOK_SECRET"] ?? "").length < 32)
+            throw new Error("Refusing to start: TIMELAPSE_WEBHOOK_SECRET must be a random secret of at least 32 characters.");
+    }
 }
 
 function required(name: string) {

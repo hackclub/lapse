@@ -437,6 +437,46 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
             })
         ),
 
+    listChanged: contract("GET", "/timelapse/listChanged")
+        .route({ description: "Lists every timelapse that was published, changed or deleted after a cursor, oldest change first, for services that keep their own copy of the catalog. Covers every visibility, including timelapses that failed or are still processing. Changes less than 30 seconds old aren't listed yet, so that one written late, or on a server whose clock runs behind, can't be skipped. A timelapse can come up more than once, and its `timelapse` is how it is now rather than at `changedAt`." })
+        .input(
+            z.object({
+                cursor: z.string().min(1).max(1024).optional()
+                    .describe("The `nextCursor` of the previous page. Omit to start from the very first timelapse."),
+
+                limit: z.coerce.number().int().min(1).max(500).default(200)
+                    .describe("The maximum number of changes to return."),
+            })
+        )
+        .output(
+            apiResult({
+                changes: z.array(z.discriminatedUnion("kind", [
+                    z.object({
+                        kind: z.literal("upsert"),
+                        changedAt: LapseDate
+                            .describe("When the timelapse was published or last changed."),
+                        timelapse: OwnedTimelapseSchema
+                    }),
+                    z.object({
+                        kind: z.literal("delete"),
+                        changedAt: LapseDate
+                            .describe("When the timelapse was deleted."),
+                        id: LapseId
+                            .describe("The ID the deleted timelapse had."),
+                        ownerId: LapseId
+                            .describe("The ID of the user who owned it. That user may have been deleted too."),
+                    })
+                ]))
+                    .describe("The changes, ordered by `changedAt`, then deletions before upserts, then ID."),
+
+                nextCursor: z.string()
+                    .describe("Where the next page starts. The same as the cursor given when there were no changes - keep it and ask again later."),
+
+                hasMore: z.boolean()
+                    .describe("Whether more changes are ready right now. `false` means the caller has caught up."),
+            })
+        ),
+
     myPublishedTimelapses: contract("GET", "/timelapse/myPublishedTimelapses")
         .route({ description: "Lists all published timelapses owned by the authenticated user, with cursor-based pagination." })
         .input(

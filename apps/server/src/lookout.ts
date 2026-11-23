@@ -53,6 +53,21 @@ export function isSessionGone(err: unknown): boolean {
     return err instanceof LookoutApiError && err.status === 404;
 }
 
+/**
+ * Whether an error is Lookout being down or overloaded - a 5xx, a 429, or no answer at all - which retrying later
+ * fixes by itself, as opposed to a bug on either side.
+ */
+export function isLookoutUnavailable(err: unknown): boolean {
+    if (err instanceof LookoutApiError)
+        return err.status >= 500 || err.status === 429;
+
+    // `fetch` rejects with a bare TypeError when it never got a response (DNS, refused connection, reset).
+    return err instanceof TypeError && err.message === "fetch failed";
+}
+
+/** Orchard's outage page is ~10 KB of inlined fonts, which would otherwise be repeated in full in every log line. */
+const MAX_LOGGED_BODY_LENGTH = 500;
+
 async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const url = `${env.LOOKOUT_API_BASE_URL}${path}`;
     const res = await fetch(url, {
@@ -66,7 +81,8 @@ async function lookoutFetch<T>(path: string, options?: RequestInit): Promise<T> 
 
     if (!res.ok) {
         const body = await res.text().catch(() => "(no body)");
-        const msg = `Lookout API error: ${res.status} ${res.statusText} on ${path} — ${body}`;
+        const loggedBody = body.length > MAX_LOGGED_BODY_LENGTH ? `${body.slice(0, MAX_LOGGED_BODY_LENGTH)}… (${body.length} bytes)` : body;
+        const msg = `Lookout API error: ${res.status} ${res.statusText} on ${path} — ${loggedBody}`;
         // Not an error log: the thrown error already reaches Sentry wherever it isn't handled, and callers that
         // expect it (a 404 for a gone session, a cosmetic call during an outage) shouldn't raise a second issue.
         logWarning(msg);

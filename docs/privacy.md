@@ -58,6 +58,7 @@ A dry run performs the same deletion inside a transaction and rolls it back, so 
 | OAuth apps they registered | Other people sign in with them. The creator is removed (`createdByUserId` becomes null) |
 | Admin audit entries | The record of admin actions. Entries about their records have `changes` cleared, and entries they made lose the actor |
 | Hackatime heartbeats | Imported into their Hackatime account. The hub's Hackatime target deletes them |
+| A `TimelapseDeletion` row per deleted timelapse (its ID, the owner's ID, when) | Written by the erasure itself. It's how services that keep a copy of the catalog through `timelapse.listChanged` learn to delete theirs, so it has to outlive the account. Neither ID leads anywhere once the account is gone |
 
 ## Not covered
 

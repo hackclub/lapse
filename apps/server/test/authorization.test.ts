@@ -97,6 +97,7 @@ const EXPECTED: Record<string, Expectation> = {
     "timelapse.update": owner("timelapse:write", "admin:write"),
     "timelapse.delete": owner("timelapse:write", "admin:write"),
     "timelapse.findByUser": anyone,
+    "timelapse.listChanged": { for: "admins", level: "ADMIN", scopes: ["timelapse:read"], program: "admin:read" },
     "timelapse.myPublishedTimelapses": users("timelapse:read"),
     "timelapse.syncWithHackatime": users("timelapse:write"),
     "timelapse.approveDesktopPairing": website,

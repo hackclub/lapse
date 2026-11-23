@@ -342,6 +342,11 @@ model Timelapse {
   /// The date when the timelapse was created.
   createdAt             DateTime
 
+  /// The last time this row changed. Drives `timelapse.listChanged`, the change feed other services follow, so
+  /// every write to a timelapse has to move it - Prisma does that for `update` and `updateMany`, and anything that
+  /// writes to this table some other way must set it itself. Rows from before it existed start at `createdAt`.
+  updatedAt             DateTime                @default(now()) @updatedAt
+
   /// The S3 key that points to the video. This may be `null` if `associatedJobId` is not `null`, which indicates the timelapse is still being processed.
   s3Key                 String?
 
@@ -404,6 +409,23 @@ model Timelapse {
   @@index([createdAt(sort: Desc)])
   @@index([ownerId, createdAt(sort: Desc)])
   @@index([recordedWith])
+  @@index([updatedAt, id])
+}
+
+/// A timelapse that has been deleted, written in the same transaction as the deletion. Deleting a timelapse leaves no
+/// row behind, so this is how `timelapse.listChanged` tells the services that follow it that one is gone.
+/// Deliberately has no foreign keys: it must outlive both the timelapse and its owner.
+model TimelapseDeletion {
+  /// The ID the deleted timelapse had.
+  timelapseId   String    @id
+
+  /// Who owned it.
+  ownerId       String
+
+  /// When it was deleted.
+  deletedAt     DateTime  @default(now())
+
+  @@index([deletedAt, timelapseId])
 }
 
 /// Represents a comment that belongs to a timelapse.
