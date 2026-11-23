@@ -218,6 +218,35 @@ export async function getTimelapseById(id: string, actor: Actor | null): Promise
  *
  * Snapshots are sorted ascending first, as they are not guaranteed to be ordered.
  */
+/**
+ * Legacy drafts bring their own snapshots, and nothing ties them to the video - so a forged draft could claim days
+ * of heartbeats for a few seconds of footage. Once the worker has measured the video, this keeps only as many of the
+ * earliest snapshots as it could plausibly account for. Real recordings claim up to about 1.8x their measured length
+ * (edits cut footage but not snapshots), so the allowance is well clear of that.
+ */
+export function capSnapshotsToVideo(snapshots: Date[], realTimeDuration: number, timeoutSeconds = 120): Date[] {
+    const allowance = realTimeDuration * 2 + 600;
+    if (durationBySnapshots(snapshots, timeoutSeconds) <= allowance)
+        return snapshots;
+
+    const sorted = [...snapshots].filter(d => Number.isFinite(d.getTime())).sort((a, b) => a.getTime() - b.getTime());
+    const kept = sorted.slice(0, 1);
+    let totalSeconds = 0;
+
+    for (let i = 1; i < sorted.length; i++) {
+        const gapSeconds = (sorted[i]!.getTime() - sorted[i - 1]!.getTime()) / 1000;
+        if (gapSeconds > 0 && gapSeconds <= timeoutSeconds)
+            totalSeconds += gapSeconds;
+
+        if (totalSeconds > allowance)
+            break;
+
+        kept.push(sorted[i]!);
+    }
+
+    return kept;
+}
+
 export function durationBySnapshots(snapshots: Date[], timeoutSeconds = 120): number {
     if (snapshots.length < 2)
         return 0;
@@ -276,6 +305,10 @@ export default os.router({
         .use(authorize("timelapse.publish"))
         .handler(async (req) => {
             const caller = req.context.user;
+
+            // The schema is shared with what timelapses report, which can be FAILED_PROCESSING - but nobody may choose it.
+            if (req.input.visibility === "FAILED_PROCESSING")
+                return apiErr("ERROR", "A timelapse can only be published as public or unlisted.");
 
             const draft = await database().draftTimelapse.findFirst({
                 where: {
@@ -399,6 +432,9 @@ export default os.router({
             if (req.input.changes.description !== undefined) {
                 updateData.description = req.input.changes.description;
             }
+
+            if (req.input.changes.visibility === "FAILED_PROCESSING")
+                return apiErr("ERROR", "A timelapse can only be made public or unlisted.");
 
             if (req.input.changes.visibility) {
                 updateData.visibility = req.input.changes.visibility;
@@ -700,7 +736,8 @@ export default os.router({
                 //
                 // Archived rather than deleted: a proxy in front of Lookout can be wrong just as Lookout can, and
                 // losing the draft over it would cut the user off from a recording that still exists.
-                if (batch.missing.has(draft.lookoutSessionId)) {
+                // Left to a caller that may write: archiving is a change, and read-only tokens can't make changes.
+                if (mayPublish && batch.missing.has(draft.lookoutSessionId)) {
                     await archiveLookoutDraft(draft, "session-gone", {
                         actor: stringifyActor(req.context.actor),
                         detail: { missingFromBatch: true },
@@ -843,6 +880,9 @@ export default os.router({
         .use(authorize("timelapse.publishFromLookout"))
         .handler(async (req) => {
             const caller = req.context.user;
+
+            if (req.input.visibility === "FAILED_PROCESSING")
+                return apiErr("ERROR", "A timelapse can only be published as public or unlisted.");
 
             const draft = await database().draftLookoutTimelapse.findFirst({
                 where: { id: req.input.draftId, ownerId: caller.id }

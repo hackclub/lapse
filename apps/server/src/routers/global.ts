@@ -220,7 +220,11 @@ export default os.router({
                 where: {
                     createdAt: {
                         gte: daysAgo(7)
-                    }
+                    },
+                    // Still processing, a legacy timelapse's duration is whatever its draft claimed, not what the
+                    // worker measured. And a failed one never produced the video it's counting.
+                    associatedJobId: null,
+                    visibility: { not: "FAILED_PROCESSING" }
                 },
                 _sum: { duration: true },
                 orderBy: { _sum: { duration: "desc" } },

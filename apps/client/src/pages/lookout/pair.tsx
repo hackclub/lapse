@@ -82,7 +82,10 @@ export default function Page() {
                         + menu is the manual escape hatch - same shape as the fallback on the recording page. */}
 {handoffUrl && (
                         <div className="w-full flex flex-col gap-2 mt-6">
-                            <p className="text-muted text-sm">Still nothing? Copy this link and paste it into Lookout.</p>
+                            <p className="text-muted text-sm">
+                                Still nothing? Copy this link and paste it into Lookout. Never give it to anyone else -
+                                it lets them record as you.
+                            </p>
                             <CopyField value={handoffUrl} label="Pairing handoff link" />
                         </div>
                     )}
@@ -101,6 +104,7 @@ export default function Page() {
                         <h1 className="text-2xl font-bold">Link {device}?</h1>
                         <p className="text-muted">
                             After linking, the {device} app will be able to start timelapses on your account directly.
+                            Only continue if you just asked to link it from the app on your own computer.
                         </p>
                     </div>
 

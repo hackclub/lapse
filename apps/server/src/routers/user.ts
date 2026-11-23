@@ -337,7 +337,8 @@ export default os.router({
                 _sum: { duration: true },
                 where: {
                     ownerId,
-                    visibility: isEntitled ? undefined : "PUBLIC"
+                    visibility: isEntitled ? undefined : "PUBLIC",
+                    associatedJobId: isEntitled ? undefined : null
                 }
             });
 

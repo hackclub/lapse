@@ -323,12 +323,31 @@ export function registerLookoutDesktopRoutes(server: FastifyInstance) {
         if (visibility !== "PUBLIC" && visibility !== "UNLISTED")
             return reply.code(400).send({ error: "visibility must be PUBLIC or UNLISTED" });
 
-        const stored = await storePublishIntent(draft, {
-            name,
-            description,
-            visibility,
-            hackatimeProject,
+        // The check above reads, then this writes, so two submits racing each other could both get past it. Claiming
+        // `pendingAt` is atomic: only one of them gets the row. It isn't an intent on its own (that needs a name and a
+        // visibility too), so nothing acts on it before the answers land.
+        const claimed = await database().draftLookoutTimelapse.updateMany({
+            where: { id: draft.id, pendingAt: null },
+            data: { pendingAt: new Date() },
         });
+
+        if (claimed.count === 0)
+            return reply.code(409).send({ error: "this timelapse has already been submitted" });
+
+        let stored: Awaited<ReturnType<typeof storePublishIntent>>;
+        try {
+            stored = await storePublishIntent(draft, {
+                name,
+                description,
+                visibility,
+                hackatimeProject,
+            });
+        }
+        catch (err) {
+            // Let the user try again rather than leave the panel locked by an answer that never landed.
+            await database().draftLookoutTimelapse.updateMany({ where: { id: draft.id, pendingName: null }, data: { pendingAt: null } });
+            throw err;
+        }
 
         const outcome = await finalizeIfPending(stored);
 

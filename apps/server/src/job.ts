@@ -8,7 +8,7 @@ import { database, redis } from "@/db.js";
 import { env } from "@/env.js";
 import { publicS3 } from "@/storage.js";
 import { deleteDraftTimelapse } from "@/routers/draftTimelapse.js";
-import { syncTimelapseWithHackatime } from "@/routers/timelapse.js";
+import { capSnapshotsToVideo, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 
 // This file handles enqueuing jobs on the worker, as well as listening for completion/failed events.
 // Callers are expected to queue jobs and disregard what happens after the completion (we handle that here!),
@@ -124,6 +124,14 @@ export function startRealizeJobEvents() {
                     });
                 }
 
+                // The snapshots become Hackatime heartbeats, so they can't claim much more time than the video holds.
+                const snapshots = currentTimelapse && realTimeDuration != null
+                    ? capSnapshotsToVideo(currentTimelapse.snapshots, realTimeDuration)
+                    : null;
+
+                if (snapshots && currentTimelapse && snapshots.length < currentTimelapse.snapshots.length)
+                    logWarning(`Trimmed timelapse ${timelapseId} from ${currentTimelapse.snapshots.length} to ${snapshots.length} snapshots to match its ${realTimeDuration}s of video.`);
+
                 // This basically marks the timelapse as having its processing finished (we assume any timelapse with an associated job ID is still being processed).
                 const completedTimelapse = await database().timelapse.update({
                     where: {
@@ -133,7 +141,8 @@ export function startRealizeJobEvents() {
                         associatedJobId: null,
                         s3Key: videoKey,
                         thumbnailS3Key: thumbnailKey,
-                        ...(realTimeDuration != null && { duration: realTimeDuration })
+                        ...(realTimeDuration != null && { duration: realTimeDuration }),
+                        ...(snapshots && { snapshots })
                     },
                     include: { owner: true }
                 });

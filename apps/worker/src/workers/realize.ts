@@ -120,7 +120,8 @@ export const realizeJobWorker = new Worker<RealizeJobInputs, RealizeJobOutputs>(
                 );
             }
 
-            // Won't be needing this anymore!
+            // Won't be needing this anymore! This only drops the copy in memory - Redis keeps the key until the job is
+            // removed (on completion), or scrubbed after its last failed attempt (see app.ts).
             input.passkey = "<REDACTED>";
             job.data.passkey = "<REDACTED>";
 

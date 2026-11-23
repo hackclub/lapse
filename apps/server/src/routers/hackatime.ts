@@ -234,7 +234,9 @@ export default os.router({
                             "PUBLIC",
                             ...maybe("UNLISTED" as const, isPrivilidged)
                         ]
-                    }
+                    },
+                    // Like `findByUser`: a timelapse that's still processing is only shown to whoever may see it.
+                    associatedJobId: isPrivilidged ? undefined : null
                 }
             });
 

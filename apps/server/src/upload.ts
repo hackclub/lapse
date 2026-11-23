@@ -70,12 +70,22 @@ export function attachUploadServer(app: FastifyInstance) {
             }
         }),
 
-        async onIncomingRequest(req) {
+        // A token is for one upload: its own key. Without this, any valid token could read, append to or delete
+        // anybody's upload by naming its ID.
+        async onIncomingRequest(req, id) {
             const token = requireUploadToken(req);
             if (token instanceof Err) {
                 throw { status_code: 401, body: token.message };
             }
+
+            if (id !== token.key) {
+                logWarning("Attempted to use an upload token on an upload it wasn't issued for.", { id, key: token.key });
+                throw { status_code: 403, body: "This upload token isn't for this upload." };
+            }
         },
+
+        // Finished uploads are the only copy of a legacy recording. Nothing legitimate deletes them through tus.
+        disableTerminationForFinishedUploads: true,
 
         // The tus S3 store always uses the upload ID as the key. By default, tus generates a random one. As we have a defined S3 structure, we
         // *don't* want that, and thus we override our namingFunction.
