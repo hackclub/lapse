@@ -320,10 +320,14 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
             return null;
         }
 
+        if (client.revokedAt) {
+            logWarning(`Attempted to use revoked client ${clientId}.`);
+            return null;
+        }
+
         // Only verify the secret if one was provided (during token endpoint)
         if (clientSecret) {
-            const expectedHash = hashServiceSecret(clientSecret);
-            if (client.clientSecretHash !== expectedHash) {
+            if (!verifySecretHash(clientSecret, client.clientSecretHash)) {
                 logWarning(`Client secret mismatch for client ${clientId}.`);
                 return null;
             }
@@ -462,8 +466,10 @@ class LapseAuthorizationCodeModel implements OAuth2Server.AuthorizationCodeModel
     }
 }
 
+export const oauthModel = new LapseAuthorizationCodeModel();
+
 export const oauthSrv = new OAuth2Server({
-    model: new LapseAuthorizationCodeModel(),
+    model: oauthModel,
     accessTokenLifetime: ACCESS_TOKEN_LIFETIME_SECONDS,
 });
 
