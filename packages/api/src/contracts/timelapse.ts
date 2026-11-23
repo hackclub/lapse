@@ -334,7 +334,8 @@ export const timelapseRouterContract = oc.tag(ROUTER_TAGS.timelapse).router({
                     id: LapseId,
                     createdAt: LapseDate,
                     lookoutSessionId: z.string(),
-                    lookoutToken: z.string(),
+                    lookoutToken: z.string()
+                        .describe("The Lookout session token to resume the recording with. Empty unless the caller may write to the user's timelapses (the `timelapse:write` scope)."),
                     lookoutStatus: z.string(),
                     videoUrl: z.string().nullable(),
                     thumbnailUrl: z.string().nullable(),

@@ -1,4 +1,4 @@
-import type * as db from "@/generated/prisma/client.js";
+import type * as db from "./generated/prisma/client.js";
 
 /**
  * Every column that would let its reader act as somebody else: a user on Hackatime, a recorder on Lookout, the desktop

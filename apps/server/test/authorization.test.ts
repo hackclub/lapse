@@ -13,7 +13,7 @@ import { setClientsForTesting } from "@/db.js";
 import type { Context } from "@/router.js";
 
 import { CANONICAL_CLIENT_ID } from "./support/env.js";
-import { FakeDatabase, type FakeDatabaseOptions } from "./support/fakeDatabase.js";
+import { FakeDatabase, secretValue, type FakeDatabaseOptions } from "./support/fakeDatabase.js";
 import { INPUTS } from "./support/inputs.js";
 import { ADMIN_ID, OTHER_ID, OWNER_ID, proceduresOf, programActor, request, ROOT_ID, THIRD_PARTY_SCOPES, userActor, type Outcome } from "./support/world.js";
 
@@ -359,6 +359,35 @@ test("what belongs to a user is only shown in full to them, an admin on the webs
 
         assert.equal(everything, /^(an admin|ROOT), on the website/.test(who), `global.recentTimelapses, called by ${who}`);
     }
+});
+
+test("a draft's Lookout token is only given to a caller that may write", async () => {
+    const drafts = PROCEDURES.get("timelapse.getLookoutDrafts")!;
+    const token = secretValue("draftLookoutTimelapse", "lookoutToken");
+
+    const mayWrite = [
+        CALLERS["the owner, on the website"],
+        CALLERS["the owner, through an app with every scope"],
+        userActor(OWNER_ID, ["timelapse:read", "timelapse:write"]),
+    ];
+
+    for (const actor of mayWrite) {
+        const outcome = await request(drafts, {}, actor);
+        const listed = (outcome.output as { data: { drafts: { lookoutToken: string }[] } }).data.drafts;
+
+        assert.equal(listed.length, 1);
+        assert.equal(listed[0]!.lookoutToken, token);
+    }
+
+    const readOnly = await request(drafts, {}, userActor(OWNER_ID, ["timelapse:read"]));
+    const listed = (readOnly.output as { data: { drafts: { id: string; lookoutToken: string }[] } }).data.drafts;
+
+    // Everything else about the draft is still there - only the token is withheld, and never even read.
+    assert.equal(listed.length, 1);
+    assert.ok(listed[0]!.id);
+    assert.equal(listed[0]!.lookoutToken, "");
+    assert.ok(!JSON.stringify(readOnly.output).includes(token));
+    assert.ok(readOnly.database.calls.every(x => !JSON.stringify(x.args).includes("lookoutToken")), "the token was read for a caller that can't have it");
 });
 
 test("a program key's scopes are only ever the ones a program key can hold", async () => {

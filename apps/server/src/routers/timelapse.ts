@@ -636,12 +636,17 @@ export default os.router({
 
             const mayPublish = actorHasScope(req.context.actor, "timelapse:write");
 
-            // The recorder resumes a draft with its Lookout token, so this is one of the few places that reads it.
-            const drafts = await database().draftLookoutTimelapse.findMany({
+            // A draft's Lookout token is what a recorder uploads to, stops and resumes the recording with. That makes
+            // it a way of *changing* the recording, so it is only read from the database - one of the few places
+            // that does - and only handed out, for a caller that may write. Anyone else gets an empty one.
+            const query = {
                 where: { ownerId: caller.id, archivedAt: null },
                 orderBy: { createdAt: "desc" },
-                omit: { lookoutToken: false },
-            });
+            } as const;
+
+            const drafts = mayPublish
+                ? await database().draftLookoutTimelapse.findMany({ ...query, omit: { lookoutToken: false } })
+                : (await database().draftLookoutTimelapse.findMany(query)).map(draft => ({ ...draft, lookoutToken: "" }));
 
             // A draft the user already answered in the desktop panel publishes as soon as its video is ready. This
             // runs at login, which is the first thing that happens after someone closes the app mid-compile - so it
