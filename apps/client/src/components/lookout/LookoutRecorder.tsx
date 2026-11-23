@@ -14,6 +14,7 @@ import { useInterval } from "@/hooks/useInterval";
 import { useRecordingKeepAwake } from "@/hooks/useRecordingKeepAwake";
 import { checkBrowserRecorderSupport } from "@/components/lookout/engineSupport";
 import { storeSession } from "@/components/lookout/sessions";
+import { holdRecordingLock, pauseSessionOnExit } from "@/components/lookout/recordingPresence";
 import {
   dismissPausedNotice,
   finishPausedDraft,
@@ -1125,6 +1126,40 @@ function LapseRecorder({ draftId, lookoutToken, apiBaseUrl, fullCaptureUrl, onSh
   const isCamera = state.captureMode === "camera";
 
   useRecordingKeepAwake(state.isRecording);
+
+  useEffect(() => holdRecordingLock(draftId), [draftId]);
+
+  const sessionLive = state.isRecording || state.status === "paused";
+
+  useEffect(() => {
+    if (!sessionLive)
+      return;
+
+    function warnBeforeLeaving(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [sessionLive]);
+
+  useEffect(() => {
+    if (!state.isRecording)
+      return;
+
+    function pauseOnExit(event: PageTransitionEvent) {
+      // Kept in the back/forward cache, the page may come back and carry on recording - it shouldn't find its own
+      // session paused under it.
+      if (event.persisted)
+        return;
+
+      pauseSessionOnExit(apiBaseUrl, lookoutToken);
+    }
+
+    window.addEventListener("pagehide", pauseOnExit);
+    return () => window.removeEventListener("pagehide", pauseOnExit);
+  }, [state.isRecording, apiBaseUrl, lookoutToken]);
 
   if (state.isSharing && !hasShared) setHasShared(true);
 

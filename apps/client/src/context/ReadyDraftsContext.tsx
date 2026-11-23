@@ -5,6 +5,8 @@ import { api } from "@/api";
 import { useAuthContext } from "@/context/AuthContext";
 import { showReadyToPublishToast } from "@/components/lookout/ReadyToPublishToast";
 import type { PausedDraft } from "@/components/lookout/pausedDrafts";
+import { draftsRecordingHere, pauseSession } from "@/components/lookout/recordingPresence";
+import { getStoredSessions } from "@/components/lookout/sessions";
 
 export type ReadyDraft = {
   id: string;
@@ -49,6 +51,51 @@ type DraftsState = {
   paused: PausedDraft[];
 };
 
+type ListedDraft = {
+  id: string;
+  lookoutStatus: string;
+  lookoutToken: string;
+  trackedSeconds: number;
+  recordedOnDesktop: boolean;
+};
+
+/**
+ * Pauses the active recordings this browser started whose tab has since gone - closed, crashed, navigated away - so
+ * they can be resumed now rather than once Lookout notices ten minutes later. Returns the IDs it paused.
+ *
+ * Only this browser's own recordings qualify, since only here can we see whether a tab is still recording them.
+ */
+async function pauseInterruptedDrafts(drafts: ListedDraft[], lookoutApiBaseUrl: string): Promise<Set<string>> {
+  const recordedHere = new Set(getStoredSessions().map(s => s.draftId));
+  const candidates = drafts.filter(d =>
+    d.lookoutStatus === "active"
+    && d.trackedSeconds > 0
+    && !d.recordedOnDesktop
+    && d.lookoutToken !== ""
+    && recordedHere.has(d.id)
+  );
+
+  if (candidates.length === 0)
+    return new Set();
+
+  const live = await draftsRecordingHere();
+  if (!live)
+    return new Set();
+
+  const paused = await Promise.all(candidates
+    .filter(d => !live.has(d.id))
+    .map(async d => {
+      try {
+        return await pauseSession(lookoutApiBaseUrl, d.lookoutToken) ? d.id : null;
+      }
+      catch {
+        return null;
+      }
+    }));
+
+  return new Set(paused.filter((id): id is string => id !== null));
+}
+
 const ReadyDraftsContext = createContext<DraftsState | null>(null);
 
 /**
@@ -74,8 +121,12 @@ export function ReadyDraftsProvider({ children }: {
 
     let cancelled = false;
     api.timelapse.getLookoutDrafts({})
-      .then(res => {
+      .then(async res => {
         if (cancelled || !res.ok)
+          return;
+
+        const interrupted = await pauseInterruptedDrafts(res.data.drafts, res.data.lookoutApiBaseUrl);
+        if (cancelled)
           return;
 
         const ready = res.data.drafts
@@ -90,9 +141,10 @@ export function ReadyDraftsProvider({ children }: {
 
         // Only paused ones: an "active" session may be recording in another tab or the desktop app right now, and
         // offering to finish it would cut that recording short. Lookout pauses idle sessions after 10 minutes, so an
-        // abandoned one shows up here soon enough. Nothing recorded means nothing to finish or resume.
+        // abandoned one shows up here soon enough - or straight away, if it was abandoned in this browser. Nothing
+        // recorded means nothing to finish or resume.
         const paused = res.data.drafts
-          .filter(d => d.lookoutStatus === "paused" && d.trackedSeconds > 0)
+          .filter(d => (d.lookoutStatus === "paused" || interrupted.has(d.id)) && d.trackedSeconds > 0)
           .sort((a, b) => b.createdAt - a.createdAt)
           .map(d => ({
             id: d.id,
