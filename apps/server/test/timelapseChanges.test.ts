@@ -37,6 +37,7 @@ class Tables {
             duration: 60,
             hackatimeProject: "lapse",
             sourceDraftId: null,
+            lookoutSessionId: null,
             ownerId: OWNER_ID,
             owner: user(OWNER_ID),
             comments: [],
@@ -240,7 +241,7 @@ test("an upsert is the full timelapse, owner and private fields included, whatev
     assert.equal(change.timelapse.visibility, "FAILED_PROCESSING");
     assert.equal(change.timelapse.playbackUrl, null);
     assert.equal(change.timelapse.owner.slackId, "U0TEST");
-    assert.deepEqual(change.timelapse.private, { hackatimeProject: "lapse", sourceDraftId: null });
+    assert.deepEqual(change.timelapse.private, { hackatimeProject: "lapse", sourceDraftId: null, lookoutSessionId: null });
 });
 
 test("a cursor is opaque but checked", () => {

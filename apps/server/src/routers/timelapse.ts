@@ -79,7 +79,8 @@ export function dtoOwnedTimelapse(entity: DbOwnedTimelapse): OwnedTimelapse {
         isDraft: false,
         private: {
             hackatimeProject: entity.hackatimeProject,
-            sourceDraftId: entity.sourceDraftId
+            sourceDraftId: entity.sourceDraftId,
+            lookoutSessionId: entity.lookoutSessionId
         }
     };
 }

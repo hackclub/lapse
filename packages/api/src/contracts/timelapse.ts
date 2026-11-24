@@ -126,7 +126,13 @@ export const OwnedTimelapseSchema = TimelapsePayloadSchema.extend({
          * The ID of the draft timelapse that this timelapse was originally published from.
          * If `null`, the source draft is unknown.
          */
-        sourceDraftId: z.string().nullable()
+        sourceDraftId: z.string().nullable(),
+
+        /**
+         * The Lookout session that recorded the timelapse, for services that read the recording's metadata from
+         * Lookout with a key of their own. `null` for timelapses recorded before Lookout.
+         */
+        lookoutSessionId: z.string().nullable()
     })
 });
 
