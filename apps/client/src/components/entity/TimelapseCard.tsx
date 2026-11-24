@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
+import NextLink from "next/link";
 import { useRouter } from "next/router";
 import NextImage from "next/image";
 import Icon from "@hackclub/icons";
@@ -19,6 +20,10 @@ import { Duration } from "@/components/Duration";
 import { AdminOnly, StatusBadge, timelapseStatus } from "@/components/ui/AdminOnly";
 
 const thumbnailCache = new Map<string, string>();
+
+function stopCardClick(e: MouseEvent) {
+  e.stopPropagation();
+}
 
 export function TimelapseCard({ timelapse }: {
   timelapse: DraftTimelapse | Timelapse
@@ -128,7 +133,11 @@ export function TimelapseCard({ timelapse }: {
       </div>
       
       <div className="flex gap-2 sm:gap-3 w-full justify-center items-center sm:items-start">
-        { !timelapse.isDraft && <ProfilePicture user={timelapse.owner} size="sm" className="" /> }
+        {!timelapse.isDraft && (
+          <span onClick={stopCardClick} onAuxClick={stopCardClick} className="shrink-0">
+            <ProfilePicture user={timelapse.owner} size="sm" />
+          </span>
+        )}
 
         <div className="flex flex-col w-full">
            <h1 className="font-bold text-md leading-none sm:leading-normal sm:text-xl wrap-break-word">{timelapse.name ?? "(untitled)"}</h1>
@@ -140,7 +149,14 @@ export function TimelapseCard({ timelapse }: {
               !timelapse.isDraft
                 ? (
                   <>
-                    <span className="truncate">@{timelapse.owner.displayName}</span>
+                    <NextLink
+                      href={`/user/@${timelapse.owner.handle}`}
+                      onClick={stopCardClick}
+                      onAuxClick={stopCardClick}
+                      className="truncate hover:underline"
+                    >
+                      @{timelapse.owner.displayName}
+                    </NextLink>
                     <Bullet />
                     <TimeAgo date={timelapse.createdAt} className="shrink-0" />
                   </>

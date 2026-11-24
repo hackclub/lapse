@@ -15,6 +15,7 @@ import { generateProgramKey, extractProgramKeyPrefix, hashServiceSecret } from "
 import { durationBySnapshots, hackatimeApiKeyFor, syncTimelapseWithHackatime } from "@/routers/timelapse.js";
 import { diffAuditedFields, findAuditedEntity, recordAdminChange, type AuditClient } from "@/adminAudit.js";
 import { notifyTimelapseChanged } from "@/changeWebhook.js";
+import { searchUsers } from "@/userSearch.js";
 
 import * as db from "@/generated/prisma/client.js";
 import { SECRET_COLUMNS, withoutSecrets } from "@/secrets.js";
@@ -402,68 +403,18 @@ const entityConfigs: Record<AdminEntity, EntityConfig> = {
     }
 };
 
-function levenshteinDistance(a: string, b: string): number {
-    const m = a.length;
-    const n = b.length;
-    if (m === 0)
-        return n;
-
-    if (n === 0)
-        return m;
-
-    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-    for (let i = 0; i <= m; i++) {
-        dp[i][0] = i;
-    }
-
-    for (let j = 0; j <= n; j++) {
-        dp[0][j] = j;
-    }
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (a[i - 1] === b[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1];
-            }
-            else {
-                dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-            }
-        }
-    }
-
-    return dp[m][n];
-}
-
-function fuzzyMatch(query: string, text: string): boolean {
-    const normalizedQuery = query.toLowerCase();
-    const normalizedText = text.toLowerCase();
-    if (normalizedText.includes(normalizedQuery))
-        return true;
-
-    const distance = levenshteinDistance(normalizedQuery, normalizedText);
-    return distance <= Math.ceil(normalizedQuery.length / 2);
-}
-
-function identifierMatch(query: string, value: string): boolean {
-    return value.toLowerCase().includes(query.toLowerCase());
-}
-
 type SearchResultRow = { entity: AdminEntity; id: string; displayText: string };
 
-type SearchDescriptor = SearchResultRow & {
-    exactValues?: string[];
-    fuzzyValues?: string[];
-};
+const SEARCH_USER_LIMIT = 10;
+const SEARCH_PER_ENTITY_LIMIT = 5;
+const SEARCH_RESULT_LIMIT = 20;
 
+function textMatch(query: string) {
+    return { contains: query, mode: "insensitive" as const };
+}
 
-function pushSearchDescriptor(results: SearchResultRow[], query: string, descriptor: SearchDescriptor) {
-    const { exactValues = [], fuzzyValues = [], ...result } = descriptor;
-    const matches = [descriptor.id, ...exactValues].some(value => identifierMatch(query, value)) || fuzzyValues.some(value => fuzzyMatch(query, value));
-
-    if (matches) {
-        results.push(result);
-    }
+function ownedBy(query: string) {
+    return { owner: { handle: textMatch(query) } };
 }
 
 /**
@@ -943,119 +894,88 @@ export default os.router({
                 };
             }
 
-            const results: SearchResultRow[] = [];
+            const take = SEARCH_PER_ENTITY_LIMIT;
+            const newestFirst = { createdAt: "desc" } as const;
 
             const [users, timelapses, comments, drafts, lookoutDrafts, legacyTimelapses] = await Promise.all([
-                database().user.findMany({
-                    select: { id: true, handle: true, displayName: true, slackId: true }
-                }),
+                searchUsers(query, SEARCH_USER_LIMIT),
 
                 database().timelapse.findMany({
-                    select: { id: true, name: true, owner: { select: { handle: true } } }
+                    where: { OR: [{ id: query }, { name: textMatch(query) }, ownedBy(query)] },
+                    select: { id: true, name: true, owner: { select: { handle: true } } },
+                    orderBy: newestFirst,
+                    take
                 }),
 
                 database().comment.findMany({
-                    select: { id: true, content: true, author: { select: { handle: true } } }
+                    where: { OR: [{ id: query }, { content: textMatch(query) }, { author: { handle: textMatch(query) } }] },
+                    select: { id: true, content: true, author: { select: { handle: true } } },
+                    orderBy: newestFirst,
+                    take
                 }),
-                
+
                 database().draftTimelapse.findMany({
-                    select: { id: true, name: true, owner: { select: { handle: true } } }
+                    where: { OR: [{ id: query }, { name: textMatch(query) }, ownedBy(query)] },
+                    select: { id: true, name: true, owner: { select: { handle: true } } },
+                    orderBy: newestFirst,
+                    take
                 }),
 
                 database().draftLookoutTimelapse.findMany({
-                    select: { id: true, lookoutSessionId: true, pendingName: true, owner: { select: { handle: true } } }
+                    where: { OR: [{ id: query }, { lookoutSessionId: query }, { pendingName: textMatch(query) }, ownedBy(query)] },
+                    select: { id: true, pendingName: true, owner: { select: { handle: true } } },
+                    orderBy: newestFirst,
+                    take
                 }),
 
                 database().legacyUnpublishedTimelapse.findMany({
-                    select: { id: true, name: true, owner: { select: { handle: true } } }
+                    where: { OR: [{ id: query }, { name: textMatch(query) }, ownedBy(query)] },
+                    select: { id: true, name: true, owner: { select: { handle: true } } },
+                    take
                 })
             ]);
 
-            for (const user of users) {
-                pushSearchDescriptor(
-                    results,
-                    query,
-                    {
-                        entity: "user" as const,
-                        id: user.id,
-                        displayText: `${user.displayName} (@${user.handle})`,
-                        exactValues: user.slackId === null ? [] : [user.slackId],
-                        fuzzyValues: [user.handle, user.displayName]
-                    }
-                );
-            }
+            const results: SearchResultRow[] = [
+                ...users.map(user => ({
+                    entity: "user" as const,
+                    id: user.lapseId,
+                    displayText: `${user.displayName} (@${user.handle})`
+                })),
 
-            for (const timelapse of timelapses) {
-                pushSearchDescriptor(
-                    results,
-                    query,
-                    {
-                        entity: "timelapse" as const,
-                        id: timelapse.id,
-                        displayText: `${timelapse.name} by @${timelapse.owner.handle}`,
-                        fuzzyValues: [timelapse.name, timelapse.owner.handle]
-                    }
-                );
-            }
+                ...timelapses.map(timelapse => ({
+                    entity: "timelapse" as const,
+                    id: timelapse.id,
+                    displayText: `${timelapse.name} by @${timelapse.owner.handle}`
+                })),
 
-            for (const comment of comments) {
-                const preview = comment.content.substring(0, 50) + (comment.content.length > 50 ? "..." : "");
-                pushSearchDescriptor(
-                    results,
-                    query,
-                    {
-                        entity: "comment" as const,
-                        id: comment.id,
-                        displayText: `"${preview}" by @${comment.author.handle}`,
-                        fuzzyValues: [preview, comment.author.handle]
-                    }
-                );
-            }
+                ...comments.map(comment => ({
+                    entity: "comment" as const,
+                    id: comment.id,
+                    displayText: `"${comment.content.substring(0, 50)}${comment.content.length > 50 ? "..." : ""}" by @${comment.author.handle}`
+                })),
 
-            for (const draft of drafts) {
-                const displayName = draft.name || "(Untitled)";
-                pushSearchDescriptor(
-                    results,
-                    query,
-                    {
-                        entity: "draftTimelapse" as const,
-                        id: draft.id,
-                        displayText: `${displayName} by @${draft.owner.handle}`,
-                        fuzzyValues: [displayName, draft.owner.handle]
-                    }
-                );
-            }
+                ...drafts.map(draft => ({
+                    entity: "draftTimelapse" as const,
+                    id: draft.id,
+                    displayText: `${draft.name || "(Untitled)"} by @${draft.owner.handle}`
+                })),
 
-            for (const draft of lookoutDrafts) {
-                const displayName = draft.pendingName || "(Unpublished recording)";
-                pushSearchDescriptor(
-                    results,
-                    query,
-                    {
-                        entity: "lookoutDraft" as const,
-                        id: draft.id,
-                        displayText: `${displayName} by @${draft.owner.handle} (Lookout draft)`,
-                        fuzzyValues: [draft.pendingName ?? "", draft.owner.handle, draft.lookoutSessionId]
-                    }
-                );
-            }
+                ...lookoutDrafts.map(draft => ({
+                    entity: "lookoutDraft" as const,
+                    id: draft.id,
+                    displayText: `${draft.pendingName || "(Unpublished recording)"} by @${draft.owner.handle} (Lookout draft)`
+                })),
 
-            for (const legacy of legacyTimelapses) {
-                pushSearchDescriptor(
-                    results,
-                    query,
-                    {
-                        entity: "legacyTimelapse" as const,
-                        id: legacy.id,
-                        displayText: `${legacy.name} by @${legacy.owner.handle} (legacy)`,
-                        fuzzyValues: [legacy.name, legacy.owner.handle]
-                    }
-                );
-            }
+                ...legacyTimelapses.map(legacy => ({
+                    entity: "legacyTimelapse" as const,
+                    id: legacy.id,
+                    displayText: `${legacy.name} by @${legacy.owner.handle} (legacy)`
+                }))
+            ];
 
             return {
                 ok: true as const,
-                data: { results: results.slice(0, 10) }
+                data: { results: results.slice(0, SEARCH_RESULT_LIMIT) }
             };
         })
 });

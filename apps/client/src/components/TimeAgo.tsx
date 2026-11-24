@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import clsx from "clsx";
 
 function extractDateComponents(seconds: number) {
   seconds = Math.floor(seconds);
@@ -57,6 +59,14 @@ function formatExactDate(date: Date) {
   });
 }
 
+function formatEasternDate(date: Date) {
+  return date.toLocaleString("en-us", {
+    timeZone: "America/New_York",
+    month: "numeric", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short"
+  });
+}
+
 /**
  * A clock shared by every elapsed-time label on the page, so that a list of a hundred of them keeps one timer
  * between them rather than a hundred. The snapshot only ever changes on a tick, as `useSyncExternalStore` requires.
@@ -101,8 +111,10 @@ function getServerClockSnapshot(): number | null {
   return null;
 }
 
-export function TimeAgo({ date, className }: {
+export function TimeAgo({ date, exact: showExact = false, className }: {
   date: Date | number;
+  /** Shows the exact Eastern time as the label, with the elapsed time on hover instead. */
+  exact?: boolean;
   className?: string;
 }) {
   const timestamp = typeof date === "number" ? date : date.getTime();
@@ -123,15 +135,30 @@ export function TimeAgo({ date, className }: {
   */
   const now = useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot);
 
+  // Where the label sits while it's hovered. The tooltip is portalled out so tables and cards can't clip it.
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+
   return (
     <time
       // Always UTC, and so identical on both sides of the wire.
       dateTime={exact.toISOString()}
-      title={now === null ? undefined : formatExactDate(exact)}
-      className={className}
+      onMouseEnter={e => setAnchor(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setAnchor(null)}
+      className={clsx("hover:underline underline-offset-2", className)}
       suppressHydrationWarning
     >
-      {now === null ? formatExactDate(exact) : formatTimeElapsed(exact, now)}
+      {showExact ? formatEasternDate(exact) : now === null ? formatExactDate(exact) : formatTimeElapsed(exact, now)}
+
+      {anchor && now !== null && createPortal(
+        <span
+          role="tooltip"
+          style={{ left: anchor.left + anchor.width / 2, top: anchor.top - 6 }}
+          className="fixed z-50 -translate-x-1/2 -translate-y-full pointer-events-none whitespace-nowrap rounded-md border border-black bg-dark px-2 py-1 text-xs font-normal text-white shadow"
+        >
+          {showExact ? formatTimeElapsed(exact, now) : formatEasternDate(exact)}
+        </span>,
+        document.body
+      )}
     </time>
   );
 }

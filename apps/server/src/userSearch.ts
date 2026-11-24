@@ -90,6 +90,7 @@ type Ranking = {
 function rankIdentifier(query: string, user: SearchableUser): Ranking | null {
     const candidates: Array<[UserSearchMatchField, string | null]> = [
         ["id", user.id],
+        ["email", user.email],
         ["slackId", user.slackId],
         ["hackatimeId", user.hackatimeId]
     ];
@@ -184,14 +185,7 @@ function ranked(
     return results;
 }
 
-export async function handleUserSearchRequest(
-    body: unknown,
-    deps: UserSearchDependencies
-): Promise<AdminReply<UserSearchResponse>> {
-    const input = parseInput(body);
-    if (!input)
-        return { statusCode: 400, body: { error: `query must be a non-empty string and limit an integer between 1 and ${USER_SEARCH_MAX_LIMIT}` } };
-
+async function rankedUserSearch(input: ParsedInput, deps: UserSearchDependencies): Promise<UserSearchResult[]> {
     const query = input.query.toLowerCase();
 
     const [exact, substring] = await Promise.all([
@@ -202,13 +196,21 @@ export async function handleUserSearchRequest(
     const deduplicated = [...new Map([...exact, ...substring].map(user => [user.id, user])).values()];
     const results = ranked(deduplicated, query, rank);
     if (results.length > 0)
-        return { statusCode: 200, body: { results: ordered(results, input.limit) } };
+        return ordered(results, input.limit);
 
     const candidates = await deps.findRecent(FUZZY_FALLBACK_CANDIDATES);
-    return {
-        statusCode: 200,
-        body: { results: ordered(ranked(candidates, query, rankFuzzy), input.limit) }
-    };
+    return ordered(ranked(candidates, query, rankFuzzy), input.limit);
+}
+
+export async function handleUserSearchRequest(
+    body: unknown,
+    deps: UserSearchDependencies
+): Promise<AdminReply<UserSearchResponse>> {
+    const input = parseInput(body);
+    if (!input)
+        return { statusCode: 400, body: { error: `query must be a non-empty string and limit an integer between 1 and ${USER_SEARCH_MAX_LIMIT}` } };
+
+    return { statusCode: 200, body: { results: await rankedUserSearch(input, deps) } };
 }
 
 const SELECTION = {
@@ -229,6 +231,7 @@ const dependencies = (): UserSearchDependencies => ({
             OR: [
                 { id: { equals: query, mode: "insensitive" } },
                 { handle: { equals: query, mode: "insensitive" } },
+                { email: { equals: query, mode: "insensitive" } },
                 { slackId: { equals: query, mode: "insensitive" } },
                 { hackatimeId: { equals: query, mode: "insensitive" } }
             ]
@@ -255,6 +258,10 @@ const dependencies = (): UserSearchDependencies => ({
         take
     })
 });
+
+export async function searchUsers(query: string, limit: number): Promise<UserSearchResult[]> {
+    return await rankedUserSearch({ query: query.trim(), limit }, dependencies());
+}
 
 export function registerUserSearchRoutes(server: FastifyInstance): void {
     registerAdminRoute(server, ADMIN_ROUTES.userSearch, body =>
