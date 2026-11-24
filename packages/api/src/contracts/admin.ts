@@ -304,7 +304,7 @@ export const adminRouterContract = oc.tag(ROUTER_TAGS.admin).router({
         .output(createResultSchema(AdminUpdateResultSchema)),
 
     search: contract("POST", "/admin/search")
-        .route({ description: "Fuzzy search across all entities. Requires administrator permissions and an `elevated` grant." })
+        .route({ description: "Searches across all entities. Users match by Lapse ID, email, handle, Hackatime ID, Slack ID or display name, best match first. Requires administrator permissions and an `elevated` grant." })
         .input(AdminSearchInputSchema)
         .output(createResultSchema(AdminSearchOutputSchema)),
 

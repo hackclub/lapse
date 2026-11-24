@@ -17,7 +17,7 @@ import { TimelapseGrid } from "@/components/entity/TimelapseGrid";
 import { Duration } from "@/components/Duration";
 import { AuditLog } from "@/components/admin/AuditLog";
 import { TimelapseFilters, EMPTY_TIMELAPSE_FILTERS, applyTimelapseFilters, type TimelapseFilterState } from "@/components/admin/TimelapseFilters";
-import { ExternalIdLink, HackatimeProjectLink, StatusBadge, timelapseStatus, type TimelapseStatus } from "@/components/ui/AdminOnly";
+import { ExternalIdLink, HackatimeProjectLink, PermissionBadge, StatusBadge, timelapseStatus, type TimelapseStatus } from "@/components/ui/AdminOnly";
 import { SAMPLE_ADMIN_USER, SAMPLE_TIMELAPSES } from "@/samples";
 
 const STATUSES: TimelapseStatus[] = ["PUBLIC", "UNLISTED", "PROCESSING", "FAILED"];
@@ -208,11 +208,11 @@ export default function AdminUserPage() {
   }, [router.isReady, router.query, isAdmin]);
 
   if (auth.isLoading)
-    return <RootLayout showHeader={false} title="Admin - User"><div /></RootLayout>;
+    return <RootLayout showHeader={true} title="Admin - User"><div /></RootLayout>;
 
   if (!isAdmin) {
     return (
-      <RootLayout showHeader={false} title="Admin - User">
+      <RootLayout showHeader={true} title="Admin - User">
         <div className="flex flex-col items-center justify-center gap-4 p-16">
           <Icon glyph="private-outline" size={64} className="text-muted" />
           <h1 className="text-2xl font-bold">Access Denied</h1>
@@ -267,7 +267,7 @@ export default function AdminUserPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 rounded-xl border border-slate p-6">
                 <InfoRow label="Lapse ID">{u.id}</InfoRow>
                 <InfoRow label="Email">{u.email}</InfoRow>
-                <InfoRow label="Permission level">{u.permissionLevel}</InfoRow>
+                <InfoRow label="Permission level"><PermissionBadge level={u.permissionLevel} /></InfoRow>
                 <InfoRow label="Hackatime ID">
                   {u.hackatimeId && <ExternalIdLink kind="hackatime" id={u.hackatimeId} />}
                 </InfoRow>

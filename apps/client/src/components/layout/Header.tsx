@@ -11,13 +11,16 @@ import { SettingsView } from "@/components/layout/SettingsView";
 import { useCachedState } from "@/hooks/useCachedState";
 import { useInterval } from "@/hooks/useInterval";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminView } from "@/hooks/useAdminView";
 import { cachedApi } from "@/api";
 
 import LapseLogo from "@/assets/icon.svg";
 
 export function Header() {
   const auth = useAuth(false);
+  const adminView = useAdminView();
   const router = useRouter();
+  const isAdminPage = router.pathname.startsWith("/admin");
 
   // Until the session is known, the account area is drawn from the shape it had last visit - signed in or not -
   // rather than guessing one and flashing the other.
@@ -73,7 +76,15 @@ export function Header() {
             {
               auth.currentUser ? (
                 <div className="flex gap-6 items-center">
-                  <Button href="/timelapse/create" kind="primary" icon="plus-fill">Create</Button>
+                  {isAdminPage ? (
+                    <Button href="/" kind="regular" icon="home">Home</Button>
+                  ) : adminView.enabled && (
+                    <Button href="/admin" kind="regular" icon="admin-badge">Admin</Button>
+                  )}
+
+                  {!isAdminPage && (
+                    <Button href="/timelapse/create" kind="primary" icon="plus-fill">Create</Button>
+                  )}
 
                   <Icon
                     width={32} height={32}
@@ -101,17 +112,19 @@ export function Header() {
             <span className="text-lg">Home</span>
           </button>
 
-          <button
-            className={clsx(
-              "p-4 rounded-full transition-transform",
-              auth.currentUser ? "bg-red active:scale-90" : "bg-muted cursor-not-allowed"
-            )}
-            onClick={() => auth.currentUser && router.push("/timelapse/create")}
-            disabled={!auth.currentUser}
-            aria-label="Create new timelapse"
-          >
-            <Icon glyph="plus-fill" width={36} height={36} />
-          </button>
+          {!isAdminPage && (
+            <button
+              className={clsx(
+                "p-4 rounded-full transition-transform",
+                auth.currentUser ? "bg-red active:scale-90" : "bg-muted cursor-not-allowed"
+              )}
+              onClick={() => auth.currentUser && router.push("/timelapse/create")}
+              disabled={!auth.currentUser}
+              aria-label="Create new timelapse"
+            >
+              <Icon glyph="plus-fill" width={36} height={36} />
+            </button>
+          )}
 
           <Skeleton id="header-account-mobile" loading={isAuthUnknown} label="Loading your account">
             {

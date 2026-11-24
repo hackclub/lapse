@@ -354,7 +354,7 @@ export default function Page({ initialTimelapse }: Props) {
                         ("2h 34m") rather than clocked, because it isn't a position in the video.
                       */}
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-secondary min-w-0">
-                        <TimeAgo date={t.createdAt} />
+                        <TimeAgo date={t.createdAt} exact />
 
                         <Bullet />
 

@@ -27,6 +27,20 @@ import { WindowedModal } from "@/components/layout/WindowedModal";
 import { TextareaInput } from "@/components/ui/TextareaInput";
 import { SAMPLE_TIMELAPSES, SAMPLE_USER } from "@/samples";
 
+/**
+ * A profile URL can name its user by handle (`@name`), Hackatime ID (all digits) or Lapse ID. Lapse IDs are random
+ * 12-character nanoids, so one made only of digits is too unlikely to worry about.
+ */
+function userQueryOf(id: string) {
+  if (id.startsWith("@"))
+    return { handle: id.substring(1).trim() };
+
+  if (/^\d+$/.test(id))
+    return { hackatimeId: Number(id) };
+
+  return { id };
+}
+
 type Props = {
   initialUser: User | PublicUser | null;
   initialTimelapses: Timelapse[] | null;
@@ -39,7 +53,7 @@ export const getStaticPaths: GetStaticPaths = async () => ({ paths: [], fallback
 export const getStaticProps: GetStaticProps<Props, { id: string }> = async ({ params }) => {
   const id = params?.id;
   const userRes = id
-    ? await prefetch(() => serverApi.user.query(id.startsWith("@") ? { handle: id.substring(1).trim() } : { id }))
+    ? await prefetch(() => serverApi.user.query(userQueryOf(id)))
     : null;
 
   const initialUser = userRes?.user ?? null;
@@ -87,9 +101,7 @@ export default function Page({ initialUser, initialTimelapses }: Props) {
     assert(typeof id === "string", `router.query.id was a ${typeof id} (expected a string)`);
 
     try {
-      const userRes = await api.user.query(
-        id.startsWith("@") ? { handle: id.substring(1).trim() } : { id } 
-      );
+      const userRes = await api.user.query(userQueryOf(id));
 
       if (!userRes.ok) {
         setLoadStatus(statusForApiError(userRes.error, userRes.message));

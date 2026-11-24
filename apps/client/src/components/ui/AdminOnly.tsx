@@ -44,6 +44,29 @@ export function StatusBadge({ status, className }: {
   );
 }
 
+const PERMISSION_STYLES: Record<string, string> = {
+  USER: "bg-muted/20 text-muted",
+  ADMIN: "bg-blue/20 text-blue",
+  ROOT: "bg-purple/20 text-purple"
+};
+
+export function PermissionBadge({ level, className }: {
+  level: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={clsx(
+        "inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
+        PERMISSION_STYLES[level] ?? PERMISSION_STYLES.USER,
+        className
+      )}
+    >
+      {level}
+    </span>
+  );
+}
+
 const EXTERNAL_ID_LINKS = {
   hackatime: { title: "Open in Telescreen", url: (id: string) => `https://telescreen.hackclub.com/subjects/${id}` },
   slack: { title: "Open in Slack", url: (id: string) => `https://hackclub.slack.com/team/${id}` }

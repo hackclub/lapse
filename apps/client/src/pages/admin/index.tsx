@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { useEffect, useState, useCallback, useRef, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import clsx from "clsx";
@@ -11,13 +11,12 @@ import RootLayout from "@/components/layout/RootLayout";
 import { Modal, ModalHeader, ModalContent } from "@/components/layout/Modal";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
-import { ExternalIdLink, StatusBadge, statusFromVisibility } from "@/components/ui/AdminOnly";
+import { ExternalIdLink, PermissionBadge, StatusBadge, statusFromVisibility } from "@/components/ui/AdminOnly";
 import { AuditLog } from "@/components/admin/AuditLog";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/api";
 import type { IconGlyph } from "@/common";
 
-import LapseLogo from "@/assets/icon.svg";
 
 type Stats = {
   totalLoggedSeconds: number;
@@ -129,8 +128,8 @@ function isAdminPanelEntity(value: string): value is AdminPanelEntity {
   return ENTITIES.includes(value as AdminPanelEntity);
 }
 
-function defaultQuery(): QueryState {
-  return { filters: [], page: 1, pageSize: 25 };
+function defaultQuery(sort?: AdminSort): QueryState {
+  return { filters: [], page: 1, pageSize: 25, sort };
 }
 
 function formatCellValue(value: unknown, kind: string): string {
@@ -1196,6 +1195,11 @@ function AdminAppsTable() {
 }
 
 const COUNT_PAGE_SIZE = 500;
+
+/** Fields left out of the table. They can still be filtered on and edited in the record modal. */
+const HIDDEN_TABLE_COLUMNS: Partial<Record<AdminEntity, string[]>> = {
+  user: ["bio", "profilePictureUrl"]
+};
 const PUSH_PAGE_SIZE = 5;
 const RATE_LIMIT_PAUSE_SECONDS = 20;
 const MAX_RATE_LIMIT_PAUSES = 20;
@@ -1228,7 +1232,7 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   const tableColumnKeys = [
     ...(entity === "timelapse" ? ["__thumbnail"] : []),
     ...(entity === "user" ? ["__profilePicture"] : []),
-    ...fieldKeys,
+    ...fieldKeys.filter(key => !HIDDEN_TABLE_COLUMNS[entity]?.includes(key)),
   ];
 
   const fetchData = useCallback(async () => {
@@ -1714,6 +1718,14 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
                     );
                   }
 
+                  if (entity === "user" && key === "permissionLevel") {
+                    return (
+                      <td key={key} className="max-w-0 px-3 py-2 align-top">
+                        <PermissionBadge level={String(row[key])} />
+                      </td>
+                    );
+                  }
+
                   if (entity === "timelapse" && key === "visibility") {
                     return (
                       <td key={key} className="max-w-0 px-3 py-2 align-top">
@@ -1775,45 +1787,94 @@ function AdminEntityTable({ entity, query, onQueryChange, highlightedId }: {
   );
 }
 
+const SEARCH_DEBOUNCE_MS = 250;
+
 function SearchBar({ onSelectResult }: {
   onSelectResult: (result: AdminSearchResult) => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AdminSearchResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestRequest = useRef(0);
 
-  const handleSearch = useCallback(async (q: string) => {
-    setQuery(q);
+  const cancelPendingSearch = () => {
+    if (debounceTimer.current)
+      clearTimeout(debounceTimer.current);
+
+    latestRequest.current++;
+  };
+
+  const runSearch = useCallback(async (q: string) => {
+    const request = ++latestRequest.current;
     if (!q.trim()) {
       setResults([]);
+      setError(null);
       setIsOpen(false);
+      setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     try {
-      const res = await api.admin.search({ query: q });
-      if (res.ok) {
-        setResults(res.data.results);
-        setIsOpen(true);
-      }
+      const res = await api.admin.search({ query: q.trim() });
+      if (request !== latestRequest.current)
+        return;
+
+      setResults(res.ok ? res.data.results : []);
+      setError(res.ok ? null : res.message ?? "Search failed.");
+      setIsOpen(true);
     }
     catch (err) {
       console.error("(admin) search failed", err);
+      if (request !== latestRequest.current)
+        return;
+
+      setResults([]);
+      setError("Search failed. Press Enter to try again.");
+      setIsOpen(true);
     }
     finally {
-      setIsLoading(false);
+      if (request === latestRequest.current)
+        setIsLoading(false);
     }
   }, []);
 
+  const handleChange = (q: string) => {
+    setQuery(q);
+    if (debounceTimer.current)
+      clearTimeout(debounceTimer.current);
+
+    debounceTimer.current = setTimeout(() => void runSearch(q), SEARCH_DEBOUNCE_MS);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter")
+      return;
+
+    e.preventDefault();
+    if (debounceTimer.current)
+      clearTimeout(debounceTimer.current);
+
+    void runSearch(query);
+  };
+
   const handleSelectResult = (result: AdminSearchResult) => {
+    cancelPendingSearch();
     setQuery("");
     setResults([]);
+    setError(null);
     setIsOpen(false);
     onSelectResult(result);
   };
+
+  useEffect(() => () => {
+    if (debounceTimer.current)
+      clearTimeout(debounceTimer.current);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1833,8 +1894,9 @@ function SearchBar({ onSelectResult }: {
         <input
           type="text"
           value={query}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search entities..."
+          onChange={(e) => handleChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Search by name, handle, email, or Lapse/Hackatime/Slack ID..."
           className="w-full rounded-xl border border-slate py-3 pl-12 pr-12 text-white placeholder-muted focus:outline-red! focus:outline-2!"
         />
 
@@ -1863,7 +1925,7 @@ function SearchBar({ onSelectResult }: {
 
       {isOpen && query.trim() && results.length === 0 && !isLoading && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-dark border border-slate rounded-lg p-3 text-muted text-sm">
-          No results found
+          {error ?? "No results found"}
         </div>
       )}
     </div>
@@ -1877,7 +1939,7 @@ export default function AdminDashboard() {
   const [activeEntity, setActiveEntity] = useState<AdminPanelEntity>("user");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [queries, setQueries] = useState<Record<AdminEntity, QueryState>>({
-    user: defaultQuery(),
+    user: defaultQuery({ field: "lastHeartbeat", direction: "desc" }),
     timelapse: defaultQuery(),
     comment: defaultQuery(),
     draftTimelapse: defaultQuery(),
@@ -1957,11 +2019,11 @@ export default function AdminDashboard() {
   };
 
   if (auth.isLoading)
-    return <RootLayout showHeader={false} title="Admin Dashboard"><div /></RootLayout>;
+    return <RootLayout showHeader={true} title="Admin Dashboard"><div /></RootLayout>;
 
   if (!isAdmin) {
     return (
-      <RootLayout showHeader={false} title="Admin Dashboard">
+      <RootLayout showHeader={true} title="Admin Dashboard">
         <div className="flex flex-col items-center justify-center gap-4 p-16">
           <Icon glyph="private-outline" size={64} className="text-muted" />
           <h1 className="text-2xl font-bold">Access Denied</h1>
@@ -1973,14 +2035,10 @@ export default function AdminDashboard() {
   }
 
   return (
-    <RootLayout showHeader={false} title="Admin Dashboard">
+    <RootLayout showHeader={true} title="Admin Dashboard">
       <div className="flex flex-col gap-6 p-8 sm:p-12">
         <div className="flex justify-center">
           <div className="flex w-full max-w-4xl flex-wrap items-center justify-center gap-4 sm:gap-6">
-            <Link href="/" aria-label="Go to homepage" className="transition-opacity hover:opacity-80">
-              <LapseLogo className="h-12" />
-            </Link>
-
             <SearchBar onSelectResult={handleSearchSelect} />
           </div>
         </div>
