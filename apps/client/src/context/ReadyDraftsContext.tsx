@@ -14,6 +14,8 @@ export type ReadyDraft = {
   thumbnailUrl: string | null;
   /** Lookout is still building the video. It can be published already; the timelapse appears once it lands. */
   compiling: boolean;
+  /** Lookout gave up building the video. The recording itself is still there, so it stays listed rather than vanishing. */
+  failed: boolean;
 };
 
 const READY_STATUSES = new Set(["stopped", "compiling", "complete"]);
@@ -130,13 +132,14 @@ export function ReadyDraftsProvider({ children }: {
           return;
 
         const ready = res.data.drafts
-          .filter(d => READY_STATUSES.has(d.lookoutStatus))
+          .filter(d => READY_STATUSES.has(d.lookoutStatus) || (d.lookoutStatus === "failed" && d.trackedSeconds > 0))
           .sort((a, b) => a.createdAt - b.createdAt)
           .map(d => ({
             id: d.id,
             createdAt: d.createdAt,
             thumbnailUrl: d.thumbnailUrl,
-            compiling: d.lookoutStatus !== "complete",
+            compiling: READY_STATUSES.has(d.lookoutStatus) && d.lookoutStatus !== "complete",
+            failed: d.lookoutStatus === "failed",
           }));
 
         // Only paused ones: an "active" session may be recording in another tab or the desktop app right now, and
@@ -159,9 +162,10 @@ export function ReadyDraftsProvider({ children }: {
         setDrafts({ ready, paused });
 
         if (path !== "/" && !NO_TOAST_ON.some(p => path.startsWith(p))) {
-          const fresh = takeUntoasted(ready);
+          const publishable = ready.filter(d => !d.failed);
+          const fresh = takeUntoasted(publishable);
           if (fresh.length > 0)
-            showReadyToPublishToast(ready, router);
+            showReadyToPublishToast(publishable, router);
         }
       })
       .catch(() => {});

@@ -133,7 +133,7 @@ export default function Page() {
         setThumbnailUrl(res.data.thumbnailUrl);
       } else if (res.data.lookoutStatus === "failed") {
         setCompilationStatus("failed");
-        setError("Video compilation failed. Please try recording again.");
+        setError("We couldn't build the video for this recording, but the recording itself is safe. Ask in #lapse-help and we'll get it back for you.");
       }
     } catch (err) {
       console.warn("(publish.tsx) poll error:", err);

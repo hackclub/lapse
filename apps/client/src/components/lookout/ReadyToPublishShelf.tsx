@@ -58,9 +58,18 @@ function ReadyCard({ draft, index }: {
           </div>
         )}
 
-        <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 bg-red text-white text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded font-bold transition-transform group-hover:scale-105">
-          Publish
-        </div>
+        {draft.failed && (
+          <div className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 flex items-center gap-1.5 bg-black/80 text-white text-xs sm:text-sm px-1 sm:px-1.5 py-0.5 rounded font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-red" />
+            Video failed
+          </div>
+        )}
+
+        {!draft.failed && (
+          <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 bg-red text-white text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded font-bold transition-transform group-hover:scale-105">
+            Publish
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col w-full">
